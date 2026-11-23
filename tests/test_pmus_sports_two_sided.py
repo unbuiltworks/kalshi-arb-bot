@@ -2601,9 +2601,12 @@ def test_an_order_larger_than_the_capacity_left_is_refused(eng, risk_on,
 def test_what_the_bot_just_committed_counts_before_the_ledger_sees_it(
         eng, risk_on):
     e, v = eng
-    # 0.60 left. Either bid fits on its own; together they do not, and the
-    # ledger's snapshot still shows the figure from before the first one.
-    risk_on["doc"] = _with_drawdown("2.40")
+    # 0.45 left. The first bid (0.42) fits. The second (0.52) would raise
+    # the worst case to 0.52, which does not, and the ledger's snapshot
+    # still shows the figure from before the first one. (2026-11-23: a bid
+    # on each side counts as the worse side, not the sum -- if both fill
+    # they are a pair -- so the room is set where even that does not fit.)
+    risk_on["doc"] = _with_drawdown("2.55")
     e.select(v.account())
     e.step_market("aec-x")
     px = sorted(D(str(o["px"])) * D(str(o["qty"])) for o in v.orders.values())
@@ -2667,7 +2670,7 @@ def test_resting_bids_use_up_the_account_capacity_for_good(eng, risk_on,
     forgot a resting bid after about 30 s and allowed the next one. Now
     every resting dollar stays counted for as long as it rests."""
     e, v = eng
-    risk_on["doc"] = _with_drawdown("2.40")          # 0.60 left
+    risk_on["doc"] = _with_drawdown("2.55")          # 0.45 left
     e.select(v.account())
     e.step_market("aec-x")
     assert len(_opened(v)) == 1
@@ -2679,7 +2682,48 @@ def test_resting_bids_use_up_the_account_capacity_for_good(eng, risk_on,
     assert len(_opened(v)) == 1
     d = e.account_risk()["drawdown"]
     assert D(d["own_resting_orders_usd"]) == first
-    assert D(d["capacity_usd"]) == D("0.60") - first
+    assert D(d["capacity_usd"]) == D("0.45") - first
+
+
+def test_a_bid_on_each_side_counts_as_the_worse_side_not_the_sum(
+        eng, risk_on):
+    """Owner 2026-11-23: enforce the limit "without incorrectly
+    double-counting ... reserved capital". 0.60 left; bids of 0.42 and
+    0.52 on the two sides of one market. If both fill they are a pair
+    bought for 0.94, which the ledger values at $1: the worst case is the
+    dearer side alone."""
+    e, v = eng
+    risk_on["doc"] = _with_drawdown("2.40")
+    e.select(v.account())
+    e.step_market("aec-x")
+    assert len(_opened(v)) == 2
+    assert e.own_exposure_usd() == D("0.94")
+    assert e.own_resting_worst() == D("0.52")
+    d = e.account_risk()["drawdown"]
+    assert D(d["capacity_usd"]) == D("0.08")
+
+
+def test_bids_in_two_markets_do_add_up(eng, risk_on):
+    e, v = eng
+    risk_on["doc"] = _with_drawdown("2.40")
+    for s_ in ("aec-x", "aec-y"):
+        mk = e.b.m(s_)
+        mk["orders"]["r" + s_] = {"side": "YES", "px": "0.40", "qty": "1",
+                                  "filled": "0", "open": True,
+                                  "stage": "rn1_open"}
+    assert e.own_resting_worst() == D("0.80")
+    assert e.account_risk_blocks() == "ACCOUNT_DRAWDOWN_LIMIT"
+
+
+def test_a_resting_extension_adds_its_whole_cost(eng, risk_on):
+    e, v = eng
+    mk = e.b.m("aec-x")
+    mk["pos"]["YES"], mk["cost"]["YES"] = D("2"), D("0.88")
+    mk["orders"]["r"] = {"side": "YES", "px": "0.44", "qty": "2",
+                         "filled": "0", "open": True, "stage": "rn1_extend"}
+    assert e.own_resting_worst() == D("0.88")
+    assert e.own_resting_worst(("aec-x", "NO", D("0.50"), D("2"))) == \
+        D("0.88")       # the completing bid adds nothing to the worst case
 
 
 def test_the_earlier_assumption_is_still_selectable(eng, risk_on,

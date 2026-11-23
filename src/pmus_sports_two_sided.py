@@ -3650,7 +3650,7 @@ class Engine:
                 # the ledger's figure moves on fills, not on resting bids:
                 # count every resting dollar, and only NEW unpaired fills
                 unp = D(self.b.total_unmatched())
-                rest = max(D(0), expo - unp)
+                rest = self.own_resting_worst()
                 added = self._own_added_since(unp)
             reader = getattr(self, "_risk_reader", None)
             doc, v = None, None
@@ -3739,8 +3739,41 @@ class Engine:
             max_age_s=ACCOUNT_RISK_SNAPSHOT_MAX_S,
             label="the trading loop no longer waits on the account ledger")
 
+    def own_resting_worst(self, extra: Optional[tuple] = None) -> D:
+        """The most this bot's RESTING bids can add to its unpaired cost,
+        over every way they could fill, summed over markets. A bid on each
+        side of one market is not the sum of the two: if both fill they
+        are a pair bought under the pair cap, which the ledger values at
+        $1. `extra` = (slug, side, px, qty) adds one hypothetical bid.
+        Unknown figures return Infinity (refuse)."""
+        try:
+            tot = D(0)
+            markets = self.b.d.get("markets") or {}
+            seen = False
+            for s_, mk_ in markets.items():
+                resting = [(o["side"], o["px"], D(str(o["qty"])) - D(str(
+                    o.get("filled") or "0")), False)
+                    for o in (mk_.get("orders") or {}).values()
+                    if o.get("open")]
+                if extra is not None and extra[0] == s_:
+                    resting.append((extra[1], extra[2], extra[3], False))
+                    seen = True
+                if not resting:
+                    continue
+                worst = RN1.committed(mk_["pos"], mk_["cost"],
+                                      resting)["unmatched"]
+                tot += max(D(0), worst - RN1.unmatched_usd(
+                    mk_["pos"], mk_["cost"]))
+            if extra is not None and not seen:
+                tot += D(str(extra[2])) * D(str(extra[3]))
+            return tot if tot.is_finite() else D("Infinity")
+        except Exception:                                # noqa: BLE001
+            return D("Infinity")
+
     def account_risk_blocks(self, px: Optional[D] = None,
-                            qty: Optional[D] = None) -> Optional[str]:
+                            qty: Optional[D] = None,
+                            slug: Optional[str] = None,
+                            side: Optional[str] = None) -> Optional[str]:
         """Reason a NEW opening/extension is refused, or None."""
         v = self.account_risk()
         if v.get("off") or not ACCOUNT_RISK_ON:          # observe: log only
@@ -3756,7 +3789,14 @@ class Engine:
             except Exception:                            # noqa: BLE001
                 return "ACCOUNT_EXPOSURE_UNREADABLE"
             from src import l5_account_risk as AR
-            if not AR.capacity_allows(v, need):
+            cap_need = need
+            if slug is not None and side is not None and \
+                    not ACCOUNT_RISK_RESTING_IN_LEDGER:
+                # what THIS bid adds to the worst case, not its face value
+                cap_need = self.own_resting_worst(
+                    (slug, side, D(str(px)), D(str(qty)))) - \
+                    self.own_resting_worst()
+            if not AR.capacity_allows(v, cap_need):
                 return "ACCOUNT_RISK_CAPACITY"
         return None
 
@@ -3861,7 +3901,7 @@ class Engine:
                       "confirmation")
             return
         if not is_completion_stage(stage):
-            why = self.account_risk_blocks(px, qty)
+            why = self.account_risk_blocks(px, qty, slug, side)
             if why:
                 log("place_refused_account_risk", slug=slug, side=side,
                     px=px, qty=qty, stage=stage, reason=why)
