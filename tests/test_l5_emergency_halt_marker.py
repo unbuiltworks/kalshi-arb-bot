@@ -350,3 +350,56 @@ def test_the_module_holds_no_venue_credential_and_no_order_path():
     for mod in ("l5_pmus_transport", "pmus_q1_executor",
                 "pmus_micro_executor", "l5_order_body"):
         assert mod not in src, mod
+
+
+# ------------------------------------ optional read credential (2026-11-23)
+def test_no_read_credential_sends_no_authorization(monkeypatch):
+    monkeypatch.setenv(M.MARKER_URL_ENV, "https://example.test/m.json")
+    monkeypatch.setenv(M.MARKER_SECRET_ENV, "s")
+    monkeypatch.delenv(M.MARKER_BEARER_ENV, raising=False)
+    monkeypatch.delenv(M.MARKER_ACCEPT_ENV, raising=False)
+    src = M.from_env(MemStore(), object())["source"]
+    assert src._header == {}
+
+
+def test_read_credential_is_sent_as_bearer_with_the_accept_header(
+        monkeypatch):
+    import urllib.request
+    monkeypatch.setenv(M.MARKER_URL_ENV, "https://example.test/m.json")
+    monkeypatch.setenv(M.MARKER_SECRET_ENV, "s")
+    monkeypatch.setenv(M.MARKER_BEARER_ENV, "tok-123")
+    monkeypatch.setenv(M.MARKER_ACCEPT_ENV, "application/vnd.github.raw")
+    src = M.from_env(MemStore(), object())["source"]
+    seen = {}
+
+    class Resp:
+        status = 200
+
+        def read(self):
+            return b"{}"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def fake(req, timeout=None):
+        seen.update({k.lower(): v for k, v in req.header_items()})
+        return Resp()
+    monkeypatch.setattr(urllib.request, "urlopen", fake)
+    assert src.fetch() == b"{}"
+    assert seen["authorization"] == "Bearer tok-123"
+    assert seen["accept"] == "application/vnd.github.raw"
+    assert seen["cache-control"] == "no-cache"
+
+
+def test_the_read_credential_does_not_authenticate_a_marker(monkeypatch):
+    """A marker fetched with a valid token but a wrong signature is still
+    refused: the token reads, the HMAC decides."""
+    doc = {"command": "HALT", "issued_utc": M._utc().isoformat(),
+           "nonce": "n", "service": "svc", "reason": "r"}
+    doc["hmac"] = M.sign(doc, "wrong")
+    import json as _j
+    v = M.evaluate(_j.dumps(doc), secret="right", service="svc")
+    assert v["act"] is False and v["reason"] == "MARKER_SIGNATURE_INVALID"

@@ -65,6 +65,18 @@ MARKER_SECRET_ENV = "L5_EMERGENCY_HALT_SECRET"
 #: which deployment a marker may halt, so one published marker cannot halt
 #: an unrelated service that happens to read the same URL.
 MARKER_SERVICE_ENV = "L5_EMERGENCY_HALT_SERVICE"
+#: OPTIONAL read credential for the marker URL, so the marker can live in a
+#: PRIVATE place the owner already controls (a file in the private
+#: repository, read through the host's authenticated API). 2026-11-23:
+#: public raw-file links are cached for minutes, and the unauthenticated
+#: API allows too few requests for a 20-second poll; the authenticated API
+#: showed a pushed file within a second. The token only READS. It is not
+#: the authentication of the marker -- the HMAC still is -- so a leaked
+#: token lets someone read a file that holds no secret, and nothing else.
+#: Sent as `Authorization: Bearer <token>`; never logged.
+MARKER_BEARER_ENV = "L5_EMERGENCY_HALT_BEARER"
+#: OPTIONAL `Accept` header (for example the raw-content media type).
+MARKER_ACCEPT_ENV = "L5_EMERGENCY_HALT_ACCEPT"
 
 #: THE OWNER'S ONE-ACTION HALT, through Railway's own authentication.
 #:
@@ -356,9 +368,16 @@ def from_env(store: Any, asserter: Any) -> Optional[Dict[str, Any]]:
     """
     if not configured():
         return None
+    header: Dict[str, str] = {}
+    bearer = (os.getenv(MARKER_BEARER_ENV) or "").strip()
+    if bearer:
+        header["Authorization"] = "Bearer " + bearer
+    accept = (os.getenv(MARKER_ACCEPT_ENV) or "").strip()
+    if accept:
+        header["Accept"] = accept
     return {
         "source": MarkerSource(
-            (os.getenv(MARKER_URL_ENV) or "").strip(),
+            (os.getenv(MARKER_URL_ENV) or "").strip(), header=header,
             timeout_s=float(os.getenv("L5_EMERGENCY_HALT_TIMEOUT_S",
                                       DEFAULT_TIMEOUT_S) or
                             DEFAULT_TIMEOUT_S)),

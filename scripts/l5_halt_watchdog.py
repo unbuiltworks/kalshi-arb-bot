@@ -172,6 +172,8 @@ def main() -> int:
     emit("L5_EMERGENCY_HALT_MARKER_CONFIG", {
         "configured": _ehm is not None,
         "url_env": EHM.MARKER_URL_ENV, "secret_env": EHM.MARKER_SECRET_ENV,
+        "read_credential_set": bool(
+            (os.getenv(EHM.MARKER_BEARER_ENV) or "").strip()),
         "poll_s": poll_s,
         "timeout_s": (None if _ehm is None else _ehm["source"].timeout_s),
         "max_marker_age_s": EHM.MAX_MARKER_AGE_S,
