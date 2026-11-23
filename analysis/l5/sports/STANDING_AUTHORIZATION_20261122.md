@@ -368,3 +368,35 @@ price. Answer: **"Priced markets only (Recommended)"**.
 Window by those terms: 17:15:00 to 23:15:00 UTC. Not authorised: any size
 or cap increase, taker orders, unpriced markets, cricket, table tennis,
 Dota 2, a second window, a halt reset.
+
+## 16. Mid-campaign stop rule — 23 Nov, about 18:30 UTC
+
+State at 18:27 UTC: 7 fills, 5 pairs (+$0.20 locked, $0.10 of it settled),
+one unpaired leg (Debru–Kopp, 2 YES, cost $1.27), ledger drawdown $2.69 of
+$3.00, ledger venue reconciliation clean. The bot's own hourly account
+audit had not completed once in the window: its only attempt (17:47) was
+deferred by the request budget and the code does not retry.
+
+Owner's decision, in their words:
+
+- "Audit passes: Continue the approved campaign if reconciliation is clean
+  and drawdown remains below $3."
+- "Audit fails or is deferred: Lock immediately, cancel resting orders, and
+  reconcile venue-confirmed cancellations."
+- "Drawdown reaches $3: Enforce the existing halt regardless of audit
+  status."
+- "I would not authorize completion-only mode yet. The missing
+  verification—that completion quantity can never exceed the existing
+  unpaired inventory—is too important."
+- "No additional authorization from me or you is needed to enforce the
+  existing safety lock. Any future live campaign or activation of
+  completion-only mode still requires your explicit approval."
+
+Decision point: the audit attempt due about 18:47 UTC, checked at 18:50.
+The stop is the plain lock (`PMUS_TWO_SIDED_SUBMISSION_LOCK=1`).
+
+Owner's order of work after the campaign: reserved request capacity for
+account audits and reconciliation with retry of a deferred audit,
+regression-tested before another extended live campaign; then the $16
+spend ceiling's accounting; then adverse selection; and an independent
+verification of completion-only mode. No limit is raised to compensate.
