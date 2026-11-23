@@ -435,3 +435,83 @@ def test_capital_breakdown_keeps_the_four_states_apart(eng):
 
 def test_loop_side_settlement_check_is_off_by_default():
     assert M.SETTLE_CHECK_S == 0
+
+
+# ------------------------------------------------ strict competition scope
+def test_the_allowed_list_alone_is_not_a_whitelist(eng, monkeypatch):
+    """Why the setting exists: with the open gate on, an unlisted
+    competition is still allowed when the gate has nothing against it."""
+    monkeypatch.setattr(M, "OPEN_EV_GATE", True)
+    monkeypatch.setattr(M, "OPEN_GATE_ALLOW_SPORTS", frozenset({"nba"}))
+    assert M.STRICT_SPORTS is False
+    assert eng.open_gate("aec-atp-a-b-2026-11-24")["allow"] is True
+    assert eng.scope_block("aec-atp-a-b-2026-11-24") is None
+
+
+def test_strict_scope_refuses_an_unlisted_competition_at_every_gate(
+        eng, monkeypatch, capsys):
+    monkeypatch.setattr(M, "TOTAL_CAP", D("20"))
+    eng.v.states = {}
+    monkeypatch.setattr(M, "STRICT_SPORTS", True)
+    monkeypatch.setattr(M, "OPEN_GATE_ALLOW_SPORTS", frozenset({"nba"}))
+    out = "aec-atp-a-b-2026-11-24"
+    assert eng.scope_block(out) == "competition_not_permitted"
+    assert eng.scope_block("aec-nba-a-b-2026-11-24") is None
+    # the controller's own decision
+    eng.b.m(out)
+    eng.step_market(out)
+    assert _open_orders(eng.v) == []
+    assert '"block":"competition_not_permitted"' in capsys.readouterr().out
+    # and the last gate, whatever asked for the order
+    n = len(eng.v.orders)
+    eng.place(out, "YES", D("0.47"), D("2"), "rn1_open")
+    eng.place(out, "YES", D("0.47"), D("2"), "rn1_extend")
+    assert len(eng.v.orders) == n
+    assert "place_refused_scope" in capsys.readouterr().out
+
+
+def test_strict_scope_never_blocks_a_completion(eng, monkeypatch):
+    monkeypatch.setattr(M, "STRICT_SPORTS", True)
+    monkeypatch.setattr(M, "OPEN_GATE_ALLOW_SPORTS", frozenset({"nba"}))
+    out = "aec-atp-a-b-2026-11-24"
+    n = len(eng.v.orders)
+    eng.place(out, "NO", D("0.40"), D("1"), "two_sided_complete")
+    assert len(eng.v.orders) == n + 1
+
+
+def test_strict_scope_with_an_empty_list_permits_nothing(eng, monkeypatch):
+    monkeypatch.setattr(M, "STRICT_SPORTS", True)
+    monkeypatch.setattr(M, "OPEN_GATE_ALLOW_SPORTS", frozenset())
+    assert eng.scope_block("aec-nba-a-b-2026-11-24") == \
+        "competition_not_permitted"
+
+
+def test_a_listed_competition_is_quoted_as_before(eng, monkeypatch):
+    monkeypatch.setattr(M, "TOTAL_CAP", D("20"))
+    eng.v.states = {}
+    monkeypatch.setattr(M, "STRICT_SPORTS", True)
+    monkeypatch.setattr(M, "OPEN_GATE_ALLOW_SPORTS", frozenset({"nba"}))
+    s = "aec-nba-a-b-2026-11-24"
+    eng.b.m(s)
+    eng.step_market(s)
+    assert len(_open_orders(eng.v)) == 2
+
+
+def test_a_flat_carried_over_market_outside_the_scope_is_dropped(
+        eng, monkeypatch):
+    """23 Nov left five flat markets tracked. Under a strict scope one
+    that is not on the list places nothing and gives up its slot."""
+    monkeypatch.setattr(M, "TOTAL_CAP", D("20"))
+    eng.v.states = {}
+    monkeypatch.setattr(M, "STRICT_SPORTS", True)
+    monkeypatch.setattr(M, "OPEN_GATE_ALLOW_SPORTS", frozenset({"nba"}))
+    out = "aec-atp-a-b-2026-11-24"
+    eng.b.m(out)
+    assert out in eng.active()
+    eng.step_market(out)
+    assert _open_orders(eng.v) == []
+    # the slot is given up once the market has been idle two minutes
+    eng.b.d["markets"][out]["idle_since"] = 0
+    eng.step_market(out)
+    assert _open_orders(eng.v) == []
+    assert out not in eng.active()

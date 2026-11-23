@@ -85,7 +85,7 @@ DRAWDOWN_REQUIRED_ENV = "L5_ACCOUNT_DRAWDOWN_REQUIRED"
 
 
 def drawdown(risk: Mapping[str, Any], *, own_at_risk: Any = None,
-             own_added_since: Any = 0,
+             own_added_since: Any = 0, own_resting: Any = None,
              env: Optional[Mapping[str, str]] = None) -> Dict[str, Any]:
     """The account drawdown verdict from the published account-risk block,
     as three separate figures:
@@ -97,6 +97,18 @@ def drawdown(risk: Mapping[str, Any], *, own_at_risk: Any = None,
       own_worst_case_exposure_usd  this reader's resting orders plus
           unpaired filled cost (already inside the published figure).
       capacity_usd  what may still be committed before the limit.
+
+    `own_resting` (LIVE 2026-11-23). The published figure turned out NOT
+    to contain resting orders: with $4 to $9 of the sports bot's bids
+    resting it stayed at exactly the earlier figure, and moved only when a
+    bid filled. Treating resting orders as "already inside" therefore let
+    the capacity spring back to the full remainder every time the snapshot
+    refreshed. When the caller gives its resting-order dollars here:
+      * capacity = limit - published - ALL resting orders - unpaired fills
+        newer than the snapshot (`own_added_since` is then unpaired only);
+      * the realized figure subtracts only the unpaired fills the snapshot
+        has seen, never the resting orders.
+    None keeps the earlier arithmetic (resting assumed inside).
 
     `refusal` is None to allow. Unreadable figures refuse."""
     env = os.environ if env is None else env
@@ -122,12 +134,26 @@ def drawdown(risk: Mapping[str, Any], *, own_at_risk: Any = None,
     own = _dec(own_at_risk) if own_at_risk is not None else None
     if own is not None and own < 0:
         own = None
-    capacity = mx - dd - added
+    rest = None
+    if own_resting is not None:
+        rest = _dec(own_resting)
+        if rest is None or rest < 0:
+            return {"state": "ON",
+                    "refusal": "ACCOUNT_DRAWDOWN_OWN_UNREADABLE"}
+    capacity = mx - dd - added - (rest or D(0))
+    if rest is None:
+        realized = None if own is None else max(D(0), dd - own)
+    else:
+        # unpaired fills the snapshot has already seen
+        seen = None if own is None else max(D(0), own - rest - added)
+        realized = None if seen is None else max(D(0), dd - seen)
     out = {"state": "ON", "max_drawdown_usd": str(mx),
            "committed_and_realized_usd": str(dd),
            "own_worst_case_exposure_usd": None if own is None else str(own),
+           "own_resting_orders_usd": None if rest is None else str(rest),
+           "resting_counted_separately": rest is not None,
            "realized_drawdown_upper_bound_usd":
-               None if own is None else str(max(D(0), dd - own)),
+               None if realized is None else str(realized),
            "own_added_since_snapshot_usd": str(added),
            "capacity_usd": str(capacity), "refusal": None}
     if capacity <= 0:
@@ -209,7 +235,8 @@ class RiskReader:
 
 
 def evaluate(doc: Any, *, now: dt.datetime, own_unaccounted: Any = 0,
-             own_at_risk: Any = None, own_added_since: Any = 0
+             own_at_risk: Any = None, own_added_since: Any = 0,
+             own_resting: Any = None
              ) -> Dict[str, Any]:
     """The account-wide loss verdict from an already-fetched document."""
     def no(reason: str, **kw: Any) -> Dict[str, Any]:
@@ -252,7 +279,7 @@ def evaluate(doc: Any, *, now: dt.datetime, own_unaccounted: Any = 0,
     if -life_all >= cum:
         return no("ACCOUNT_CUMULATIVE_LOSS_CEILING", **out)
     dd = drawdown(risk, own_at_risk=own_at_risk,
-                  own_added_since=own_added_since)
+                  own_added_since=own_added_since, own_resting=own_resting)
     out["drawdown"] = dd
     if dd.get("refusal"):
         return no(str(dd["refusal"]), **out)

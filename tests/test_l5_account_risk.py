@@ -271,3 +271,69 @@ def test_the_ledgers_own_published_block_shape_is_read(monkeypatch):
            "refusal": "PORTFOLIO_VALUE_UNAVAILABLE"}
     v = AR.evaluate(doc(risk={"portfolio_drawdown": blk}), now=NOW)
     assert not v["ok"] and v["reason"] == "ACCOUNT_DRAWDOWN_UNREADABLE"
+
+
+# ---- resting orders are not inside the published figure (LIVE 2026-11-23)
+def _dd(used, **kw):
+    return AR.drawdown({"portfolio_drawdown": {
+        "state": "ON", "drawdown_usd": used, "max_drawdown_usd": "3.00"}},
+        **kw)
+
+
+def test_the_23_nov_reading_that_passed_is_now_a_refusal():
+    """17:40:53Z: ledger 1.5344, $3.88 of bids resting, nothing unpaired.
+    Read as "already inside", it left 1.4656 and allowed more."""
+    old = _dd("1.5344", own_at_risk="3.88", own_added_since="0")
+    assert old["refusal"] is None and old["capacity_usd"] == "1.4656"
+    new = _dd("1.5344", own_at_risk="3.88", own_added_since="0",
+              own_resting="3.88")
+    assert new["capacity_usd"] == "-2.4144"
+    assert new["refusal"] == "ACCOUNT_DRAWDOWN_LIMIT"
+    assert new["realized_drawdown_upper_bound_usd"] == "1.5344"
+
+
+def test_capacity_does_not_spring_back_when_the_snapshot_refreshes():
+    """The flip seen all evening: 'added since the snapshot' fell to zero
+    on each refresh and the full remainder came back."""
+    a = _dd("1.5344", own_at_risk="1.00", own_added_since="0",
+            own_resting="1.00")
+    b = _dd("1.5344", own_at_risk="1.00", own_added_since="0",
+            own_resting="1.00")
+    assert a["capacity_usd"] == b["capacity_usd"] == "0.4656"
+
+
+def test_an_unpaired_fill_is_counted_once_before_and_after_the_snapshot():
+    """Fill of $1.32 with nothing resting. Before the ledger sees it: the
+    figure is still 1.5344 and the fill is 'added'. After: the figure is
+    2.8544 and nothing is added. Same capacity, same realized figure."""
+    before = _dd("1.5344", own_at_risk="1.32", own_added_since="1.32",
+                 own_resting="0")
+    after = _dd("2.8544", own_at_risk="1.32", own_added_since="0",
+                own_resting="0")
+    assert before["capacity_usd"] == after["capacity_usd"] == "0.1456"
+    assert before["realized_drawdown_upper_bound_usd"] == "1.5344"
+    assert after["realized_drawdown_upper_bound_usd"] == "1.5344"
+
+
+def test_paired_and_settled_money_is_not_subtracted():
+    """After the pair completes the ledger's own figure falls (it values a
+    pair at $1); the bot has nothing unpaired and nothing resting, so the
+    whole remainder is capacity."""
+    v = _dd("1.3444", own_at_risk="0", own_added_since="0", own_resting="0")
+    assert v["capacity_usd"] == "1.6556" and v["refusal"] is None
+    assert v["realized_drawdown_upper_bound_usd"] == "1.3444"
+
+
+def test_one_order_must_fit_what_resting_orders_leave():
+    v = {"drawdown": _dd("1.3444", own_at_risk="0.97", own_added_since="0",
+                         own_resting="0.97")}
+    assert v["drawdown"]["capacity_usd"] == "0.6856"
+    assert AR.capacity_allows(v, "0.68")
+    assert not AR.capacity_allows(v, "0.70")
+
+
+def test_unreadable_resting_figure_refuses():
+    assert _dd("1.0", own_at_risk="1", own_resting="x")["refusal"] == \
+        "ACCOUNT_DRAWDOWN_OWN_UNREADABLE"
+    assert _dd("1.0", own_at_risk="1", own_resting="-1")["refusal"] == \
+        "ACCOUNT_DRAWDOWN_OWN_UNREADABLE"

@@ -351,6 +351,12 @@ ACCOUNT_RISK_ASYNC = os.getenv("PMUS_TWO_SIDED_ACCOUNT_RISK_ASYNC",
                                "1").strip() != "0"
 ACCOUNT_RISK_READ_S = float(os.getenv("PMUS_TWO_SIDED_ACCOUNT_RISK_READ_S",
                                       "5"))
+# LIVE 2026-11-23: the ledger's drawdown figure did not move while $4-$9 of
+# this bot's bids rested; it moved only on fills. "0" (default) = resting
+# orders are NOT in the ledger's figure, so all of them are subtracted from
+# the capacity. "1" = the earlier assumption (resting already inside).
+ACCOUNT_RISK_RESTING_IN_LEDGER = os.getenv(
+    "PMUS_TWO_SIDED_ACCOUNT_RISK_RESTING_IN_LEDGER", "0").strip() == "1"
 ACCOUNT_RISK_SNAPSHOT_MAX_S = float(os.getenv(
     "PMUS_TWO_SIDED_ACCOUNT_RISK_SNAPSHOT_MAX_S", "30"))
 #: RISK-REDUCING stages: they buy the missing side of a held leg (or exit
@@ -1250,6 +1256,16 @@ OPEN_EV_MIN_MARKETS = _env_d("PMUS_TWO_SIDED_OPEN_EV_MIN_MARKETS", "10")
 # these sports past the open-EV gate (comma list of slug sport codes, e.g.
 # "dota2,utr"). Every other sport stays gated exactly as before. Empty
 # (default) = no exception. The gate's own statistics are unchanged.
+# OWNER 2026-11-23: "The campaign must not silently expand beyond its
+# authorization." OPEN_GATE_ALLOW_SPORTS is not a whitelist: it lets the
+# listed competitions past the open-EV gate, and an UNLISTED competition
+# still opens whenever its own settled history shows positive expected
+# value. With STRICT_SPORTS=1 the list is exactly the scope: no opening or
+# extension in any other competition, and no slot taken by one. Completions
+# and cancels are never blocked. An empty list with STRICT on permits
+# nothing. Default 0 = today's behaviour.
+STRICT_SPORTS = os.getenv("PMUS_TWO_SIDED_STRICT_SPORTS",
+                          "0").strip() == "1"
 OPEN_GATE_ALLOW_SPORTS = frozenset(
     x.strip().lower() for x in os.getenv(
         "PMUS_TWO_SIDED_OPEN_GATE_ALLOW_SPORTS", "").split(",") if x.strip())
@@ -2710,6 +2726,15 @@ class Engine:
         self._gate_cache = (now, st)
         return st
 
+    def scope_block(self, slug: str) -> Optional[str]:
+        """"competition_not_permitted" when the strict scope is on and this
+        market's competition is not on the owner's list; else None."""
+        if not STRICT_SPORTS:
+            return None
+        from src import pmus_sports_open_gate as G
+        return None if G.sport_of(slug) in OPEN_GATE_ALLOW_SPORTS \
+            else "competition_not_permitted"
+
     def open_gate(self, slug: str) -> Dict[str, Any]:
         from src import pmus_sports_open_gate as G
         sport = G.sport_of(slug)
@@ -3618,7 +3643,15 @@ class Engine:
         url = (os.getenv(AR.RISK_URL_ENV) or "").strip()
         try:
             expo = self.own_exposure_usd()
-            added = self._own_added_since(expo)
+            rest = None
+            if ACCOUNT_RISK_RESTING_IN_LEDGER:
+                added = self._own_added_since(expo)
+            else:
+                # the ledger's figure moves on fills, not on resting bids:
+                # count every resting dollar, and only NEW unpaired fills
+                unp = D(self.b.total_unmatched())
+                rest = max(D(0), expo - unp)
+                added = self._own_added_since(unp)
             reader = getattr(self, "_risk_reader", None)
             doc, v = None, None
             if reader is not None:
@@ -3648,7 +3681,7 @@ class Engine:
                 own = self.own_unaccounted_losses(AR.retired_markets(doc))
                 v = AR.evaluate(doc, now=datetime.now(timezone.utc),
                                 own_unaccounted=own, own_at_risk=expo,
-                                own_added_since=added)
+                                own_added_since=added, own_resting=rest)
             lane = AR.lane_cap()
             v = dict(v, lane_cap_usd=None if lane is None else str(lane),
                      own_exposure_usd=str(expo))
@@ -3860,6 +3893,11 @@ class Engine:
                     qty=qty, stage=stage, reason=why,
                     min_touch_qty=str(MIN_TOUCH_QTY))
                 return
+        if not is_completion_stage(stage) and self.scope_block(slug):
+            log("place_refused_scope", slug=slug, side=side, px=px, qty=qty,
+                stage=stage, reason=self.scope_block(slug),
+                allow_sports=sorted(OPEN_GATE_ALLOW_SPORTS))
+            return
         if self.shared_halt() == "HALT":
             log("place_refused_shared_halt", slug=slug, side=side, px=px,
                 qty=qty, stage=stage)
@@ -4311,6 +4349,8 @@ class Engine:
             late = "excluded"
         if not new_block and late:
             new_block = "late:" + str(late)
+        if not new_block and self.scope_block(slug):
+            new_block = self.scope_block(slug)
         if not new_block and OPEN_EV_GATE and not self.open_gate(slug)["allow"]:
             new_block = "open_ev_gate"
         if not new_block and self.ws is not None and \
@@ -5053,6 +5093,9 @@ class Engine:
                 _pin_why[slug] = "bid_outside_band:%s not in %s..%s" % (
                     b, BAND_LO, BAND_HI)
                 continue
+            if self.scope_block(slug):
+                _pin_why[slug] = "competition_not_permitted"
+                continue         # outside the owner's scope: no slot
             if OPEN_EV_GATE and OPEN_GATE_ALLOW_SPORTS and \
                     not self.open_gate(slug)["allow"]:
                 _pin_why[slug] = "competition_not_permitted"
@@ -5868,6 +5911,7 @@ class Engine:
                                    "max_spread_ticks": MAX_SPREAD_TICKS,
                                    "max_markets": MAX_MARKETS,
                                    "max_tracked": MAX_TRACKED,
+                                   "strict_sports": STRICT_SPORTS,
                                    "exclude": os.getenv(
                                        "PMUS_TWO_SIDED_EXCLUDE", "cr-"),
                                    "allow_sports": sorted(

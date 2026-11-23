@@ -2659,3 +2659,34 @@ def test_the_loop_never_fetches_when_a_reader_is_present(reader, monkeypatch):
         AssertionError("the loop read the ledger itself")))
     r.refresh_once()
     assert e.account_risk()["ok"] is True
+
+
+def test_resting_bids_use_up_the_account_capacity_for_good(eng, risk_on,
+                                                           monkeypatch):
+    """LIVE 2026-11-23: with the snapshot unchanged the earlier arithmetic
+    forgot a resting bid after about 30 s and allowed the next one. Now
+    every resting dollar stays counted for as long as it rests."""
+    e, v = eng
+    risk_on["doc"] = _with_drawdown("2.40")          # 0.60 left
+    e.select(v.account())
+    e.step_market("aec-x")
+    assert len(_opened(v)) == 1
+    first = e.own_exposure_usd()
+    # long after any snapshot window: the bid still rests, still counts
+    e._expo_hist = []
+    e._acct_risk = None
+    e.step_market("aec-x")
+    assert len(_opened(v)) == 1
+    d = e.account_risk()["drawdown"]
+    assert D(d["own_resting_orders_usd"]) == first
+    assert D(d["capacity_usd"]) == D("0.60") - first
+
+
+def test_the_earlier_assumption_is_still_selectable(eng, risk_on,
+                                                    monkeypatch):
+    e, v = eng
+    monkeypatch.setattr(M, "ACCOUNT_RISK_RESTING_IN_LEDGER", True)
+    risk_on["doc"] = _with_drawdown("2.40")
+    e.select(v.account())
+    e.step_market("aec-x")
+    assert e.account_risk()["drawdown"]["resting_counted_separately"] is False
