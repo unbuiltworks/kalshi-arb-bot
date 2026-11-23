@@ -342,6 +342,16 @@ _ACCOUNT_RISK_MODE = os.getenv("PMUS_TWO_SIDED_ACCOUNT_RISK", "0").strip()
 ACCOUNT_RISK_ON = _ACCOUNT_RISK_MODE == "1"
 ACCOUNT_RISK_OBSERVE = _ACCOUNT_RISK_MODE.lower() == "observe"
 ACCOUNT_RISK_TTL_S = float(os.getenv("PMUS_TWO_SIDED_ACCOUNT_RISK_TTL_S", "10"))
+# The account-risk document is read on its OWN thread once the loop runs
+# (ACCOUNT_RISK_ASYNC, on): the loop only looks at the last snapshot. A
+# snapshot older than ACCOUNT_RISK_SNAPSHOT_MAX_S, or none yet, refuses new
+# openings and extensions; cancels and completions are untouched.
+ACCOUNT_RISK_ASYNC = os.getenv("PMUS_TWO_SIDED_ACCOUNT_RISK_ASYNC",
+                               "1").strip() != "0"
+ACCOUNT_RISK_READ_S = float(os.getenv("PMUS_TWO_SIDED_ACCOUNT_RISK_READ_S",
+                                      "5"))
+ACCOUNT_RISK_SNAPSHOT_MAX_S = float(os.getenv(
+    "PMUS_TWO_SIDED_ACCOUNT_RISK_SNAPSHOT_MAX_S", "30"))
 #: RISK-REDUCING stages: they buy the missing side of a held leg (or exit
 #: it) and are never refused by the account-wide limits. Everything else --
 #: two_sided_open, two_sided_open_rewarded, two_sided_extend -- adds risk.
@@ -3496,27 +3506,40 @@ class Engine:
             return hit[1]
         from src import l5_account_risk as AR
         url = (os.getenv(AR.RISK_URL_ENV) or "").strip()
-        doc_box: Dict[str, Any] = {}
-
-        def fetch(u: str) -> Any:
-            doc_box["doc"] = AR.fetch_json(u)
-            return doc_box["doc"]
-
         try:
-            first = AR.account_risk(url=url, now=datetime.now(timezone.utc),
-                                    own_unaccounted=0, fetch=fetch)
-            if "doc" in doc_box and first.get("reason") not in (
-                    "ACCOUNT_RISK_URL_NOT_SET",):
-                own = self.own_unaccounted_losses(
-                    AR.retired_markets(doc_box["doc"]))
-                v = AR.evaluate(doc_box["doc"],
-                                now=datetime.now(timezone.utc),
-                                own_unaccounted=own,
-                                own_at_risk=self.own_exposure_usd())
-            else:
-                v = first
-            lane = AR.lane_cap()
             expo = self.own_exposure_usd()
+            added = self._own_added_since(expo)
+            reader = getattr(self, "_risk_reader", None)
+            doc, v = None, None
+            if reader is not None:
+                # the loop never waits on the ledger: last snapshot only
+                snap = reader.snapshot()
+                if snap["doc"] is None:
+                    v = {"ok": False, "reason": snap["err"] or
+                         "ACCOUNT_RISK_NOT_READ_YET"}
+                elif snap["age_s"] is None or \
+                        snap["age_s"] > ACCOUNT_RISK_SNAPSHOT_MAX_S:
+                    v = {"ok": False, "reason": "ACCOUNT_RISK_SNAPSHOT_STALE",
+                         "age_s": None if snap["age_s"] is None
+                         else round(snap["age_s"], 1), "last_error":
+                         snap["err"]}
+                else:
+                    doc = snap["doc"]
+            elif not url:
+                v = {"ok": False, "reason": "ACCOUNT_RISK_URL_NOT_SET",
+                     "env": AR.RISK_URL_ENV}
+            else:
+                try:
+                    doc = AR.fetch_json(url)
+                except Exception as exc:                 # noqa: BLE001
+                    v = {"ok": False, "reason": "ACCOUNT_RISK_UNREADABLE:%s"
+                         % type(exc).__name__}
+            if v is None:
+                own = self.own_unaccounted_losses(AR.retired_markets(doc))
+                v = AR.evaluate(doc, now=datetime.now(timezone.utc),
+                                own_unaccounted=own, own_at_risk=expo,
+                                own_added_since=added)
+            lane = AR.lane_cap()
             v = dict(v, lane_cap_usd=None if lane is None else str(lane),
                      own_exposure_usd=str(expo))
             if v.get("ok") and lane is None:
@@ -3538,6 +3561,41 @@ class Engine:
         self._acct_risk = (now, v)
         return v
 
+    def _own_added_since(self, expo: D) -> D:
+        """How much this bot's at-risk money has grown over the period a
+        ledger snapshot may be old: now, less the LOWEST it has been in
+        that period. The ledger's figure cannot contain it yet. Erring high
+        only makes the capacity smaller."""
+        from src import l5_account_risk as AR
+        hist = getattr(self, "_expo_hist", None)
+        if hist is None:
+            hist = self._expo_hist = []
+        now = time.monotonic()
+        keep = AR.RISK_MAX_AGE_S + ACCOUNT_RISK_SNAPSHOT_MAX_S + 10
+        hist.append((now, expo))
+        while len(hist) > 1 and now - hist[0][0] > keep:
+            hist.pop(0)
+        try:
+            low = min(e for _t, e in hist)
+            return max(D(0), expo - low) if low.is_finite() and \
+                expo.is_finite() else D("Infinity")
+        except Exception:                                # noqa: BLE001
+            return D("Infinity")
+
+    def start_risk_reader(self) -> None:
+        """Begin reading the account-risk document off the loop."""
+        if not (ACCOUNT_RISK_ON or ACCOUNT_RISK_OBSERVE) or \
+                not ACCOUNT_RISK_ASYNC or \
+                getattr(self, "_risk_reader", None) is not None:
+            return
+        from src import l5_account_risk as AR
+        self._risk_reader = AR.RiskReader(
+            lambda: os.getenv(AR.RISK_URL_ENV) or "",
+            every_s=ACCOUNT_RISK_READ_S).start()
+        log("account_risk_reader_started", every_s=ACCOUNT_RISK_READ_S,
+            max_age_s=ACCOUNT_RISK_SNAPSHOT_MAX_S,
+            label="the trading loop no longer waits on the account ledger")
+
     def account_risk_blocks(self, px: Optional[D] = None,
                             qty: Optional[D] = None) -> Optional[str]:
         """Reason a NEW opening/extension is refused, or None."""
@@ -3547,12 +3605,16 @@ class Engine:
         if not v.get("ok"):
             return str(v.get("reason"))
         if px is not None and qty is not None:
+            need = D(str(px)) * D(str(qty))
             try:
                 lane = D(str(v.get("lane_cap_usd")))
-                if self.own_exposure_usd() + D(str(px)) * D(str(qty)) > lane:
+                if self.own_exposure_usd() + need > lane:
                     return "ACCOUNT_EXPOSURE_CAP"
             except Exception:                            # noqa: BLE001
                 return "ACCOUNT_EXPOSURE_UNREADABLE"
+            from src import l5_account_risk as AR
+            if not AR.capacity_allows(v, need):
+                return "ACCOUNT_RISK_CAPACITY"
         return None
 
     def stale_completion_block(self, slug: str, side: str,
@@ -5493,6 +5555,7 @@ class Engine:
         self._hook_loop_beat()
         signal.signal(signal.SIGTERM, lambda *_: self.on_sigterm())
         self.require_fresh_account = True     # no new exposure on stale state
+        self.start_risk_reader()
         self.mark_recovery_start()
         seed = seed_drift(self.b.d, os.getenv("PMUS_TWO_SIDED_DRIFT_SEED"))
         if seed["seeded"] or seed["error"] or seed["kept_live"]:

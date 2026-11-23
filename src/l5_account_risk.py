@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import time
 import os
 import urllib.request
 from decimal import ROUND_DOWN, Decimal as D
@@ -60,28 +61,43 @@ def fetch_json(url: str, timeout: float = 3.0) -> Any:
 
 
 #: OWNER 2026-11-23: "Enforce account-wide drawdown in sports. The $3 limit
-#: needs to apply consistently across every money-capable service." The
-#: account ledger publishes its own drawdown figure and limit in the
-#: account-risk block (`portfolio_drawdown`); a reader refuses new exposure
-#: at the limit exactly as the ledger does.
+#: needs to apply consistently across every money-capable service." and, on
+#: the proposal to stop counting committed capital: "I would not approve
+#: redefining the drawdown calculation yet ... distinguish: realized account
+#: drawdown; worst-case outstanding-order and inventory exposure; remaining
+#: authorized risk capacity. Enforce all three without double-counting the
+#: same exposure. Any change to the effective loss limit still needs
+#: explicit approval."
+#:
+#: THE LIMIT IS THE LEDGER'S, UNCHANGED. Its published figure already counts
+#: cash held for resting orders and unpaired contracts as lost, so it is
+#: "realized losses plus everything committed", and the reader's own
+#: committed money is INSIDE it. Nothing is added to it and nothing is
+#: taken out of it here. What a reader adds is only what the snapshot
+#: cannot contain yet: exposure it has taken on since the snapshot.
+#:   capacity = limit - published figure - own exposure added since
+#: New exposure is refused when capacity is used up, and a single order is
+#: refused when it is larger than the capacity left.
 #:   L5_ACCOUNT_DRAWDOWN_REQUIRED=1  a publisher that gives no drawdown
 #:       block, or has the limit off, is refused (unset: such a publisher
 #:       is not a refusal -- the earlier behaviour).
-#:   L5_ACCOUNT_DRAWDOWN_AT_RISK_BUDGET_USD  THE OWNER'S DECISION, default
-#:       0 = strict. The ledger's figure counts cash held for resting
-#:       orders and unpaired contracts as already lost. With a budget set,
-#:       up to that much of the READER'S OWN declared at-risk money (resting
-#:       orders plus unpaired cost) is not counted as drawdown, and its
-#:       marked-down value is counted instead. Money lost for good -- a
-#:       settled loss -- always counts in full.
 DRAWDOWN_REQUIRED_ENV = "L5_ACCOUNT_DRAWDOWN_REQUIRED"
-DRAWDOWN_BUDGET_ENV = "L5_ACCOUNT_DRAWDOWN_AT_RISK_BUDGET_USD"
 
 
 def drawdown(risk: Mapping[str, Any], *, own_at_risk: Any = None,
-             own_marks: Any = 0, env: Optional[Mapping[str, str]] = None
-             ) -> Dict[str, Any]:
-    """The account drawdown verdict from the published account-risk block.
+             own_added_since: Any = 0,
+             env: Optional[Mapping[str, str]] = None) -> Dict[str, Any]:
+    """The account drawdown verdict from the published account-risk block,
+    as three separate figures:
+
+      realized_drawdown_upper_bound_usd  the published figure less this
+          reader's own committed money. It still contains any OTHER
+          service's committed money, so it can only overstate what has
+          actually been lost.
+      own_worst_case_exposure_usd  this reader's resting orders plus
+          unpaired filled cost (already inside the published figure).
+      capacity_usd  what may still be committed before the limit.
+
     `refusal` is None to allow. Unreadable figures refuse."""
     env = os.environ if env is None else env
     required = str(env.get(DRAWDOWN_REQUIRED_ENV, "") or "").strip() == "1"
@@ -99,28 +115,22 @@ def drawdown(risk: Mapping[str, Any], *, own_at_risk: Any = None,
     dd, mx = _dec(pd.get("drawdown_usd")), _dec(pd.get("max_drawdown_usd"))
     if dd is None or mx is None or mx <= 0:
         return {"state": "ON", "refusal": "ACCOUNT_DRAWDOWN_UNREADABLE"}
-    raw_b = str(env.get(DRAWDOWN_BUDGET_ENV, "") or "").strip()
-    budget = _dec(raw_b) if raw_b else D(0)
-    if budget is None or budget < 0:
-        return {"state": "ON", "refusal": "ACCOUNT_DRAWDOWN_BUDGET_UNREADABLE"}
-    credit, marked = D(0), D(0)
-    if budget > 0:
-        risk_now = _dec(own_at_risk) if own_at_risk is not None else None
-        marks = _dec(own_marks)
-        if risk_now is None or risk_now < 0 or marks is None:
-            # unknown own exposure: nothing is excused (the strict figure)
-            credit, marked = D(0), D(0)
-        else:
-            credit = min(risk_now, budget)
-            marked = max(D(0), -marks)
-    used = dd - credit + marked
-    out = {"state": "ON", "published_drawdown_usd": str(dd),
-           "max_drawdown_usd": str(mx), "at_risk_budget_usd": str(budget),
-           "own_at_risk_not_counted_usd": str(credit),
-           "own_marked_loss_counted_usd": str(marked),
-           "drawdown_usd": str(used), "room_usd": str(mx - used),
-           "refusal": None}
-    if used >= mx:
+    added = _dec(own_added_since)
+    if added is None:
+        return {"state": "ON", "refusal": "ACCOUNT_DRAWDOWN_OWN_UNREADABLE"}
+    added = max(D(0), added)
+    own = _dec(own_at_risk) if own_at_risk is not None else None
+    if own is not None and own < 0:
+        own = None
+    capacity = mx - dd - added
+    out = {"state": "ON", "max_drawdown_usd": str(mx),
+           "committed_and_realized_usd": str(dd),
+           "own_worst_case_exposure_usd": None if own is None else str(own),
+           "realized_drawdown_upper_bound_usd":
+               None if own is None else str(max(D(0), dd - own)),
+           "own_added_since_snapshot_usd": str(added),
+           "capacity_usd": str(capacity), "refusal": None}
+    if capacity <= 0:
         out["refusal"] = "ACCOUNT_DRAWDOWN_LIMIT"
     elif pd.get("refusal") and not str(pd.get("refusal")).startswith(
             "PORTFOLIO_DRAWDOWN_LIMIT"):
@@ -131,8 +141,76 @@ def drawdown(risk: Mapping[str, Any], *, own_at_risk: Any = None,
     return out
 
 
+def capacity_allows(verdict: Mapping[str, Any], order_usd: Any) -> bool:
+    """May one more order of this worst-case value be committed? True when
+    the publisher gives no drawdown figure and none is required (nothing to
+    measure against); otherwise the order must fit the capacity left."""
+    dd = verdict.get("drawdown") if isinstance(verdict, Mapping) else None
+    if not isinstance(dd, Mapping) or dd.get("state") != "ON":
+        return not (isinstance(dd, Mapping) and dd.get("refusal"))
+    cap, need = _dec(dd.get("capacity_usd")), _dec(order_usd)
+    if cap is None or need is None:
+        return False
+    return need <= cap
+
+
+class RiskReader:
+    """Reads the account-risk document on its own thread, so the trading
+    loop never waits on it (owner 2026-11-23: "I want the account-risk read
+    moved off the execution loop ... A stale or unavailable account-risk
+    snapshot should block new orders, without preventing cancellations").
+    The loop only ever looks at the last snapshot and its age."""
+
+    def __init__(self, url: Callable[[], str], every_s: float = 5.0,
+                 fetch: Optional[Callable[[str], Any]] = None,
+                 clock: Callable[[], float] = time.monotonic):
+        self._url, self._every, self._fetch = url, max(1.0, every_s), fetch
+        self._clock = clock
+        self._snap: Dict[str, Any] = {"doc": None, "at": None, "err": None,
+                                      "tries": 0}
+        self.stop = False
+
+    def refresh_once(self) -> None:
+        url = (self._url() or "").strip()
+        snap = dict(self._snap, tries=int(self._snap["tries"]) + 1)
+        if not url:
+            snap.update(err="ACCOUNT_RISK_URL_NOT_SET")
+        else:
+            try:
+                doc = (self._fetch or fetch_json)(url)
+                snap.update(doc=doc, at=self._clock(), err=None)
+            except BaseException as exc:                 # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                # the last good document is kept; its age keeps growing
+                snap.update(err="ACCOUNT_RISK_UNREADABLE:%s"
+                            % type(exc).__name__)
+        self._snap = snap                    # one atomic reference swap
+
+    def snapshot(self) -> Dict[str, Any]:
+        s = self._snap
+        age = None if s["at"] is None else max(0.0, self._clock() - s["at"])
+        return {"doc": s["doc"], "age_s": age, "err": s["err"],
+                "tries": s["tries"]}
+
+    def start(self) -> "RiskReader":
+        import threading
+
+        def run() -> None:
+            while not self.stop:
+                try:
+                    self.refresh_once()
+                except Exception:                        # noqa: BLE001
+                    pass
+                time.sleep(self._every)
+        threading.Thread(target=run, daemon=True,
+                         name="account-risk-reader").start()
+        return self
+
+
 def evaluate(doc: Any, *, now: dt.datetime, own_unaccounted: Any = 0,
-             own_at_risk: Any = None) -> Dict[str, Any]:
+             own_at_risk: Any = None, own_added_since: Any = 0
+             ) -> Dict[str, Any]:
     """The account-wide loss verdict from an already-fetched document."""
     def no(reason: str, **kw: Any) -> Dict[str, Any]:
         return dict(kw, ok=False, reason=reason)
@@ -173,7 +251,8 @@ def evaluate(doc: Any, *, now: dt.datetime, own_unaccounted: Any = 0,
         return no("ACCOUNT_DAILY_LOSS_HALT", **out)
     if -life_all >= cum:
         return no("ACCOUNT_CUMULATIVE_LOSS_CEILING", **out)
-    dd = drawdown(risk, own_at_risk=own_at_risk, own_marks=add)
+    dd = drawdown(risk, own_at_risk=own_at_risk,
+                  own_added_since=own_added_since)
     out["drawdown"] = dd
     if dd.get("refusal"):
         return no(str(dd["refusal"]), **out)

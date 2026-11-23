@@ -124,13 +124,13 @@ def dd(drawdown="1.6744", mx="3.00", state="ON", **kw):
 @pytest.fixture(autouse=True)
 def _no_drawdown_env(monkeypatch):
     monkeypatch.delenv(AR.DRAWDOWN_REQUIRED_ENV, raising=False)
-    monkeypatch.delenv(AR.DRAWDOWN_BUDGET_ENV, raising=False)
 
 
 def test_published_drawdown_under_the_limit_passes_and_is_reported():
     v = AR.evaluate(dd(), now=NOW)
-    assert v["ok"] and v["drawdown"]["drawdown_usd"] == "1.6744"
-    assert v["drawdown"]["room_usd"] == "1.3256"
+    assert v["ok"]
+    assert v["drawdown"]["committed_and_realized_usd"] == "1.6744"
+    assert v["drawdown"]["capacity_usd"] == "1.3256"
 
 
 def test_published_drawdown_at_the_limit_refuses():
@@ -165,48 +165,87 @@ def test_a_publisher_without_the_figure_is_refused_only_when_required(
     assert AR.evaluate(dd(), now=NOW)["ok"]
 
 
-def test_strict_by_default_own_resting_money_counts_as_drawdown():
-    # the ledger's 5.00 includes 4.00 of this bot's own resting orders
-    v = AR.evaluate(dd("5.00"), now=NOW, own_at_risk="4.00")
+def test_the_three_figures_are_reported_separately():
+    # the ledger's 2.50 includes 1.90 of this bot's own resting orders
+    v = AR.evaluate(dd("2.50"), now=NOW, own_at_risk="1.90")
+    d = v["drawdown"]
+    assert v["ok"]
+    assert d["committed_and_realized_usd"] == "2.50"       # the ledger's own
+    assert d["own_worst_case_exposure_usd"] == "1.90"
+    assert d["realized_drawdown_upper_bound_usd"] == "0.60"
+    assert d["capacity_usd"] == "0.50"                     # 3.00 - 2.50
+
+
+def test_own_committed_money_is_never_taken_out_of_the_limit():
+    # however much of the figure is this bot's own resting money, the
+    # limit is reached when the ledger's figure reaches it
+    for own in ("0", "2.00", "5.00", None):
+        v = AR.evaluate(dd("3.00"), now=NOW, own_at_risk=own)
+        assert v["reason"] == "ACCOUNT_DRAWDOWN_LIMIT", own
+
+
+def test_exposure_added_since_the_snapshot_is_counted_once():
+    # snapshot 1.67; the bot has since put 0.94 at risk the ledger has not
+    # seen: capacity is 3.00 - 1.67 - 0.94
+    v = AR.evaluate(dd("1.67"), now=NOW, own_at_risk="0.94",
+                    own_added_since="0.94")
+    assert v["ok"] and v["drawdown"]["capacity_usd"] == "0.39"
+    # once the ledger's snapshot includes it, it is not added again
+    v = AR.evaluate(dd("2.61"), now=NOW, own_at_risk="0.94",
+                    own_added_since="0")
+    assert v["drawdown"]["capacity_usd"] == "0.39"
+    # and enough of it reaches the limit before the ledger has seen any
+    v = AR.evaluate(dd("1.67"), now=NOW, own_at_risk="1.40",
+                    own_added_since="1.40")
     assert v["reason"] == "ACCOUNT_DRAWDOWN_LIMIT"
 
 
-def test_with_an_owner_budget_own_at_risk_money_is_not_counted_up_to_it(
-        monkeypatch):
-    monkeypatch.setenv(AR.DRAWDOWN_BUDGET_ENV, "50")
-    v = AR.evaluate(dd("5.00"), now=NOW, own_at_risk="4.00")
-    assert v["ok"] and v["drawdown"]["drawdown_usd"] == "1.00"
-    assert v["drawdown"]["own_at_risk_not_counted_usd"] == "4.00"
-    # only up to the budget: 60 at risk, 50 excused, 10 + 1 counted
-    v = AR.evaluate(dd("61.00"), now=NOW, own_at_risk="60")
-    assert v["reason"] == "ACCOUNT_DRAWDOWN_LIMIT"
-    assert v["drawdown"]["drawdown_usd"] == "11.00"
-    # a settled loss is never excused: nothing is at risk any more
-    v = AR.evaluate(dd("3.50"), now=NOW, own_at_risk="0")
-    assert v["reason"] == "ACCOUNT_DRAWDOWN_LIMIT"
+def test_unknown_own_additions_refuse():
+    for bad in ("x", None, "NaN"):
+        v = AR.evaluate(dd("1.00"), now=NOW, own_added_since=bad)
+        assert v["reason"] == "ACCOUNT_DRAWDOWN_OWN_UNREADABLE", bad
+    v = AR.evaluate(dd("1.00"), now=NOW, own_added_since="Infinity")
+    assert not v["ok"]
 
 
-def test_with_a_budget_marked_losses_on_held_inventory_count(monkeypatch):
-    monkeypatch.setenv(AR.DRAWDOWN_BUDGET_ENV, "50")
-    # 2.00 published + 8 at risk, of which 1.20 is already marked down
-    v = AR.evaluate(dd("10.00"), now=NOW, own_at_risk="8",
-                    own_unaccounted="-1.20")
-    assert v["drawdown"]["own_marked_loss_counted_usd"] == "1.20"
-    assert v["drawdown"]["drawdown_usd"] == "3.20"
-    assert v["reason"] == "ACCOUNT_DRAWDOWN_LIMIT"
+def test_one_order_must_fit_the_capacity_left():
+    v = AR.evaluate(dd("1.67"), now=NOW)
+    assert AR.capacity_allows(v, "1.33") and not AR.capacity_allows(v, "1.34")
+    assert not AR.capacity_allows(v, "x")
+    # nothing published and nothing required: nothing to measure against
+    assert AR.capacity_allows(AR.evaluate(doc(), now=NOW), "999")
 
 
-def test_unknown_own_exposure_excuses_nothing(monkeypatch):
-    monkeypatch.setenv(AR.DRAWDOWN_BUDGET_ENV, "50")
-    for unknown in (None, "Infinity", "x", "-1"):
-        v = AR.evaluate(dd("5.00"), now=NOW, own_at_risk=unknown)
-        assert v["reason"] == "ACCOUNT_DRAWDOWN_LIMIT", unknown
+# ---- the document is read off the trading loop
+def test_the_reader_keeps_the_last_good_document_and_its_age():
+    t = [100.0]
+    box = {"doc": {"n": 1}, "fail": False}
+
+    def fetch(url):
+        if box["fail"]:
+            raise OSError("down")
+        return box["doc"]
+    r = AR.RiskReader(lambda: "http://x", fetch=fetch, clock=lambda: t[0])
+    s = r.snapshot()
+    assert s["doc"] is None and s["age_s"] is None and s["tries"] == 0
+    r.refresh_once()
+    assert r.snapshot()["doc"] == {"n": 1} and r.snapshot()["age_s"] == 0
+    t[0] += 40
+    box["fail"] = True
+    r.refresh_once()
+    s = r.snapshot()
+    assert s["doc"] == {"n": 1} and s["age_s"] == 40      # ageing, not fresh
+    assert s["err"] == "ACCOUNT_RISK_UNREADABLE:OSError" and s["tries"] == 2
+    box["fail"] = False
+    r.refresh_once()
+    assert r.snapshot()["age_s"] == 0 and r.snapshot()["err"] is None
 
 
-def test_an_unreadable_budget_refuses(monkeypatch):
-    monkeypatch.setenv(AR.DRAWDOWN_BUDGET_ENV, "lots")
-    v = AR.evaluate(dd(), now=NOW, own_at_risk="1")
-    assert v["reason"] == "ACCOUNT_DRAWDOWN_BUDGET_UNREADABLE"
+def test_the_reader_without_an_address_reads_nothing():
+    r = AR.RiskReader(lambda: "", fetch=lambda u: {"never": 1})
+    r.refresh_once()
+    assert r.snapshot()["doc"] is None
+    assert r.snapshot()["err"] == "ACCOUNT_RISK_URL_NOT_SET"
 
 
 def test_a_publisher_that_refuses_for_another_reason_is_followed():
@@ -225,7 +264,7 @@ def test_the_ledgers_own_published_block_shape_is_read(monkeypatch):
            "anchor_usd": "321.4782", "max_drawdown_usd": "3.00",
            "drawdown_usd": "1.6744", "room_usd": "1.3256", "refusal": None}
     v = AR.evaluate(doc(risk={"portfolio_drawdown": blk}), now=NOW)
-    assert v["ok"] and v["drawdown"]["room_usd"] == "1.3256"
+    assert v["ok"] and v["drawdown"]["capacity_usd"] == "1.3256"
     # a value the ledger could not establish: no figure, its own refusal
     blk = {"state": "ON", "worst_case_value_usd": None,
            "anchor_usd": "321.4782", "max_drawdown_usd": "3.00",

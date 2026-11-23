@@ -2577,28 +2577,85 @@ def test_account_drawdown_at_the_limit_blocks_new_openings(eng, risk_on):
 
 def test_account_drawdown_under_the_limit_allows_openings(eng, risk_on):
     e, v = eng
-    risk_on["doc"] = _with_drawdown("1.67")
+    risk_on["doc"] = _with_drawdown("0.50")
     e.select(v.account())
     e.step_market("aec-x")
     assert len(_opened(v)) == 2
-    assert e.account_risk()["drawdown"]["state"] == "ON"
+    d = e.account_risk()["drawdown"]
+    assert d["state"] == "ON" and D(d["own_worst_case_exposure_usd"]) > 0
 
 
-def test_the_bots_own_resting_orders_reach_the_drawdown_verdict(
-        eng, risk_on, monkeypatch):
-    from src import l5_account_risk as AR
+def test_an_order_larger_than_the_capacity_left_is_refused(eng, risk_on,
+                                                           capsys):
     e, v = eng
-    monkeypatch.setenv(AR.DRAWDOWN_BUDGET_ENV, "50")
-    risk_on["doc"] = _with_drawdown("1.67")
+    # 3.00 - 2.50 = 0.50 left: one bid fits, the second does not, and what
+    # the first committed is counted before the ledger has seen it
+    risk_on["doc"] = _with_drawdown("2.50")
     e.select(v.account())
     e.step_market("aec-x")
-    resting = e.own_exposure_usd()
-    assert resting > 0
-    # the ledger now shows that money as gone; with the owner's budget the
-    # bot does not count its own resting orders against the limit
-    risk_on["doc"] = _with_drawdown(str(D("1.67") + resting + D("2")))
-    assert e.account_risk_blocks() == "ACCOUNT_DRAWDOWN_LIMIT"   # 3.67 used
-    risk_on["doc"] = _with_drawdown(str(D("1.67") + resting))
-    assert e.account_risk_blocks() is None
-    got = e.account_risk()["drawdown"]
-    assert D(got["own_at_risk_not_counted_usd"]) == resting
+    assert len(_opened(v)) == 1
+    assert "ACCOUNT_RISK_CAPACITY" in capsys.readouterr().out
+    assert e.own_exposure_usd() <= D("0.50")
+
+
+def test_what_the_bot_just_committed_counts_before_the_ledger_sees_it(
+        eng, risk_on):
+    e, v = eng
+    # 0.60 left. Either bid fits on its own; together they do not, and the
+    # ledger's snapshot still shows the figure from before the first one.
+    risk_on["doc"] = _with_drawdown("2.40")
+    e.select(v.account())
+    e.step_market("aec-x")
+    px = sorted(D(str(o["px"])) * D(str(o["qty"])) for o in v.orders.values())
+    assert len(_opened(v)) == 1, px
+    assert e.own_exposure_usd() <= D("0.60")
+    assert all(p <= D("0.60") for p in px)             # each fits alone
+
+
+# ---- the account-risk document is read off the loop
+@pytest.fixture
+def reader(eng, risk_on, monkeypatch):
+    from src import l5_account_risk as AR
+    e, v = eng
+    t = [1000.0]
+    r = AR.RiskReader(lambda: "http://risk/l5/live_orders.json",
+                      fetch=lambda u: risk_on["doc"], clock=lambda: t[0])
+    e._risk_reader = r
+    return e, v, r, t
+
+
+def test_no_snapshot_yet_blocks_new_orders_but_not_completions(reader):
+    e, v, r, t = reader
+    assert e.account_risk_blocks() == "ACCOUNT_RISK_NOT_READ_YET"
+    e.select(v.account())
+    e.step_market("aec-x")
+    assert _opened(v) == []
+    r.refresh_once()
+    e.step_market("aec-x")
+    assert len(_opened(v)) == 2
+
+
+def test_a_stale_snapshot_blocks_new_orders_and_cancels_still_work(
+        reader, monkeypatch):
+    e, v, r, t = reader
+    r.refresh_once()
+    e.select(v.account())
+    e.step_market("aec-x")
+    assert len(_opened(v)) == 2
+    t[0] += M.ACCOUNT_RISK_SNAPSHOT_MAX_S + 1          # the ledger went quiet
+    assert e.account_risk_blocks() == "ACCOUNT_RISK_SNAPSHOT_STALE"
+    n = len(v.orders)
+    e.place("aec-x", "YES", D("0.40"), D("1"), "two_sided_open")
+    assert len(v.orders) == n                          # no new order
+    e.cancel_all_own("test")                           # cancelling is free
+    assert _opened(v) == []
+
+
+def test_the_loop_never_fetches_when_a_reader_is_present(reader, monkeypatch):
+    from src import l5_account_risk as AR
+    e, v, r, t = reader
+    monkeypatch.setattr(AR, "fetch_json", lambda *a, **k: (_ for _ in ()
+                                                           ).throw(
+        AssertionError("the loop read the ledger itself")))
+    r.refresh_once()
+    assert e.account_risk()["ok"] is True
