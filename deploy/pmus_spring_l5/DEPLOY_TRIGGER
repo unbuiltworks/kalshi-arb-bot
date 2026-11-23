@@ -288,3 +288,4 @@
 2026-11-22T16:20Z registry freshness follows the trading loop's own progress (a wedged loop goes STALE to the watchdog).
 2026-11-22T16:45Z RN1 reward-aware selection ranking; marginal-edge test for adding to an unpaired side.
 2026-11-22T17:05Z stalled loop reports manages_own_resting=false with a fresh stamp, so the watchdog both latches and can cancel the listed orders.
+2026-11-23T22:0xZ CANDIDATE b926e712f on top of 0ebb4a14a: (1) account limit counts resting bids at their true worst case per market instead of assuming the ledger figure already holds them (it does not: live 23 Nov); acts only when PMUS_TWO_SIDED_ACCOUNT_RISK=1, production is on observe. (2) PMUS_TWO_SIDED_STRICT_SPORTS (default 0) makes the allowed list the exact scope. NOT approved, NOT deployed.
