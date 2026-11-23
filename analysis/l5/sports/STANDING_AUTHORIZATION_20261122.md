@@ -400,3 +400,22 @@ account audits and reconciliation with retry of a deferred audit,
 regression-tested before another extended live campaign; then the $16
 spend ceiling's accounting; then adverse selection; and an independent
 verification of completion-only mode. No limit is raised to compensate.
+
+### Outcome of the 18:50 decision point
+
+- 18:47:57 UTC: the audit attempt was deferred by the request budget again
+  (the reward read at 18:47:55 too). Rule applied: plain lock.
+- About 18:52 UTC: `PMUS_TWO_SIDED_SUBMISSION_LOCK=1` set on the sports
+  bot. **The lock did not take effect for about 15 minutes**: the platform
+  created the replacement deployment (`6263f134`, same commit `62dca41cd`)
+  only at 19:06:43 and it started at 19:07:31.
+- In between, the old process placed six more pre-game orders (last one
+  18:56:56), none filled, then stopped quoting by itself at 18:59:19
+  (`pilot_meter_unavailable`). Venue open orders: 0 from 18:59:36 on every
+  watchdog sweep and on the ledger reconciles of 19:01 and 19:06.
+- New deployment: locked for new exposure and completions, no order and
+  no fill since it started, no safety latch.
+- Last fill of the campaign: 18:31:48 (before the lock). Inventory at the
+  lock: no unpaired contracts. Seven pairs in three ATP markets, locked
+  +$0.33; venue cash $319.8038 before the window, $320.1338 after.
+- The campaign is over. No further window is authorised.
