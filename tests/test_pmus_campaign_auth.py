@@ -275,3 +275,104 @@ def test_a_stale_snapshot_blocks():
 def test_an_absent_file_blocks():
     v = dec(snap(missing=True, raw=None))
     assert v["permit"] is False and v["reason"] == "AUTH_FILE_ABSENT"
+
+
+# ------------------------------------------------------------- the reader
+class Clk:
+    t = 100.0
+
+    def __call__(self):
+        return self.t
+
+
+def test_reader_keeps_only_the_last_attempt():
+    box = {"v": b"file-1"}
+
+    def fetch():
+        if isinstance(box["v"], Exception):
+            raise box["v"]
+        return box["v"]
+    c = Clk()
+    r = CA.FileReader("https://x/y", fetch=fetch, clock=c)
+    assert r.snapshot()["age_s"] is None             # nothing read yet
+    r.refresh_once()
+    s = r.snapshot()
+    assert s["raw"] == b"file-1" and s["err"] is None and not s["missing"]
+    box["v"] = OSError("down")
+    r.refresh_once()
+    s = r.snapshot()
+    assert s["err"] == "OSError" and s["raw"] is None      # bytes dropped
+    assert dec(dict(s))["reason"] == "AUTH_UNREACHABLE"
+    box["v"] = None                                   # host: no such file
+    r.refresh_once()
+    s = r.snapshot()
+    assert s["missing"] is True and s["err"] is None
+    assert dec(dict(s))["reason"] == "AUTH_FILE_ABSENT"
+
+
+def test_reader_without_a_url_never_permits():
+    r = CA.FileReader("", fetch=lambda: raw())
+    r.refresh_once()
+    assert r.snapshot()["err"] == "AUTH_URL_NOT_SET"
+    assert dec(r.snapshot())["permit"] is False
+
+
+def test_reader_treats_404_as_absent_and_other_errors_as_failures(
+        monkeypatch):
+    import io
+    import urllib.error
+    import urllib.request
+    r = CA.FileReader("https://x/y", bearer="tok", accept="application/x")
+    seen = {}
+
+    def gone(req, timeout=None):
+        seen.update({k.lower(): v for k, v in req.header_items()})
+        raise urllib.error.HTTPError(req.full_url, 404, "nf", {}, io.BytesIO())
+    monkeypatch.setattr(urllib.request, "urlopen", gone)
+    r.refresh_once()
+    assert r.snapshot()["missing"] is True
+    assert seen["authorization"] == "Bearer tok"
+    assert seen["accept"] == "application/x"
+
+    def boom(req, timeout=None):
+        raise urllib.error.HTTPError(req.full_url, 500, "x", {}, io.BytesIO())
+    monkeypatch.setattr(urllib.request, "urlopen", boom)
+    r.refresh_once()
+    assert r.snapshot()["err"] == "HTTPError"
+
+
+# ------------------------------------------------------- the signing tool
+def _sign(monkeypatch, capsys, *extra, secret=SECRET):
+    from scripts import pmus_campaign_auth_sign as S
+    if secret is None:
+        monkeypatch.delenv(S.SECRET_ENV, raising=False)
+    else:
+        monkeypatch.setenv(S.SECRET_ENV, secret)
+    args = ["--campaign-id", "c-9", "--build", BUILD[:9],
+            "--start", iso(NOW), "--hours", "12",
+            "--competitions", "atp,nba", "--max-markets", "4",
+            "--order-qty", "1"] + list(extra)
+    rc = S.main(args, now=NOW - dt.timedelta(minutes=1))
+    out = capsys.readouterr()
+    return rc, out.out, out.err
+
+
+def test_the_tool_emits_a_file_the_bot_accepts(monkeypatch, capsys):
+    rc, out, err = _sign(monkeypatch, capsys)
+    assert rc == 0 and SECRET not in out and SECRET not in err
+    v = ev(out.encode(), now=NOW + dt.timedelta(minutes=1))
+    assert v["permit"] is True and v["campaign"]["campaign_id"] == "c-9"
+
+
+def test_the_tool_refuses_without_a_secret(monkeypatch, capsys):
+    rc, out, err = _sign(monkeypatch, capsys, secret=None)
+    assert rc == 2 and out == ""
+
+
+@pytest.mark.parametrize("extra", [
+    ("--max-markets", "5"), ("--order-qty", "3"), ("--hours", "13"),
+    ("--competitions", "atp,cricket"), ("--campaign-unpaired-usd", "7")])
+def test_the_tool_refuses_values_above_the_ceilings(monkeypatch, capsys,
+                                                    extra):
+    rc, out, err = _sign(monkeypatch, capsys, *extra)
+    assert rc == 3 and out == "" and "AUTH_ABOVE_CEILING" in err

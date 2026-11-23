@@ -128,6 +128,7 @@ COPY src/pmus_request_budget.py src/pmus_request_budget.py
 COPY src/pmus_pilot_pnl.py src/pmus_pilot_pnl.py
 COPY src/pmus_fill_markout.py src/pmus_fill_markout.py
 COPY src/pmus_sports_phase.py src/pmus_sports_phase.py
+COPY src/pmus_campaign_auth.py src/pmus_campaign_auth.py
 COPY src/pmus_sports_completion.py src/pmus_sports_completion.py
 COPY src/pmus_sports_completion_replay.py src/pmus_sports_completion_replay.py
 COPY src/l5_halt_gate.py src/l5_halt_gate.py

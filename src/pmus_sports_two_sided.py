@@ -794,6 +794,76 @@ def lock_window(raw: Optional[str] = None) -> Optional[tuple]:
     return start, end
 
 
+# ---------------------------------------------------------------------------
+# RUNTIME CAMPAIGN AUTHORIZATION (owner 2026-11-23). With the lock value
+# `runtime` the decision to trade comes from a signed, expiring campaign
+# file the RUNNING bot reads (src/pmus_campaign_auth.py), not from a
+# settings change that restarts it. Everything else about the lock is
+# unchanged: `1` still locks whatever any file says, and a window value
+# still works as before.
+#   * No file, an unreadable, unsigned, expired, revoked, wrong-build or
+#     out-of-bounds file, or a refresh that failed: fully locked, own
+#     orders cancelled (no grace).
+#   * The file chooses competitions, market count, order size, slate and
+#     the campaign and per-market caps INSIDE the deployed values, which
+#     are the hard ceilings. It cannot touch the account limit, the loss
+#     stop, the daily halt, the pair cap or anything about a halt.
+#   * The emergency halt is checked before this on every order. A campaign
+#     that has seen a latched halt is ended for good.
+RUNTIME_LOCK = "runtime"
+CAMPAIGN_AUTH_URL_ENV = "PMUS_CAMPAIGN_AUTH_URL"
+CAMPAIGN_AUTH_SECRET_ENV = "PMUS_CAMPAIGN_AUTH_SECRET"
+CAMPAIGN_AUTH_BEARER_ENV = "PMUS_CAMPAIGN_AUTH_BEARER"
+CAMPAIGN_AUTH_ACCEPT_ENV = "PMUS_CAMPAIGN_AUTH_ACCEPT"
+CAMPAIGN_AUTH_SERVICE_ENV = "PMUS_CAMPAIGN_AUTH_SERVICE"
+CAMPAIGN_AUTH_POLL_S = float(os.getenv("PMUS_CAMPAIGN_AUTH_POLL_S", "20"))
+#: the last SUCCESSFUL read may be at most this old (two polls and a bit)
+CAMPAIGN_AUTH_MAX_AGE_S = float(os.getenv(
+    "PMUS_CAMPAIGN_AUTH_MAX_AGE_S", "45"))
+#: the engine's own decision must be this fresh for the lock to open: a
+#: loop that has stopped evaluating stops permitting
+CAMPAIGN_DECISION_MAX_AGE_S = float(os.getenv(
+    "PMUS_CAMPAIGN_DECISION_MAX_AGE_S", "15"))
+#: `1` = read and evaluate the campaign file and SHOW the verdict in the
+#: heartbeat while the lock value is not `runtime`. It permits nothing,
+#: records nothing and applies nothing: a non-trading preflight.
+CAMPAIGN_AUTH_REPORT = os.getenv("PMUS_CAMPAIGN_AUTH_REPORT",
+                                 "0").strip() == "1"
+_RUNTIME: Dict[str, Any] = {"at": None, "decision": None}
+
+
+def runtime_mode() -> bool:
+    return (os.getenv(SUBMISSION_LOCK_ENV) or "").strip().lower() \
+        == RUNTIME_LOCK
+
+
+def runtime_state(now: Optional[float] = None) -> Dict[str, Any]:
+    """The lock state under the `runtime` value, from the engine's last
+    decision. Anything short of a fresh, permitted decision inside the
+    campaign's own window is fully locked."""
+    def locked(why: str) -> Dict[str, Any]:
+        return {"new": True, "all": True, "why": "runtime:" + why}
+    at, d = _RUNTIME.get("at"), _RUNTIME.get("decision")
+    if at is None or not isinstance(d, Mapping):
+        return locked("AUTH_NOT_EVALUATED")
+    if time.monotonic() - float(at) > CAMPAIGN_DECISION_MAX_AGE_S:
+        return locked("AUTH_DECISION_STALE")
+    if not d.get("permit"):
+        return locked(str(d.get("reason") or "AUTH_REFUSED"))
+    c = d.get("campaign") or {}
+    try:
+        start, end = float(c["start"]), float(c["end"])
+    except Exception:                                     # noqa: BLE001
+        return locked("AUTH_WINDOW_UNREADABLE")
+    wall = time.time() if now is None else now
+    if wall < start:
+        return locked("AUTH_NOT_STARTED")
+    if wall >= end:
+        return locked("AUTH_EXPIRED")
+    return {"new": False, "all": False, "why": None, "start": start,
+            "end": end, "campaign_id": c.get("campaign_id")}
+
+
 def lock_state(now: Optional[float] = None) -> Dict[str, Any]:
     """`new` = openings/extensions (and everything else that adds risk) are
     refused; `all` = maker completions are refused too. `why` names it."""
@@ -802,6 +872,8 @@ def lock_state(now: Optional[float] = None) -> Dict[str, Any]:
         return {"new": False, "all": False, "why": None}
     if raw == "1":
         return {"new": True, "all": True, "why": "locked"}
+    if raw.lower() == RUNTIME_LOCK:
+        return runtime_state(now)
     w = lock_window(raw)
     if w is None:
         return {"new": True, "all": True,
@@ -838,6 +910,66 @@ _w = lock_window()
 if _w is not None and (PILOT_SINCE is None or PILOT_SINCE < _w[0]):
     PILOT_SINCE = _w[0]            # the window start is the campaign marker
 del _w
+
+
+_CEIL: Dict[str, Any] = {}
+
+
+def campaign_ceilings() -> Dict[str, Any]:
+    """The hard ceilings a campaign file must stay inside: the DEPLOYED
+    values, captured once before any file is applied."""
+    if not _CEIL:
+        _CEIL.update({
+            "max_window_s": WINDOW_MAX_S, "max_markets": MAX_MARKETS,
+            "order_qty": rn1_max_clip(),
+            "campaign_spend_usd": RN1.TOTAL_SPEND_USD,
+            "campaign_unpaired_usd": RN1.TOTAL_UNMATCHED_USD,
+            "per_market_spend_usd": RN1.PER_MARKET_USD,
+            "per_market_unpaired_usd": RN1.RESIDUAL_CAP_USD,
+            "competitions": sorted(OPEN_GATE_ALLOW_SPORTS),
+            "_qty": RN1.QTY, "_pregame": RN1_PREGAME_QTY,
+            "_live": RN1_LIVE_QTY, "_strict": STRICT_SPORTS,
+            "_slate": SLATE})
+    return _CEIL
+
+
+def apply_campaign(c: Optional[Mapping[str, Any]]) -> None:
+    """Put a permitted campaign's values in force, each no higher than its
+    ceiling (the file was already refused if any exceeded one; the min()
+    here is the second lock on the same door). None = back to the deployed
+    values."""
+    global MAX_MARKETS, OPEN_GATE_ALLOW_SPORTS, STRICT_SPORTS, SLATE
+    global RN1_PREGAME_QTY, RN1_LIVE_QTY
+    k = campaign_ceilings()
+    if c is None:
+        MAX_MARKETS = k["max_markets"]
+        RN1.QTY, RN1_PREGAME_QTY, RN1_LIVE_QTY = \
+            k["_qty"], k["_pregame"], k["_live"]
+        RN1.TOTAL_SPEND_USD = k["campaign_spend_usd"]
+        RN1.TOTAL_UNMATCHED_USD = k["campaign_unpaired_usd"]
+        RN1.PER_MARKET_USD = k["per_market_spend_usd"]
+        RN1.RESIDUAL_CAP_USD = k["per_market_unpaired_usd"]
+        OPEN_GATE_ALLOW_SPORTS = frozenset(k["competitions"])
+        STRICT_SPORTS, SLATE = k["_strict"], k["_slate"]
+        return
+    q = D(str(c["order_qty"]))
+    MAX_MARKETS = min(int(k["max_markets"]), int(D(str(c["max_markets"]))))
+    RN1.QTY = min(D(str(k["_qty"])), q)
+    RN1_PREGAME_QTY = None if k["_pregame"] is None \
+        else min(D(str(k["_pregame"])), q)
+    RN1_LIVE_QTY = None if k["_live"] is None \
+        else min(D(str(k["_live"])), q)
+    RN1.TOTAL_SPEND_USD = min(D(str(k["campaign_spend_usd"])),
+                              D(str(c["campaign_spend_usd"])))
+    RN1.TOTAL_UNMATCHED_USD = min(D(str(k["campaign_unpaired_usd"])),
+                                  D(str(c["campaign_unpaired_usd"])))
+    RN1.PER_MARKET_USD = min(D(str(k["per_market_spend_usd"])),
+                             D(str(c["per_market_spend_usd"])))
+    RN1.RESIDUAL_CAP_USD = min(D(str(k["per_market_unpaired_usd"])),
+                               D(str(c["per_market_unpaired_usd"])))
+    OPEN_GATE_ALLOW_SPORTS = frozenset(c["competitions"]) & \
+        frozenset(k["competitions"])
+    STRICT_SPORTS, SLATE = True, str(c["slate"])
 
 
 def adopt_campaign_marker(book: Any) -> Optional[float]:
@@ -3411,12 +3543,176 @@ class Engine:
             return self.latch("position_mismatch", slug=slug, book_net=book,
                               venue_net=full, age_s=int(age))
 
+    # --------------------------------------- runtime campaign authorization
+    def start_campaign_reader(self) -> None:
+        if not (runtime_mode() or CAMPAIGN_AUTH_REPORT) or \
+                getattr(self, "_camp_reader", None) is not None:
+            return
+        from src import pmus_campaign_auth as CA
+        campaign_ceilings()                  # before anything is applied
+        self._camp_reader = CA.FileReader(
+            (os.getenv(CAMPAIGN_AUTH_URL_ENV) or "").strip(),
+            bearer=(os.getenv(CAMPAIGN_AUTH_BEARER_ENV) or "").strip(),
+            accept=(os.getenv(CAMPAIGN_AUTH_ACCEPT_ENV) or "").strip(),
+            every_s=CAMPAIGN_AUTH_POLL_S).start()
+        log("campaign_auth_reader_started", poll_s=CAMPAIGN_AUTH_POLL_S,
+            max_age_s=CAMPAIGN_AUTH_MAX_AGE_S,
+            url_set=bool((os.getenv(CAMPAIGN_AUTH_URL_ENV) or "").strip()),
+            secret_set=bool((os.getenv(CAMPAIGN_AUTH_SECRET_ENV)
+                             or "").strip()),
+            ceilings={k: str(v) for k, v in campaign_ceilings().items()
+                      if not k.startswith("_")},
+            label="trading is permitted only by a signed, unexpired "
+                  "campaign file read just now; no file = locked")
+
+    def _campaign_store(self) -> Dict[str, Any]:
+        st = self.b.d.get("campaign_auth")
+        if not isinstance(st, dict):
+            st = self.b.d["campaign_auth"] = {"active": None, "ended": {}}
+        st.setdefault("active", None)
+        st.setdefault("ended", {})
+        return st
+
+    def refresh_campaign_auth(self, force: bool = False
+                              ) -> Optional[Dict[str, Any]]:
+        """Evaluate the campaign file and publish the decision the lock
+        reads. No-op unless the lock value is `runtime`."""
+        report_only = not runtime_mode()
+        if report_only and getattr(self, "_camp_reader", None) is None:
+            return None
+        nowm = time.monotonic()
+        last = getattr(self, "_camp_eval", None)
+        if not force and last and nowm - last[0] < 1.0:
+            if report_only:
+                return None
+            _RUNTIME.update(at=nowm, decision=last[1])
+            return last[1]
+        from src import pmus_campaign_auth as CA
+        ceil = {k: v for k, v in campaign_ceilings().items()
+                if not k.startswith("_")}
+        st = self._campaign_store()
+        act = st["active"] if isinstance(st.get("active"), dict) else None
+        reader = getattr(self, "_camp_reader", None)
+        snap = reader.snapshot() if reader is not None else {
+            "raw": None, "age_s": None, "err": "AUTH_READER_NOT_STARTED",
+            "missing": False}
+        utc = datetime.now(timezone.utc)
+        try:
+            d = CA.decide(
+                snap, max_age_s=CAMPAIGN_AUTH_MAX_AGE_S,
+                secret=(os.getenv(CAMPAIGN_AUTH_SECRET_ENV) or ""),
+                service=((os.getenv(CAMPAIGN_AUTH_SERVICE_ENV) or "").strip()
+                         or (os.getenv("RAILWAY_SERVICE_NAME") or "").strip()),
+                build=(os.getenv("RAILWAY_GIT_COMMIT_SHA") or "").strip(),
+                ceilings=ceil, now=utc, ended_ids=list(st["ended"]),
+                active=act)
+        except Exception as exc:                          # noqa: BLE001
+            d = {"permit": False, "campaign": None,
+                 "reason": "AUTH_EVAL_ERROR:%s" % type(exc).__name__}
+        camp = d.get("campaign")
+        if report_only:
+            # shown, never acted on: no state, no values, no permission
+            self._camp_eval = (nowm, d)
+            return None
+        changed = False
+
+        def end(cid: str, why: str) -> None:
+            nonlocal changed, act
+            if cid in st["ended"]:
+                return
+            st["ended"][cid] = {"why": why, "t": utc.isoformat()}
+            if act and act.get("id") == cid:
+                st["active"] = act = None
+            changed = True
+            log("CAMPAIGN_ENDED", campaign_id=cid, why=why,
+                label="this campaign id is never accepted again")
+
+        halt = self.shared_halt()
+        if halt == "HALT":
+            # precedence: a latched halt ends the campaign in force and any
+            # campaign that could otherwise run now; neither comes back
+            if act:
+                end(str(act["id"]), "emergency_halt")
+            if camp and d.get("reason") in (None, "AUTH_NOT_STARTED"):
+                end(str(camp["campaign_id"]), "emergency_halt")
+            d = dict(d, permit=False, reason="EMERGENCY_HALT")
+        elif halt is not None:
+            d = dict(d, permit=False, reason="HALT_STATE_UNAVAILABLE")
+        else:
+            if act:
+                aid = str(act["id"])
+                if time.time() >= float(act.get("end") or 0):
+                    end(aid, "expired")
+                elif d.get("reason") == "AUTH_FILE_ABSENT":
+                    end(aid, "revoked:file_removed")
+                elif d.get("permit") and camp and \
+                        camp["campaign_id"] != aid:
+                    end(aid, "revoked_by:%s" % camp["campaign_id"])
+            if d.get("permit") and camp and st["active"] is None:
+                if camp["campaign_id"] in st["ended"]:
+                    d = dict(d, permit=False, reason="AUTH_CAMPAIGN_ENDED")
+                else:
+                    st["active"] = act = {
+                        "id": camp["campaign_id"], "digest": camp["digest"],
+                        "start": camp["start"], "end": camp["end"]}
+                    self.b.d["campaign_window"] = [camp["start"], camp["end"]]
+                    self.b.d["campaign_since"] = camp["start"]
+                    self.since = float(camp["start"])
+                    changed = True
+                    log("CAMPAIGN_STARTED", **{k: camp[k] for k in camp
+                                               if k != "digest"},
+                        label="values in force are these or the deployed "
+                              "ceilings, whichever is lower")
+        if d.get("permit") and act and float(self.since or 0) != \
+                float(act["start"]):
+            self.since = float(act["start"])     # restart: original start
+        apply_campaign(camp if d.get("permit") else None)
+        if changed:
+            self.b.save()
+        key = (d.get("permit"), d.get("reason"),
+               (camp or {}).get("campaign_id"))
+        if key != getattr(self, "_camp_key", None):
+            self._camp_key = key
+            log("CAMPAIGN_AUTH", permit=bool(d.get("permit")),
+                reason=d.get("reason"),
+                campaign_id=(camp or {}).get("campaign_id"),
+                expires=(camp or {}).get("expires"),
+                active_id=(act or {}).get("id"),
+                snapshot_age_s=snap.get("age_s"), fetch_error=snap.get("err"),
+                detail={k: d[k] for k in ("field", "fields", "outside",
+                                          "active_id") if k in d})
+        self._camp_eval = (nowm, d)
+        _RUNTIME.update(at=nowm, decision=d)
+        return d
+
+    def campaign_status(self) -> Dict[str, Any]:
+        """For the heartbeat: which campaign is in force and, if none, why
+        not. Computed whatever the lock value is, so a locked deployment
+        shows what the file WOULD decide (it permits nothing while locked
+        with `1`)."""
+        if not runtime_mode() and getattr(self, "_camp_reader", None) is None:
+            return {"mode": "off"}
+        d = (getattr(self, "_camp_eval", None) or (0, {}))[1] or {}
+        c = d.get("campaign") or {}
+        st = self._campaign_store()
+        return {"mode": "runtime" if runtime_mode() else "report_only",
+                "permit": bool(d.get("permit")), "reason": d.get("reason"),
+                "campaign_id": c.get("campaign_id"),
+                "expires": c.get("expires"),
+                "active_id": (st.get("active") or {}).get("id"),
+                "ended": len(st.get("ended") or {}),
+                "in_force": {"max_markets": MAX_MARKETS,
+                             "order_qty": str(rn1_max_clip()),
+                             "competitions": sorted(OPEN_GATE_ALLOW_SPORTS),
+                             "slate": slate()}}
+
     def enforce_lock(self) -> Optional[str]:
         """The lock acts on what is ALREADY resting, not only on new
         placements: when the window ends (or the lock is on) every own
         order the lock forbids is cancelled by exact id, each pass until
         none is left. Logs each change of lock state once. The safety
         latch comes first and overrides every lock value."""
+        self.refresh_campaign_auth()
         lt = self.safety_latch()
         if lt:
             if self.open_own_orders():
@@ -3947,6 +4243,7 @@ class Engine:
                               "order plus this one would exceed the "
                               "portfolio budget")
                 return
+        self.refresh_campaign_auth()
         if submission_locked(stage, post_only):
             log("place_refused_submission_lock", slug=slug, side=side, px=px,
                 qty=qty, stage=stage, why=lock_state()["why"])
@@ -4105,6 +4402,10 @@ class Engine:
         campaign loss stop (LIVE 2026-11-22 20:16Z). Fail closed: no new
         exposure while it holds."""
         w = lock_window()
+        if w is None and runtime_mode():
+            act = self._campaign_store().get("active")
+            if act:
+                w = (float(act["start"]), float(act["end"]))
         if w is None:
             return False
         return self.since is None or float(self.since) > float(w[0]) + 1e-6
@@ -5868,6 +6169,7 @@ class Engine:
                              phases=self.phase_summary(),
                              capital=self.capital_breakdown(),
                              account_limit=self.account_limit_status(),
+                             campaign=self.campaign_status(),
                              audit={"last_complete_age_s": self.audit_age_s(),
                                     "max_age_s": AUDIT_MAX_AGE_S,
                                     "stale_blocks_new": self.audit_stale(),
@@ -5932,6 +6234,7 @@ class Engine:
         signal.signal(signal.SIGTERM, lambda *_: self.on_sigterm())
         self.require_fresh_account = True     # no new exposure on stale state
         self.start_risk_reader()
+        self.start_campaign_reader()
         self.mark_recovery_start()
         seed = seed_drift(self.b.d, os.getenv("PMUS_TWO_SIDED_DRIFT_SEED"))
         if seed["seeded"] or seed["error"] or seed["kept_live"]:

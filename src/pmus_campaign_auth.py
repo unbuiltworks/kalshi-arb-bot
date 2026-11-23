@@ -38,7 +38,9 @@ international-price requirement, anything about a halt. An unknown field
 makes the file invalid, so none of those can be smuggled in under a new
 name and a typo cannot be silently ignored.
 
-This module fetches nothing, places nothing and writes nothing.
+`evaluate` and `decide` fetch nothing, place nothing and write nothing.
+`FileReader` is the one thing here that touches the network: it GETs the
+file on its own thread and keeps the last attempt, successful or not.
 """
 from __future__ import annotations
 
@@ -46,8 +48,9 @@ import datetime as dt
 import hashlib
 import hmac
 import json
+import time
 from decimal import Decimal as D
-from typing import Any, Dict, Iterable, Mapping, Optional
+from typing import Any, Callable, Dict, Iterable, Mapping, Optional
 
 #: every field the signature covers, in a fixed order. `revokes` is signed
 #: as the empty string when absent.
@@ -250,3 +253,78 @@ def decide(snapshot: Mapping[str, Any], *, max_age_s: float, **kw: Any
     if snapshot.get("missing"):
         return _no("AUTH_FILE_ABSENT")
     return evaluate(snapshot.get("raw"), **kw)
+
+
+class FileReader:
+    """Reads the campaign file off the trading loop. The loop only ever
+    looks at the last ATTEMPT: a failed attempt replaces a good one, so a
+    file that can no longer be refreshed stops permitting at once."""
+
+    def __init__(self, url: str, *, bearer: str = "", accept: str = "",
+                 every_s: float = 20.0, timeout_s: float = 5.0,
+                 fetch: Optional[Callable[[], Optional[bytes]]] = None,
+                 clock: Callable[[], float] = time.monotonic) -> None:
+        self.url, self._bearer, self._accept = str(url or ""), bearer, accept
+        self._every, self._timeout = max(1.0, float(every_s)), float(timeout_s)
+        self._fetch, self._clock = fetch, clock
+        self._snap: Dict[str, Any] = {"raw": None, "at": None, "err": None,
+                                      "missing": False, "tries": 0}
+        self.stop = False
+
+    def _get(self) -> Optional[bytes]:
+        """The file's bytes, or None when the host says it does not exist
+        (a successful answer). Anything else raises."""
+        import urllib.error
+        import urllib.request
+        h = {"Cache-Control": "no-cache", "Pragma": "no-cache"}
+        if self._bearer:
+            h["Authorization"] = "Bearer " + self._bearer
+        if self._accept:
+            h["Accept"] = self._accept
+        try:
+            with urllib.request.urlopen(urllib.request.Request(
+                    self.url, headers=h), timeout=self._timeout) as r:
+                if getattr(r, "status", 200) != 200:
+                    raise RuntimeError("http_%s" % getattr(r, "status", "?"))
+                return r.read()
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return None
+            raise
+
+    def refresh_once(self) -> None:
+        snap = dict(self._snap, tries=int(self._snap["tries"]) + 1)
+        if not self.url.strip():
+            snap.update(raw=None, missing=False, err="AUTH_URL_NOT_SET")
+        else:
+            try:
+                raw = (self._fetch or self._get)()
+                snap.update(raw=raw, missing=raw is None,
+                            at=self._clock(), err=None)
+            except BaseException as exc:                 # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                # NO GRACE: the earlier bytes are dropped with the failure
+                snap.update(raw=None, missing=False,
+                            err=type(exc).__name__)
+        self._snap = snap                    # one atomic reference swap
+
+    def snapshot(self) -> Dict[str, Any]:
+        s = self._snap
+        age = None if s["at"] is None else max(0.0, self._clock() - s["at"])
+        return {"raw": s["raw"], "age_s": age, "err": s["err"],
+                "missing": s["missing"], "tries": s["tries"]}
+
+    def start(self) -> "FileReader":
+        import threading
+
+        def run() -> None:
+            while not self.stop:
+                try:
+                    self.refresh_once()
+                except Exception:                        # noqa: BLE001
+                    pass
+                time.sleep(self._every)
+        threading.Thread(target=run, daemon=True,
+                         name="campaign-auth-reader").start()
+        return self
