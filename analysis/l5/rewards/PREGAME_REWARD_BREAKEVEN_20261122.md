@@ -130,3 +130,45 @@ nothing (under 0.001c per contract-hour).
 - `scan/pregame_sampler.py` — the once-a-minute recorder.
 - `scan/intl_history_*_20261122.json.gz` — eight hours of one-minute
   international prices for the hockey and Liga MX matches.
+
+## Addendum, 23 Nov 01:35 UTC — pre-game against in-game, measured
+
+Once-a-minute record of the public book and cumulative traded volume, 23:01
+to 01:34 UTC (about a minute missing at 01:01). "Pre-game" is up to five
+minutes before the start; "in-game" is from ten minutes after it. Averages
+are weighted by market-hours. This measures the market, not our fills: the
+bot was locked.
+
+| League, phase | Markets | Hours | Best-price changes per hour | Price path per hour | Traded per hour | Average size at best price |
+|---|---|---|---|---|---|---|
+| Liga MX, pre-game | 3 | 6.1 | 1.6 | 0.8c | 1,261 | 10,551 |
+| Liga MX, in-game | 6 | 5.8 | 49.6 | 65.8c | 74,736 | 10,033 |
+| NHL, pre-game | 3 | 3.7 | 0.5 | 0.3c | 22,349 | 91,848 |
+| NHL, in-game | 3 | 3.2 | 31.5 | 42.1c | 64,883 | 20,691 |
+| ATP, pre-game | 10 | 25.4 | 0.3 | 0.2c | 68 | 1,648 |
+| UTR tennis, pre-game | 4 | 6.8 | 3.4 | 6.2c | 20 | 99 |
+| La Liga and Serie A, a day ahead | 6 | 15.2 | 0.0 | 0.0c | 8 | about 15,000 |
+
+"Price path" is the sum of every move of the mid, up and down. The single
+calmest market was the Querétaro–Necaxa draw before the game: no price
+change at all in two hours and 53 contracts traded an hour.
+
+What it adds to the break-even table:
+
+- **Pre-game, Liga MX.** The price moves about one tick an hour. If every
+  such move fills the bid it runs through, that is roughly 0.4c per
+  contract-hour on each side, against a reward of 0.10c to 0.27c. The draw
+  market, which did not move, is the one pre-game market here where the
+  reward clearly exceeds the measured movement; the two team markets do
+  not, unless a later move back completes the pair.
+- **In-game, Liga MX.** The price path is about 66c an hour against a
+  theoretical reward of 3c to 13c per contract-hour. Whether that is a
+  profit or a loss depends on how much of the path is back-and-forth (which
+  completes pairs inside the 0.97 cap) and how much is one-way (goals). The
+  book alone cannot answer that; only fills can.
+- **Queue position.** Pre-game, about 1,300 contracts an hour trade against
+  roughly 10,500 resting at the best price, so an order at the back of the
+  queue is rarely reached unless the price moves. In-game the best-price
+  size turns over about seven times an hour.
+- **Still unmeasured:** our own fills by phase, their markouts, and any
+  credited reward. The development build now counts all of these by phase.

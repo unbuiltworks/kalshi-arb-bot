@@ -53,20 +53,93 @@ pass. Nothing forces a pair.
   sent. A first run found that candidates could not be ranked before the
   international feed followed them; that is fixed in `ee74ee5f2`.
 
+## Added 23 Nov, for the owner's five priorities
+
+Development head is now `fbfc95c37`. Full suite: 5,276 passed, 24 failed,
+the same 24 as before any of this work. Every setting defaults to the
+present behaviour except the audit interleaving, which is on.
+
+**1. The 89-second late fill — cause found and fixed.** Production logs
+show the hourly audit ran on the trading loop's own thread: about 85
+read-only requests at one a second. For 87 seconds (22:08:55 to 22:10:21
+UTC) nothing read an order's status and nothing sent a cancel. A fill made
+0.2 seconds after its order was placed was recorded 88.8 seconds later, and
+a cancel the price guard asked for waited 93 seconds. The stall detector
+counts every request as progress, so the watchdog saw a healthy loop. The
+first audit of the evening (21:08) did the same for 82 seconds.
+- Order management now runs between the audit's requests.
+- A second measure, when the bot's markets were last actually served, is
+  reported, and with `PMUS_TWO_SIDED_ORDER_SERVICE_STALL_S` set a longer gap
+  tells the watchdog the bot is not managing its orders.
+
+**2. Safety without a session.**
+- `PMUS_TWO_SIDED_FILL_LATE_LATCH_S`: a fill recorded later than this after
+  the venue's own stamp latches the bot.
+- `PMUS_TWO_SIDED_AUDIT_LATCH`: either of the audit's reconciliations
+  failing blocks new exposure at once, brings the next audit forward, and
+  latches on the second failure in a row.
+- Both use the existing latch: every own order cancelled, every placement
+  refused, survives a restart, cleared only by the owner.
+- Relocking at the end of a campaign window was already automatic and now
+  also acts in the middle of an audit.
+
+**3. Account drawdown in the sports bot.** The ledger already publishes its
+drawdown figure and limit; the sports bot never read it. It now refuses new
+exposure at the limit, on an unreadable figure, and when the ledger itself
+refuses. This acts when `PMUS_TWO_SIDED_ACCOUNT_RISK=1` (production has it
+on observe).
+- **Consequence the owner must decide on.** The ledger's figure counts cash
+  held for resting orders and unpaired contracts as already lost. Today it
+  reads $1.67 of $3.00, so strict enforcement leaves the sports bot $1.33
+  for resting orders and unpaired inventory together: less than one
+  two-contract quote on each side.
+- `L5_ACCOUNT_DRAWDOWN_AT_RISK_BUDGET_USD` is the alternative: up to that
+  much of the bot's own declared at-risk money is not counted, its
+  marked-down value is counted instead, and a settled loss always counts in
+  full. It is off. Turning it on redefines the $3 limit and needs explicit
+  approval.
+
+**4. Quote flicker.** `PMUS_RN1_KEEP_TOL_USD` and `PMUS_RN1_KEEP_MAX_S`: a
+bid already resting is kept at its own price while it misses the marginal
+test by no more than the tolerance, for at most the time limit. It is
+judged against a fair value read now, a bid not worth more than it costs is
+never kept, and a block, a pause or the kickoff hold pulls it regardless.
+
+**5. Measured by phase.** Orders, fills, contracts filled, resting time and
+reward-qualifying resting time are counted per phase, and every fill and
+markout line carries its phase.
+
+## Dry runs across four real kickoffs (no credentials, nothing sent)
+
+Run on the code before the hysteresis rule, 23:38 to 01:35 UTC.
+
+| Market | Pre-game | Hold began | Resumed | In-game |
+|---|---|---|---|---|
+| NHL Edmonton–St. Louis | 4 orders, 4 cancels in 17 min | 23:55:03 | 00:07:28 | 65 orders, 45 cancels an hour |
+| NHL Pittsburgh–Dallas | 2 orders, 2 cancels in 17 min | 23:55:03 | 00:08:03 | 72 orders, 50 cancels an hour |
+| NHL Chicago–Vancouver | 2 orders, 2 cancels in 77 min | 00:55:04 | 01:09:03 | 28 orders, 63 cancels an hour |
+| Liga MX Querétaro–Necaxa draw | 2 orders, 2 cancels in 46 min | 01:05:01 | 01:12:42 | 19 orders, 47 cancels an hour |
+
+- Every hold began five minutes before the start with every recorded order
+  cancelled, and every resume waited until the venue listed the game as
+  live (7 to 14 minutes after the scheduled start).
+- Pre-game quotes rested almost undisturbed. In-game, an order lasted about
+  a minute on average: the marginal test flipping at half-cent boundaries,
+  the fair value not yet settled, the price-move pause (72 pauses in all)
+  and the price band. This is the flicker the hysteresis rule addresses; it
+  has not yet been re-measured with the rule on.
+- The Liga MX draw resolved and was quoted, which confirms the league
+  mapping and the accent fix on a live market.
+
 ## Not built yet
 
-- Account-level loss protection across sports and crypto in the sports bot.
-  The sports bot still only observes the account ledger, and the ledger's
-  drawdown figure treats cash reserved for resting orders as lost value. With
-  $50 resting, that figure would read about $50 against its $3 limit. It
-  needs the split the owner asked for: a strict worst-case exposure cap, and
-  separately marked value, settled losses and confirmed rewards.
-- The bot locking itself when a reconciliation finds a mismatch. Today the
-  20-second position check latches; the fuller audit only reports. The audit
-  interval is a setting (`PMUS_TWO_SIDED_REWARD_CHECK_S`, hourly now).
-- The cause of the 89-second late fill on 22 Nov.
-- The campaign marker fix and the fair-value rules are on this development
-  line but not in the running build.
+- The background (non-blocking) read of the ledger for the account-risk
+  check. It is still a short synchronous read on the loop, cached for ten
+  seconds.
+- A re-run of the dry run with the hysteresis rule on, to count how much
+  resting time it recovers.
+- Order expiry at the venue (built earlier, off, unproven at the venue) for
+  the case where the whole process dies.
 
 ## Bounded live-validation configuration (proposal, not approved)
 
@@ -91,7 +164,11 @@ unchanged, $4 campaign loss stop and $5 daily halt unchanged.
 | Campaign unpaired cap | $6 | $30 | $60 |
 | Campaign loss stop | $4 | $4 | $4 |
 | Daily halt | $5 | $5 | $5 |
-| Audit and fill confirmation interval | hourly | 5 minutes | 5 minutes |
+| Audit interval | hourly | 15 minutes | 15 minutes |
+| Late-fill latch | none | 30 seconds | 30 seconds |
+| Audit latch | none | on, two in a row | on, two in a row |
+| Order-service stall limit (watchdog) | none | 45 seconds | 45 seconds |
+| Hysteresis for a resting bid | none | half a cent, 60 seconds | same |
 
 Why the per-market and campaign caps have to move with the size: a
 10-contract bid at 45c is $4.50, which the present $3 per-market unpaired cap
