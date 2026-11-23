@@ -291,3 +291,30 @@ separate owner-approved reset. Answer: **"Proceed, accept the latch"**.
 
 This authorises one drill on those terms. It does not authorise a halt
 reset, any other order, or arming.
+
+## 13. Death drill retry, 23 Nov 2026
+
+The first attempt (14:30 to 14:33 UTC) was void: no order was placed.
+
+The owner authorised read-only inspection of exactly two settings
+(`PMUS_TWO_SIDED_BAND_LO`, `PMUS_TWO_SIDED_BAND_HI`). They were not read:
+the only tool available returns every variable in plain text.
+
+Asked and answered directly by the owner at about 15:19 UTC:
+
+- **Step 1.** Asked: deploy the logging-only build from
+  `release/pmus-sports-rn1-62dca41cd` at
+  `62dca41cd7167fab117753a2f010fddffd95d55c`, then a locked pre-flight (pin
+  `atc-sea-mon-fio-2026-11-23-fio:YES`, slate both, Serie A added to the
+  permitted list, submission lock still `1`). Answer: **"Deploy and
+  pre-flight"**.
+- **Step 2.** Asked: only if the pre-flight shows the market selected and
+  the bid passing, one maker bid of 1 contract, YES only, at 49c or below on
+  `atc-sea-mon-fio-2026-11-23-fio`; 3-minute window at 16:30 UTC, or 18:30
+  UTC if 16:30 cannot be met; exit with no cleanup 60 s in, down 3 minutes;
+  maximum settlement loss $0.49; the shared halt will latch if the watchdog
+  acts and stays latched until a separately approved reset; settings
+  restored after. Answer: **"Authorize the retry"**.
+
+This authorises one drill on those terms. It does not authorise a halt
+reset, any other order, or arming.
