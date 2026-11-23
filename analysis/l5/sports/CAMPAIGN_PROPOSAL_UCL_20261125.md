@@ -1,5 +1,10 @@
 # Campaign proposal for approval — Champions League, Wednesday 25 Nov 2026
 
+> **NOT APPROVED (owner, 23 Nov).** A $1.14 reward target against a $63
+> worst case does not line up. Superseded by `CAMPAIGN_REDESIGN_20261123.md`.
+> Two statements below are also wrong on later evidence: the payout minimum
+> is not established, and no pre-game reward has ever been observed.
+
 Prepared 23 Nov 2026, 03:00 UTC. **Nothing here is approved, deployed or
 armed.** Production is unchanged: sports bot on `158685d3a`, locked, no
 resting orders. This is one campaign, stated so it can be approved or

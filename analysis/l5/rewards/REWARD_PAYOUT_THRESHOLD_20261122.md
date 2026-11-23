@@ -44,3 +44,13 @@ window). Estimates are marked.
 
 Not yet verified: whether the minimum is per programme or per account, and
 the current programme list and pool sizes (they change daily).
+
+## Correction, 23 Nov
+
+The inference above does not hold. From the venue's reward record read on
+23 Nov: on 17 Nov tennis rows totalling $0.40 were paid while esports rows
+totalling $0.47 were skipped, and $0.01 rows are paid on most days. What
+decides "skipped" is not simply a $1 daily total, per programme or
+otherwise. The payout rule is not established. Skipped rows still carry the
+amount accrued.
+
