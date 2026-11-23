@@ -253,7 +253,12 @@ def main() -> int:
             emit("L5_WATCHDOG_ALARM", {"kind": "sweep_raised",
                                        "error": type(exc).__name__,
                                        "detail": str(exc)[:200]})
-        time.sleep(poll_s)
+        # LIVE 2026-11-23 16:31Z: a bot died 10.8 s after placing an order;
+        # this loop had last read its ownership claim 1.7 s BEFORE that
+        # order, so the order it remembered was an older one and the
+        # resting order was never cancelled. Ownership is therefore
+        # refreshed between sweeps (an internal read; no venue request).
+        W.wait_refreshing_claims(wd, poll_s)
 
 
 if __name__ == "__main__":

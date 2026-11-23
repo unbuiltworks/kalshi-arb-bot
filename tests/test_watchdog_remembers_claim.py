@@ -123,3 +123,67 @@ def test_without_memory_nothing_is_selected_early(orc, tmp_path):
     o._unreachable_since = time.monotonic() - 3600
     wd.sweep()
     assert v.cancels == [] and o.dead_ids() == set()
+
+
+# ---- LIVE 2026-11-23 16:31Z: an order placed after the last sweep was unknown
+class FakeClock:
+    def __init__(s): s.t = 0.0
+    def now(s): return s.t
+    def sleep(s, d): s.t += d
+
+def test_claims_are_refreshed_between_sweeps(orc, monkeypatch, tmp_path):
+    o, b = orc
+    monkeypatch.setenv("L5_WATCHDOG_CLAIM_POLL_S", "2")
+    v = Venue(["o1", "o2"], age_s=20)
+    wd = dog(o, v, tmp_path)
+    wd.sweep()                                        # remembers o1, o2
+    b.body = doc(["o9"])                              # the bot replaces its orders
+    c = FakeClock()
+    n = W.wait_refreshing_claims(wd, 20.0, sleep=c.sleep, monotonic=c.now)
+    assert n == 9 and c.t == 20.0                     # every 2 s, not at the end
+    assert set(o._last_good[1]) == {"o9"}             # the new order is known
+
+def test_an_order_placed_just_before_death_is_cancelled(orc, monkeypatch, tmp_path):
+    o, b = orc
+    monkeypatch.setenv("L5_WATCHDOG_REMEMBER_CLAIMS_S", "900")
+    monkeypatch.setenv("L5_WATCHDOG_DEAD_AFTER_S", "30")
+    monkeypatch.setenv("L5_WATCHDOG_CLAIM_POLL_S", "2")
+    v = Venue(["o9"], age_s=10)
+    wd = dog(o, v, tmp_path)
+    b.body = doc(["o1"])
+    wd.sweep()                                        # last sweep: only the OLD order
+    b.body = doc(["o9"])                              # new order placed after the sweep
+    c = FakeClock()
+    W.wait_refreshing_claims(wd, 6.0, sleep=c.sleep, monotonic=c.now)
+    b.dead = True                                     # then the bot dies
+    W.wait_refreshing_claims(wd, 14.0, sleep=c.sleep, monotonic=c.now)
+    wd.sweep(); assert v.cancels == []                # inside the grace
+    o._unreachable_since = time.monotonic() - 31
+    wd.sweep()
+    assert v.cancels == ["o9"]                        # the order really resting
+
+def test_without_the_refresh_that_order_is_never_known(orc, monkeypatch, tmp_path):
+    o, b = orc
+    monkeypatch.setenv("L5_WATCHDOG_REMEMBER_CLAIMS_S", "900")
+    monkeypatch.setenv("L5_WATCHDOG_CLAIM_POLL_S", "0")
+    v = Venue(["o9"], age_s=10)
+    wd = dog(o, v, tmp_path)
+    b.body = doc(["o1"]); wd.sweep()
+    b.body = doc(["o9"])
+    c = FakeClock()
+    assert W.wait_refreshing_claims(wd, 20.0, sleep=c.sleep, monotonic=c.now) == 0
+    b.dead = True; wd.sweep()
+    o._unreachable_since = time.monotonic() - 31
+    wd.sweep()
+    assert v.cancels == []                            # what happened in production
+
+def test_the_refresh_never_raises_and_touches_no_venue(orc, monkeypatch, tmp_path):
+    o, b = orc
+    v = Venue(["o1"], age_s=10)
+    calls = []
+    v.open_orders = lambda: calls.append("open") or []
+    wd = dog(o, v, tmp_path)
+    b.dead = True
+    c = FakeClock()
+    assert W.wait_refreshing_claims(wd, 10.0, sleep=c.sleep, monotonic=c.now) == 4
+    assert calls == [] and v.cancels == []

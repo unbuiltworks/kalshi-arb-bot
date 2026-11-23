@@ -1378,3 +1378,42 @@ def oracle_from_env() -> Optional[Any]:
     if not built:
         return None
     return built[0] if len(built) == 1 else CompositeOracle(built)
+
+
+def wait_refreshing_claims(wd: Any, total_s: float, *, sleep=None,
+                           monotonic=None) -> int:
+    """Wait `total_s` between sweeps, re-reading every ownership registry
+    each L5_WATCHDOG_CLAIM_POLL_S (default 2 s; 0 = plain wait, the earlier
+    behaviour). Each read only refreshes what an oracle remembers
+    (`_last_good`, `_unreachable_since`); it cancels nothing, asserts
+    nothing and makes no venue request. Returns the number of refreshes.
+    Never raises: a failed read is exactly what the next sweep reports."""
+    import os
+    import time as _time
+    sleep = _time.sleep if sleep is None else sleep
+    monotonic = _time.monotonic if monotonic is None else monotonic
+    try:
+        every = float(os.environ.get("L5_WATCHDOG_CLAIM_POLL_S", "") or 2.0)
+    except ValueError:
+        every = 2.0
+    oracle = getattr(wd, "oracle", None)
+    if every <= 0 or oracle is None:
+        sleep(max(0.0, total_s))
+        return 0
+    end = monotonic() + max(0.0, total_s)
+    n = 0
+    while True:
+        left = end - monotonic()
+        if left <= 0:
+            return n
+        sleep(min(every, left))
+        if end - monotonic() <= 0:
+            return n
+        try:
+            for o in oracles_of(oracle):
+                o.claimed()
+            n += 1
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+
