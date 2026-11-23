@@ -1,106 +1,125 @@
-# Next bounded sports campaign — request for approval
+# Next bounded sports campaign — request for approval (revised)
 
-Prepared 23 Nov 2026, 21:00 UTC. **Not approved. Nothing is armed.** The
-sports bot is locked on `4e60d5384` with no orders and no inventory.
+Revised 23 Nov 2026, 22:10 UTC, after the owner's decisions: four markets;
+the $3 account limit enforced in the bot, not by periodic checks; scope
+must not expand silently. **Not approved. Nothing is armed.** The sports
+bot is locked on `4e60d5384` with no orders and no inventory.
 
-## What it is for
+## The two checks the owner asked for
 
-1. **Does the audit protection hold under real quote traffic?** The first
-   hourly audit of the window must complete; the reserved request class
-   must show no refused safety reads.
-2. **Does inventory accumulation earn money, or only pair completion?**
-   23 Nov did not answer this: every fill ended in a pair, and two of the
-   three opening or extending fills were marked 14c to 17c down. Each fill
-   is reported by role (open, extend, complete) with its marks and its
-   settled result.
-3. **What do rewards actually pay?** Reward rows for the window's date are
-   reconciled when the venue posts them, paid, pending and skipped apart.
+**1. Competition filtering: the allowed list was not a whitelist.**
+A listed competition is always allowed. An unlisted one was still allowed
+whenever its own settled history showed positive expected value, so a
+window could have traded outside its named competitions. Built and tested
+on the development branch: a strict-scope setting. With it on, the list is
+exactly the scope, enforced where markets are selected, in the quoting
+decision and at the single gate every order passes. Completions and
+cancels are never blocked.
 
-## Terms: the same controller and the same limits as 23 Nov
+**2. Carried-over markets: nothing live, nothing unsettled.**
+The five markets still tracked from 23 Nov have no orders (watchdog and
+ledger: zero open orders at the venue) and no positions (20:41 audit:
+zero non-zero venue positions, no mismatch). They are stale controller
+state only. Under the lock they place nothing. With strict scope on, a
+flat market that is not on the list gives up its slot two minutes after
+the lock lifts and places nothing in between; one that is on the list is
+simply a permitted market.
+
+## The $3 account limit: what enforcing it correctly means
+
+Checking for double-counting found the opposite fault, and one real
+over-count.
+
+- **Under-count (the serious one).** The ledger's figure moves when a bid
+  fills, not while it rests: on 23 Nov it stayed at $1.5344 with $4 to $9
+  of bids resting. The bot's check assumed resting bids were already
+  inside that figure, so every time the ledger snapshot refreshed, the
+  full remaining room came back. That is why its verdict flipped between
+  "ok" and "refuse" all evening. Enforced as it was, it would have let
+  resting orders exceed the limit.
+- **Over-count.** A bid on each side of one market was treated as two
+  risks. If both fill they are a pair bought under the pair cap, which
+  the ledger values at $1. The true worst case is the dearer side alone.
+- **Fixed on the development branch.** Room left = limit, less the
+  ledger's figure, less the worst case of all resting bids (per market,
+  over every way they could fill), less unpaired fills the ledger has not
+  seen yet. An unpaired fill is counted once. Paired and settled money is
+  not subtracted. 23 Nov's readings are replayed in the tests.
+
+**Where that leaves the budget.** The ledger's figure is $1.34: that is
+real cash lost from the account's high point on earlier days, not
+reserved money. So $1.66 is left, for everything that could be lost.
+
+| Account limit | Room for new worst-case exposure | What the bot can quote |
+|---|---|---|
+| $3.00 (today) | $1.66 | one market at 2 contracts, or about three at 1 contract |
+| $5.00 | $3.66 | about three markets at 2 contracts, little room to add to a side |
+| $7.50 | $6.16 | four markets at 2 contracts with the campaign's full $6 unpaired allowance |
+
+Four markets at two contracts does not fit inside $3.00. This is the
+decision the owner described: accept the smaller campaign, or explicitly
+change the account limit.
+
+**Recommendation: $5.00 for this one window, enforced in the bot.** New
+money at risk is then $3.66, below the campaign's $4 loss stop, with four
+markets permitted and the limit deciding how many are quoted at once.
+After the window the limit returns to $3.00. The limit is a setting of the
+ledger service, so this is a production risk-setting change that needs the
+owner's explicit approval, and a ledger redeploy.
+
+## Terms proposed
 
 | Item | Value |
 |---|---|
-| Build | `4e60d5384` (RN1 pricing with same-side accumulation; audit protection on) |
+| Build | new candidate `19ee9fdd1` (code `b926e712f`): the running build plus the account-limit arithmetic and the strict scope |
+| Controller | unchanged: RN1 pricing with same-side accumulation |
+| Markets | up to 4, pre-game and in-play |
+| Scope | strict: NBA, NFL, NHL, ATP, Serie A, Premier League, La Liga (23 Nov's list), or the owner's list |
 | Orders | maker-only, taker off, 2 contracts |
-| Campaign spend / unpaired | $16 / $6 |
+| Account limit | enforced in the bot (owner's decision); value per the table above |
+| Campaign spend / unpaired | $16 / $6 (the account limit binds first) |
 | Per-market spend / unpaired | $8 / $3 |
 | Loss stop / daily halt | $4 / $5 |
 | Pair cap, depth, price guard | 0.97, 10 contracts, international price required |
-| Stale-audit block | 75 minutes (new) |
-| Settlement check | every 2 minutes (new) |
-| Watchdog | unchanged: 20-second sweeps, cancels orders the bot stops managing |
-| Relock | automatic at the end of the window |
+| Stale-audit block / settlement check | 75 minutes / 2 minutes |
+| Not included | ranking by net economics, hysteresis, unpriced markets, cricket, table tennis, Dota 2 |
 
-Unchanged from the standing rules: no cricket, no table tennis, no Dota 2,
-no unpriced markets, no hysteresis, no net-economic ranking (off until the
-23 Nov rewards are reconciled).
+## What still stands between this and unattended running
 
-## Three choices for the owner
+- No immediate manual stop: a lock by hand took 15 minutes on 23 Nov.
+  The signed halt marker is not yet enabled or drilled.
+- The watchdog's cancel after the bot's process dies is unproven in
+  production.
+- The reserved audit capacity and the account-limit enforcement have not
+  run under live quote traffic.
 
-**A. Scope.** The standing permission is NFL and NBA, two markets, in
-play. 23 Nov ran on a one-night exception: seven competitions, six
-markets, pre-game and in-play.
-- *Recommended: four markets, the 23 Nov competition list, pre-game and
-  in-play.* Every fill on 23 Nov was in-play tennis; about 160 pre-game
-  orders filled nothing and used most of the request budget. Four markets
-  eases that pressure while still giving question 2 enough fills.
-- Alternative: repeat 23 Nov exactly (six markets) for a like-for-like
-  comparison.
-- Alternative: standing scope only (two markets, NFL and NBA).
+With the account limit, the loss stop, the stale-audit block and the
+safety latch all acting inside the bot, the money at risk is bounded
+without anyone watching. What remains manual is stopping early for a
+reason the bot cannot see. This window is therefore supervised, with
+30-minute checks.
 
-**B. The $3 account figure.** One unpaired two-contract leg took it to
-$2.99 on 23 Nov; it now reads $1.34, leaving $1.66. The campaign's $6
-unpaired allowance and the $3 account limit cannot both hold with two
-legs open.
-- *Recommended: keep the bot's account check on observe, as on 23 Nov,
-  and lock at any check that finds the ledger figure at or above $3.00.*
-  That lock depends on this session and takes 6 to 15 minutes to act.
-- Alternative: enforce it in the bot. Quoting would mostly stop, because
-  resting orders count against it.
+## Sequence, each step needing its own approval
 
-**C. Window.** Six hours at most. Arming restarts the service, and the bot
-then blocks new exposure for two to four minutes until its first audit
-completes, so the window should start at least five minutes after arming.
-The date and hours depend on the slate; the owner names them.
+1. Deploy `19ee9fdd1` locked, with `PMUS_TWO_SIDED_STRICT_SPORTS=1` and
+   `PMUS_TWO_SIDED_ACCOUNT_RISK=1`. Verify: commit, lock, zero orders,
+   first audit, boot line shows strict scope on, account check enforcing.
+   Rollback: `4e60d5384`.
+2. The account limit for the window (ledger setting), if changed.
+3. The window itself: exact start and end (at least five minutes after
+   arming, six hours at most), market count, list of competitions.
 
-## What stops it
+A halt reset, taker orders, any size increase and the halt drill are not
+part of this request.
 
-Inside the bot, at once and with no session involved: the window's
-automatic relock; the safety latch (late fill over 30 s, two failed
-audits in a row, position mismatch, repeated loop errors); the 75-minute
-stale-audit block; the $4 loss stop and $5 daily halt; the shared halt.
+## Tests for the new candidate
 
-From outside: the watchdog cancels orders the bot stops managing.
-
-**Not yet available: an immediate manual stop.** A lock set by hand took
-15 minutes on 23 Nov. Until the signed halt marker is enabled and drilled,
-this campaign is supervised, not unattended, and the owner should treat a
-manual stop as slow. The watchdog's cancel after the bot's process dies is
-also still unproven in production (failed drill of 23 Nov, fix deployed,
-no retest).
-
-Checks every 30 minutes by this session, with the same safety and
-economic stop rules as 23 Nov, plus: no completed audit by 70 minutes into
-the window means lock.
-
-## Before arming (read-only, no approval needed)
-
-1. Confirm how the allowed-competition list behaves. In the code a listed
-   competition is always allowed, and an unlisted one is allowed only if
-   its own settled history shows positive expected value; it is not a
-   strict whitelist. The bot is also still tracking five markets from
-   23 Nov. Both are harmless while locked and must be understood before a
-   window opens.
-2. Read the 23 Nov reward rows if posted.
-3. Dry read of the slate: which markets are priced, in band and ranked.
-
-## Worst case
-
-Unchanged from 23 Nov: $6 if every unpaired contract allowed is filled and
-loses; the $4 loss stop acts before that on realized losses.
-
-## Approval needed
-
-Scope (A), the account-figure rule (B), the exact window (C), and the
-arming itself. A halt reset, a size or limit increase, taker orders and
-the halt drill are not part of this request.
+Development head `b926e712f`: 5,347 passed, 24 failed, the same 24 as the
+running build. New tests cover: 23 Nov's readings replayed (the one that
+passed is now a refusal; no spring-back on a snapshot refresh); an
+unpaired fill counted once before and after the ledger sees it; paired and
+settled money not subtracted; two sides of one market counted as the
+dearer side; bids in different markets adding up; a resting extension
+counted in full; strict scope at all three gates, completions never
+blocked, an empty list permitting nothing, a flat out-of-scope market
+giving up its slot.
