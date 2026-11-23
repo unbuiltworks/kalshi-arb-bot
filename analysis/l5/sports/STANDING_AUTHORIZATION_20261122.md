@@ -267,3 +267,27 @@ about 12:10 UTC on 23 Nov:
 
 Neither answer authorises an order, arming, a new competition, a limit
 change or the death drill.
+
+## 12. Death drill and pin build, 23 Nov 2026
+
+Asked and answered directly by the owner at about 13:28 UTC:
+
+- **Pin build.** Asked: deploy `pmus-spring-l5-probe` from
+  `release/pmus-sports-rn1-8eb920772` at
+  `8eb920772e9cfadbc58eaeb5899ebb973a7776d0`, lock on, no variable changed.
+  Answer: **"Deploy locked"**. Deployed 13:32 UTC, verified locked.
+- **Death drill.** Asked: one maker bid of 2 contracts, YES only, at 25c or
+  below on `atc-sea-mon-fio-2026-11-23-mon`, in a 3-minute window at the
+  first of 14:30, 16:30 or 18:30 UTC at least 40 minutes after approval; the
+  bot exits with no cleanup 60 s in and stays down 3 minutes; the watchdog
+  must cancel the bid; maximum settlement loss $0.50; Serie A permitted for
+  that window only; settings restored after. Answer: **"Authorize the
+  drill"**.
+
+Correction asked at about 13:34 UTC, before anything was set: the watchdog
+latches the shared halt when it cancels an unmanaged order, which the terms
+had left out, so after a successful drill every lane stays halted until a
+separate owner-approved reset. Answer: **"Proceed, accept the latch"**.
+
+This authorises one drill on those terms. It does not authorise a halt
+reset, any other order, or arming.
