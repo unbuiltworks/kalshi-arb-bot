@@ -490,6 +490,81 @@ class OwnershipOracle:
     #: the two services keep their own clocks; a small negative age is skew,
     #: not a forged future timestamp. The sweep routinely reports -0.011s.
     CLOCK_SKEW_S = 5.0
+    #: THE PROCESS-DEATH CASE (owner 2026-11-23: "prove process-death
+    #: cancellation"). An executor whose whole process is gone serves no
+    #: registry, so by the rule above nothing it left resting is
+    #: cancellable until it comes back. L5_WATCHDOG_REMEMBER_CLAIMS_S > 0
+    #: bounds that: when the registry cannot be REACHED AT ALL, the ids of
+    #: its last good, fresh claim are still treated as claimed for that
+    #: many seconds after that claim was read. An order id never changes
+    #: owner, and requirement (2) -- the venue's own row agreeing on the
+    #: market and reporting AUTOMATIC -- is checked exactly as before, so
+    #: this cannot reach a manual order or another desk's. It applies ONLY
+    #: to an unreachable registry: one that answers but is stale, unreadable
+    #: or says otherwise is alive, and its own statement stands.
+    #: Default 0 = off (failing to read is failing to own, as before).
+    REMEMBER_CLAIMS_S = 0.0
+    #: HOW SOON (owner 2026-11-23: "a five-minute worst-case cancellation
+    #: delay is too long for volatile in-game markets ... investigate
+    #: whether it can be shortened without compromising account ownership
+    #: protections"). The ordinary age rule waits `max_order_age_s` because
+    #: a LIVE executor is expected to manage a young order itself. An
+    #: executor whose registry has been unreachable for DEAD_AFTER_S is
+    #: managing nothing, so its remembered ids are selected for cancel at
+    #: once, whatever their age. Ownership is unchanged: only ids of its own
+    #: last good claim, and the venue's row must still agree. A planned
+    #: restart cancels its own orders on the way down, so there is normally
+    #: nothing left to select. Only meaningful with REMEMBER_CLAIMS_S > 0.
+    DEAD_AFTER_S = 30.0
+
+    @staticmethod
+    def _dead_after_s() -> float:
+        import os
+        try:
+            return max(0.0, float(os.environ.get(
+                "L5_WATCHDOG_DEAD_AFTER_S", "")
+                or OwnershipOracle.DEAD_AFTER_S))
+        except ValueError:
+            return OwnershipOracle.DEAD_AFTER_S
+
+    def dead_ids(self) -> set:
+        """Ids of an executor that has been unreachable long enough to be
+        treated as gone: its last good claim, while that is still inside
+        the memory bound. Empty when the registry answers, when memory is
+        off, or before DEAD_AFTER_S."""
+        import time as _time
+        since = getattr(self, "_unreachable_since", None)
+        last = getattr(self, "_last_good", None)
+        keep = self.REMEMBER_CLAIMS_S or self._remember_s()
+        if since is None or last is None or keep <= 0:
+            return set()
+        now = _time.monotonic()
+        if now - since < self._dead_after_s() or now - last[0] > keep:
+            return set()
+        return set(last[1])
+
+    @staticmethod
+    def _remember_s() -> float:
+        import os
+        try:
+            return max(0.0, float(os.environ.get(
+                "L5_WATCHDOG_REMEMBER_CLAIMS_S", "") or 0.0))
+        except ValueError:
+            return 0.0
+
+    def _remembered(self, why: str) -> Dict[str, Dict[str, Any]]:
+        """The last good claim, while it is still inside the bound."""
+        keep = self.REMEMBER_CLAIMS_S or self._remember_s()
+        last = getattr(self, "_last_good", None)
+        if keep <= 0 or last is None or not last[1]:
+            return {}
+        import time as _time
+        age = _time.monotonic() - last[0]
+        if age > keep:
+            return {}
+        self.last_refusal = ("%s; USING_LAST_GOOD_CLAIM:%d ids read %.1fs ago"
+                             % (why, len(last[1]), age))
+        return {k: dict(v) for k, v in last[1].items()}
 
     def __init__(self, url: str, *, timeout_s: float = DEFAULT_TIMEOUT_S,
                  max_claim_age_s: Optional[float] = None,
@@ -548,7 +623,11 @@ class OwnershipOracle:
             # A CRASHED executor lands here: its registry server dies with
             # the process, so the read fails and ownership is unknown.
             self.last_refusal = "REGISTRY_UNREACHABLE:%s" % type(exc).__name__
-            return {}
+            import time as _time
+            if getattr(self, "_unreachable_since", None) is None:
+                self._unreachable_since = _time.monotonic()
+            return self._remembered(self.last_refusal)
+        self._unreachable_since = None       # it answered: it is not gone
         if not isinstance(doc, dict) or doc.get("readable") is not True:
             self.last_refusal = "REGISTRY_NOT_READABLE"
             return {}
@@ -570,6 +649,9 @@ class OwnershipOracle:
             vid = str(row.get("venue_order_id") or "").strip()
             if vid:
                 out[vid] = dict(row)
+        import time as _time
+        self._last_good = (_time.monotonic(), {k: dict(v)
+                                               for k, v in out.items()})
         return out
 
 
@@ -918,6 +1000,21 @@ class Watchdog:
         #: REPORTED, never silent: an invisible exemption is the shape that
         #: looks configured while being inert or permissive.
         out["manual_exempt"] = []
+        #: ids of executors that are GONE (see OwnershipOracle.dead_ids):
+        #: selected below whatever their age
+        dead: set = set()
+        try:
+            for _o in (oracles_of(self.oracle) if self.oracle is not None
+                       else []):
+                _f = getattr(_o, "dead_ids", None)
+                if callable(_f):
+                    dead |= set(_f())
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            dead = set()
+        if dead:
+            out["executor_unreachable_ids"] = len(dead)
         for r in rows:
             if is_terminal(r):
                 continue
@@ -940,12 +1037,17 @@ class Watchdog:
             age = order_age_s(r, now=now)
             # age UNKNOWN is treated as overdue: an order whose creation time
             # we cannot read is an order we cannot vouch for.
-            if age is None or age > self.max_order_age_s:
+            gone = str(r.get("id") or "") in dead
+            if age is None or age > self.max_order_age_s or gone:
                 overdue.append({"venue_order_id": str(r.get("id") or ""),
                                 "market": str(r.get("marketSlug") or ""),
                                 "age_s": age,
                                 "age_known": age is not None,
-                                "leaves": str(r.get("leavesQuantity"))})
+                                "leaves": str(r.get("leavesQuantity")),
+                                **({"selected_by": "EXECUTOR_UNREACHABLE"}
+                                   if gone and not (age is None or
+                                                    age > self.max_order_age_s)
+                                   else {})})
         out["overdue"] = overdue
         if not overdue:
             # THE POSITIVE ATTESTATION. `HaltGate` returns True only for a
