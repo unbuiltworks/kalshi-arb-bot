@@ -513,3 +513,17 @@ Arming plan: at about 02:55 UTC, after re-checking the preflight, set
 the preflight does not pass, or the service is not up and audited by
 03:08, the window is not opened. Not authorised: any other window, size,
 limit or competition; a halt reset; taker orders; the halt drill.
+
+### Preflight of `e6e8b4e60` — 23:05 UTC, 23 Nov: PASS (no trading)
+
+Deployment `46c889ed` on commit `e6e8b4e60a2c…`, container started
+22:54:55; locked for new exposure and completions; strict scope on;
+account risk on, not on observe. The account-limit verdict is in every
+heartbeat while locked: mode enforce, ok, would block nothing, ledger
+figure $1.3444, limit $3.00, capacity $1.6556, resting orders counted
+separately, own resting $0, snapshot 0.5 to 5 s old. First audit complete
+at 22:58:32 (position reconciliation clean, 87 safety requests, none
+refused). No order or fill; watchdog 0 open orders, not halted; ledger
+reconcile clean. Campaign of 23 Nov still +$0.33 at the venue; the ledger
+has $0.29 (Karpol–Benwei +$0.04 not booked). No reward row dated 23 Nov.
+The bot still tracks two NHL markets from 23 Nov; both blocked by the lock.
