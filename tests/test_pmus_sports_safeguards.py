@@ -514,3 +514,21 @@ def test_alias_setting_is_parsed_strictly():
                                                   "thai1": "tha1"}
     assert XV._aliases("") == {} and XV._aliases("lmx") == {}
     assert XV._aliases("a=b=c,=x,y=") == {}
+
+
+def test_an_accent_does_not_hide_a_team_name(monkeypatch):
+    assert XV._has_name("Will Queretaro FC vs Club Necaxa end in a draw?",
+                        "Querétaro FC")
+    assert XV._has_name("São Paulo wins", "Sao Paulo")
+    assert not XV._has_name("Will Queretaro FC win?", "Club Necaxa")
+    # the draw of a match whose team is spelled with and without the accent
+    monkeypatch.setattr(XV, "THREE_WAY_LEAGUES", ("lmx",))
+    monkeypatch.setattr(XV, "THREE_WAY_ALIASES", {"lmx": "mex"})
+    ev = _mx_event()
+    pmk = _mx_pm("draw")
+    pmk["question"] = ("Will the Liga MX match Queretaro FC vs Club Necaxa "
+                       "scheduled for Nov 22, 2026 end in a draw?")
+    got = XV.resolve_three_way(
+        lambda p: [ev] if p == "/events?slug=mex-que-nec-2026-11-22" else [],
+        "atc-lmx-que-nec-2026-11-22-draw", pmk)
+    assert got == "D1"

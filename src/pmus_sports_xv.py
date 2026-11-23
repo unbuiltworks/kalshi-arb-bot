@@ -364,9 +364,14 @@ THREE_WAY_ALIASES = _aliases(os.getenv(
 
 def _words(x: Any) -> str:
     """Lower-case words only: punctuation never joins or hides a word
-    ("draw?" is the word "draw"; "vs." is "vs")."""
+    ("draw?" is the word "draw"; "vs." is "vs"). Accents are dropped, so
+    one venue's "Queretaro" is the other's "Querétaro" (seen live
+    2026-11-23: the draw of that match would not map)."""
+    import unicodedata
+    txt = "".join(ch for ch in unicodedata.normalize("NFKD", str(x or ""))
+                  if not unicodedata.combining(ch))
     return " ".join("".join(ch if ch.isalnum() else " "
-                            for ch in str(x or "").lower()).split())
+                            for ch in txt.lower()).split())
 
 
 def _has_name(text: Any, name: Any) -> bool:
