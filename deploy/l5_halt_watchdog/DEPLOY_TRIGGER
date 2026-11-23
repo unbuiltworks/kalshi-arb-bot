@@ -5,3 +5,5 @@
 2026-11-17T23:3xZ promote 402c28435 (2eb6c5d40: lane freshness measured at the read, 5 s skew band restored). Owner-approved watchdog-only deploy; sports session sole deployer. Halt NOT reset by this deploy.
 
 2026-11-18T01:5xZ promote 98caa3073 (reset reads comma-separated registries like the sweep; every registry must attest). Owner-approved watchdog-only deploy; no halt change, no reset.
+
+2026-11-23T02:5xZ CANDIDATE 0a4c1fa1a (a gone executor's last claim is remembered for a bounded time and its orders are cancelled after a short grace; both settings unset = deployed behaviour exactly). NOT approved, NOT deployed: prepared for the owner's decision. No halt change, no reset.
