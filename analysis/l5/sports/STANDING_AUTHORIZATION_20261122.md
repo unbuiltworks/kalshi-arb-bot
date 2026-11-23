@@ -237,3 +237,33 @@ live campaign with venue-confirmed fills and settled results.
 Explicit approval is still required for capital increases, taker
 authorization, weakened limits, other deployments, and anything outside
 the terms above.
+
+## 11. Decisions of 23 Nov 2026
+
+From the owner's messages of 23 Nov:
+
+| Item | Decision |
+|---|---|
+| Non-blocking account-risk reader | Keep |
+| $3 drawdown limit | Unchanged; "I would not silently redefine the existing $3 limit" |
+| In-game hysteresis | Keep off |
+| Champions League | "Approve for development and market evaluation only" |
+| $97 live campaign | Not approved |
+| Capital increase, live arming | Not approved |
+| Production death drill | "Prepare, but separate authorization required for a live resting order" |
+
+Two deployments, asked separately and answered directly by the owner at
+about 12:10 UTC on 23 Nov:
+
+- **Watchdog.** Asked: deploy `l5-halt-watchdog` from
+  `release/l5-halt-watchdog-ce26e2a9e` at
+  `ce26e2a9eeb6c95e534e34f907686b1948b640e2`, verify sweeps are unchanged,
+  then add `L5_WATCHDOG_REMEMBER_CLAIMS_S=900` and
+  `L5_WATCHDOG_DEAD_AFTER_S=30`. Answer: **"Deploy and enable"**.
+- **Sports bot.** Asked: deploy `pmus-spring-l5-probe` from
+  `release/pmus-sports-rn1-02e5141b1` at
+  `02e5141b13a41eca7224671a22bd4fec9ff26c6f` with the submission lock left
+  on and no variable changed. Answer: **"Deploy locked"**.
+
+Neither answer authorises an order, arming, a new competition, a limit
+change or the death drill.
