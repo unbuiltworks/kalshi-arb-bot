@@ -2956,8 +2956,12 @@ class Engine:
                     late = round(max(0.0, time.time() - float(st["t"])), 1)
             except (TypeError, ValueError):
                 late = None
+            if o.get("phase"):
+                self._phase_count(mk, o["phase"], "fills", 1)
+                self._phase_count(mk, o["phase"], "filled_contracts", new)
             log("FILL", slug=slug, side=side, px=st["px"], qty=new,
                 order_id=oid, pos=mk["pos"], seen_late_s=late,
+                phase=o.get("phase"),
                 label="venue-reported fill; not realized until settlement")
             if late is not None and FILL_LATE_LATCH_S > 0 and \
                     late > FILL_LATE_LATCH_S:
@@ -3000,6 +3004,7 @@ class Engine:
                 t_fill=t_fill, t_seen=seen, t_source=src, mids=self._mids(),
                 fair_yes=self.intl_fair(slug), unpaired_before=before,
                 role=role)
+            rec["phase"] = (mk["orders"].get(oid) or {}).get("phase")
             rows = mk.setdefault("markouts", [])
             rows.append(rec)
             del rows[:-self.MARKOUT_KEEP]
@@ -3028,6 +3033,7 @@ class Engine:
                     log("FILL_MARKOUT", slug=slug, side=rec["side"],
                         px=rec["px"], qty=rec["qty"],
                         order_id=rec["order_id"], role=rec.get("role"),
+                        phase=rec.get("phase"),
                         unpaired_before=rec.get("unpaired_before"),
                         t_source=rec.get("t_source"),
                         seen_after_s=round(rec["t_seen"] - rec["t"], 1),
@@ -3692,10 +3698,13 @@ class Engine:
         mk["orders"][oid] = {"side": side, "px": str(px), "qty": str(qty),
                              "filled": "0", "open": True, "stage": stage,
                              "placed_at": time.time()}
+        if mk.get("phase_now"):
+            mk["orders"][oid]["phase"] = mk["phase_now"]
+            self._phase_count(mk, mk["phase_now"], "orders", 1)
         self.b.d["own_order_ids"].append(oid)
         self.b.save()
         log("ORDER", slug=slug, side=side, px=px, qty=qty, stage=stage,
-            order_id=oid)
+            order_id=oid, phase=mk.get("phase_now"))
 
     # ------------------------------------------------ RN1 replica (default off)
     def rn1_campaign_exposure(self, exclude: Optional[str] = None
@@ -3853,6 +3862,63 @@ class Engine:
             return PH.price_range(h, now, VOL_WINDOW_S)
         except Exception:                                 # noqa: BLE001
             return D("0")
+
+    # MEASURED SEPARATELY BY PHASE (owner 2026-11-23: "Measure qualifying
+    # resting time, actual fills, adverse markouts, and credited rewards
+    # separately"). Per market, per phase: orders sent, fills, contracts
+    # filled, contract-seconds resting, and contract-seconds resting while
+    # the venue's scoring rule gives the resting quotes a share of a paying
+    # reward pool (theoretical; a credit is only what the venue pays).
+    # Measurement only: nothing here places, cancels or blocks an order.
+    @staticmethod
+    def _phase_count(mk: Dict[str, Any], phase: str, key: str,
+                     amount: Any) -> None:
+        try:
+            row = mk.setdefault("phase_stats", {}).setdefault(str(phase), {})
+            row[key] = str(D(str(row.get(key) or 0)) + D(str(amount)))
+        except Exception:                                 # noqa: BLE001
+            pass
+
+    def _phase_resting(self, mk: Dict[str, Any], phase: str,
+                       now: float) -> None:
+        """Add the time since this market's last pass to what was resting
+        through it. A gap longer than 60 s is not counted as resting (the
+        bot was not watching)."""
+        last = mk.get("phase_t")
+        mk["phase_t"] = now
+        if last is None:
+            return
+        dt = now - float(last)
+        if not (0 < dt <= 60):
+            return
+        left = D(0)
+        for o in mk["orders"].values():
+            if o.get("open"):
+                left += max(D(0), D(str(o["qty"])) -
+                            D(str(o.get("filled") or "0")))
+        if left <= 0:
+            return
+        self._phase_count(mk, phase, "resting_contract_s",
+                          left * D(str(round(dt, 3))))
+        est = mk.get("rn1_reward_est") or {}
+        if float(est.get("share") or 0.0) > 0 and \
+                now - float(est.get("t") or 0) <= 4 * REWARD_WALK_CHECK_S:
+            self._phase_count(mk, phase, "qualifying_contract_s",
+                              left * D(str(round(dt, 3))))
+
+    def phase_summary(self) -> Dict[str, Any]:
+        """Totals by phase across this bot's markets, for the heartbeat."""
+        out: Dict[str, Dict[str, D]] = {}
+        try:
+            for mk in (self.b.d.get("markets") or {}).values():
+                for ph, row in (mk.get("phase_stats") or {}).items():
+                    agg = out.setdefault(ph, {})
+                    for k, v in row.items():
+                        agg[k] = agg.get(k, D(0)) + D(str(v))
+            return {ph: {k: str(v) for k, v in sorted(row.items())}
+                    for ph, row in sorted(out.items())}
+        except Exception:                                 # noqa: BLE001
+            return {}
 
     def market_phase(self, slug: str, mk: Dict[str, Any], bbo: Optional[
             Mapping], now: float) -> Dict[str, Any]:
@@ -4037,6 +4103,8 @@ class Engine:
                 label="locked pair economics; realized at settlement")
         rng = self._vol(slug, bbo, now)
         ph = self.market_phase(slug, mk, bbo, now)
+        self._phase_resting(mk, mk.get("phase_now") or ph["phase"], now)
+        mk["phase_now"] = ph["phase"]
         if ph["phase"] == PH.KICKOFF:
             self._kickoff_hold(slug, mk, ph, now)
             return
@@ -5365,7 +5433,8 @@ class Engine:
         extra = dict(extra, loop=loop_report())
         if RN1.ON:
             try:
-                extra = dict(extra, markout=self.markout_summary())
+                extra = dict(extra, markout=self.markout_summary(),
+                             phases=self.phase_summary())
             except Exception:                             # noqa: BLE001
                 pass
         extra = dict(extra, submission_lock={

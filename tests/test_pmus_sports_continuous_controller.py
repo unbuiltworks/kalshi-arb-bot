@@ -594,3 +594,54 @@ def test_the_tolerance_applies_to_the_net_after_the_inventory_charge():
                       "keep_tol_usd": D("0.005")})
     assert out["edge"]["YES"]["why"] == "edge_below_risk"
     assert out["YES"] is None
+
+
+# ------------------------------------------ measured separately by phase
+@pytest.mark.rn1_edge_gate
+def test_orders_fills_and_resting_time_are_counted_by_phase(eng, capsys):
+    e, v = eng
+    mk = e.b.m(SLUG)
+    mk["game_start"] = time.time() + 3600
+    e.step_market(SLUG)                              # two pre-game bids of 10
+    assert {o.get("phase") for o in mk["orders"].values()} == {"pregame"}
+    assert mk["phase_stats"]["pregame"]["orders"] == "2"
+    mk["phase_t"] = time.time() - 10                 # ten seconds resting
+    e.step_market(SLUG)
+    rest = D(mk["phase_stats"]["pregame"]["resting_contract_s"])
+    assert D("195") <= rest <= D("205")              # 20 contracts x 10 s
+    assert "qualifying_contract_s" not in mk["phase_stats"]["pregame"]
+    # a fill is counted in the phase its order was placed in
+    oid = next(k for k, o in mk["orders"].items() if o["side"] == "YES")
+    v.orders[oid]["filled"], v.orders[oid]["open"] = D("10"), False
+    e.step_market(SLUG)
+    st = mk["phase_stats"]["pregame"]
+    assert st["fills"] == "1" and st["filled_contracts"] == "10"
+    fills = logged(capsys, "FILL")
+    assert fills and fills[-1]["phase"] == "pregame"
+    assert mk["markouts"][-1]["phase"] == "pregame"
+    assert e.phase_summary()["pregame"]["fills"] == "1"
+
+
+@pytest.mark.rn1_edge_gate
+def test_resting_time_counts_as_qualifying_only_with_a_reward_share(eng):
+    e, v = eng
+    mk = e.b.m(SLUG)
+    e.step_market(SLUG)                              # live, two bids of 4
+    mk["rn1_reward_est"] = {"t": time.time(), "share": 0.01,
+                            "est_usd_per_hour": 0.05,
+                            "legs": mk.get("rn1_reward_est", {}).get("legs")}
+    mk["phase_t"] = time.time() - 5
+    e.step_market(SLUG)
+    st = mk["phase_stats"]["live"]
+    assert D("38") <= D(st["qualifying_contract_s"]) <= D("42")   # 8 x 5 s
+    assert st["qualifying_contract_s"] == st["resting_contract_s"]
+
+
+@pytest.mark.rn1_edge_gate
+def test_a_long_gap_is_not_counted_as_resting_time(eng):
+    e, v = eng
+    mk = e.b.m(SLUG)
+    e.step_market(SLUG)
+    mk["phase_t"] = time.time() - 600                # the bot was not watching
+    e.step_market(SLUG)
+    assert "resting_contract_s" not in mk["phase_stats"]["live"]
