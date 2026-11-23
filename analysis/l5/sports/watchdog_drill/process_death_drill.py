@@ -6,10 +6,15 @@ the real Watchdog and OwnershipOracle over real HTTP, a fake venue transport
 that also shows another desk's old order on the shared account.
 The bot process is then killed with SIGKILL -- no shutdown handler runs, its
 registry is gone -- and the watchdog keeps sweeping.
-usage: process_death_drill.py <sports_checkout> <port> <remember_s>"""
+The orders are <order_age_s> old (default 900, past the watchdog's 300 s age
+rule; use a small value to show the gone-executor rule acting before it).
+usage: process_death_drill.py <sports_checkout> <port> <remember_s> [order_age_s] [dead_after_s]"""
 import datetime as dt, json, os, pathlib, signal, subprocess, sys, tempfile, time
 sports, port, remember = sys.argv[1], int(sys.argv[2]), sys.argv[3]
 os.environ["L5_WATCHDOG_REMEMBER_CLAIMS_S"] = remember
+AGE = float(sys.argv[4]) if len(sys.argv) > 4 else 900.0
+DEAD = float(sys.argv[5]) if len(sys.argv) > 5 else 30.0
+os.environ["L5_WATCHDOG_DEAD_AFTER_S"] = str(DEAD)
 sys.path.insert(0, ".")
 from src import l5_watchdog as W, l5_halt_gate as HG
 here = pathlib.Path(__file__).resolve().parent
@@ -34,7 +39,7 @@ now = lambda: dt.datetime.now(dt.timezone.utc)
 class Venue:
     name = "FAKE_VENUE"
     def __init__(s):
-        old = (now() - dt.timedelta(seconds=900)).isoformat()
+        old = (now() - dt.timedelta(seconds=AGE)).isoformat()
         s.rows = {i: {"id": i, "marketSlug": "aec-x", "createTime": old,
                       "manualOrderIndicator": W.AUTOMATIC, "state": "ORDER_STATE_OPEN",
                       "leavesQuantity": "2", "cumQuantity": "0"} for i in ids}
@@ -62,6 +67,9 @@ show("1 bot alive")
 os.kill(bot.pid, signal.SIGKILL); bot.wait()
 print("BOT KILLED (SIGKILL), exit", bot.returncode, flush=True)
 time.sleep(1.0)
-show("2 first sweep after death")
-show("3 next sweep")
+show("2 first sweep after death (%.0fs old orders)" % AGE)
+if AGE <= 300:
+    time.sleep(DEAD + 0.5)
+    show("3 after the %.0fs grace" % DEAD)
+show("4 next sweep")
 print("VENUE_CANCELS", v.cancels, "| STILL OPEN", [r["id"] for r in v.open_orders()], flush=True)

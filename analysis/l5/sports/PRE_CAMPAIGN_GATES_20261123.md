@@ -67,8 +67,12 @@ resting bid, which is the adverse case. Marks are not profit.
 - Limits of the test: only adverse fills are modelled, each judged alone,
   and the rule-off arm has six fills. The comparison between the arms is
   like for like; the absolute levels are not a forecast.
-- A live side-by-side dry run (rule off and on, same market, with the same
-  fill model) is still running to 03:05 UTC on one Liga MX market.
+- The live side-by-side dry run (rule off and on, same fill model) adds
+  nothing to this. It covered one Liga MX market for about 27 minutes of
+  play and stopped early, at about 02:42 UTC, for a reason not established.
+  The rule never engaged in that time: 20 orders, 18 cancels and one fill
+  with it off; 18, 16 and one with it on.
+- **Owner's decision, 23 Nov: disabled.** It stays in the code, off.
 
 Files: `hysteresis/replay.py`, `hysteresis/replay_result_20261122.txt`.
 
@@ -89,14 +93,36 @@ killed with SIGKILL, so no shutdown handler runs.
   order, as before. A registry that answers is never overridden.
 - Off by default. Watchdog tests: 493 passed before, 501 with the change
   (the 8 new ones).
-- The watchdog cancels an order once it is older than its age limit (300
-  seconds in production), so the worst case after a process death is about
-  five minutes plus one sweep.
-- Not proven in production: that needs a watchdog deployment and a no-order
-  drill, both for the owner to approve.
+- **Shortened, 23 Nov.** The age rule waits 300 seconds because a live bot
+  is expected to manage a young order itself. A bot whose registry has been
+  unreachable for 30 seconds is managing nothing, so its remembered orders
+  are now selected at once, whatever their age. Worst case after a death:
+  the 30-second grace plus one 20-second sweep, about 50 seconds, down from
+  about five minutes. Ownership checks are unchanged. A planned restart
+  cancels its own orders on the way down, so it leaves nothing to select.
+- Drill with orders only 20 seconds old: without the change nothing is
+  cancelled; with it, the bot's two orders are cancelled on the first sweep
+  after the grace and the other desk's order is left alone.
+- The watchdog's test files: 493 passed as deployed, 504 with the change.
+- **Release candidate, not deployed:** `release/l5-halt-watchdog-ce26e2a9e`.
+  With neither setting present it behaves exactly as the deployed watchdog.
+- **Verification in production** needs the watchdog deployed, its two
+  settings on, and a death drill: the sports bot now has a bounded switch
+  that makes it exit with no cleanup and stay down for a set window. A real
+  proof needs one small resting order during that window. All of that is
+  for the owner to approve.
 
 Files: `patches/0003-watchdog-remembers-a-dead-executors-claim-on-faebeca6f.patch`,
-`watchdog_drill/process_death_drill.py` and its two result files.
+`watchdog_drill/process_death_drill.py` and its result files.
+
+## Release candidates (neither approved nor deployed)
+
+| Service | Branch | Code | Tests |
+|---|---|---|---|
+| Sports bot | `release/pmus-sports-rn1-1b9f4325f` | `0c554dd09` | 5,287 passed, 24 failed; the same 24 failed before this work |
+| Watchdog | `release/l5-halt-watchdog-ce26e2a9e` | `0a4c1fa1a` | 504 passed in the 20 files that touch it |
+
+The campaign these are for is in `CAMPAIGN_PROPOSAL_UCL_20261125.md`.
 
 ## The smallest live campaign that could produce reward-credit evidence
 

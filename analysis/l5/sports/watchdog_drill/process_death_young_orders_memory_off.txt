@@ -1,0 +1,8 @@
+BOT READY ['o1', 'o2'] pid 331
+{"phase": "1 bot alive", "open": 3, "exempt": ["o1", "o2"], "claimed_ids": null, "cancelled": [], "not_ours": [], "cancel_skipped": null, "claim_refused": null, "lanes": ["http://127.0.0.1:18510:OK:2"], "halt": null}
+BOT KILLED (SIGKILL), exit -9
+{"phase": "2 first sweep after death (20s old orders)", "open": 3, "exempt": [], "claimed_ids": null, "cancelled": [], "not_ours": [], "cancel_skipped": null, "claim_refused": null, "lanes": ["http://127.0.0.1:18510:UNREACHABLE:URLError"], "halt": null}
+{"phase": "3 after the 3s grace", "open": 3, "exempt": [], "claimed_ids": null, "cancelled": [], "not_ours": [], "cancel_skipped": null, "claim_refused": null, "lanes": ["http://127.0.0.1:18510:UNREACHABLE:URLError"], "halt": null}
+{"phase": "4 next sweep", "open": 3, "exempt": [], "claimed_ids": null, "cancelled": [], "not_ours": [], "cancel_skipped": null, "claim_refused": null, "lanes": ["http://127.0.0.1:18510:UNREACHABLE:URLError"], "halt": null}
+VENUE_CANCELS [] | STILL OPEN ['o1', 'o2', 'other-desk-1']
+exit 0

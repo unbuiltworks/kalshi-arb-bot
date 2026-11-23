@@ -1,0 +1,1004 @@
+[
+ {
+  "start": "2026-11-23T19:45:00Z",
+  "league": "sea",
+  "title": "AC Monza vs. ACF Fiorentina",
+  "markets": [
+   "atc-sea-mon-fio-2026-11-23-mon",
+   "atc-sea-mon-fio-2026-11-23-draw",
+   "atc-sea-mon-fio-2026-11-23-fio"
+  ],
+  "periods": {
+   "day_of": [
+    80.0,
+    8000.0,
+    0.35
+   ],
+   "early": [
+    40.0,
+    8000.0,
+    0.4
+   ],
+   "live": [
+    640.0,
+    8000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-23T20:00:00Z",
+  "league": "epl",
+  "title": "Brentford FC vs. Everton FC",
+  "markets": [
+   "atc-epl-bre-eve-2026-11-23-bre",
+   "atc-epl-bre-eve-2026-11-23-draw",
+   "atc-epl-bre-eve-2026-11-23-eve"
+  ],
+  "periods": {
+   "day_of": [
+    80.0,
+    10000.0,
+    0.3
+   ],
+   "live": [
+    1600.0,
+    10000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-23T20:00:00Z",
+  "league": "lal",
+  "title": "Levante UD vs. Elche CF",
+  "markets": [
+   "atc-lal-lev-elc-2026-11-23-lev",
+   "atc-lal-lev-elc-2026-11-23-draw",
+   "atc-lal-lev-elc-2026-11-23-elc"
+  ],
+  "periods": {
+   "day_of": [
+    80.0,
+    8000.0,
+    0.35
+   ],
+   "early": [
+    40.0,
+    8000.0,
+    0.4
+   ],
+   "live": [
+    640.0,
+    8000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-24T00:00:00Z",
+  "league": "nhl",
+  "title": "CBJ Blue Jackets vs. NJD Devils",
+  "markets": [
+   "aec-nhl-cbj-nj-2026-11-23"
+  ],
+  "periods": {
+   "day_of": [
+    33.0,
+    12000.0,
+    0.25
+   ],
+   "live": [
+    350.0,
+    8000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-24T00:30:00Z",
+  "league": "nhl",
+  "title": "CGY Flames vs. OTT Senators",
+  "markets": [
+   "aec-nhl-cgy-ott-2026-11-23"
+  ],
+  "periods": {
+   "day_of": [
+    33.0,
+    12000.0,
+    0.25
+   ],
+   "live": [
+    350.0,
+    8000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-24T00:30:00Z",
+  "league": "nhl",
+  "title": "LAK Kings vs. MTL Canadiens",
+  "markets": [
+   "aec-nhl-la-mon-2026-11-23"
+  ],
+  "periods": {
+   "day_of": [
+    33.0,
+    12000.0,
+    0.25
+   ],
+   "live": [
+    350.0,
+    8000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-24T00:30:00Z",
+  "league": "nhl",
+  "title": "TOR Maple Leafs vs. NYI Islanders",
+  "markets": [
+   "aec-nhl-tor-nyi-2026-11-23"
+  ],
+  "periods": {
+   "day_of": [
+    33.0,
+    12000.0,
+    0.25
+   ],
+   "live": [
+    350.0,
+    8000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-24T00:30:00Z",
+  "league": "nhl",
+  "title": "UTA Mammoth vs. WPG Jets",
+  "markets": [
+   "aec-nhl-uta-wpg-2026-11-23"
+  ],
+  "periods": {
+   "day_of": [
+    33.0,
+    12000.0,
+    0.25
+   ],
+   "live": [
+    350.0,
+    8000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-24T02:40:00Z",
+  "league": "nhl",
+  "title": "ANA Ducks vs. SEA Kraken",
+  "markets": [
+   "aec-nhl-ana-sea-2026-11-23"
+  ],
+  "periods": {
+   "day_of": [
+    33.0,
+    12000.0,
+    0.25
+   ],
+   "live": [
+    350.0,
+    8000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-24T03:00:00Z",
+  "league": "nhl",
+  "title": "MIN Wild vs. SJS Sharks",
+  "markets": [
+   "aec-nhl-min-sj-2026-11-23"
+  ],
+  "periods": {
+   "day_of": [
+    33.0,
+    12000.0,
+    0.25
+   ],
+   "live": [
+    350.0,
+    8000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-24T17:45:00Z",
+  "league": "ucl",
+  "title": "FK Bodo/Glimt vs. LASK Linz",
+  "markets": [
+   "atc-ucl-bog-lask-2026-11-24-bog",
+   "atc-ucl-bog-lask-2026-11-24-draw",
+   "atc-ucl-bog-lask-2026-11-24-lask"
+  ],
+  "periods": {
+   "day_of": [
+    160.0,
+    10000.0,
+    0.35
+   ],
+   "early": [
+    80.0,
+    10000.0,
+    0.4
+   ],
+   "live": [
+    1280.0,
+    10000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-24T17:45:00Z",
+  "league": "ucl",
+  "title": "Galatasaray SK vs. Aston Villa FC",
+  "markets": [
+   "atc-ucl-gal-ast-2026-11-24-gal",
+   "atc-ucl-gal-ast-2026-11-24-draw",
+   "atc-ucl-gal-ast-2026-11-24-ast"
+  ],
+  "periods": {
+   "day_of": [
+    160.0,
+    10000.0,
+    0.35
+   ],
+   "early": [
+    80.0,
+    10000.0,
+    0.4
+   ],
+   "live": [
+    1280.0,
+    10000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-24T20:00:00Z",
+  "league": "ucl",
+  "title": "Arsenal FC vs. BV Borussia 09 Dortmund",
+  "markets": [
+   "atc-ucl-ars-bvb-2026-11-24-ars",
+   "atc-ucl-ars-bvb-2026-11-24-draw",
+   "atc-ucl-ars-bvb-2026-11-24-bvb"
+  ],
+  "periods": {
+   "day_of": [
+    160.0,
+    10000.0,
+    0.35
+   ],
+   "early": [
+    80.0,
+    10000.0,
+    0.4
+   ],
+   "live": [
+    1280.0,
+    10000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-24T20:00:00Z",
+  "league": "ucl",
+  "title": "Como 1907 vs. AEK",
+  "markets": [
+   "atc-ucl-com-aek1-2026-11-24-com",
+   "atc-ucl-com-aek1-2026-11-24-draw",
+   "atc-ucl-com-aek1-2026-11-24-aek1"
+  ],
+  "periods": {
+   "day_of": [
+    160.0,
+    10000.0,
+    0.35
+   ],
+   "early": [
+    80.0,
+    10000.0,
+    0.4
+   ],
+   "live": [
+    1280.0,
+    10000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-24T20:00:00Z",
+  "league": "ucl",
+  "title": "Feyenoord Rotterdam vs. FC Porto",
+  "markets": [
+   "atc-ucl-fey-por-2026-11-24-fey",
+   "atc-ucl-fey-por-2026-11-24-draw",
+   "atc-ucl-fey-por-2026-11-24-por"
+  ],
+  "periods": {
+   "day_of": [
+    160.0,
+    10000.0,
+    0.35
+   ],
+   "early": [
+    80.0,
+    10000.0,
+    0.4
+   ],
+   "live": [
+    1280.0,
+    10000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-24T20:00:00Z",
+  "league": "ucl",
+  "title": "Manchester City FC vs. SSC Napoli",
+  "markets": [
+   "atc-ucl-mnc-nap-2026-11-24-mnc",
+   "atc-ucl-mnc-nap-2026-11-24-draw",
+   "atc-ucl-mnc-nap-2026-11-24-nap"
+  ],
+  "periods": {
+   "day_of": [
+    160.0,
+    10000.0,
+    0.35
+   ],
+   "early": [
+    80.0,
+    10000.0,
+    0.4
+   ],
+   "live": [
+    1280.0,
+    10000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-24T20:00:00Z",
+  "league": "ucl",
+  "title": "RB Leipzig vs. Racing Club de Lens",
+  "markets": [
+   "atc-ucl-rbl-rcl-2026-11-24-rbl",
+   "atc-ucl-rbl-rcl-2026-11-24-draw",
+   "atc-ucl-rbl-rcl-2026-11-24-rcl"
+  ],
+  "periods": {
+   "day_of": [
+    160.0,
+    10000.0,
+    0.35
+   ],
+   "early": [
+    80.0,
+    10000.0,
+    0.4
+   ],
+   "live": [
+    1280.0,
+    10000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-24T20:00:00Z",
+  "league": "ucl",
+  "title": "Real Madrid CF vs. PSV",
+  "markets": [
+   "atc-ucl-rma-psv-2026-11-24-rma",
+   "atc-ucl-rma-psv-2026-11-24-draw",
+   "atc-ucl-rma-psv-2026-11-24-psv"
+  ],
+  "periods": {
+   "day_of": [
+    160.0,
+    10000.0,
+    0.35
+   ],
+   "early": [
+    80.0,
+    10000.0,
+    0.4
+   ],
+   "live": [
+    1280.0,
+    10000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-24T20:00:00Z",
+  "league": "ucl",
+  "title": "SK Slovan Bratislava vs. Real Betis Seville",
+  "markets": [
+   "atc-ucl-sba-rbb-2026-11-24-sba",
+   "atc-ucl-sba-rbb-2026-11-24-draw",
+   "atc-ucl-sba-rbb-2026-11-24-rbb"
+  ],
+  "periods": {
+   "day_of": [
+    160.0,
+    10000.0,
+    0.35
+   ],
+   "early": [
+    80.0,
+    10000.0,
+    0.4
+   ],
+   "live": [
+    1280.0,
+    10000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-25T01:00:00Z",
+  "league": "nhl",
+  "title": "VGK Golden Knights vs. EDM Oilers",
+  "markets": [
+   "aec-nhl-veg-edm-2026-11-24"
+  ],
+  "periods": {
+   "day_of": [
+    33.0,
+    12000.0,
+    0.25
+   ],
+   "live": [
+    350.0,
+    8000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-25T17:45:00Z",
+  "league": "ucl",
+  "title": "SK Slavia Praha vs. Villarreal CF",
+  "markets": [
+   "atc-ucl-slp-vil-2026-11-25-slp",
+   "atc-ucl-slp-vil-2026-11-25-draw",
+   "atc-ucl-slp-vil-2026-11-25-vil"
+  ],
+  "periods": {
+   "day_of": [
+    160.0,
+    10000.0,
+    0.35
+   ],
+   "early": [
+    80.0,
+    10000.0,
+    0.4
+   ],
+   "live": [
+    1280.0,
+    10000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-25T17:45:00Z",
+  "league": "ucl",
+  "title": "Sabah FK vs. FC Barcelona",
+  "markets": [
+   "atc-ucl-sab1-fcb-2026-11-25-sab1",
+   "atc-ucl-sab1-fcb-2026-11-25-draw",
+   "atc-ucl-sab1-fcb-2026-11-25-fcb"
+  ],
+  "periods": {
+   "day_of": [
+    160.0,
+    10000.0,
+    0.35
+   ],
+   "early": [
+    80.0,
+    10000.0,
+    0.4
+   ],
+   "live": [
+    1280.0,
+    10000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-25T20:00:00Z",
+  "league": "ucl",
+  "title": "Club Atletico de Madrid vs. Viking FK",
+  "markets": [
+   "atc-ucl-atm-vik1-2026-11-25-atm",
+   "atc-ucl-atm-vik1-2026-11-25-draw",
+   "atc-ucl-atm-vik1-2026-11-25-vik1"
+  ],
+  "periods": {
+   "day_of": [
+    160.0,
+    10000.0,
+    0.35
+   ],
+   "early": [
+    80.0,
+    10000.0,
+    0.4
+   ],
+   "live": [
+    1280.0,
+    10000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-25T20:00:00Z",
+  "league": "ucl",
+  "title": "Club Brugge KV vs. Liverpool FC",
+  "markets": [
+   "atc-ucl-bru-liv-2026-11-25-bru",
+   "atc-ucl-bru-liv-2026-11-25-draw",
+   "atc-ucl-bru-liv-2026-11-25-liv"
+  ],
+  "periods": {
+   "day_of": [
+    160.0,
+    10000.0,
+    0.35
+   ],
+   "early": [
+    80.0,
+    10000.0,
+    0.4
+   ],
+   "live": [
+    1280.0,
+    10000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-25T20:00:00Z",
+  "league": "ucl",
+  "title": "FC Internazionale Milano vs. VfB Stuttgart",
+  "markets": [
+   "atc-ucl-int-stu-2026-11-25-int",
+   "atc-ucl-int-stu-2026-11-25-draw",
+   "atc-ucl-int-stu-2026-11-25-stu"
+  ],
+  "periods": {
+   "day_of": [
+    160.0,
+    10000.0,
+    0.35
+   ],
+   "early": [
+    80.0,
+    10000.0,
+    0.4
+   ],
+   "live": [
+    1280.0,
+    10000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-25T20:00:00Z",
+  "league": "ucl",
+  "title": "FC Shakhtar Donetsk vs. Fenerbahce SK",
+  "markets": [
+   "atc-ucl-sha-fen-2026-11-25-sha",
+   "atc-ucl-sha-fen-2026-11-25-draw",
+   "atc-ucl-sha-fen-2026-11-25-fen"
+  ],
+  "periods": {
+   "day_of": [
+    160.0,
+    10000.0,
+    0.35
+   ],
+   "early": [
+    80.0,
+    10000.0,
+    0.4
+   ],
+   "live": [
+    1280.0,
+    10000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-25T20:00:00Z",
+  "league": "ucl",
+  "title": "Lille OSC vs. FC Bayern Munchen",
+  "markets": [
+   "atc-ucl-lil-bay-2026-11-25-lil",
+   "atc-ucl-lil-bay-2026-11-25-draw",
+   "atc-ucl-lil-bay-2026-11-25-bay"
+  ],
+  "periods": {
+   "day_of": [
+    160.0,
+    10000.0,
+    0.35
+   ],
+   "early": [
+    80.0,
+    10000.0,
+    0.4
+   ],
+   "live": [
+    1280.0,
+    10000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-25T20:00:00Z",
+  "league": "ucl",
+  "title": "Paris Saint-Germain FC vs. AS Roma",
+  "markets": [
+   "atc-ucl-psg-rom-2026-11-25-psg",
+   "atc-ucl-psg-rom-2026-11-25-draw",
+   "atc-ucl-psg-rom-2026-11-25-rom"
+  ],
+  "periods": {
+   "day_of": [
+    160.0,
+    10000.0,
+    0.35
+   ],
+   "early": [
+    80.0,
+    10000.0,
+    0.4
+   ],
+   "live": [
+    1280.0,
+    10000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-25T20:00:00Z",
+  "league": "ucl",
+  "title": "Sporting CP vs. Manchester United FC",
+  "markets": [
+   "atc-ucl-spo-mnu-2026-11-25-spo",
+   "atc-ucl-spo-mnu-2026-11-25-draw",
+   "atc-ucl-spo-mnu-2026-11-25-mnu"
+  ],
+  "periods": {
+   "day_of": [
+    160.0,
+    10000.0,
+    0.35
+   ],
+   "early": [
+    80.0,
+    10000.0,
+    0.4
+   ],
+   "live": [
+    1280.0,
+    10000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-26T00:00:00Z",
+  "league": "nhl",
+  "title": "CAR Hurricanes vs. TBL Lightning",
+  "markets": [
+   "aec-nhl-car-tb-2026-11-25"
+  ],
+  "periods": {
+   "day_of": [
+    33.0,
+    12000.0,
+    0.25
+   ],
+   "live": [
+    350.0,
+    8000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-26T00:00:00Z",
+  "league": "nhl",
+  "title": "CGY Flames vs. PIT Penguins",
+  "markets": [
+   "aec-nhl-cgy-pit-2026-11-25"
+  ],
+  "periods": {
+   "day_of": [
+    33.0,
+    12000.0,
+    0.25
+   ],
+   "live": [
+    350.0,
+    8000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-26T00:00:00Z",
+  "league": "nhl",
+  "title": "NJD Devils vs. CBJ Blue Jackets",
+  "markets": [
+   "aec-nhl-nj-cbj-2026-11-25"
+  ],
+  "periods": {
+   "day_of": [
+    33.0,
+    12000.0,
+    0.25
+   ],
+   "live": [
+    350.0,
+    8000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-26T00:00:00Z",
+  "league": "nhl",
+  "title": "NYR Rangers vs. BUF Sabres",
+  "markets": [
+   "aec-nhl-nyr-buf-2026-11-25"
+  ],
+  "periods": {
+   "day_of": [
+    33.0,
+    12000.0,
+    0.25
+   ],
+   "live": [
+    350.0,
+    8000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-26T00:00:00Z",
+  "league": "nhl",
+  "title": "OTT Senators vs. FLA Panthers",
+  "markets": [
+   "aec-nhl-ott-fla-2026-11-25"
+  ],
+  "periods": {
+   "day_of": [
+    33.0,
+    12000.0,
+    0.25
+   ],
+   "live": [
+    350.0,
+    8000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-26T00:00:00Z",
+  "league": "nhl",
+  "title": "PHI Flyers vs. WSH Capitals",
+  "markets": [
+   "aec-nhl-phi-was-2026-11-25"
+  ],
+  "periods": {
+   "day_of": [
+    33.0,
+    12000.0,
+    0.25
+   ],
+   "live": [
+    350.0,
+    8000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-26T00:00:00Z",
+  "league": "nhl",
+  "title": "STL Blues vs. NYI Islanders",
+  "markets": [
+   "aec-nhl-stl-nyi-2026-11-25"
+  ],
+  "periods": {
+   "day_of": [
+    33.0,
+    12000.0,
+    0.25
+   ],
+   "live": [
+    350.0,
+    8000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-26T00:00:00Z",
+  "league": "nhl",
+  "title": "WPG Jets vs. BOS Bruins",
+  "markets": [
+   "aec-nhl-wpg-bos-2026-11-25"
+  ],
+  "periods": {
+   "day_of": [
+    33.0,
+    12000.0,
+    0.25
+   ],
+   "live": [
+    350.0,
+    8000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-26T00:30:00Z",
+  "league": "nhl",
+  "title": "VAN Canucks vs. DET Red Wings",
+  "markets": [
+   "aec-nhl-van-det-2026-11-25"
+  ],
+  "periods": {
+   "day_of": [
+    33.0,
+    12000.0,
+    0.25
+   ],
+   "live": [
+    350.0,
+    8000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-26T01:00:00Z",
+  "league": "nhl",
+  "title": "NSH Predators vs. DAL Stars",
+  "markets": [
+   "aec-nhl-nas-dal-2026-11-25"
+  ],
+  "periods": {
+   "day_of": [
+    33.0,
+    12000.0,
+    0.25
+   ],
+   "live": [
+    350.0,
+    8000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-26T01:00:00Z",
+  "league": "nhl",
+  "title": "UTA Mammoth vs. MIN Wild",
+  "markets": [
+   "aec-nhl-uta-min-2026-11-25"
+  ],
+  "periods": {
+   "day_of": [
+    33.0,
+    12000.0,
+    0.25
+   ],
+   "live": [
+    350.0,
+    8000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-26T02:30:00Z",
+  "league": "nhl",
+  "title": "MTL Canadiens vs. COL Avalanche",
+  "markets": [
+   "aec-nhl-mon-col-2026-11-25"
+  ],
+  "periods": {
+   "day_of": [
+    33.0,
+    12000.0,
+    0.25
+   ],
+   "live": [
+    350.0,
+    8000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-26T02:40:00Z",
+  "league": "nhl",
+  "title": "CHI Blackhawks vs. SEA Kraken",
+  "markets": [
+   "aec-nhl-chi-sea-2026-11-25"
+  ],
+  "periods": {
+   "day_of": [
+    33.0,
+    12000.0,
+    0.25
+   ],
+   "live": [
+    350.0,
+    8000.0,
+    0.3
+   ]
+  }
+ },
+ {
+  "start": "2026-11-26T03:00:00Z",
+  "league": "nhl",
+  "title": "SJS Sharks vs. ANA Ducks",
+  "markets": [
+   "aec-nhl-sj-ana-2026-11-25"
+  ],
+  "periods": {
+   "day_of": [
+    33.0,
+    12000.0,
+    0.25
+   ],
+   "live": [
+    350.0,
+    8000.0,
+    0.3
+   ]
+  }
+ }
+]

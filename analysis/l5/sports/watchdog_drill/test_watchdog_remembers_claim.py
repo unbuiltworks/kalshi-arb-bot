@@ -64,3 +64,62 @@ def test_a_live_registry_that_now_claims_nothing_replaces_the_memory(orc, monkey
     assert o.claimed() == {}
     b.dead = True
     assert o.claimed() == {}               # it had cancelled everything itself
+
+
+# ---- how soon: a gone executor's young orders do not wait for the age rule
+class Venue:
+    name = "FAKE_VENUE"
+    def __init__(s, ids, age_s):
+        t = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=age_s)).isoformat()
+        s.rows = {i: {"id": i, "marketSlug": "aec-x", "createTime": t,
+                      "manualOrderIndicator": W.AUTOMATIC, "state": "ORDER_STATE_OPEN",
+                      "leavesQuantity": "2", "cumQuantity": "0"} for i in ids}
+        s.rows["other-desk"] = dict(s.rows[ids[0]], id="other-desk", marketSlug="aec-y")
+        s.rows["mine-manual"] = dict(s.rows[ids[0]], id="mine-manual", manualOrderIndicator=W.MANUAL)
+        s.cancels = []
+    def open_orders(s): return [dict(r) for r in s.rows.values() if r["leavesQuantity"] != "0"]
+    def order(s, i): return dict(s.rows[i])
+    def cancel(s, i, slug):
+        s.cancels.append(i); s.rows[i].update(state="ORDER_STATE_CANCELED", leavesQuantity="0")
+
+def dog(o, v, tmp_path):
+    from src import l5_halt_gate as HG
+    return W.Watchdog(v, W.asserter_for(HG.FileStore(str(tmp_path))), max_order_age_s=300,
+                      cancel_enabled=True, oracle=o)
+
+def test_young_orders_of_a_gone_executor_are_cancelled_after_the_grace(orc, monkeypatch, tmp_path):
+    o, b = orc
+    monkeypatch.setenv("L5_WATCHDOG_REMEMBER_CLAIMS_S", "900")
+    monkeypatch.setenv("L5_WATCHDOG_DEAD_AFTER_S", "30")
+    v = Venue(["o1", "o2"], age_s=20)                 # far younger than 300 s
+    wd = dog(o, v, tmp_path)
+    wd.sweep(); assert v.cancels == []                # executor alive
+    b.dead = True
+    wd.sweep(); assert v.cancels == []                # unreachable, inside the grace
+    assert o.dead_ids() == set()
+    o._unreachable_since = time.monotonic() - 31      # the grace has passed
+    out = wd.sweep()
+    assert sorted(v.cancels) == ["o1", "o2"]          # only its own two
+    assert out["executor_unreachable_ids"] == 2
+    assert {x["venue_order_id"] for x in out["overdue"]} == {"o1", "o2"}
+    assert all(x.get("selected_by") == "EXECUTOR_UNREACHABLE" for x in out["overdue"])
+
+def test_an_executor_that_answers_again_is_not_gone(orc, monkeypatch, tmp_path):
+    o, b = orc
+    monkeypatch.setenv("L5_WATCHDOG_REMEMBER_CLAIMS_S", "900")
+    v = Venue(["o1", "o2"], age_s=20)
+    wd = dog(o, v, tmp_path)
+    wd.sweep(); b.dead = True; wd.sweep()
+    o._unreachable_since = time.monotonic() - 31
+    b.dead = False                                    # it is back before the sweep
+    wd.sweep()
+    assert v.cancels == [] and o.dead_ids() == set()
+
+def test_without_memory_nothing_is_selected_early(orc, tmp_path):
+    o, b = orc
+    v = Venue(["o1", "o2"], age_s=20)
+    wd = dog(o, v, tmp_path)
+    wd.sweep(); b.dead = True; wd.sweep()
+    o._unreachable_since = time.monotonic() - 3600
+    wd.sweep()
+    assert v.cancels == [] and o.dead_ids() == set()
