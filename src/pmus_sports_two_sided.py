@@ -1215,6 +1215,17 @@ SHARED_HALT_URL_ENV = "L5_HALT_URL"
 SETTLE_LOOKUPS_PER_AUDIT = int(os.getenv(
     "PMUS_TWO_SIDED_SETTLE_LOOKUPS", "400"))
 SETTLE_LOOKUP_GAP_S = float(os.getenv("PMUS_TWO_SIDED_SETTLE_GAP_S", "0.2"))
+# LIVE 2026-11-23: the campaign spend ceiling counts a market until its
+# settlement price is recorded, and that was only looked up inside the
+# hourly audit -- which never ran, so nothing was ever released. With
+# SETTLE_CHECK_S > 0 the loop itself looks up closed markets that still
+# hold contracts (the venue's public final price, a keyless read that is
+# not on the signed budget), at most SETTLE_CHECK_MAX per pass. Capital is
+# released only by a FINAL settlement price, never because a position is
+# balanced. 0 = off (today's behaviour).
+SETTLE_CHECK_S = float(os.getenv("PMUS_TWO_SIDED_SETTLE_CHECK_S", "0"))
+SETTLE_CHECK_MAX = max(1, int(os.getenv(
+    "PMUS_TWO_SIDED_SETTLE_CHECK_MAX", "2")))
 # OWNER 2026-11-15 "Prevent losing first legs": open a two-sided quote only
 # when its expected NET value from this bot's own SETTLED results is
 # positive (src/pmus_sports_open_gate.py). DEFAULT OFF.
@@ -5468,25 +5479,7 @@ class Engine:
         # pairs' gross margin (lone legs, exits; fees if the venue nets them)
         mk_all = self.b.d.get("markets") or {}
         # the venue's PUBLIC final settlement price per market (bounded)
-        looked = 0
-        from src import pmus_settlement_public_px as SP
-        for s_, mk_ in list(mk_all.items()):
-            if looked >= SETTLE_LOOKUPS_PER_AUDIT or self.stop:
-                break                       # shutdown: cancel first
-            if mk_.get("settle_px") is not None or not mk_.get("done") or (
-                    D(mk_["pos"]["YES"]) == 0 and D(mk_["pos"]["NO"]) == 0):
-                continue
-            looked += 1
-            if looked > 1 and SETTLE_LOOKUP_GAP_S > 0:
-                time.sleep(SETTLE_LOOKUP_GAP_S)
-            try:
-                ps = SP.public_settlement(self.v.t, s_)
-            except Exception:                             # noqa: BLE001
-                continue
-            if ps.get("final"):
-                mk_["settle_px"] = ps["px"]
-        if looked:
-            self.b.save()
+        self.settle_lookups(SETTLE_LOOKUPS_PER_AUDIT)
         bs = PNL.book_settled(mk_all)
         self.pilot_meter(mine, mk_all,
                          venue_net=getattr(self, "_venue_net", None))
@@ -5551,6 +5544,73 @@ class Engine:
             return False
         self._audit_ok_at = time.monotonic()
         return True
+
+    def settle_lookups(self, limit: int) -> Dict[str, int]:
+        """Record the venue's PUBLIC final settlement price for closed
+        markets that still hold contracts, at most `limit` lookups. Only a
+        final price of exactly 0 or 1 is recorded; anything else leaves the
+        market counted as it was."""
+        from src import pmus_settlement_public_px as SP
+        looked = found = 0
+        mk_all = self.b.d.get("markets") or {}
+        # resume after the last market looked at, so a short limit still
+        # reaches every market over successive passes
+        slugs = list(mk_all)
+        start = getattr(self, "_settle_cursor", 0) % max(1, len(slugs))
+        for s_ in slugs[start:] + slugs[:start]:
+            mk_ = mk_all[s_]
+            if looked >= limit or self.stop:
+                break                       # shutdown: cancel first
+            if mk_.get("settle_px") is not None or not mk_.get("done") or (
+                    D(mk_["pos"]["YES"]) == 0 and D(mk_["pos"]["NO"]) == 0):
+                continue
+            looked += 1
+            self._settle_cursor = slugs.index(s_) + 1
+            if looked > 1 and SETTLE_LOOKUP_GAP_S > 0:
+                time.sleep(SETTLE_LOOKUP_GAP_S)
+            try:
+                ps = SP.public_settlement(self.v.t, s_)
+            except Exception:                             # noqa: BLE001
+                continue
+            if ps.get("final"):
+                mk_["settle_px"] = ps["px"]
+                found += 1
+                log("SETTLEMENT_RECORDED", slug=s_, px=ps["px"],
+                    label="venue public final price; this market no longer "
+                          "counts toward the campaign spend ceiling")
+        if looked:
+            self.b.save()
+        return {"looked": looked, "found": found}
+
+    def capital_breakdown(self) -> Dict[str, str]:
+        """This campaign's dollars in four separate states. Only the last
+        is released; the first three all count toward the spend ceiling."""
+        from src import pmus_pilot_pnl as PP
+        markets = self.b.d.get("markets") or {}
+        rest = unp = paired = released = D(0)
+        for s_ in PP.pilot_slugs(markets, self.since):
+            mk_ = markets[s_]
+            qy, qn = D(str(mk_["pos"]["YES"])), D(str(mk_["pos"]["NO"]))
+            cy, cn = D(str(mk_["cost"]["YES"])), D(str(mk_["cost"]["NO"]))
+            pairs = min(qy, qn)
+            pair_cost = (pairs * cy / qy if qy else D(0)) + \
+                        (pairs * cn / qn if qn else D(0))
+            settled = mk_.get("settle_px") is not None
+            if settled:
+                released += cy + cn
+                continue
+            paired += pair_cost
+            unp += RN1.unmatched_usd(mk_["pos"], mk_["cost"])
+            for o in (mk_.get("orders") or {}).values():
+                if o.get("open"):
+                    rest += D(str(o["px"])) * (
+                        D(str(o["qty"])) - D(str(o.get("filled") or "0")))
+        return {"resting_orders_usd": str(rest),
+                "unpaired_inventory_usd": str(unp),
+                "paired_awaiting_settlement_usd": str(paired),
+                "settled_released_usd": str(released),
+                "label": "campaign markets only; settled = the venue's "
+                         "public final price is recorded"}
 
     def inventory_reconcile(self) -> Optional[Dict[str, Any]]:
         """Account-wide venue positions vs this bot's book; logged every
@@ -5695,7 +5755,13 @@ class Engine:
         if RN1.ON:
             try:
                 extra = dict(extra, markout=self.markout_summary(),
-                             phases=self.phase_summary())
+                             phases=self.phase_summary(),
+                             capital=self.capital_breakdown(),
+                             audit={"last_complete_age_s": self.audit_age_s(),
+                                    "max_age_s": AUDIT_MAX_AGE_S,
+                                    "stale_blocks_new": self.audit_stale(),
+                                    "incomplete_in_a_row": int(getattr(
+                                        self, "_audit_incomplete", 0))})
             except Exception:                             # noqa: BLE001
                 pass
         extra = dict(extra, submission_lock={
@@ -5891,6 +5957,14 @@ class Engine:
                         time.monotonic() - self._acct_ok_at <= 30
                     self.orphan_sweep(self._acct_cache["open_orders"]
                                       if fresh else None)
+                if SETTLE_CHECK_S > 0 and time.monotonic() - getattr(
+                        self, "_last_settle", -1e9) > SETTLE_CHECK_S:
+                    self._last_settle = time.monotonic()
+                    try:
+                        self.settle_lookups(SETTLE_CHECK_MAX)
+                    except Exception as exc:              # noqa: BLE001
+                        log("settle_lookup_error",
+                            err=f"{type(exc).__name__}:{str(exc)[:160]}")
                 if time.monotonic() - last_hb > 60:
                     self.report()
                     last_hb = time.monotonic()

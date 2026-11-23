@@ -277,3 +277,161 @@ def test_a_stale_audit_pulls_openings_but_keeps_the_completion(
     mk["pos"]["YES"], mk["cost"]["YES"] = D("2"), D("0.88")
     eng.step_market("aec-x")
     assert _open_orders(eng.v) == [("NO", "two_sided_complete")]
+
+
+# ------------------------------------------------- schedule and restart
+def test_first_audit_is_due_about_two_minutes_after_boot(eng):
+    due_in = eng._last_reward + M.REWARD_CHECK_S - time.monotonic()
+    assert 100 <= due_in <= 120
+
+
+def test_schedule_one_missed_hourly_audit_is_retried_before_the_limit(
+        eng, monkeypatch):
+    """The 23 Nov timeline with the fix on: audit completes at boot, the
+    next hourly one is refused, retries run every 60 s, and the 75-minute
+    limit blocks new exposure only if every retry up to it fails."""
+    monkeypatch.setattr(M, "AUDIT_MAX_AGE_S", 4500.0)
+    monkeypatch.setattr(M, "AUDIT_RETRY_S", 60.0)
+    clock = {"t": 50_000.0}
+    monkeypatch.setattr(M.time, "monotonic", lambda: clock["t"])
+    outcome = {"ok": True}
+    attempts = []
+
+    def audit():
+        attempts.append(clock["t"])
+        if outcome["ok"]:
+            eng._audit_ok_at = clock["t"]
+        return outcome["ok"]
+    monkeypatch.setattr(eng, "reward_check", lambda: True)
+    monkeypatch.setattr(eng, "account_audit", audit)
+    eng._last_reward = clock["t"] - M.REWARD_CHECK_S + 120   # boot
+
+    def run(seconds):
+        blocked_at = None
+        for _ in range(int(seconds)):
+            clock["t"] += 1
+            if clock["t"] - eng._last_reward > M.REWARD_CHECK_S:
+                eng._last_reward = clock["t"]
+                eng.audit_round()
+            if blocked_at is None and eng.audit_blocks():
+                blocked_at = clock["t"]
+        return blocked_at
+
+    t0 = clock["t"]
+    assert eng.audit_blocks() == "audit_stale"       # boot: none yet
+    run(125)
+    assert eng.audit_blocks() is None                # first audit, ~2 min
+    first_ok = eng._audit_ok_at
+    outcome["ok"] = False
+    blocked_at = run(2 * 3600)
+    assert blocked_at is not None
+    assert 4500 <= blocked_at - first_ok <= 4502     # 75 min, not 2 h 10
+    failed = [t for t in attempts if t > first_ok]
+    gaps = [b - a for a, b in zip(failed, failed[1:])]
+    assert len(failed) >= 10 and max(gaps) <= 61     # every minute
+    outcome["ok"] = True
+    run(62)
+    assert eng.audit_blocks() is None                # one clean audit lifts
+    assert clock["t"] > t0
+
+
+def test_a_restart_blocks_until_its_own_first_audit(tmp_path, monkeypatch):
+    """Nothing about the audit is carried across a restart: a new process
+    has no completed audit and is blocked until it has one."""
+    monkeypatch.setattr(R, "ON", True)
+    monkeypatch.setenv(M.ENABLED_ENV, "YES")
+    monkeypatch.setattr(M, "AUDIT_MAX_AGE_S", 4500.0)
+    v = FakeVenue()
+    e1 = M.Engine(v, M.Book(tmp_path / "s.json"))
+    e1._audit_ok_at = time.monotonic()
+    assert e1.audit_blocks() is None
+    e1.b.save()
+    e2 = M.Engine(FakeVenue(), M.Book(tmp_path / "s.json"))
+    assert e2.audit_blocks() == "audit_stale"
+
+
+# ------------------------------------- settlement releases, pairing does not
+def _campaign_market(eng, slug, yes, no, done=True):
+    mk = eng.b.m(slug)
+    mk["pos"]["YES"], mk["cost"]["YES"] = D(yes[0]), D(yes[1])
+    mk["pos"]["NO"], mk["cost"]["NO"] = D(no[0]), D(no[1])
+    mk["orders"]["x" + slug] = {"side": "YES", "px": "0.5", "qty": "2",
+                                "filled": "2", "open": False,
+                                "stage": "rn1_open",
+                                "placed_at": time.time()}
+    mk["done"] = done
+    if not hasattr(eng.v, "t"):
+        eng.v.t = object()            # the lookup is faked; it needs a handle
+    return mk
+
+
+def _settles(monkeypatch, table):
+    from src import pmus_settlement_public_px as SP
+    seen = []
+
+    def fake(t, slug):
+        seen.append(slug)
+        return table.get(slug, {"final": False, "px": None})
+    monkeypatch.setattr(SP, "public_settlement", fake)
+    return seen
+
+
+def test_a_balanced_position_still_counts_until_settlement_is_recorded(
+        eng, monkeypatch):
+    eng.since = None
+    _campaign_market(eng, "aec-a", ("2", "1.32"), ("2", "0.58"))
+    assert eng.rn1_campaign_exposure()["spend"] == D("1.90")
+    cap = eng.capital_breakdown()
+    assert D(cap["paired_awaiting_settlement_usd"]) == D("1.90")
+    assert D(cap["settled_released_usd"]) == 0
+    _settles(monkeypatch, {"aec-a": {"final": False, "px": "0.5"}})
+    assert eng.settle_lookups(5) == {"looked": 1, "found": 0}
+    assert eng.rn1_campaign_exposure()["spend"] == D("1.90")
+    _settles(monkeypatch, {"aec-a": {"final": True, "px": "1"}})
+    assert eng.settle_lookups(5) == {"looked": 1, "found": 1}
+    assert eng.rn1_campaign_exposure()["spend"] == 0
+    cap = eng.capital_breakdown()
+    assert D(cap["paired_awaiting_settlement_usd"]) == 0
+    assert D(cap["settled_released_usd"]) == D("1.90")
+
+
+def test_an_open_market_is_never_looked_up_or_released(eng, monkeypatch):
+    eng.since = None
+    _campaign_market(eng, "aec-a", ("2", "1.32"), ("2", "0.58"), done=False)
+    seen = _settles(monkeypatch, {"aec-a": {"final": True, "px": "1"}})
+    assert eng.settle_lookups(5) == {"looked": 0, "found": 0}
+    assert seen == []
+    assert eng.rn1_campaign_exposure()["spend"] == D("1.90")
+
+
+def test_short_passes_reach_every_closed_market(eng, monkeypatch):
+    eng.since = None
+    monkeypatch.setattr(M, "SETTLE_LOOKUP_GAP_S", 0.0)
+    for s in ("aec-a", "aec-b", "aec-c"):
+        _campaign_market(eng, s, ("1", "0.6"), ("1", "0.35"))
+    seen = _settles(monkeypatch, {})           # none final yet
+    for _ in range(3):
+        assert eng.settle_lookups(1)["looked"] == 1
+    assert sorted(seen) == ["aec-a", "aec-b", "aec-c"]
+
+
+def test_capital_breakdown_keeps_the_four_states_apart(eng):
+    eng.since = None
+    _campaign_market(eng, "aec-a", ("2", "1.32"), ("2", "0.58"))
+    mk = _campaign_market(eng, "aec-b", ("4", "2.54"), ("2", "0.62"),
+                          done=False)
+    mk["orders"]["r"] = {"side": "NO", "px": "0.33", "qty": "2",
+                         "filled": "0", "open": True,
+                         "stage": "two_sided_complete",
+                         "placed_at": time.time()}
+    s = _campaign_market(eng, "aec-c", ("1", "0.65"), ("1", "0.31"))
+    s["settle_px"] = "1"
+    cap = eng.capital_breakdown()
+    assert D(cap["resting_orders_usd"]) == D("0.66")
+    assert D(cap["unpaired_inventory_usd"]) == D("1.27")
+    assert D(cap["paired_awaiting_settlement_usd"]) == D("1.90") + D("1.89")
+    assert D(cap["settled_released_usd"]) == D("0.96")
+
+
+def test_loop_side_settlement_check_is_off_by_default():
+    assert M.SETTLE_CHECK_S == 0
