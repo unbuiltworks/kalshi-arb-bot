@@ -183,3 +183,150 @@ def test_a_matching_position_audit_never_counts(eng, monkeypatch):
     for _ in range(3):
         e.inventory_reconcile()
     assert e.audit_blocks() is None and not e.b.d.get("safety_latch")
+
+
+# ------------------------------- the audit no longer holds orders still
+class PagedTransport:
+    """Stands in for the venue transport during a long read-only walk."""
+
+    def __init__(self, fail=False):
+        self.n, self.fail = 0, fail
+
+    def request(self, method, path, **kw):
+        self.n += 1
+        if self.fail:
+            raise RuntimeError("venue said no")
+        return {"activities": [], "eof": True}
+
+    marker = "the wrapped transport's own attribute"
+
+
+def fill_all(v):
+    for o in v.orders.values():
+        if o["open"]:
+            o["filled"], o["open"] = o["qty"], False
+
+
+def due(e):
+    e._last_service = time.monotonic() - M.LOOP_S - 1
+    e._svc_acct_at = time.monotonic()        # the account read is not due
+
+
+@pytest.fixture
+def quoting(eng, monkeypatch):
+    e, v = eng
+    e.guard = None
+    mk = e.b.m(SLUG)
+    e.step_market(SLUG)
+    assert [o for o in v.orders.values() if o["open"]]
+    return e, v, mk
+
+
+def test_a_fill_during_the_audit_walk_is_recorded_between_its_requests(
+        quoting, capsys):
+    e, v, mk = quoting
+    v.t = PagedTransport()
+    t = e.audit_transport()
+    assert isinstance(t, M.ServicedTransport) and t.marker == v.t.marker
+    fill_all(v)                               # filled while the audit runs
+    due(e)
+    t.request("GET", "/v1/portfolio/activities")
+    assert v.t.n == 1
+    assert D(mk["pos"]["YES"]) + D(mk["pos"]["NO"]) > 0
+    assert logged(capsys, "FILL")
+
+
+def test_orders_are_served_even_when_an_audit_request_fails(quoting):
+    e, v, mk = quoting
+    v.t = PagedTransport(fail=True)
+    fill_all(v)
+    due(e)
+    with pytest.raises(RuntimeError):
+        e.audit_transport().request("GET", "/x")
+    assert D(mk["pos"]["YES"]) + D(mk["pos"]["NO"]) > 0
+
+
+def test_markets_are_stepped_at_the_loop_pace_not_on_every_request(
+        quoting, monkeypatch):
+    e, v, mk = quoting
+    steps = []
+    monkeypatch.setattr(e, "step_market", lambda slug: steps.append(slug))
+    due(e)
+    e.service_pass()
+    e.service_pass()
+    e.service_pass()
+    assert steps == [SLUG]                    # once per LOOP_S
+    due(e)
+    e.service_pass()
+    assert steps == [SLUG, SLUG]
+
+
+def test_the_service_pass_never_re_enters_itself(quoting, monkeypatch):
+    e, v, mk = quoting
+    depth = []
+
+    def step(slug):
+        depth.append(len(depth))
+        due(e)
+        e.service_pass()                      # a nested long read
+    monkeypatch.setattr(e, "step_market", step)
+    due(e)
+    e.service_pass()
+    assert depth == [0]
+
+
+def test_a_latched_bot_cancels_and_steps_nothing_during_the_audit(
+        quoting, monkeypatch):
+    e, v, mk = quoting
+    steps = []
+    e.latch("position_mismatch", slug=SLUG)
+    monkeypatch.setattr(e, "step_market", lambda slug: steps.append(slug))
+    due(e)
+    e.service_pass()
+    assert steps == []
+    assert not [o for o in v.orders.values() if o["open"]]
+
+
+def test_interleaving_can_be_switched_off(quoting, monkeypatch):
+    e, v, mk = quoting
+    v.t = PagedTransport()
+    monkeypatch.setattr(M, "AUDIT_INTERLEAVE", False)
+    assert e.audit_transport() is v.t
+
+
+# ---------------------- a loop that reads but does not serve its orders
+@pytest.fixture
+def clocks(monkeypatch):
+    monkeypatch.setitem(M._LOOP, "thread", None)
+    monkeypatch.setitem(M._LOOP, "beat", time.time())     # requests flowing
+    monkeypatch.setitem(M._LOOP, "max_gap", 0.0)
+    monkeypatch.setitem(M._ORDERS, "served", time.time() - 87)
+    monkeypatch.setitem(M._ORDERS, "max_gap", 0.0)
+
+
+def test_the_gap_in_order_service_is_measured_and_reported(clocks):
+    r = M.loop_report(reset=False)
+    assert r["idle_s"] < 2                    # the old figure sees nothing
+    assert 86 <= r["order_service_idle_s"] <= 89
+    assert r["order_service_max_gap_s"] >= 86
+    assert r["stalled"] is False              # reporting only by default
+
+
+def test_with_a_limit_the_gap_reads_as_a_stalled_loop(clocks, monkeypatch):
+    monkeypatch.setattr(M, "ORDER_SERVICE_STALL_S", 45.0)
+    assert M.order_service_stalled() is True
+    assert M.loop_report(reset=False)["stalled"] is True
+    M.orders_served()
+    assert M.order_service_stalled() is False
+    assert M.loop_report(reset=False)["stalled"] is False
+
+
+def test_the_registry_tells_the_watchdog_when_orders_are_not_served(
+        eng, clocks, monkeypatch):
+    e, v = eng
+    doc = M.registry_doc(e.b)
+    assert doc["manages_own_resting"] is True
+    monkeypatch.setattr(M, "ORDER_SERVICE_STALL_S", 45.0)
+    doc = M.registry_doc(e.b)
+    assert doc["manages_own_resting"] is False and doc["loop_stalled"] is True
+    assert 86 <= doc["order_service_idle_s"] <= 89

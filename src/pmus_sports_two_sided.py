@@ -37,7 +37,7 @@ import time
 from datetime import datetime, timezone
 from decimal import ROUND_CEILING, ROUND_DOWN, Decimal as D
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional
 
 ONE = D("1")
 
@@ -509,11 +509,19 @@ def loop_report(reset: bool = True) -> Dict[str, Any]:
     """{"idle_s", "max_gap_s", "stall_s", "stalled"} for the heartbeat."""
     idle = loop_idle_s()
     gap = max(float(_LOOP.get("max_gap") or 0.0), idle or 0.0)
+    oidle = order_service_idle_s()
+    ogap = max(float(_ORDERS.get("max_gap") or 0.0), oidle or 0.0)
     if reset:
         _LOOP["max_gap"] = 0.0
+        _ORDERS["max_gap"] = 0.0
     return {"idle_s": None if idle is None else round(idle, 1),
             "max_gap_s": round(gap, 1), "stall_s": LOOP_STALL_S,
-            "stalled": idle is not None and idle > LOOP_STALL_S}
+            "stalled": (idle is not None and idle > LOOP_STALL_S)
+            or order_service_stalled(),
+            "order_service_idle_s": None if oidle is None
+            else round(oidle, 1),
+            "order_service_max_gap_s": round(ogap, 1),
+            "order_service_stall_s": ORDER_SERVICE_STALL_S}
 
 
 # OWNER 2026-11-22: "Verify the independent watchdog can detect a stalled
@@ -581,6 +589,72 @@ def loop_idle_s(now: Optional[float] = None) -> Optional[float]:
     if b is None:
         return None
     return max(0.0, (time.time() if now is None else now) - float(b))
+
+
+# LIVE 2026-11-22 22:08:55Z-22:10:21Z: the hourly audit ran on the trading
+# loop's own thread, about 85 read-only requests paced at one a second. For
+# 87 s nothing read an order's status and nothing drained the queued price
+# events: a fill was recorded 88.8 s late and a cancel the price guard asked
+# for waited 93 s. `loop_beat` counts every venue request as progress, so
+# the stall figure read 5 s throughout and the watchdog saw a healthy loop.
+#
+# Two changes. (1) Order management runs BETWEEN the audit's requests
+# (Engine.service_pass; AUDIT_INTERLEAVE, on). (2) A second, stricter
+# measure: when the bot's markets were last actually served. With
+# ORDER_SERVICE_STALL_S set, a gap longer than that reads as a stalled loop
+# in the registry (`manages_own_resting: false`), so the watchdog cancels
+# what rests exactly as for a wedged loop. 0 = measured and reported only.
+AUDIT_INTERLEAVE = os.getenv("PMUS_TWO_SIDED_AUDIT_INTERLEAVE",
+                             "1").strip() != "0"
+ORDER_SERVICE_STALL_S = float(os.getenv(
+    "PMUS_TWO_SIDED_ORDER_SERVICE_STALL_S", "0"))
+_ORDERS: Dict[str, Any] = {"served": None, "max_gap": 0.0}
+
+
+def orders_served() -> None:
+    """One complete pass of order management has just finished."""
+    if _LOOP["thread"] in (None, threading.get_ident()):
+        now = time.time()
+        last = _ORDERS.get("served")
+        if last is not None:
+            _ORDERS["max_gap"] = max(float(_ORDERS.get("max_gap") or 0.0),
+                                     now - float(last))
+        _ORDERS["served"] = now
+
+
+def order_service_idle_s(now: Optional[float] = None) -> Optional[float]:
+    b = _ORDERS["served"]
+    if b is None:
+        return None
+    return max(0.0, (time.time() if now is None else now) - float(b))
+
+
+def order_service_stalled(now: Optional[float] = None) -> bool:
+    idle = order_service_idle_s(now)
+    return ORDER_SERVICE_STALL_S > 0 and idle is not None and \
+        idle > ORDER_SERVICE_STALL_S
+
+
+class ServicedTransport:
+    """A transport that runs `service` after every request it makes, so a
+    long read-only job cannot hold order management still. Everything else
+    is the wrapped transport's."""
+
+    def __init__(self, t: Any, service: Callable[[], None]):
+        self._t, self._service = t, service
+
+    def request(self, *a: Any, **k: Any) -> Any:
+        try:
+            return self._t.request(*a, **k)
+        finally:
+            try:
+                self._service()
+            except Exception as exc:                      # noqa: BLE001
+                log("service_pass_error",
+                    err=f"{type(exc).__name__}:{str(exc)[:160]}")
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._t, name)
 
 
 SAFETY_LATCH_ON = os.getenv("PMUS_TWO_SIDED_SAFETY_LATCH",
@@ -3431,7 +3505,8 @@ class Engine:
                     AR.retired_markets(doc_box["doc"]))
                 v = AR.evaluate(doc_box["doc"],
                                 now=datetime.now(timezone.utc),
-                                own_unaccounted=own)
+                                own_unaccounted=own,
+                                own_at_risk=self.own_exposure_usd())
             else:
                 v = first
             lane = AR.lane_cap()
@@ -3451,7 +3526,7 @@ class Engine:
                 "ok", "reason", "utc_day_realized_usd", "daily_halt_usd",
                 "lifetime_realized_usd", "cumulative_loss_ceiling_usd",
                 "own_losses_not_yet_in_account_ledger_usd", "loss_room_usd",
-                "lane_cap_usd", "own_exposure_usd", "age_s")},
+                "lane_cap_usd", "own_exposure_usd", "age_s", "drawdown")},
                 label="shared account-wide limits; refusals block NEW "
                       "openings/extensions only, completions continue")
         self._acct_risk = (now, v)
@@ -4973,6 +5048,55 @@ class Engine:
             return True
         return False
 
+    def service_pass(self) -> None:
+        """Order management in the middle of a long read-only job (the
+        audit): queued price events are drained every time, and every
+        LOOP_S the lock is enforced and each market gets its ordinary step
+        (fills read, stale bids pulled, quotes kept current). The account
+        read and position check run on their usual 20 s. Never re-enters."""
+        if getattr(self, "_in_service", False) or self.stop:
+            return
+        self._in_service = True
+        try:
+            self.drain_ws_events()
+            now = time.monotonic()
+            if now - float(getattr(self, "_last_service", 0.0)) < LOOP_S:
+                return
+            self._last_service = now
+            latched = str(self.enforce_lock() or "").startswith(
+                "safety_latch")
+            if now - float(getattr(self, "_svc_acct_at", 0.0)) > 20:
+                self._svc_acct_at = now
+                acc = self.read_account()
+                try:
+                    self.safety_check(acc)
+                except Exception as exc:                  # noqa: BLE001
+                    log("safety_check_error", at="service_pass",
+                        err=f"{type(exc).__name__}:{str(exc)[:160]}")
+                latched = latched or bool(self.b.d.get("safety_latch"))
+            if latched:
+                self.enforce_lock()
+            for slug in ([] if latched else list(self.active())):
+                if self.stop:
+                    break
+                self.drain_ws_events()
+                try:
+                    self.step_market(slug)
+                except Exception as exc:                  # noqa: BLE001
+                    log("market_error", slug=slug, at="service_pass",
+                        err=f"{type(exc).__name__}:{str(exc)[:200]}")
+                loop_beat()
+            orders_served()
+        finally:
+            self._in_service = False
+
+    def audit_transport(self) -> Any:
+        """The transport the audit's long walk uses: the venue transport,
+        with order management run between its requests."""
+        if not AUDIT_INTERLEAVE:
+            return self.v.t
+        return ServicedTransport(self.v.t, self.service_pass)
+
     def account_audit(self) -> None:
         """VENUE TRUTH for this bot's markets, from /v1/portfolio/activities:
         realizedPnl summed per market and per sport (trades + resolutions),
@@ -4981,8 +5105,8 @@ class Engine:
         try:
             from src import pmus_settlement_auditor as SA
             from src import pmus_incentive_audit as IA
-            walk = SA.activity_pages(self.v.t, since=self.AUDIT_SINCE,
-                                     max_pages=200)
+            walk = SA.activity_pages(self.audit_transport(),
+                                     since=self.AUDIT_SINCE, max_pages=200)
         except Exception as exc:                          # noqa: BLE001
             log("ACCOUNT_AUDIT", ok=False,
                 err=f"{type(exc).__name__}:{str(exc)[:160]}")
@@ -5362,6 +5486,7 @@ class Engine:
             try:
                 if os.getenv(ENABLED_ENV, "").upper() != "YES":
                     self.cancel_all_own("disabled")
+                    orders_served()
                     time.sleep(30)
                     continue
                 latched = str(self.enforce_lock() or "").startswith(
@@ -5402,6 +5527,9 @@ class Engine:
                         log("market_error", slug=slug,
                             err=f"{type(exc).__name__}:{str(exc)[:200]}")
                     loop_beat()
+                if not self.stop:
+                    self._last_service = time.monotonic()
+                    orders_served()
                 if REWARD_CHECK_S > 0 and \
                         time.monotonic() - self._last_reward > REWARD_CHECK_S:
                     self._last_reward = time.monotonic()
@@ -5517,7 +5645,8 @@ def registry_doc(book: "Book", clock=None) -> Dict[str, Any]:
             continue
         rows.append({**row, "closing": True})
     _idle = loop_idle_s(now)
-    _stalled = _idle is not None and _idle > LOOP_STALL_S
+    _stalled = (_idle is not None and _idle > LOOP_STALL_S) or \
+        order_service_stalled(now)
     return {"readable": True, "lane": LANE,
             "manages_own_resting": not _stalled,
             "enabled": os.getenv(ENABLED_ENV, "").upper() == "YES",
@@ -5529,6 +5658,9 @@ def registry_doc(book: "Book", clock=None) -> Dict[str, Any]:
             "safety_latch": book.d.get("safety_latch") or None,
             "loop_idle_s": (None if _idle is None else round(_idle, 1)),
             "loop_stalled": _stalled,
+            "order_service_idle_s": (
+                None if order_service_idle_s(now) is None
+                else round(order_service_idle_s(now), 1)),
             "orders": rows,
             "loop_last_progress_utc": (None if _LOOP["beat"] is None
                                        else _iso_precise(_LOOP["beat"])),

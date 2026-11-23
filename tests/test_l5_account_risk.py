@@ -110,3 +110,125 @@ def test_lane_cap_split_and_typo_refusal():
 def test_retired_markets():
     assert AR.retired_markets(doc()) == {"aec-a", "aec-b"}
     assert AR.retired_markets({}) == set()
+
+
+# ---- account-wide drawdown (owner 2026-11-23: "The $3 limit needs to apply
+# ---- consistently across every money-capable service.")
+def dd(drawdown="1.6744", mx="3.00", state="ON", **kw):
+    blk = {"state": state, "anchor_usd": "321.4782",
+           "max_drawdown_usd": mx, "drawdown_usd": drawdown}
+    blk.update(kw)
+    return doc(risk={"portfolio_drawdown": blk})
+
+
+@pytest.fixture(autouse=True)
+def _no_drawdown_env(monkeypatch):
+    monkeypatch.delenv(AR.DRAWDOWN_REQUIRED_ENV, raising=False)
+    monkeypatch.delenv(AR.DRAWDOWN_BUDGET_ENV, raising=False)
+
+
+def test_published_drawdown_under_the_limit_passes_and_is_reported():
+    v = AR.evaluate(dd(), now=NOW)
+    assert v["ok"] and v["drawdown"]["drawdown_usd"] == "1.6744"
+    assert v["drawdown"]["room_usd"] == "1.3256"
+
+
+def test_published_drawdown_at_the_limit_refuses():
+    for used in ("3.00", "3.01", "47"):
+        v = AR.evaluate(dd(used), now=NOW)
+        assert not v["ok"] and v["reason"] == "ACCOUNT_DRAWDOWN_LIMIT"
+
+
+@pytest.mark.parametrize("blk, reason", [
+    ({"state": "INVALID"}, "ACCOUNT_DRAWDOWN_INVALID"),
+    ({"state": "UNREADABLE"}, "ACCOUNT_DRAWDOWN_UNREADABLE"),
+    ({"state": "ON", "max_drawdown_usd": "3"}, "ACCOUNT_DRAWDOWN_UNREADABLE"),
+    ({"state": "ON", "drawdown_usd": "x", "max_drawdown_usd": "3"},
+     "ACCOUNT_DRAWDOWN_UNREADABLE"),
+    ({"state": "ON", "drawdown_usd": "1", "max_drawdown_usd": "0"},
+     "ACCOUNT_DRAWDOWN_UNREADABLE"),
+])
+def test_a_misconfigured_or_unreadable_limit_refuses(blk, reason):
+    v = AR.evaluate(doc(risk={"portfolio_drawdown": blk}), now=NOW)
+    assert not v["ok"] and v["reason"] == reason
+
+
+def test_a_publisher_without_the_figure_is_refused_only_when_required(
+        monkeypatch):
+    assert AR.evaluate(doc(), now=NOW)["ok"]             # earlier behaviour
+    assert AR.evaluate(dd(state="OFF"), now=NOW)["ok"]
+    monkeypatch.setenv(AR.DRAWDOWN_REQUIRED_ENV, "1")
+    assert AR.evaluate(doc(), now=NOW)["reason"] == \
+        "ACCOUNT_DRAWDOWN_NOT_PUBLISHED"
+    assert AR.evaluate(dd(state="OFF"), now=NOW)["reason"] == \
+        "ACCOUNT_DRAWDOWN_OFF_AT_PUBLISHER"
+    assert AR.evaluate(dd(), now=NOW)["ok"]
+
+
+def test_strict_by_default_own_resting_money_counts_as_drawdown():
+    # the ledger's 5.00 includes 4.00 of this bot's own resting orders
+    v = AR.evaluate(dd("5.00"), now=NOW, own_at_risk="4.00")
+    assert v["reason"] == "ACCOUNT_DRAWDOWN_LIMIT"
+
+
+def test_with_an_owner_budget_own_at_risk_money_is_not_counted_up_to_it(
+        monkeypatch):
+    monkeypatch.setenv(AR.DRAWDOWN_BUDGET_ENV, "50")
+    v = AR.evaluate(dd("5.00"), now=NOW, own_at_risk="4.00")
+    assert v["ok"] and v["drawdown"]["drawdown_usd"] == "1.00"
+    assert v["drawdown"]["own_at_risk_not_counted_usd"] == "4.00"
+    # only up to the budget: 60 at risk, 50 excused, 10 + 1 counted
+    v = AR.evaluate(dd("61.00"), now=NOW, own_at_risk="60")
+    assert v["reason"] == "ACCOUNT_DRAWDOWN_LIMIT"
+    assert v["drawdown"]["drawdown_usd"] == "11.00"
+    # a settled loss is never excused: nothing is at risk any more
+    v = AR.evaluate(dd("3.50"), now=NOW, own_at_risk="0")
+    assert v["reason"] == "ACCOUNT_DRAWDOWN_LIMIT"
+
+
+def test_with_a_budget_marked_losses_on_held_inventory_count(monkeypatch):
+    monkeypatch.setenv(AR.DRAWDOWN_BUDGET_ENV, "50")
+    # 2.00 published + 8 at risk, of which 1.20 is already marked down
+    v = AR.evaluate(dd("10.00"), now=NOW, own_at_risk="8",
+                    own_unaccounted="-1.20")
+    assert v["drawdown"]["own_marked_loss_counted_usd"] == "1.20"
+    assert v["drawdown"]["drawdown_usd"] == "3.20"
+    assert v["reason"] == "ACCOUNT_DRAWDOWN_LIMIT"
+
+
+def test_unknown_own_exposure_excuses_nothing(monkeypatch):
+    monkeypatch.setenv(AR.DRAWDOWN_BUDGET_ENV, "50")
+    for unknown in (None, "Infinity", "x", "-1"):
+        v = AR.evaluate(dd("5.00"), now=NOW, own_at_risk=unknown)
+        assert v["reason"] == "ACCOUNT_DRAWDOWN_LIMIT", unknown
+
+
+def test_an_unreadable_budget_refuses(monkeypatch):
+    monkeypatch.setenv(AR.DRAWDOWN_BUDGET_ENV, "lots")
+    v = AR.evaluate(dd(), now=NOW, own_at_risk="1")
+    assert v["reason"] == "ACCOUNT_DRAWDOWN_BUDGET_UNREADABLE"
+
+
+def test_a_publisher_that_refuses_for_another_reason_is_followed():
+    v = AR.evaluate(dd(refusal="PORTFOLIO_VALUE_UNAVAILABLE"), now=NOW)
+    assert v["reason"] == "ACCOUNT_DRAWDOWN_PUBLISHER_REFUSES"
+    # its own limit refusal is not double-counted when the figure is under
+    # the reader's (budget-adjusted) limit: the reader's arithmetic decides
+    v = AR.evaluate(dd("1.00", refusal="PORTFOLIO_DRAWDOWN_LIMIT:9>=3"),
+                    now=NOW)
+    assert v["ok"]
+
+
+def test_the_ledgers_own_published_block_shape_is_read(monkeypatch):
+    # exactly what l5_portfolio_drawdown.report() publishes today
+    blk = {"state": "ON", "worst_case_value_usd": "319.8038",
+           "anchor_usd": "321.4782", "max_drawdown_usd": "3.00",
+           "drawdown_usd": "1.6744", "room_usd": "1.3256", "refusal": None}
+    v = AR.evaluate(doc(risk={"portfolio_drawdown": blk}), now=NOW)
+    assert v["ok"] and v["drawdown"]["room_usd"] == "1.3256"
+    # a value the ledger could not establish: no figure, its own refusal
+    blk = {"state": "ON", "worst_case_value_usd": None,
+           "anchor_usd": "321.4782", "max_drawdown_usd": "3.00",
+           "refusal": "PORTFOLIO_VALUE_UNAVAILABLE"}
+    v = AR.evaluate(doc(risk={"portfolio_drawdown": blk}), now=NOW)
+    assert not v["ok"] and v["reason"] == "ACCOUNT_DRAWDOWN_UNREADABLE"

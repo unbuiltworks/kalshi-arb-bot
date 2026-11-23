@@ -2556,3 +2556,49 @@ def test_combo_maker_starts_and_logs_without_crashing(eng, monkeypatch,
     e.stop = True                                  # thread exits at once
     mk = M.start_combo_maker(v, e)
     assert mk is not None and mk.mode == "shadow"
+
+
+# ---- account-wide drawdown reaches the sports bot (owner 2026-11-23)
+def _with_drawdown(used, mx="3.00"):
+    d = _risk_doc()
+    d["account_risk"]["portfolio_drawdown"] = {
+        "state": "ON", "drawdown_usd": used, "max_drawdown_usd": mx}
+    return d
+
+
+def test_account_drawdown_at_the_limit_blocks_new_openings(eng, risk_on):
+    e, v = eng
+    risk_on["doc"] = _with_drawdown("3.00")
+    e.select(v.account())
+    e.step_market("aec-x")
+    assert _opened(v) == []
+    assert e.account_risk_blocks() == "ACCOUNT_DRAWDOWN_LIMIT"
+
+
+def test_account_drawdown_under_the_limit_allows_openings(eng, risk_on):
+    e, v = eng
+    risk_on["doc"] = _with_drawdown("1.67")
+    e.select(v.account())
+    e.step_market("aec-x")
+    assert len(_opened(v)) == 2
+    assert e.account_risk()["drawdown"]["state"] == "ON"
+
+
+def test_the_bots_own_resting_orders_reach_the_drawdown_verdict(
+        eng, risk_on, monkeypatch):
+    from src import l5_account_risk as AR
+    e, v = eng
+    monkeypatch.setenv(AR.DRAWDOWN_BUDGET_ENV, "50")
+    risk_on["doc"] = _with_drawdown("1.67")
+    e.select(v.account())
+    e.step_market("aec-x")
+    resting = e.own_exposure_usd()
+    assert resting > 0
+    # the ledger now shows that money as gone; with the owner's budget the
+    # bot does not count its own resting orders against the limit
+    risk_on["doc"] = _with_drawdown(str(D("1.67") + resting + D("2")))
+    assert e.account_risk_blocks() == "ACCOUNT_DRAWDOWN_LIMIT"   # 3.67 used
+    risk_on["doc"] = _with_drawdown(str(D("1.67") + resting))
+    assert e.account_risk_blocks() is None
+    got = e.account_risk()["drawdown"]
+    assert D(got["own_at_risk_not_counted_usd"]) == resting

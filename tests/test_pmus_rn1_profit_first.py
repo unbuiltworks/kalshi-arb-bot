@@ -595,8 +595,11 @@ def test_the_heartbeat_reports_the_longest_gap_between_beats(eng,
         M.loop_beat()
     clock["t"] += 3
     rep = M.loop_report()
-    assert rep == {"idle_s": 3.0, "max_gap_s": 47.0,
-                   "stall_s": M.LOOP_STALL_S, "stalled": False}
+    # (the order-service fields added 2026-11-23 sit beside these four)
+    assert {k: rep[k] for k in ("idle_s", "max_gap_s", "stall_s",
+                                "stalled")} == {
+        "idle_s": 3.0, "max_gap_s": 47.0,
+        "stall_s": M.LOOP_STALL_S, "stalled": False}
     assert M.loop_report()["max_gap_s"] == 3.0        # reset each report
 
 

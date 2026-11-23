@@ -59,8 +59,80 @@ def fetch_json(url: str, timeout: float = 3.0) -> Any:
         return json.loads(r.read().decode("utf-8"))
 
 
-def evaluate(doc: Any, *, now: dt.datetime, own_unaccounted: Any = 0
+#: OWNER 2026-11-23: "Enforce account-wide drawdown in sports. The $3 limit
+#: needs to apply consistently across every money-capable service." The
+#: account ledger publishes its own drawdown figure and limit in the
+#: account-risk block (`portfolio_drawdown`); a reader refuses new exposure
+#: at the limit exactly as the ledger does.
+#:   L5_ACCOUNT_DRAWDOWN_REQUIRED=1  a publisher that gives no drawdown
+#:       block, or has the limit off, is refused (unset: such a publisher
+#:       is not a refusal -- the earlier behaviour).
+#:   L5_ACCOUNT_DRAWDOWN_AT_RISK_BUDGET_USD  THE OWNER'S DECISION, default
+#:       0 = strict. The ledger's figure counts cash held for resting
+#:       orders and unpaired contracts as already lost. With a budget set,
+#:       up to that much of the READER'S OWN declared at-risk money (resting
+#:       orders plus unpaired cost) is not counted as drawdown, and its
+#:       marked-down value is counted instead. Money lost for good -- a
+#:       settled loss -- always counts in full.
+DRAWDOWN_REQUIRED_ENV = "L5_ACCOUNT_DRAWDOWN_REQUIRED"
+DRAWDOWN_BUDGET_ENV = "L5_ACCOUNT_DRAWDOWN_AT_RISK_BUDGET_USD"
+
+
+def drawdown(risk: Mapping[str, Any], *, own_at_risk: Any = None,
+             own_marks: Any = 0, env: Optional[Mapping[str, str]] = None
              ) -> Dict[str, Any]:
+    """The account drawdown verdict from the published account-risk block.
+    `refusal` is None to allow. Unreadable figures refuse."""
+    env = os.environ if env is None else env
+    required = str(env.get(DRAWDOWN_REQUIRED_ENV, "") or "").strip() == "1"
+    pd = risk.get("portfolio_drawdown") if isinstance(risk, Mapping) else None
+    if not isinstance(pd, Mapping):
+        return {"state": "NOT_PUBLISHED", "refusal":
+                "ACCOUNT_DRAWDOWN_NOT_PUBLISHED" if required else None}
+    state = str(pd.get("state") or "")
+    if state == "OFF":
+        return {"state": "OFF", "refusal":
+                "ACCOUNT_DRAWDOWN_OFF_AT_PUBLISHER" if required else None}
+    if state != "ON":
+        return {"state": state or "UNKNOWN",
+                "refusal": "ACCOUNT_DRAWDOWN_%s" % (state or "UNKNOWN")}
+    dd, mx = _dec(pd.get("drawdown_usd")), _dec(pd.get("max_drawdown_usd"))
+    if dd is None or mx is None or mx <= 0:
+        return {"state": "ON", "refusal": "ACCOUNT_DRAWDOWN_UNREADABLE"}
+    raw_b = str(env.get(DRAWDOWN_BUDGET_ENV, "") or "").strip()
+    budget = _dec(raw_b) if raw_b else D(0)
+    if budget is None or budget < 0:
+        return {"state": "ON", "refusal": "ACCOUNT_DRAWDOWN_BUDGET_UNREADABLE"}
+    credit, marked = D(0), D(0)
+    if budget > 0:
+        risk_now = _dec(own_at_risk) if own_at_risk is not None else None
+        marks = _dec(own_marks)
+        if risk_now is None or risk_now < 0 or marks is None:
+            # unknown own exposure: nothing is excused (the strict figure)
+            credit, marked = D(0), D(0)
+        else:
+            credit = min(risk_now, budget)
+            marked = max(D(0), -marks)
+    used = dd - credit + marked
+    out = {"state": "ON", "published_drawdown_usd": str(dd),
+           "max_drawdown_usd": str(mx), "at_risk_budget_usd": str(budget),
+           "own_at_risk_not_counted_usd": str(credit),
+           "own_marked_loss_counted_usd": str(marked),
+           "drawdown_usd": str(used), "room_usd": str(mx - used),
+           "refusal": None}
+    if used >= mx:
+        out["refusal"] = "ACCOUNT_DRAWDOWN_LIMIT"
+    elif pd.get("refusal") and not str(pd.get("refusal")).startswith(
+            "PORTFOLIO_DRAWDOWN_LIMIT"):
+        # the publisher refuses for a reason other than the figure itself
+        # (value unavailable, limit misconfigured): so does the reader
+        out["refusal"] = "ACCOUNT_DRAWDOWN_PUBLISHER_REFUSES"
+        out["publisher_refusal"] = str(pd.get("refusal"))[:80]
+    return out
+
+
+def evaluate(doc: Any, *, now: dt.datetime, own_unaccounted: Any = 0,
+             own_at_risk: Any = None) -> Dict[str, Any]:
     """The account-wide loss verdict from an already-fetched document."""
     def no(reason: str, **kw: Any) -> Dict[str, Any]:
         return dict(kw, ok=False, reason=reason)
@@ -101,6 +173,10 @@ def evaluate(doc: Any, *, now: dt.datetime, own_unaccounted: Any = 0
         return no("ACCOUNT_DAILY_LOSS_HALT", **out)
     if -life_all >= cum:
         return no("ACCOUNT_CUMULATIVE_LOSS_CEILING", **out)
+    dd = drawdown(risk, own_at_risk=own_at_risk, own_marks=add)
+    out["drawdown"] = dd
+    if dd.get("refusal"):
+        return no(str(dd["refusal"]), **out)
     return dict(out, ok=True, reason=None)
 
 
