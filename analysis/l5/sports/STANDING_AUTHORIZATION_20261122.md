@@ -419,3 +419,28 @@ verification of completion-only mode. No limit is raised to compensate.
   lock: no unpaired contracts. Seven pairs in three ATP markets, locked
   +$0.33; venue cash $319.8038 before the window, $320.1338 after.
 - The campaign is over. No further window is authorised.
+
+## 17. Audit-protection release — 23 Nov, about 20:27 UTC
+
+Owner's decisions (their table): audit release `4e60d5384` "Approve in
+principle, locked deployment only"; 75-minute stale-audit protection
+"Enable, retain fail-closed behavior"; two-minute settlement
+reconciliation "Include in locked release"; $16 spend accounting "Keep
+conservative"; immediate halt "Configure existing mechanism, no new
+service"; live halt drill "Separate authorization required"; new live
+campaign "Not authorized". "The deployment still needs your explicit
+approval; my recommendation isn't a substitute for it."
+
+Asked with the exact commit and settings. Answer: **"Deploy locked"**.
+
+Done at about 20:28 UTC: `PMUS_TWO_SIDED_SUBMISSION_LOCK=1`,
+`PMUS_TWO_SIDED_AUDIT_MAX_AGE_S=4500`, `PMUS_TWO_SIDED_SETTLE_CHECK_S=120`
+set; source connected to `release/pmus-sports-rn1-4e60d5384`, commit
+`4e60d5384a5eeab383f1bcee2f25473b92cf81a3`. Not authorised: arming, any
+order, a halt reset, any limit change, the halt drill, a campaign.
+
+Owner on the halt marker: "a dedicated, uncached HTTPS endpoint under our
+existing infrastructure"; the secret "generated and stored in Railway's
+protected environment configuration, not committed to GitHub or included
+in logs"; verify first "with the joint sports-bot/watchdog regression
+test"; the watchdog's own triggers must keep working without the endpoint.
