@@ -288,3 +288,4 @@
 2026-11-22T16:20Z registry freshness follows the trading loop's own progress (a wedged loop goes STALE to the watchdog).
 2026-11-22T16:45Z RN1 reward-aware selection ranking; marginal-edge test for adding to an unpaired side.
 2026-11-22T17:05Z stalled loop reports manages_own_resting=false with a fresh stamp, so the watchdog both latches and can cancel the listed orders.
+2026-11-23T22:2xZ CANDIDATE d0faffde1 on top of b926e712f: heartbeat reports the account-limit verdict (mode, ledger figure, limit, capacity, what a new opening would be told) whether or not the bot is locked. Reporting only. NOT approved, NOT deployed.
