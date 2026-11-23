@@ -28,6 +28,7 @@ directional exposure until the market settles.
 from __future__ import annotations
 
 import json
+import contextlib
 import os
 import re
 import queue
@@ -1128,6 +1129,18 @@ AUDIT_LATCH = os.getenv("PMUS_TWO_SIDED_AUDIT_LATCH", "0").strip() == "1"
 AUDIT_LATCH_STRIKES = max(1, int(os.getenv(
     "PMUS_TWO_SIDED_AUDIT_LATCH_STRIKES", "2")))
 AUDIT_RECHECK_S = float(os.getenv("PMUS_TWO_SIDED_AUDIT_RECHECK_S", "30"))
+# LIVE 2026-11-23: both hourly audits of a campaign were refused by the
+# request budget and nothing retried, so the bot quoted for 1 h 45 min with
+# no account audit.
+#   AUDIT_RETRY_S    an audit (or reward read) that did not complete is
+#                    tried again after this long, not after another hour.
+#   AUDIT_MAX_AGE_S  with no COMPLETED audit (venue walk and position
+#                    reconciliation both read) within this long -- none yet
+#                    since boot counts -- new exposure is blocked
+#                    ("audit_stale"). Cancels and completions are not.
+#                    0 = off (today's behaviour).
+AUDIT_RETRY_S = float(os.getenv("PMUS_TWO_SIDED_AUDIT_RETRY_S", "60"))
+AUDIT_MAX_AGE_S = float(os.getenv("PMUS_TWO_SIDED_AUDIT_MAX_AGE_S", "0"))
 RANK_HORIZON_H = float(os.getenv("PMUS_RN1_RANK_HORIZON_H", "1"))
 RANK_REWARD_HAIRCUT = float(os.getenv("PMUS_RN1_RANK_REWARD_HAIRCUT", "0.5"))
 RANK_TTL_S = float(os.getenv("PMUS_RN1_RANK_TTL_S", "300"))
@@ -5256,9 +5269,51 @@ class Engine:
         self._last_reward = time.monotonic() - REWARD_CHECK_S + \
             max(0.0, AUDIT_RECHECK_S)
 
+    def audit_age_s(self) -> Optional[float]:
+        """Seconds since the last COMPLETED audit; None = none since boot."""
+        at = getattr(self, "_audit_ok_at", None)
+        return None if at is None else max(0.0, time.monotonic() - at)
+
+    def audit_stale(self) -> bool:
+        if AUDIT_MAX_AGE_S <= 0:
+            return False
+        age = self.audit_age_s()
+        return age is None or age > AUDIT_MAX_AGE_S
+
     def audit_blocks(self) -> Optional[str]:
         st = getattr(self, "_audit_strikes", None)
-        return ("audit_failed:" + ",".join(sorted(st))) if st else None
+        if st:
+            return "audit_failed:" + ",".join(sorted(st))
+        return "audit_stale" if self.audit_stale() else None
+
+    def safety_reads(self) -> Any:
+        """Context for the audit's own venue reads: they take the request
+        budget's safety class (ahead of quote traffic)."""
+        b = getattr(getattr(self.v, "t", None), "budget", None)
+        return b.safety() if b is not None and hasattr(b, "safety") \
+            else contextlib.nullcontext()
+
+    def audit_round(self) -> bool:
+        """The periodic reward read and account audit. False = one of them
+        did not complete; the loop then retries after AUDIT_RETRY_S."""
+        r_ok = self.reward_check()
+        a_ok = self.account_audit()
+        ok = bool(r_ok) and bool(a_ok)
+        if not ok:
+            self._audit_incomplete = int(getattr(
+                self, "_audit_incomplete", 0)) + 1
+            # never later than a re-check an audit failure already asked for
+            self._last_reward = min(
+                self._last_reward,
+                time.monotonic() - REWARD_CHECK_S + max(0.0, AUDIT_RETRY_S))
+            log("AUDIT_RETRY", reward_ok=bool(r_ok), audit_ok=bool(a_ok),
+                retry_in_s=AUDIT_RETRY_S,
+                incomplete_in_a_row=self._audit_incomplete,
+                audit_age_s=self.audit_age_s(),
+                blocks_new_exposure=self.audit_stale())
+        else:
+            self._audit_incomplete = 0
+        return ok
 
     def pilot_block(self) -> Optional[str]:
         """Why the pilot's accounting forbids NEW RN1 exposure, or None.
@@ -5357,11 +5412,13 @@ class Engine:
     def audit_transport(self) -> Any:
         """The transport the audit's long walk uses: the venue transport,
         with order management run between its requests."""
+        from src import pmus_request_budget as RB
+        t = RB.SafetyTransport(self.v.t)
         if not AUDIT_INTERLEAVE:
-            return self.v.t
-        return ServicedTransport(self.v.t, self.service_pass)
+            return t
+        return ServicedTransport(t, self.service_pass)
 
-    def account_audit(self) -> None:
+    def account_audit(self) -> bool:
         """VENUE TRUTH for this bot's markets, from /v1/portfolio/activities:
         realizedPnl summed per market and per sport (trades + resolutions),
         and the commissions on OUR side of our trades (taker fees charged,
@@ -5374,7 +5431,7 @@ class Engine:
         except Exception as exc:                          # noqa: BLE001
             log("ACCOUNT_AUDIT", ok=False,
                 err=f"{type(exc).__name__}:{str(exc)[:160]}")
-            return
+            return False
         ours = set(self.b.d.get("markets") or {})
         types: Dict[str, int] = {}
         mine = []
@@ -5405,7 +5462,8 @@ class Engine:
         except Exception as exc:                          # noqa: BLE001
             fees = {"error": repr(exc)[:120]}
         book = PNL.book_economics(self.b.d.get("markets") or {})
-        inv = self.inventory_reconcile()
+        with self.safety_reads():
+            inv = self.inventory_reconcile()
         # residual = what settled markets realized beyond their completed
         # pairs' gross margin (lone legs, exits; fees if the venue nets them)
         mk_all = self.b.d.get("markets") or {}
@@ -5488,6 +5546,11 @@ class Engine:
                   "side per isAggressor and reported separately; 1-4 and "
                   "unmatched cost are the bot's own book. Rewards are "
                   "separate (REWARD_CHECK).")
+        # complete = the venue walk AND the position reconciliation read
+        if inv is None:
+            return False
+        self._audit_ok_at = time.monotonic()
+        return True
 
     def inventory_reconcile(self) -> Optional[Dict[str, Any]]:
         """Account-wide venue positions vs this bot's book; logged every
@@ -5587,16 +5650,17 @@ class Engine:
                 log("orphan_cancel_error", slug=slug, order_id=oid,
                     err=str(exc)[:160])
 
-    def reward_check(self) -> None:
+    def reward_check(self) -> bool:
         """OBSERVED reward earnings from the venue. Only rows the venue marks
         credited are money; pending/skipped are reported, never counted."""
         try:
             from src import pmus_incentive_audit as IA
-            e = IA.earnings(self.v.t)
+            with self.safety_reads():
+                e = IA.earnings(self.v.t)
         except Exception as exc:                          # noqa: BLE001
             log("REWARD_CHECK", ok=False,
                 err=f"{type(exc).__name__}:{str(exc)[:160]}")
-            return
+            return False
         ours = set(self.b.d.get("markets") or {})
         mine = [r for r in (e.get("rows_detail") or [])
                 if str(r.get("marketSlug") or "") in ours]
@@ -5610,6 +5674,7 @@ class Engine:
                 (e.get("rows_detail") or [])[:50]],
             error=e.get("error"),
             label="venue /v1/incentives/earnings; ONLY credited_usd is money")
+        return bool(e.get("ok"))
 
     def report(self) -> None:
         pairs = self.b.d["pairs"]
@@ -5808,8 +5873,7 @@ class Engine:
                 if REWARD_CHECK_S > 0 and \
                         time.monotonic() - self._last_reward > REWARD_CHECK_S:
                     self._last_reward = time.monotonic()
-                    self.reward_check()
-                    self.account_audit()
+                    self.audit_round()
                 if SHARP_MODE == "shadow" and time.monotonic() - getattr(
                         self, "_last_sharp", -1e9) > SHARP_SHADOW_EVERY_S:
                     self._last_sharp = time.monotonic()

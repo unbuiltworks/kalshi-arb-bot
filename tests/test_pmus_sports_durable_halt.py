@@ -291,7 +291,11 @@ def test_interleaving_can_be_switched_off(quoting, monkeypatch):
     e, v, mk = quoting
     v.t = PagedTransport()
     monkeypatch.setattr(M, "AUDIT_INTERLEAVE", False)
-    assert e.audit_transport() is v.t
+    t = e.audit_transport()
+    # 2026-11-23: the audit's reads are marked as safety reads, so the
+    # transport is wrapped for that; it is still not the serviced one
+    assert not isinstance(t, M.ServicedTransport)
+    assert t._t is v.t
 
 
 # ---------------------- a loop that reads but does not serve its orders

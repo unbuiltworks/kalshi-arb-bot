@@ -12,6 +12,14 @@ calls by what they protect:
   normal    order placement, account / open-orders / positions reads
             (reconciliation). Wait for budget (bounded), and through a 429
             cool-down; refused with BudgetDeferred if still none.
+  safety    account audit, inventory reconciliation and the reward read,
+            marked by the caller with `budget.safety()`. LIVE 2026-11-23:
+            both hourly audits of a campaign were refused because quote
+            traffic had spent the bucket, so the bot ran 1 h 45 min with no
+            account audit. A safety read waits longer (SAFETY_WAIT_S) and,
+            while one is waiting, order placement and other normal reads
+            stand aside: the next token goes to the safety read. Cancels
+            and order-status reads are still never delayed.
   research  everything else (RFQs, incentives, activity, history). Only
             from spare budget -- never below RESERVE of the bucket, never in
             a cool-down -- and refused at once rather than queued.
@@ -58,19 +66,23 @@ def _is_429(exc: BaseException) -> bool:
 class RequestBudget:
     def __init__(self, rps: float = 1.0, burst: float = 4.0,
                  cooldown_s: float = 15.0, reserve: float = 0.5,
-                 normal_wait_s: float = 3.0,
+                 normal_wait_s: float = 3.0, safety_wait_s: float = 20.0,
                  clock: Callable[[], float] = time.monotonic,
                  sleep: Callable[[float], None] = time.sleep):
         self.rps, self.burst = float(rps), float(burst)
         self.cooldown_s, self.reserve = float(cooldown_s), float(reserve)
         self.normal_wait_s = float(normal_wait_s)
+        self.safety_wait_s = float(safety_wait_s)
+        self._safety_waiting = 0
+        self._tl = threading.local()
         self.clock, self.sleep = clock, sleep
         self._tokens = self.burst
         self._last = clock()
         self._cool_until = 0.0
         self._lock = threading.Lock()
-        self.stats = {"sent": {"critical": 0, "normal": 0, "research": 0},
-                      "deferred": {"normal": 0, "research": 0},
+        self.stats = {"sent": {"critical": 0, "safety": 0, "normal": 0,
+                               "research": 0},
+                      "deferred": {"safety": 0, "normal": 0, "research": 0},
                       "http_429": 0, "cooldowns": 0, "critical_in_cooldown": 0}
         self._t0 = clock()
 
@@ -83,7 +95,42 @@ class RequestBudget:
     def cooling(self) -> bool:
         return self.clock() < self._cool_until
 
+    def safety(self) -> "_Safety":
+        """Context: signed requests made by THIS thread inside it are
+        safety reads (see the module text). Re-entrant."""
+        return _Safety(self)
+
+    def in_safety(self) -> bool:
+        return getattr(self._tl, "depth", 0) > 0
+
+    def _acquire_safety(self) -> None:
+        deadline = self.clock() + self.safety_wait_s
+        with self._lock:
+            self._safety_waiting += 1
+        try:
+            while True:
+                with self._lock:
+                    self._refill()
+                    if not self.cooling() and self._tokens >= 1:
+                        self._tokens -= 1
+                        self.stats["sent"]["safety"] += 1
+                        return
+                    wait = max(self._cool_until - self.clock(),
+                               (1 - self._tokens) / self.rps
+                               if self.rps > 0 else self.safety_wait_s)
+                if self.clock() + min(wait, 0.5) > deadline:
+                    with self._lock:
+                        self.stats["deferred"]["safety"] += 1
+                    raise BudgetDeferred("safety request deferred "
+                                         "(shared budget / 429 cool-down)")
+                self.sleep(min(max(wait, 0.05), 0.5))
+        finally:
+            with self._lock:
+                self._safety_waiting -= 1
+
     def acquire(self, cls: str) -> None:
+        if cls == "safety":
+            return self._acquire_safety()
         deadline = self.clock() + self.normal_wait_s
         while True:
             with self._lock:
@@ -97,15 +144,16 @@ class RequestBudget:
                     self.stats["sent"]["critical"] += 1
                     return
                 if cls == "research":
-                    if not self.cooling() and \
-                            self._tokens - 1 >= self.reserve * self.burst:
+                    if not self.cooling() and self._safety_waiting == 0 \
+                            and self._tokens - 1 >= self.reserve * self.burst:
                         self._tokens -= 1
                         self.stats["sent"]["research"] += 1
                         return
                     self.stats["deferred"]["research"] += 1
                     raise BudgetDeferred("research request deferred "
                                          "(shared budget)")
-                if not self.cooling() and self._tokens >= 1:
+                if not self.cooling() and self._tokens >= 1 and \
+                        self._safety_waiting == 0:
                     self._tokens -= 1
                     self.stats["sent"]["normal"] += 1
                     return
@@ -138,6 +186,37 @@ class RequestBudget:
                              "order-status first, research only from spare"}
 
 
+class _Safety:
+    def __init__(self, budget: "RequestBudget"):
+        self._b = budget
+
+    def __enter__(self) -> "_Safety":
+        self._b._tl.depth = getattr(self._b._tl, "depth", 0) + 1
+        return self
+
+    def __exit__(self, *exc: Any) -> None:
+        self._b._tl.depth = max(0, getattr(self._b._tl, "depth", 1) - 1)
+
+
+class SafetyTransport:
+    """A transport whose own requests are safety reads. Only the request
+    itself is marked: whatever a caller runs between requests (the audit's
+    order-management pass) keeps its ordinary class."""
+
+    def __init__(self, t: Any):
+        self._t = t
+
+    def request(self, *a: Any, **k: Any) -> Any:
+        b = getattr(self._t, "budget", None)
+        if b is None:
+            return self._t.request(*a, **k)
+        with b.safety():
+            return self._t.request(*a, **k)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._t, name)
+
+
 class GovernedTransport:
     """Wraps the signed transport; every request goes through the budget."""
 
@@ -149,7 +228,10 @@ class GovernedTransport:
         if base is not None and "gateway" in str(base):
             # public, unsigned gateway reads are not on the key's budget
             return self._inner.request(method, path, *a, **kw)
-        self.budget.acquire(classify(method, path))
+        cls = classify(method, path)
+        if cls != "critical" and self.budget.in_safety():
+            cls = "safety"
+        self.budget.acquire(cls)
         try:
             return self._inner.request(method, path, *a, **kw)
         except Exception as exc:                          # noqa: BLE001
@@ -170,4 +252,6 @@ def from_env() -> RequestBudget:
     return RequestBudget(rps=f("PMUS_TWO_SIDED_SIGNED_RPS", "1.0"),
                          burst=f("PMUS_TWO_SIDED_SIGNED_BURST", "4"),
                          cooldown_s=f("PMUS_TWO_SIDED_429_COOLDOWN_S", "15"),
-                         reserve=f("PMUS_TWO_SIDED_RESEARCH_RESERVE", "0.5"))
+                         reserve=f("PMUS_TWO_SIDED_RESEARCH_RESERVE", "0.5"),
+                         safety_wait_s=f("PMUS_TWO_SIDED_SAFETY_WAIT_S",
+                                         "20"))
