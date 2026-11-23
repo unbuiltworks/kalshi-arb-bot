@@ -968,9 +968,9 @@ def account_risk(*, url: str, now: dt.datetime, own_unaccounted: Decimal,
     #: than the booked results is added to the lifetime figure here, so the
     #: cumulative ceiling binds on it. Only a negative figure is read: an
     #: upward difference is never applied by anyone without the owner, and
-    #: an absent or unreadable report adds nothing and is said so -- the
-    #: venue-equity drawdown below, measured on the venue's own balance,
-    #: is the control that does not depend on any ledger.
+    #: an absent report adds nothing, but a published unreadable REPORT
+    #: refuses order admission (fail closed). Venue-equity drawdown below,
+    #: measured on the venue's balance, independently checks the ledger.
     vb_add, vb_state = D(0), "NOT_PUBLISHED"
     _vb = risk.get("venue_basis")
     if isinstance(_vb, Mapping):
