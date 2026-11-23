@@ -51,9 +51,10 @@ def test_the_pending_upward_total_is_never_read():
     {"state": "REPORT", "summary": {"downward_adjustment_usd": None}},
     {"state": "REPORT", "summary": {"downward_adjustment_usd": "n/a"}},
     {"state": "REPORT"}])
-def test_a_report_with_no_readable_figure_adds_nothing_and_says_so(block):
+def test_a_report_with_no_readable_figure_refuses_admission(block):
     r = read(own({}), venue_basis=block)
-    assert r["ok"] and life_of(r) == D("-40")
+    assert r["ok"] is False
+    assert r["reason"] == "ACCOUNT_VENUE_BASIS_REPORT_UNREADABLE"
     assert r["venue_basis_state"] == "REPORT_NO_READABLE_FIGURE"
 
 
@@ -61,3 +62,17 @@ def test_a_report_with_no_readable_figure_adds_nothing_and_says_so(block):
 def test_only_a_report_is_read(state):
     r = read(own({}), venue_basis=vb("-5", state=state))
     assert life_of(r) == D("-40")
+
+
+@pytest.mark.parametrize("adj", ["NaN", "Infinity", "-Infinity", float("nan"), float("inf")])
+def test_nonfinite_report_refuses_admission(adj):
+    r = read(own({}), venue_basis=vb(adj))
+    assert r["ok"] is False
+    assert r["reason"] == "ACCOUNT_VENUE_BASIS_REPORT_UNREADABLE"
+
+
+def test_valid_negative_and_zero_adjustments_remain_readable():
+    for adjustment, expected in [("-0.25", "-40.25"), ("0", "-40")]:
+        r = read(own({}), venue_basis=vb(adjustment))
+        assert r["ok"] is True
+        assert life_of(r) == D(expected)
