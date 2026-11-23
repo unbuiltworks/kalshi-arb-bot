@@ -1,0 +1,448 @@
+{
+ "source_time": "2026-11-23T22:57:01.627299+00:00",
+ "rows": 187,
+ "credited_usd": "22.7900000000000001",
+ "accrued_not_credited_usd": "5.30",
+ "by_status": {
+  "PAID": {
+   "n": 120,
+   "usd": "22.7900000000000001"
+  },
+  "PENDING": {
+   "n": 4,
+   "usd": "1.34"
+  },
+  "SKIPPED": {
+   "n": 63,
+   "usd": "3.96"
+  }
+ },
+ "by_program": {
+  "liquidityProgram": 187
+ },
+ "rows_on_our_markets": 50,
+ "sample_ours": [
+  {
+   "reward": 0.52,
+   "programType": "liquidityProgram",
+   "marketSlug": "atc-sea-bol-udi-2026-11-22-bol",
+   "date": "2026-11-22",
+   "status": "PENDING"
+  },
+  {
+   "reward": 0.78,
+   "programType": "liquidityProgram",
+   "marketSlug": "atc-sea-sas-gen-2026-11-22-gen",
+   "date": "2026-11-22",
+   "status": "PENDING"
+  },
+  {
+   "reward": 0.02,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-valorant-ele-tse-2026-11-21",
+   "date": "2026-11-21",
+   "status": "PENDING"
+  },
+  {
+   "reward": 0.02,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-valorant-w7m-man-2026-11-21",
+   "date": "2026-11-21",
+   "status": "PENDING"
+  },
+  {
+   "reward": 0.03,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-atp-jurrod-nickja-2026-11-18",
+   "date": "2026-11-18",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.01,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-atp-lasdje-jacfea-2026-11-18",
+   "date": "2026-11-18",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.01,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-cs2-bca-big-2026-11-18",
+   "date": "2026-11-18",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.02,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-cs2-forzer-g2a-2026-11-18",
+   "date": "2026-11-18",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.08,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-cs2-sta-ttbs-2026-11-18",
+   "date": "2026-11-18",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.01,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-cs2-unity-gl-2026-11-18",
+   "date": "2026-11-18",
+   "status": "PAID"
+  }
+ ],
+ "rows_brief": [
+  {
+   "reward": 0.52,
+   "programType": "liquidityProgram",
+   "marketSlug": "atc-sea-bol-udi-2026-11-22-bol",
+   "date": "2026-11-22",
+   "status": "PENDING"
+  },
+  {
+   "reward": 0.78,
+   "programType": "liquidityProgram",
+   "marketSlug": "atc-sea-sas-gen-2026-11-22-gen",
+   "date": "2026-11-22",
+   "status": "PENDING"
+  },
+  {
+   "reward": 0.02,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-valorant-ele-tse-2026-11-21",
+   "date": "2026-11-21",
+   "status": "PENDING"
+  },
+  {
+   "reward": 0.02,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-valorant-w7m-man-2026-11-21",
+   "date": "2026-11-21",
+   "status": "PENDING"
+  },
+  {
+   "reward": 0.03,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-atp-jurrod-nickja-2026-11-18",
+   "date": "2026-11-18",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.01,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-atp-lasdje-jacfea-2026-11-18",
+   "date": "2026-11-18",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.01,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-cs2-bca-big-2026-11-18",
+   "date": "2026-11-18",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.02,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-cs2-forzer-g2a-2026-11-18",
+   "date": "2026-11-18",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.08,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-cs2-sta-ttbs-2026-11-18",
+   "date": "2026-11-18",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.01,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-cs2-unity-gl-2026-11-18",
+   "date": "2026-11-18",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.03,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-dota2-aur-pari-2026-11-18",
+   "date": "2026-11-18",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.02,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-dota2-hul-nemiga-2026-11-18",
+   "date": "2026-11-18",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.01,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-itfwo-eliyan-elemal-2026-11-18",
+   "date": "2026-11-18",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.01,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-itfwo-julmya-madhag-2026-11-18",
+   "date": "2026-11-18",
+   "status": "PAID"
+  },
+  {
+   "reward": 1.88,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-setkamemd-ciumir-melvla-2026-11-18",
+   "date": "2026-11-18",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.01,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-setkamemd-cojdor-ursser-2026-11-18",
+   "date": "2026-11-18",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.16,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-setkameua-hreiur-chaboh-2026-11-18",
+   "date": "2026-11-18",
+   "status": "PAID"
+  },
+  {
+   "reward": 3.4,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-setkameua-khevse-helval-2026-11-18",
+   "date": "2026-11-18",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.47,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-setkameua-kotand-lipole-2026-11-18",
+   "date": "2026-11-18",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.07,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-setkameua-lukval-serrus-2026-11-18",
+   "date": "2026-11-18",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.02,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-setkameua-selole-leyyur-2026-11-18",
+   "date": "2026-11-18",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.05,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-setkameua-soprus-zozart-2026-11-18",
+   "date": "2026-11-18",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.37,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-setkameua-stemak-yakste-2026-11-18",
+   "date": "2026-11-18",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.25,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-setkameua-zaiboh-popedu-2026-11-18",
+   "date": "2026-11-18",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.74,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-setkameua-zhavit-sukiho-2026-11-18",
+   "date": "2026-11-18",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.05,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-valorant-xjg-ur-2026-11-18",
+   "date": "2026-11-18",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.01,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-wtt-andber-yirtan-2026-11-18",
+   "date": "2026-11-18",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.12,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-wtt-elezah-chalut-2026-11-18",
+   "date": "2026-11-18",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.43,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-wtt-ricwal-joesey-2026-11-18",
+   "date": "2026-11-18",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.02,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-atp-aidmch-jerzha-2026-11-16",
+   "date": "2026-11-17",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.23,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-atp-edwwin-enzagu-2026-11-17",
+   "date": "2026-11-17",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.06,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-atp-maxgur-oribat-2026-11-17",
+   "date": "2026-11-17",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.07,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-atp-zacvii-geobla-2026-11-17",
+   "date": "2026-11-17",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.01,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-atpdb-barryingild-dominkplanin-2026-11-15",
+   "date": "2026-11-17",
+   "status": "SKIPPED"
+  },
+  {
+   "reward": 0.02,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-cs2-envy-mzp-2026-11-17",
+   "date": "2026-11-17",
+   "status": "SKIPPED"
+  },
+  {
+   "reward": 0.05,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-cs2-xi-jumbo-2026-11-17",
+   "date": "2026-11-17",
+   "status": "SKIPPED"
+  },
+  {
+   "reward": 0.4,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-dota2-xe-ch-2026-11-17",
+   "date": "2026-11-17",
+   "status": "SKIPPED"
+  },
+  {
+   "reward": 0.01,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-itfwo-vikmor-enakoi-2026-11-17",
+   "date": "2026-11-17",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.01,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-utr-gaskan-hanbra-2026-11-17",
+   "date": "2026-11-17",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.91,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-cs2-ep-ytigeres-2026-11-16",
+   "date": "2026-11-16",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.02,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-cs2-hec-jumbo-2026-11-16",
+   "date": "2026-11-16",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.02,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-cs2-hero-prv-2026-11-16",
+   "date": "2026-11-16",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.03,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-cs2-vp-priv-2026-11-16",
+   "date": "2026-11-16",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.14,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-cs2-ytigeres-jumbo-2026-11-16",
+   "date": "2026-11-16",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.01,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-dota2-gl-lgd-2026-11-16",
+   "date": "2026-11-16",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.01,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-nhl-mon-nyr-2026-11-16",
+   "date": "2026-11-16",
+   "status": "SKIPPED"
+  },
+  {
+   "reward": 0.02,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-atp-alecan-robcat-2026-11-15",
+   "date": "2026-11-15",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.01,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-atp-filmor-elicou-2026-11-15",
+   "date": "2026-11-15",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.01,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-atp-fralla-brufer-2026-11-15",
+   "date": "2026-11-15",
+   "status": "PAID"
+  },
+  {
+   "reward": 0.01,
+   "programType": "liquidityProgram",
+   "marketSlug": "aec-atp-frarib-thicig-2026-11-15",
+   "date": "2026-11-15",
+   "status": "PAID"
+  }
+ ]
+}
