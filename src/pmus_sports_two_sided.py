@@ -574,9 +574,59 @@ STALL_DRILL_ENV = "PMUS_TWO_SIDED_STALL_DRILL"
 STALL_DRILL_MAX_S = 600.0
 
 
-def stall_drill(now: Optional[float] = None) -> Optional[Dict[str, Any]]:
+# THE PROCESS-DEATH DRILL (owner 2026-11-23: "I would not approve another
+# extended live campaign until the independent cancellation path is deployed
+# and verified"). A restart cannot stand in for a death: on SIGTERM the bot
+# cancels its own orders. So, for a drill only:
+#
+#   PMUS_TWO_SIDED_DEATH_DRILL=window:<startZ>/<endZ>
+#
+# At the window's start the running process exits at once with os._exit --
+# no cancel, no shutdown handler, the registry gone with it. Every restart
+# inside the window waits, serving nothing and touching nothing, until the
+# window ends, then boots normally (under a lock it cancels what is left).
+# Whatever was resting is therefore unmanaged for the window and only the
+# independent watchdog can cancel it. Same bounds as the stall drill: a
+# window longer than STALL_DRILL_MAX_S or malformed is NO drill. It can only
+# stop this bot from acting; it cannot place or keep an order.
+DEATH_DRILL_ENV = "PMUS_TWO_SIDED_DEATH_DRILL"
+
+
+def death_drill(now: Optional[float] = None) -> Optional[Dict[str, Any]]:
+    return stall_drill(now, env=DEATH_DRILL_ENV)
+
+
+def death_drill_exit_if_due(exit_fn: Optional[Callable[[int], None]] = None
+                            ) -> None:
+    """In the running loop: inside the window, die without cleaning up."""
+    d = death_drill()
+    if d and d["active"]:
+        log("DEATH_DRILL", phase="exit", end=_iso(d["end"]),
+            label="deliberate drill: the process exits with no cancel and "
+                  "no shutdown handling")
+        (exit_fn or os._exit)(70)
+
+
+def death_drill_boot_hold(sleep: Callable[[float], None] = time.sleep
+                          ) -> bool:
+    """At boot: inside the window, do nothing until it ends. True if held."""
+    held = False
+    while True:
+        d = death_drill()
+        if not d or not d["active"]:
+            return held
+        if not held:
+            held = True
+            log("DEATH_DRILL", phase="boot_hold", end=_iso(d["end"]),
+                label="deliberate drill: nothing is served or touched until "
+                      "the window ends")
+        sleep(1.0)
+
+
+def stall_drill(now: Optional[float] = None, env: Optional[str] = None
+                ) -> Optional[Dict[str, Any]]:
     """{"start", "end", "active"} for a well-formed drill window, else None."""
-    raw = (os.getenv(STALL_DRILL_ENV) or "").strip()
+    raw = (os.getenv(env or STALL_DRILL_ENV) or "").strip()
     if not raw.startswith("window:"):
         return None
     try:
@@ -5708,6 +5758,7 @@ class Engine:
             except Exception as exc:                  # noqa: BLE001
                 log("loop_error", err=f"{type(exc).__name__}:{str(exc)[:200]}")
             loop_beat()
+            death_drill_exit_if_due()
             self._sleep(LOOP_S)
             self._stall_drill_hold()
         self.cancel_all_own("sigterm")
@@ -5917,6 +5968,7 @@ def serve_registry(book: "Book", port: int) -> None:
 
 
 def main() -> int:
+    death_drill_boot_hold()      # a drill window: stay down until it ends
     book = Book(STATE_DIR / "state.json")
     try:
         serve_registry(book, int(os.getenv("PMUS_TWO_SIDED_REGISTRY_PORT",

@@ -330,3 +330,71 @@ def test_the_registry_tells_the_watchdog_when_orders_are_not_served(
     doc = M.registry_doc(e.b)
     assert doc["manages_own_resting"] is False and doc["loop_stalled"] is True
     assert 86 <= doc["order_service_idle_s"] <= 89
+
+
+# ------------------------------------------------ the process-death drill
+def _window(start_in, length):
+    import datetime as _dt
+    a = _dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(seconds=start_in)
+    b = a + _dt.timedelta(seconds=length)
+    f = lambda d: d.strftime("%Y-%m-%dT%H:%M:%SZ")
+    return "window:%s/%s" % (f(a), f(b))
+
+
+class _Exit(Exception):
+    pass
+
+
+def _exit(code):
+    raise _Exit(code)
+
+
+def test_no_death_drill_by_default_and_a_malformed_one_is_none(monkeypatch):
+    monkeypatch.delenv(M.DEATH_DRILL_ENV, raising=False)
+    assert M.death_drill() is None
+    M.death_drill_exit_if_due(_exit)                 # nothing happens
+    for raw in ("1", "window:", _window(-5, 601), "window:x/y"):
+        monkeypatch.setenv(M.DEATH_DRILL_ENV, raw)
+        assert M.death_drill() is None, raw
+        M.death_drill_exit_if_due(_exit)
+
+
+def test_inside_the_window_the_process_exits_without_any_cleanup(
+        quoting, monkeypatch, capsys):
+    e, v, mk = quoting
+    monkeypatch.setenv(M.DEATH_DRILL_ENV, _window(-5, 120))
+    cancelled = []
+    monkeypatch.setattr(e, "cancel_all_own", lambda why: cancelled.append(why))
+    with pytest.raises(_Exit) as x:
+        M.death_drill_exit_if_due(_exit)
+    assert x.value.args == (70,)
+    assert cancelled == []                           # nothing was cancelled
+    assert [o for o in v.orders.values() if o["open"]]   # orders left resting
+    assert logged(capsys, "DEATH_DRILL")[-1]["phase"] == "exit"
+
+
+def test_before_and_after_the_window_nothing_exits(monkeypatch):
+    monkeypatch.setenv(M.DEATH_DRILL_ENV, _window(60, 120))
+    M.death_drill_exit_if_due(_exit)
+    monkeypatch.setenv(M.DEATH_DRILL_ENV, _window(-300, 120))
+    M.death_drill_exit_if_due(_exit)
+
+
+def test_a_restart_inside_the_window_waits_until_it_ends(monkeypatch):
+    monkeypatch.setenv(M.DEATH_DRILL_ENV, _window(-5, 120))
+    ticks = []
+
+    def sleep(s):
+        ticks.append(s)
+        if len(ticks) == 3:                          # the window is over
+            monkeypatch.setenv(M.DEATH_DRILL_ENV, _window(-300, 120))
+    assert M.death_drill_boot_hold(sleep) is True
+    assert len(ticks) == 3
+    assert M.death_drill_boot_hold(sleep) is False   # normal boot afterwards
+
+
+def test_the_stall_drill_is_unaffected_by_the_death_drill_setting(
+        monkeypatch):
+    monkeypatch.delenv(M.STALL_DRILL_ENV, raising=False)
+    monkeypatch.setenv(M.DEATH_DRILL_ENV, _window(-5, 120))
+    assert M.stall_drill() is None and M.death_drill()["active"] is True
