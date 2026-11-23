@@ -27,6 +27,9 @@ ENV = {  # "Option A" of CONTINUOUS_CONTROLLER_20261122.md -- a proposal only
     "PMUS_RN1_TOTAL_SPEND_USD": "50", "PMUS_RN1_TOTAL_UNMATCHED_USD": "30",
     "PMUS_TWO_SIDED_VOL_PAUSE_USD": "0.03", "PMUS_TWO_SIDED_VOL_SHRINK_USD": "0.02",
     "PMUS_RN1_RANK_NET": "1"}
+# optional overrides for side-by-side runs, e.g.
+# DRYRUN_OVERRIDES='{"PMUS_RN1_GAP_HOLD_S": "20"}'
+ENV.update(json.loads(os.getenv("DRYRUN_OVERRIDES") or "{}"))
 os.environ.update(ENV)
 os.environ.pop("PMUS_TWO_SIDED_SUBMISSION_LOCK", None)
 for k in ("PMUS_RN1_QTY", "PMUS_RN1_PAIR_CAP"): os.environ.pop(k, None)
@@ -114,7 +117,10 @@ def feed():
 last_sel = 0.0
 last_sum = time.time()
 def summary():
-    emit("SUMMARY", keep_tol_usd=str(M.RN1_KEEP_TOL_USD), fills_model=FILLS, phases=eng.phase_summary(),
+    emit("SUMMARY", keep_tol_usd=str(M.RN1_KEEP_TOL_USD), fills_model=FILLS,
+         gap_hold_s=getattr(M, "RN1_GAP_HOLD_S", None),
+         gap_holds=getattr(eng, "_gap_holds", 0),
+         depth_ticks=str(getattr(M, "DEPTH_TICKS", None)), phases=eng.phase_summary(),
          markout=eng.markout_summary(),
          positions={s: {"pos": m["pos"], "cost": m["cost"]} for s, m in eng.b.d["markets"].items()
                     if D(str(m["pos"]["YES"])) or D(str(m["pos"]["NO"]))})
