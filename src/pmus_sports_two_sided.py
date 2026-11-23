@@ -930,6 +930,34 @@ AT_RISK_BUDGET_USD = _env_d("PMUS_TWO_SIDED_AT_RISK_BUDGET_USD", "0")
 # At most RANK_NEW_PER_ROUND candidates are priced per selection round and
 # a ranking number is reused for RANK_TTL_S (one public book read each).
 RN1_RANK_NET = os.getenv("PMUS_RN1_RANK_NET", "0").strip() == "1"
+# HYSTERESIS for a resting bid (see RN1.quotes): kept at its own price while
+# it misses the marginal test by no more than RN1_KEEP_TOL_USD, for at most
+# RN1_KEEP_MAX_S in a row; then it is pulled like any failing bid. 0 = off
+# (every failing bid is pulled at once, as before).
+RN1_KEEP_TOL_USD = _env_d("PMUS_RN1_KEEP_TOL_USD", "0")
+RN1_KEEP_MAX_S = float(os.getenv("PMUS_RN1_KEEP_MAX_S", "60"))
+# DURABLE HALT ON A RECONCILIATION FAILURE, with no session involved
+# (owner 2026-11-23: "reconciliation failures must trigger a durable halt";
+# LIVE 2026-11-22 22:10Z a fill was recorded 89 s after the venue made it,
+# the position check then agreed again, nothing latched, and the manual
+# relock arrived 22 minutes late). Both use the existing safety latch: every
+# own order is cancelled, nothing is placed, it survives a restart and only
+# the owner's acknowledgement clears it.
+#   FILL_LATE_LATCH_S   a fill recorded more than this long after the
+#                       venue's own stamp on the order latches
+#                       ("fill_seen_late"). 0 = measure and log only.
+#   AUDIT_LATCH         the audit's two reconciliations (venue positions
+#                       against the book; venue trade rows against recorded
+#                       fills) latch when the SAME one fails
+#                       AUDIT_LATCH_STRIKES audits in a row. The first
+#                       failure blocks new exposure at once and brings the
+#                       next audit forward to AUDIT_RECHECK_S, so a fill
+#                       that landed between the two reads is not a halt.
+FILL_LATE_LATCH_S = float(os.getenv("PMUS_TWO_SIDED_FILL_LATE_LATCH_S", "0"))
+AUDIT_LATCH = os.getenv("PMUS_TWO_SIDED_AUDIT_LATCH", "0").strip() == "1"
+AUDIT_LATCH_STRIKES = max(1, int(os.getenv(
+    "PMUS_TWO_SIDED_AUDIT_LATCH_STRIKES", "2")))
+AUDIT_RECHECK_S = float(os.getenv("PMUS_TWO_SIDED_AUDIT_RECHECK_S", "30"))
 RANK_HORIZON_H = float(os.getenv("PMUS_RN1_RANK_HORIZON_H", "1"))
 RANK_REWARD_HAIRCUT = float(os.getenv("PMUS_RN1_RANK_REWARD_HAIRCUT", "0.5"))
 RANK_TTL_S = float(os.getenv("PMUS_RN1_RANK_TTL_S", "300"))
@@ -2848,9 +2876,20 @@ class Engine:
             self._markout_open(slug, mk, side, oid, st["px"], new,
                                st.get("t"), o.get("stage"))
             mk.setdefault("last_fill_t", {})[side] = time.time()
+            late = None
+            try:
+                if st.get("t") is not None:
+                    late = round(max(0.0, time.time() - float(st["t"])), 1)
+            except (TypeError, ValueError):
+                late = None
             log("FILL", slug=slug, side=side, px=st["px"], qty=new,
-                order_id=oid, pos=mk["pos"],
+                order_id=oid, pos=mk["pos"], seen_late_s=late,
                 label="venue-reported fill; not realized until settlement")
+            if late is not None and FILL_LATE_LATCH_S > 0 and \
+                    late > FILL_LATE_LATCH_S:
+                self.latch("fill_seen_late", slug=slug, order_id=oid,
+                           side=side, late_s=late,
+                           limit_s=FILL_LATE_LATCH_S)
 
     # ------------------------------------------------ post-fill markout
     #: fills kept per market in the durable book (newest last)
@@ -3945,6 +3984,8 @@ class Engine:
             new_block = self.pilot_block()
         elif self.campaign_marker_mismatch():
             new_block = "campaign_marker_mismatch"
+        elif self.audit_blocks():
+            new_block = self.audit_blocks()
         # account-wide blocks hold the slot (they lift); a block about THIS
         # market (late, excluded, open-EV gate) frees a flat market's slot,
         # exactly as the two-sided path releases a gated flat market
@@ -3983,13 +4024,26 @@ class Engine:
                                                  VOL_SHRINK_USD))
         if pq != D(str(RN1.QTY)):
             qcfg["qty"] = pq
+        if RN1_KEEP_TOL_USD > 0 and not new_block:
+            qcfg["keep_tol_usd"] = RN1_KEEP_TOL_USD
+            qcfg["keep_px"] = {o["side"]: o["px"]
+                               for o in mk["orders"].values()
+                               if o.get("open")}
         q = RN1.quotes(yes_bid=bbo["bid"], yes_ask=bbo["ask"], tick=tick,
                        pos=mk["pos"], cost=mk["cost"],
                        last_fill_t=mk.get("last_fill_t"), now=now,
                        min_qty=spec["min_qty"], c=qcfg)
         want: Dict[str, Any] = {}
+        ks = mk.setdefault("keep_since", {})
         for side in ("YES", "NO"):
             tg = q.get(side)
+            if tg and tg.get("kept"):
+                since = float(ks.setdefault(side, now))
+                if now - since > RN1_KEEP_MAX_S:
+                    q["why_" + side] = "keep_expired"
+                    tg = None
+            else:
+                ks.pop(side, None)
             if tg and tg["role"] != "complete" and new_block:
                 tg = None
             if tg and tg["role"] != "complete":
@@ -4810,6 +4864,8 @@ class Engine:
             return
         self._pilot = r
         self._pilot_at = time.monotonic()
+        self.audit_result("fills_unconfirmed", bool(r.get("unconfirmed")),
+                          unconfirmed=r.get("unconfirmed"))
         log("PILOT_PNL", ok=True, since=self.since,
             loss_stop_usd=str(PILOT_LOSS_USD),
             new_openings_block=self.pilot_block(),
@@ -4838,6 +4894,32 @@ class Engine:
             self.b.save()
         return PP.cash_check(cash, exp, base if base and
                              base.get("since") == key else None)
+
+    def audit_result(self, kind: str, failed: bool, **detail: Any) -> None:
+        """Count consecutive failures of one of the audit's
+        reconciliations; see AUDIT_LATCH. A clean result clears its count."""
+        st = getattr(self, "_audit_strikes", None)
+        if st is None:
+            st = self._audit_strikes = {}
+        if not failed:
+            st.pop(kind, None)
+            return
+        if not AUDIT_LATCH:
+            return
+        n = st[kind] = int(st.get(kind, 0)) + 1
+        log("AUDIT_FAILED", check=kind, strikes=n,
+            latch_at=AUDIT_LATCH_STRIKES, **detail,
+            label="new exposure blocked; the next audit is brought forward")
+        if n >= AUDIT_LATCH_STRIKES:
+            self.latch("audit_" + kind, strikes=n, **detail)
+            return
+        # bring the next audit forward
+        self._last_reward = time.monotonic() - REWARD_CHECK_S + \
+            max(0.0, AUDIT_RECHECK_S)
+
+    def audit_blocks(self) -> Optional[str]:
+        st = getattr(self, "_audit_strikes", None)
+        return ("audit_failed:" + ",".join(sorted(st))) if st else None
 
     def pilot_block(self) -> Optional[str]:
         """Why the pilot's accounting forbids NEW RN1 exposure, or None.
@@ -5047,6 +5129,10 @@ class Engine:
                             self.own(), walk_complete=snap["complete"])
         log("INVENTORY_RECONCILE", ok=True, pages=snap["pages"],
             book_open_unmatched_usd=str(self.b.total_unmatched()), **rep)
+        # only a COMPLETE walk can show a real difference
+        bad = bool(snap.get("complete")) and bool(rep.get("mismatches"))
+        self.audit_result("position_mismatch", bad,
+                          mismatches=(rep.get("mismatches") or [])[:5])
         return rep
 
     def orphan_sweep(self, orders: Optional[list] = None) -> None:

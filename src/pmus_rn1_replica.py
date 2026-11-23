@@ -374,9 +374,49 @@ def quotes(*, yes_bid: Any, yes_ask: Any, tick: Any,
             ev["role"] = role
             out.setdefault("edge", {})[s] = ev
             if not ev["ok"]:
-                out["why_" + s] = ev["why"]
-                continue
+                # HYSTERESIS (owner 2026-11-23: "retains economically
+                # acceptable orders without allowing stale or unprofitable
+                # quotes to persist"). A NEW bid needs the full test. A bid
+                # ALREADY RESTING on this side is kept at its own price
+                # while it misses the test by no more than `keep_tol_usd`:
+                # the fair value sitting on a half-cent boundary otherwise
+                # cancels and re-places the same order every few seconds
+                # and gives up its place in the queue. It is still judged
+                # against a fair value read now (none = pulled), still has
+                # to be worth more than it costs, and the caller limits how
+                # long a bid may be kept this way.
+                rp = (k.get("keep_px") or {}).get(s)
+                tol = D(str(k.get("keep_tol_usd") or 0))
+                kept = None
+                if rp is not None and tol > ZERO:
+                    rp = D(str(rp))
+                    if pmin <= rp <= pmax and rp < touch + t:
+                        ev2 = edge(side=s, px=rp, tick=t, fair_yes=_fy,
+                                   adds_exposure=adds, unpaired_clips=clips,
+                                   fee_rate=frate, adverse_ticks=adv,
+                                   risk_step_ticks=k.get("risk_step_ticks"),
+                                   incentive_ticks=k.get("incentive_ticks",
+                                                         0))
+                        if ev2.get("net_edge") is not None and \
+                                D(ev2["net_edge"]) >= -tol and \
+                                D(ev2["trade_edge"]) >= -tol and \
+                                D(ev2["fair"]) - rp - D(ev2["fee"]) > ZERO:
+                            kept = ev2
+                if kept is None:
+                    out["why_" + s] = ev["why"]
+                    continue
+                # a resting price that passes the full test on its own is
+                # simply kept; only a bid inside the tolerance is on the
+                # caller's clock
+                within = not kept["ok"]
+                kept.update(role=role, kept=within, missed=ev["why"])
+                out["edge"][s] = kept
+                px = rp
+                why = "kept_within_tolerance" if within \
+                    else "resting_price_passes"
         out[s] = {"px": px, "qty": qty, "role": role, "why": why}
+        if why == "kept_within_tolerance":
+            out[s]["kept"] = True
     # SIMULTANEOUS QUOTES (owner 2026-11-21): when neither side is a
     # completion, both resting bids can fill together, so their pair --
     # fees included -- must also fit PAIR_CAP. Step the dearer side down a

@@ -459,3 +459,138 @@ def test_candidates_are_followed_then_priced_then_selected(eng, monkeypatch):
         e._rank_cache[slug] = (t - M.RANK_NO_FAIR_TTL_S - 1, o)
     got = [r[2] for r in e.rank_net(scored)]
     assert got and set(got) <= {"aec-a", "aec-b", "aec-c"}
+
+
+# ------------------------------------------------- hysteresis for a resting bid
+def _q(bid, ask, fair, **c):
+    return R.quotes(yes_bid=bid, yes_ask=ask, tick=D("0.01"),
+                    pos={"YES": 0, "NO": 0}, cost={"YES": 0, "NO": 0},
+                    last_fill_t={}, now=1000.0, min_qty=D("1"),
+                    c={"edge_gate": True, "fair_yes": D(str(fair)), **c})
+
+
+def test_a_new_bid_always_needs_the_full_test():
+    # fair 0.475, YES bid would rest at 0.47: edge 0.005 - 0.01 < 0
+    out = _q("0.48", "0.49", "0.475", keep_tol_usd=D("0.005"))
+    assert out["YES"] is None and out["why_YES"] == "edge_negative"
+
+
+def test_a_resting_bid_is_kept_within_the_tolerance_and_not_beyond():
+    kw = dict(keep_px={"YES": D("0.47")}, keep_tol_usd=D("0.005"))
+    out = _q("0.48", "0.49", "0.475", **kw)       # misses by half a cent
+    assert out["YES"]["px"] == D("0.47") and out["YES"]["kept"] is True
+    assert out["edge"]["YES"]["kept"] and \
+        out["edge"]["YES"]["missed"] == "edge_negative"
+    out = _q("0.48", "0.49", "0.474", **kw)       # misses by more
+    assert out["YES"] is None and out["why_YES"] == "edge_negative"
+
+
+def test_a_bid_that_is_not_worth_more_than_it_costs_is_never_kept():
+    out = _q("0.48", "0.49", "0.47", keep_px={"YES": D("0.47")},
+             keep_tol_usd=D("0.05"))              # fair == price: no value
+    assert out["YES"] is None
+
+
+def test_no_fair_value_now_means_no_bid_is_kept():
+    out = R.quotes(yes_bid="0.48", yes_ask="0.49", tick=D("0.01"),
+                   pos={"YES": 0, "NO": 0}, cost={"YES": 0, "NO": 0},
+                   last_fill_t={}, now=1000.0, min_qty=D("1"),
+                   c={"edge_gate": True, "fair_yes": None,
+                      "keep_px": {"YES": D("0.47")},
+                      "keep_tol_usd": D("0.005")})
+    assert out["YES"] is None and out["why_YES"] == "no_fair"
+
+
+def test_tolerance_off_by_default_pulls_at_once():
+    out = _q("0.48", "0.49", "0.475", keep_px={"YES": D("0.47")})
+    assert out["YES"] is None
+
+
+@pytest.mark.rn1_edge_gate
+def test_engine_keeps_a_resting_bid_through_a_half_cent_wobble(
+        eng, monkeypatch, capsys):
+    e, v = eng
+    monkeypatch.setattr(M, "RN1_KEEP_TOL_USD", D("0.005"))
+    mk = e.b.m(SLUG)
+    e.step_market(SLUG)                      # fair 0.49: YES 0.47, NO 0.49
+    before = {k for k, o in v.orders.items() if o["open"]}
+    assert len(before) == 2
+    e.guard.mid = 0.475                      # YES now misses by half a cent
+    e.step_market(SLUG)
+    assert {k for k, o in v.orders.items() if o["open"]} == before
+    assert "YES" in mk["keep_since"]
+    e.guard.mid = 0.49                       # back: the clock is cleared
+    e.step_market(SLUG)
+    assert "YES" not in mk["keep_since"]
+    assert {k for k, o in v.orders.items() if o["open"]} == before
+
+
+@pytest.mark.rn1_edge_gate
+def test_engine_pulls_a_kept_bid_when_the_miss_lasts_or_grows(
+        eng, monkeypatch):
+    e, v = eng
+    monkeypatch.setattr(M, "RN1_KEEP_TOL_USD", D("0.005"))
+    mk = e.b.m(SLUG)
+    e.step_market(SLUG)
+    e.guard.mid = 0.475
+    e.step_market(SLUG)
+    assert ("YES", "0.47", "4") in resting(v)
+    mk["keep_since"]["YES"] = time.time() - M.RN1_KEEP_MAX_S - 1   # too long
+    e.step_market(SLUG)
+    assert ("YES", "0.47", "4") not in resting(v)
+    # and a miss beyond the tolerance pulls at once
+    e.guard.mid = 0.49
+    mk["keep_since"].clear()
+    e.step_market(SLUG)
+    assert ("YES", "0.47", "4") in resting(v)
+    e.guard.mid = 0.47
+    e.step_market(SLUG)
+    assert ("YES", "0.47", "4") not in resting(v)
+
+
+@pytest.mark.rn1_edge_gate
+def test_nothing_is_kept_through_a_block_or_a_stale_fair_value(
+        eng, monkeypatch):
+    e, v = eng
+    monkeypatch.setattr(M, "RN1_KEEP_TOL_USD", D("0.005"))
+    mk = e.b.m(SLUG)
+    e.step_market(SLUG)
+    e.guard.mid = None                       # the fair value is gone
+    e.step_market(SLUG)
+    assert resting(v) == []
+    e.guard.mid = 0.49
+    e.step_market(SLUG)
+    assert len(resting(v)) == 2
+    e.guard.mid = 0.475
+    mk["vol_pause_until"] = time.time() + 60  # a pause beats the tolerance
+    monkeypatch.setattr(M, "VOL_PAUSE_USD", D("0.03"))
+    e.step_market(SLUG)
+    assert resting(v) == []
+
+
+def test_tolerance_off_changes_nothing_even_for_a_lower_resting_price():
+    # resting a tick lower, where the full test would pass: with the rule
+    # off the decision is what it always was (the bid is pulled)
+    out = _q("0.48", "0.49", "0.475", keep_px={"YES": D("0.46")})
+    assert out["YES"] is None and out["why_YES"] == "edge_negative"
+
+
+def test_a_resting_price_that_passes_on_its_own_is_kept_off_the_clock():
+    out = _q("0.48", "0.49", "0.475", keep_px={"YES": D("0.46")},
+             keep_tol_usd=D("0.005"))
+    assert out["YES"]["px"] == D("0.46") and "kept" not in out["YES"]
+    assert out["YES"]["why"] == "resting_price_passes"
+
+
+def test_the_tolerance_applies_to_the_net_after_the_inventory_charge():
+    # 4 YES unpaired at 0.40 (two clips): adding costs a 2c risk charge.
+    # fair 0.48, resting add at 0.47: trade edge 0, net -0.02 -> not kept
+    out = R.quotes(yes_bid="0.48", yes_ask="0.49", tick=D("0.01"),
+                   pos={"YES": 4, "NO": 0}, cost={"YES": "1.60", "NO": 0},
+                   last_fill_t={}, now=1000.0, min_qty=D("1"),
+                   c={"edge_gate": True, "fair_yes": D("0.48"), "qty": 2,
+                      "extend_max_up": D("0.20"),
+                      "keep_px": {"YES": D("0.47")},
+                      "keep_tol_usd": D("0.005")})
+    assert out["edge"]["YES"]["why"] == "edge_below_risk"
+    assert out["YES"] is None
