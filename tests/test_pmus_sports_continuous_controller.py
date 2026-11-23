@@ -732,3 +732,67 @@ def test_selection_considers_only_pinned_markets(eng, monkeypatch):
         e.b.d["markets"][s]["done"] = True
     e.select(v.account())
     assert list(e.active()) == []
+
+
+# ------------------------- a pinned market that is not selected says why
+def _pin_reasons(capsys):
+    rows = logged(capsys, "PIN_NOT_CANDIDATE")
+    return rows[-1]["reasons"] if rows else None
+
+
+def _select_pinned(eng, monkeypatch, slug="aec-owner"):
+    e, v = eng
+    e.guard = None
+    monkeypatch.setattr(R, "EDGE_GATE", False)
+    monkeypatch.setattr(M, "SLATE", "live")
+    monkeypatch.setenv("PMUS_RN1_PIN", slug + ":YES")
+    return e, v
+
+
+def test_a_pinned_market_outside_the_band_says_so(eng, monkeypatch, capsys):
+    e, v = _select_pinned(eng, monkeypatch)
+    monkeypatch.setattr(M, "BAND_LO", D("0.55"))      # aec-owner bids 0.50
+    e.select(v.account())
+    assert list(e.active()) == []
+    why = _pin_reasons(capsys)
+    assert set(why) == {"aec-owner"}
+    assert why["aec-owner"].startswith("bid_outside_band:0.5")
+    assert why["aec-owner"].endswith("not in 0.55..0.75")
+    e.select(v.account())                             # logged once
+    assert _pin_reasons(capsys) is None
+
+
+def test_a_pinned_market_missing_from_the_slate_says_so(eng, monkeypatch,
+                                                        capsys):
+    e, v = _select_pinned(eng, monkeypatch, slug="aec-nowhere")
+    e.select(v.account())
+    assert _pin_reasons(capsys) == {"aec-nowhere": "not_in_slate:live"}
+
+
+def test_a_pinned_market_in_an_unpermitted_competition_says_so(
+        eng, monkeypatch, capsys):
+    e, v = _select_pinned(eng, monkeypatch)
+    monkeypatch.setattr(M, "OPEN_EV_GATE", True)
+    monkeypatch.setattr(M, "OPEN_GATE_ALLOW_SPORTS", frozenset({"nfl"}))
+    monkeypatch.setattr(e, "open_gate", lambda slug: {"allow": False})
+    e.select(v.account())
+    assert _pin_reasons(capsys) == {"aec-owner": "competition_not_permitted"}
+
+
+def test_a_pinned_market_that_is_selected_logs_no_reason(eng, monkeypatch,
+                                                        capsys):
+    e, v = _select_pinned(eng, monkeypatch)
+    e.select(v.account())
+    assert list(e.active()) == ["aec-owner"]
+    assert _pin_reasons(capsys) is None
+
+
+def test_without_a_pin_no_reason_is_logged(eng, monkeypatch, capsys):
+    e, v = eng
+    e.guard = None
+    monkeypatch.setattr(R, "EDGE_GATE", False)
+    monkeypatch.setattr(M, "SLATE", "live")
+    monkeypatch.delenv("PMUS_RN1_PIN", raising=False)
+    monkeypatch.setattr(M, "BAND_LO", D("0.99"))
+    e.select(v.account())
+    assert _pin_reasons(capsys) is None

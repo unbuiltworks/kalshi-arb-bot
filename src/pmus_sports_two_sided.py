@@ -4998,25 +4998,55 @@ class Engine:
             self._game_start.update({t["slug"]: t["game_start"]
                                      for t in targets if "game_start" in t})
         scored = []
+        # LIVE 2026-11-23 14:30Z: a pinned market was never selected and the
+        # bot logged no reason. For a PINNED market every way of not becoming
+        # a candidate is now named (logged when it changes).
+        _pin_why: Dict[str, str] = {}
+        _pinned = rn1_pin() if RN1.ON else None
+        _seen = set()
         for tg in targets:
             slug = tg["slug"]
+            _seen.add(slug)
             if slug in self.b.d["markets"]:
+                if _pinned and slug in _pinned and \
+                        self.b.d["markets"][slug].get("done"):
+                    _pin_why[slug] = "already_traded_and_released"
                 continue
             meta = tg.get("market_meta") or {}
             b = self.v.gw._qnum(meta.get("bestBidQuote"))
             a = self.v.gw._qnum(meta.get("bestAskQuote"))
             if b is None or a is None:
+                _pin_why[slug] = "no_two_sided_quote_in_listing"
                 continue
-            if excluded(slug) or late_for(
-                    slug, (getattr(self.v, "states", {}) or {}).get(slug)):
+            _late = late_for(
+                slug, (getattr(self.v, "states", {}) or {}).get(slug))
+            if excluded(slug) or _late:
+                _pin_why[slug] = "excluded" if excluded(slug) \
+                    else "late:%s" % _late
                 continue
             b, a = D(str(b)), D(str(a))
             if not (BAND_LO <= b <= BAND_HI):
+                _pin_why[slug] = "bid_outside_band:%s not in %s..%s" % (
+                    b, BAND_LO, BAND_HI)
                 continue
             if OPEN_EV_GATE and OPEN_GATE_ALLOW_SPORTS and \
                     not self.open_gate(slug)["allow"]:
+                _pin_why[slug] = "competition_not_permitted"
                 continue         # would be gated at open: don't take a slot
             scored.append((a - b, abs(b - D("0.5")), slug))
+        _pin_why = {k: v for k, v in _pin_why.items()
+                    if _pinned and k in _pinned}
+        if _pinned:
+            for slug in _pinned:
+                if slug not in _seen and slug not in self.b.d["markets"]:
+                    _pin_why[slug] = "not_in_slate:%s" % slate()
+            key = json.dumps(_pin_why, sort_keys=True)
+            if key != getattr(self, "_pin_why_logged", None):
+                self._pin_why_logged = key
+                if _pin_why:
+                    log("PIN_NOT_CANDIDATE", reasons=_pin_why,
+                        targets=len(targets),
+                        label="why a pinned market is not being selected")
         if RN1.ON and rn1_pin() is not None:
             _pin = rn1_pin()
             scored = [r for r in scored if r[2] in _pin]
@@ -5026,6 +5056,14 @@ class Engine:
             if self.guard.require:
                 # open only where intl can price the market (resolved in the
                 # guard's background thread; unresolved -> next round)
+                if _pinned:
+                    _no = sorted(r[2] for r in scored if r[2] in _pinned
+                                 and not self.guard.token(r[2]))
+                    if _no and _no != getattr(self, "_pin_noguard", None):
+                        log("PIN_NOT_CANDIDATE",
+                            reasons={x: "no_international_price_yet"
+                                     for x in _no})
+                    self._pin_noguard = _no
                 scored = [r for r in scored if self.guard.token(r[2])]
         if RN1.ON and RN1_REWARD_RANK and scored:
             rn1_rw: Dict[str, Any] = {}
@@ -5694,7 +5732,15 @@ class Engine:
                         "at_risk_budget_usd": AT_RISK_BUDGET_USD,
                         "at_risk_usd": self.own_exposure_usd(),
                         "rank_net": RN1_RANK_NET,
-                        "pin": rn1_pin()},
+                        "pin": rn1_pin(),
+                        "select": {"band_lo": BAND_LO, "band_hi": BAND_HI,
+                                   "max_spread_ticks": MAX_SPREAD_TICKS,
+                                   "max_markets": MAX_MARKETS,
+                                   "max_tracked": MAX_TRACKED,
+                                   "exclude": os.getenv(
+                                       "PMUS_TWO_SIDED_EXCLUDE", "cr-"),
+                                   "allow_sports": sorted(
+                                       OPEN_GATE_ALLOW_SPORTS)}},
             pregame={"on": PREGAME, "min_lead_s": PREGAME_MIN_LEAD_S,
                      "max_lead_s": PREGAME_MAX_LEAD_S,
                      "cutoff_s": PREGAME_CUTOFF_S}, **({"ws": True} if self.ws is not None else {}), caps={"per_market": PER_MARKET_CAP, "total": TOTAL_CAP,
