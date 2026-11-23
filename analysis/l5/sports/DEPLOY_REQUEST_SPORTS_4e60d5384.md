@@ -96,3 +96,35 @@ Each step is a redeploy and took 6 to 15 minutes on 23 Nov.
 
 Deploy `4e60d5384` locked, with `PMUS_TWO_SIDED_AUDIT_MAX_AGE_S=4500` and
 `PMUS_TWO_SIDED_SETTLE_CHECK_S=120`. Nothing else.
+
+## Deployed and verified — 23 Nov, 20:45 UTC (owner: "Deploy locked")
+
+| Check | Result |
+|---|---|
+| Running commit | `4e60d5384a5eeab383f1bcee2f25473b92cf81a3`, deployment `d7dcd4bf`, container started 20:37:25 (source switched about 20:28; the platform created the deployment at 20:36:31) |
+| Lock | new exposure locked, completions locked, reason "locked" |
+| Orders | none since 18:56:56; watchdog open orders 0 on every sweep since 18:59:36; ledger reconcile clean, 0 open orders at the venue |
+| Before the first audit | heartbeat showed no completed audit and new exposure blocked by the stale-audit rule, as designed |
+| First audit | completed 20:41:06, 3 min 41 s after start: reward read ok, position reconciliation clean (no mismatch, walk complete), account audit ok |
+| Reserved request class | 87 safety requests sent, 0 deferred |
+| Heartbeat | audit age reported, limit 4500 s, not blocking; four capital states present (all campaign capital shown as settled, $6.67) |
+| Errors | none; no safety latch |
+
+Campaign of 23 Nov, from this audit (venue rows): 9 fills, 14 contracts,
+7 pairs, realized net +$0.33, no fees, no rebates, nothing unconfirmed,
+cash change fully explained (unexplained $0.0000). Ledger has booked
++$0.29 (Strombachs–Perez +0.10, Debru–Kopp +0.19); Karpol–Benwei (+0.04)
+is not yet booked there.
+
+Rewards: no row dated 23 Nov yet. All-time on the account: paid $22.79,
+pending $1.34, skipped $3.96.
+
+Open observations, none a risk while locked:
+- The bot tracks five markets (soccer, NHL, ATP) carried over from the
+  campaign although the allowed list is back to NFL and NBA. Every one is
+  blocked by the lock. Whether the allowed list alone would stop a bid on
+  them has to be confirmed before any arming.
+- No `SETTLEMENT_RECORDED` line: the three markets' settlement prices were
+  already recorded by the previous build's audits. The loop-side check is
+  therefore not yet seen working in production.
+- The reserved class has not yet been seen under quote traffic.
