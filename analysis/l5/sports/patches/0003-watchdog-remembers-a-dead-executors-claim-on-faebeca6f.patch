@@ -1,0 +1,67 @@
+diff --git a/src/l5_watchdog.py b/src/l5_watchdog.py
+index 055edbf..d713bb4 100644
+--- a/src/l5_watchdog.py
++++ b/src/l5_watchdog.py
+@@ -490,6 +490,43 @@ class OwnershipOracle:
+     #: the two services keep their own clocks; a small negative age is skew,
+     #: not a forged future timestamp. The sweep routinely reports -0.011s.
+     CLOCK_SKEW_S = 5.0
++    #: THE PROCESS-DEATH CASE (owner 2026-11-23: "prove process-death
++    #: cancellation"). An executor whose whole process is gone serves no
++    #: registry, so by the rule above nothing it left resting is
++    #: cancellable until it comes back. L5_WATCHDOG_REMEMBER_CLAIMS_S > 0
++    #: bounds that: when the registry cannot be REACHED AT ALL, the ids of
++    #: its last good, fresh claim are still treated as claimed for that
++    #: many seconds after that claim was read. An order id never changes
++    #: owner, and requirement (2) -- the venue's own row agreeing on the
++    #: market and reporting AUTOMATIC -- is checked exactly as before, so
++    #: this cannot reach a manual order or another desk's. It applies ONLY
++    #: to an unreachable registry: one that answers but is stale, unreadable
++    #: or says otherwise is alive, and its own statement stands.
++    #: Default 0 = off (failing to read is failing to own, as before).
++    REMEMBER_CLAIMS_S = 0.0
++
++    @staticmethod
++    def _remember_s() -> float:
++        import os
++        try:
++            return max(0.0, float(os.environ.get(
++                "L5_WATCHDOG_REMEMBER_CLAIMS_S", "") or 0.0))
++        except ValueError:
++            return 0.0
++
++    def _remembered(self, why: str) -> Dict[str, Dict[str, Any]]:
++        """The last good claim, while it is still inside the bound."""
++        keep = self.REMEMBER_CLAIMS_S or self._remember_s()
++        last = getattr(self, "_last_good", None)
++        if keep <= 0 or last is None or not last[1]:
++            return {}
++        import time as _time
++        age = _time.monotonic() - last[0]
++        if age > keep:
++            return {}
++        self.last_refusal = ("%s; USING_LAST_GOOD_CLAIM:%d ids read %.1fs ago"
++                             % (why, len(last[1]), age))
++        return {k: dict(v) for k, v in last[1].items()}
+ 
+     def __init__(self, url: str, *, timeout_s: float = DEFAULT_TIMEOUT_S,
+                  max_claim_age_s: Optional[float] = None,
+@@ -548,7 +585,7 @@ class OwnershipOracle:
+             # A CRASHED executor lands here: its registry server dies with
+             # the process, so the read fails and ownership is unknown.
+             self.last_refusal = "REGISTRY_UNREACHABLE:%s" % type(exc).__name__
+-            return {}
++            return self._remembered(self.last_refusal)
+         if not isinstance(doc, dict) or doc.get("readable") is not True:
+             self.last_refusal = "REGISTRY_NOT_READABLE"
+             return {}
+@@ -570,6 +607,9 @@ class OwnershipOracle:
+             vid = str(row.get("venue_order_id") or "").strip()
+             if vid:
+                 out[vid] = dict(row)
++        import time as _time
++        self._last_good = (_time.monotonic(), {k: dict(v)
++                                               for k, v in out.items()})
+         return out
+ 
+ 

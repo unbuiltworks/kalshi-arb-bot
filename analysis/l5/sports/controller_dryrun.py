@@ -3,11 +3,18 @@ against live public data, across pre-game, kickoff and in-game.
 Real: the venue's event lists, books and market specs, the international
 resolver and books. Fake: the account (empty) and order placement (recorded,
 never sent). No Transport is constructed, so nothing here can reach the
-venue's order API. Fills never happen, so this shows decisions, not results.
+venue's order API.
+FILL MODEL (4th argument "through"; default none): a recorded bid counts as
+filled in full, at its own price, as soon as the venue's best price on its
+side has moved THROUGH it (best bid below a YES bid; best offer above the
+level a NO bid implies). That is the adverse case only -- a bid is never
+"filled" by ordinary trading at its level -- so the results are a lower
+bound on fills and a worst case on their quality. Nothing is realized.
 usage (from a checkout of the sports code):
-  controller_dryrun.py <out.jsonl> <until_epoch> <allow_sports_csv>"""
+  controller_dryrun.py <out.jsonl> <until_epoch> <allow_sports_csv> [through]"""
 import json, os, sys, tempfile, time, urllib.request, pathlib
 OUT, UNTIL, ALLOW = sys.argv[1], float(sys.argv[2]), sys.argv[3]
+FILLS = sys.argv[4] if len(sys.argv) > 4 else "none"
 ENV = {  # "Option A" of CONTINUOUS_CONTROLLER_20261122.md -- a proposal only
     "PMUS_TWO_SIDED_OPEN_GATE_ALLOW_SPORTS": ALLOW, "PMUS_TWO_SIDED_ENABLED": "YES",
     "PMUS_TWO_SIDED_RN1": "1", "PMUS_TWO_SIDED_MAX_MARKETS": "5",
@@ -48,7 +55,28 @@ class DryVenue(M.Venue):
         emit("DRY_ORDER", slug=slug, side=side, px=px, qty=qty, stage=stage, post_only=post_only,
              label="recorded only; never sent")
         return oid
-    def status(self, oid): return {"qty": D(0), "px": None, "open": self.orders[oid]["open"], "state": ""}
+    _bbo_at = {}
+    def _bbo_cached(self, slug):
+        hit = self._bbo_at.get(slug)
+        if hit and time.time() - hit[0] < 2.0: return hit[1]
+        try: b = self.bbo(slug)
+        except Exception: b = None
+        self._bbo_at[slug] = (time.time(), b)
+        return b
+    def status(self, oid):
+        o = self.orders[oid]
+        if o.get("filled"):
+            return {"qty": D(str(o["qty"])), "px": D(str(o["px"])), "open": False, "state": "FILLED", "t": o["filled"]}
+        if FILLS == "through" and o["open"]:
+            b = self._bbo_cached(o["slug"])
+            if b and b.get("bid") is not None and b.get("ask") is not None:
+                side_bid = D(str(b["bid"])) if o["side"] == "YES" else D("1") - D(str(b["ask"]))
+                if side_bid < D(str(o["px"])):
+                    o["filled"], o["open"] = time.time(), False
+                    emit("DRY_FILL", slug=o["slug"], side=o["side"], px=o["px"], qty=o["qty"],
+                         side_bid_now=side_bid, label="modelled: the price moved through the bid")
+                    return {"qty": D(str(o["qty"])), "px": D(str(o["px"])), "open": False, "state": "FILLED", "t": o["filled"]}
+        return {"qty": D(0), "px": None, "open": o["open"], "state": ""}
     def cancel(self, oid):
         if self.orders[oid]["open"]:
             o = self.orders[oid]; emit("DRY_CANCEL", slug=o["slug"], side=o["side"], px=o["px"])
@@ -57,7 +85,7 @@ class DryVenue(M.Venue):
         self.cancel(oid); return self.status(oid)
 KEEP = {"SELECTED", "RN1_QUOTE", "KICKOFF_HOLD", "KICKOFF_RESUME", "VOL_PAUSE", "RN1_NET_RANK", "RN1_REWARD_RANK",
         "place_refused_at_risk_budget", "released_flat_market", "market_closed", "late_cutoff", "discovery_error",
-        "market_error", "DRY_ORDER", "DRY_CANCEL"}
+        "market_error", "DRY_ORDER", "DRY_CANCEL", "DRY_FILL", "FILL", "FILL_MARKOUT", "PAIR_LOCKED", "SUMMARY"}
 fh = open(OUT, "a")
 def emit(kind, **kw):
     if kind in KEEP or kind.startswith("place_refused"):
@@ -84,8 +112,16 @@ def feed():
         except Exception as e:
             emit("market_error", slug=slug, err="intl:" + type(e).__name__)
 last_sel = 0.0
+last_sum = time.time()
+def summary():
+    emit("SUMMARY", keep_tol_usd=str(M.RN1_KEEP_TOL_USD), fills_model=FILLS, phases=eng.phase_summary(),
+         markout=eng.markout_summary(),
+         positions={s: {"pos": m["pos"], "cost": m["cost"]} for s, m in eng.b.d["markets"].items()
+                    if D(str(m["pos"]["YES"])) or D(str(m["pos"]["NO"]))})
 while time.time() < UNTIL:
     t0 = time.time()
+    if t0 - last_sum > 600:
+        last_sum = t0; summary()
     try:
         if t0 - last_sel >= 20:
             last_sel = t0
@@ -106,3 +142,4 @@ while time.time() < UNTIL:
     except Exception as e:
         emit("market_error", slug=None, err="loop:" + type(e).__name__ + ":" + str(e)[:120])
     time.sleep(max(1.0, 5.0 - (time.time() - t0)))
+summary()
