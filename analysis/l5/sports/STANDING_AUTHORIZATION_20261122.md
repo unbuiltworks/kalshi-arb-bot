@@ -318,3 +318,26 @@ Asked and answered directly by the owner at about 15:19 UTC:
 
 This authorises one drill on those terms. It does not authorise a halt
 reset, any other order, or arming.
+
+## 14. Watchdog fix and third death drill, 23 Nov 2026
+
+The second drill (16:30 to 16:33 UTC) failed: the watchdog did not cancel
+the resting bid. No fill, no loss, no halt.
+
+Asked and answered directly by the owner at about 16:44 UTC:
+
+- **Watchdog fix.** Asked: deploy `l5-halt-watchdog` from
+  `release/l5-halt-watchdog-8c9bee06f` at
+  `8c9bee06fe0faf7d0ed22aec2453acc1a2cad6be`. Answer: **"Deploy the fix"**.
+- **Third drill.** Asked: same terms as the second (one maker bid of 1
+  contract, YES only, at 49c or below on `atc-sea-mon-fio-2026-11-23-fio`;
+  3-minute window at 17:30 UTC, or 18:30 UTC if 17:30 cannot be met; exit
+  with no cleanup 60 s in, down 3 minutes; maximum settlement loss $0.49;
+  the shared halt latches if the watchdog acts and stays latched until a
+  separately approved reset; settings restored after), only after the fix
+  is verified. Answer: **"Authorize the third drill"**.
+
+Earlier owner messages of 16:00 to 16:10 UTC ("we need to be aggressive",
+"attack current live sports as well as pre game", "can we loosen the
+filters? ... full tilt") are direction. They authorise no order, no
+permission change and no limit change.
