@@ -341,3 +341,30 @@ Earlier owner messages of 16:00 to 16:10 UTC ("we need to be aggressive",
 "attack current live sports as well as pre game", "can we loosen the
 filters? ... full tilt") are direction. They authorise no order, no
 permission change and no limit change.
+
+## 15. Live campaign of 23 Nov 2026, 17:15 to 23:15 UTC
+
+Owner, about 16:43 UTC: "can we work on getting the strategy working first
+before worrying about this" (the death drill).
+
+Asked and answered directly by the owner at about 16:44 UTC:
+
+- **Campaign.** Asked: tonight's live sports campaign on build `62dca41cd`;
+  six-hour window from the first quarter-hour at least 20 minutes after
+  approval, automatic relock at the end; pre-game and in-play, maker-only, 2
+  contracts a side, taker off, pair cap 0.97, band 30c to 70c,
+  international price required; caps unchanged ($8/$3 per market, $16
+  campaign spend, $6 campaign unpaired, $4 loss stop, $5 daily halt);
+  maximum settlement loss $6, stated as the owner's explicit $6 for this one
+  window above the $1.33 left under the $3 limit. Answer: **"Wide slate, 6
+  markets"**: NBA, NFL, NHL, ATP, Serie A, Premier League, La Liga; up to 6
+  markets at once by the bot's ranking.
+- **Third death drill.** Answer: **"Defer the drill"**. The authorization
+  given at 16:44 lapses; it is not run today.
+
+Asked at about 16:50 UTC whether to add live markets with no international
+price. Answer: **"Priced markets only (Recommended)"**.
+
+Window by those terms: 17:15:00 to 23:15:00 UTC. Not authorised: any size
+or cap increase, taker orders, unpriced markets, cricket, table tennis,
+Dota 2, a second window, a halt reset.
