@@ -2734,3 +2734,50 @@ def test_the_earlier_assumption_is_still_selectable(eng, risk_on,
     e.select(v.account())
     e.step_market("aec-x")
     assert e.account_risk()["drawdown"]["resting_counted_separately"] is False
+
+
+# ---- the account-limit verdict is visible while locked (owner 2026-11-23)
+def test_account_limit_status_is_reported_while_locked(eng, risk_on,
+                                                       monkeypatch):
+    e, v = eng
+    monkeypatch.setenv(M.SUBMISSION_LOCK_ENV, "1")
+    risk_on["doc"] = _with_drawdown("1.3444")
+    s = e.account_limit_status()
+    assert s["mode"] == "enforce" and s["ok"] is True
+    assert s["would_block_new"] is None
+    assert s["ledger_figure_usd"] == "1.3444" and s["limit_usd"] == "3.00"
+    assert s["capacity_usd"] == "1.6556"
+    assert s["resting_counted_separately"] is True
+    e.select(v.account())
+    e.step_market("aec-x")
+    assert _opened(v) == []                      # still locked: no order
+
+
+def test_account_limit_status_shows_a_refusal(eng, risk_on):
+    e, v = eng
+    risk_on["doc"] = _with_drawdown("3.00")
+    s = e.account_limit_status()
+    assert s["ok"] is False
+    assert s["would_block_new"] == "ACCOUNT_DRAWDOWN_LIMIT"
+
+
+def test_a_ledger_that_stops_publishing_the_figure_refuses_when_required(
+        eng, risk_on, monkeypatch):
+    """Fail closed: with L5_ACCOUNT_DRAWDOWN_REQUIRED=1 a document without
+    the drawdown block blocks new exposure. Without it, it would pass."""
+    from src import l5_account_risk as AR
+    e, v = eng
+    risk_on["doc"] = _risk_doc()                 # no portfolio_drawdown
+    assert e.account_limit_status()["would_block_new"] is None
+    monkeypatch.setenv(AR.DRAWDOWN_REQUIRED_ENV, "1")
+    e._acct_risk = None
+    s = e.account_limit_status()
+    assert s["would_block_new"] == "ACCOUNT_DRAWDOWN_NOT_PUBLISHED"
+    e.select(v.account())
+    e.step_market("aec-x")
+    assert _opened(v) == []
+
+
+def test_account_limit_status_off_when_the_check_is_off(eng):
+    e, v = eng
+    assert e.account_limit_status() == {"mode": "off"}

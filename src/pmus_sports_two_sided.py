@@ -3739,6 +3739,33 @@ class Engine:
             max_age_s=ACCOUNT_RISK_SNAPSHOT_MAX_S,
             label="the trading loop no longer waits on the account ledger")
 
+    def account_limit_status(self) -> Dict[str, Any]:
+        """The account-limit verdict for the heartbeat, computed whether or
+        not the bot is locked (owner 2026-11-23: the verdict must be
+        checkable in a non-trading preflight). `would_block_new` is what a
+        new opening would be told right now."""
+        if not (ACCOUNT_RISK_ON or ACCOUNT_RISK_OBSERVE):
+            return {"mode": "off"}
+        try:
+            v = self.account_risk()
+            dd = v.get("drawdown") if isinstance(v.get("drawdown"),
+                                                 Mapping) else {}
+            return {"mode": "enforce" if ACCOUNT_RISK_ON else "observe",
+                    "ok": bool(v.get("ok")), "reason": v.get("reason"),
+                    "would_block_new": self.account_risk_blocks(),
+                    "ledger_figure_usd": dd.get("committed_and_realized_usd"),
+                    "limit_usd": dd.get("max_drawdown_usd"),
+                    "capacity_usd": dd.get("capacity_usd"),
+                    "own_resting_worst_usd": dd.get("own_resting_orders_usd"),
+                    "resting_counted_separately":
+                        dd.get("resting_counted_separately"),
+                    "drawdown_state": dd.get("state"),
+                    "snapshot_age_s": v.get("age_s")}
+        except Exception as exc:                         # noqa: BLE001
+            return {"mode": "enforce" if ACCOUNT_RISK_ON else "observe",
+                    "ok": False, "reason": "STATUS_ERROR:%s"
+                    % type(exc).__name__}
+
     def own_resting_worst(self, extra: Optional[tuple] = None) -> D:
         """The most this bot's RESTING bids can add to its unpaired cost,
         over every way they could fill, summed over markets. A bid on each
@@ -5840,6 +5867,7 @@ class Engine:
                 extra = dict(extra, markout=self.markout_summary(),
                              phases=self.phase_summary(),
                              capital=self.capital_breakdown(),
+                             account_limit=self.account_limit_status(),
                              audit={"last_complete_age_s": self.audit_age_s(),
                                     "max_age_s": AUDIT_MAX_AGE_S,
                                     "stale_blocks_new": self.audit_stale(),
