@@ -475,3 +475,41 @@ requests, none refused; position reconciliation clean; campaign of 23 Nov
 Not verifiable while locked: the account-limit verdict itself. The bot
 evaluates it only for a market that has passed the lock, so no
 `ACCOUNT_RISK` line exists yet. First seen when a window opens.
+
+## 19. Preflight build and the 24 Nov ATP window — asked 22:30 UTC, 23 Nov
+
+Owner's proposed terms (their table): Polymarket US; RN1 + Bonereaper
+hybrid; ATP only; up to 3 markets; 1 contract per order; $3.00 account
+limit enforced; $4.00 loss stop unchanged; maker-only, no taker; 60
+minutes, supervised; start after a fresh audit and preflight; "Existing
+watchdog and campaign shutdown; no reliance on an unverified immediate
+halt". "Before arming, I want the account-risk verdict verified through a
+non-trading preflight if possible. If it can only be observed after
+unlocking, the first-minute check must fail closed". "No live arming is
+authorized by this recommendation."
+
+Two questions asked with exact terms.
+
+**1. Preflight build.** Deploy `e6e8b4e60`
+(`e6e8b4e60a2c5c9c4732d001035aaa718949f226`) locked and set
+`L5_ACCOUNT_DRAWDOWN_REQUIRED=1`. Answer: **"Deploy locked"**. Done at
+22:54 UTC (first attempt at about 22:35 did not run; production stayed on
+`19ee9fdd1` in between). Rollback: `19ee9fdd1`.
+
+**2. Window.** "If, and only if, the locked preflight passes (verdict
+readable, enforce mode, $3.00 limit, capacity about $1.66, zero orders,
+clean audit): arm one supervised window on build e6e8b4e60": Polymarket
+US; ATP only, strict scope; in-play markets only; up to 3 markets; 1
+contract per order; maker-only, taker off; $3.00 account limit enforced;
+$4 loss stop, $5 daily halt, $16/$6 campaign and $8/$3 per-market caps,
+0.97 pair cap, 10-contract depth, international price required; automatic
+relock at the end; settings restored to NBA/NFL, 2 markets, lock=1
+afterwards. Answer: **"03:10-04:10 UTC, 24 Nov"**.
+
+Arming plan: at about 02:55 UTC, after re-checking the preflight, set
+`PMUS_TWO_SIDED_SUBMISSION_LOCK=window:2026-11-24T03:10:00Z/2026-11-24T04:10:00Z`,
+`PMUS_TWO_SIDED_OPEN_GATE_ALLOW_SPORTS=atp`, `PMUS_TWO_SIDED_MAX_MARKETS=3`,
+`PMUS_TWO_SIDED_SLATE=live`, `PMUS_RN1_QTY=1`. Nothing else changes. If
+the preflight does not pass, or the service is not up and audited by
+03:08, the window is not opened. Not authorised: any other window, size,
+limit or competition; a halt reset; taker orders; the halt drill.
