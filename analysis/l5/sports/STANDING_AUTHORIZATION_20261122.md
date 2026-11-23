@@ -444,3 +444,22 @@ existing infrastructure"; the secret "generated and stored in Railway's
 protected environment configuration, not committed to GitHub or included
 in logs"; verify first "with the joint sports-bot/watchdog regression
 test"; the watchdog's own triggers must keep working without the endpoint.
+
+## 18. Account-limit and strict-scope release — 23 Nov, about 22:20 UTC
+
+Owner: "Deploy 19ee9fdd1 locked, after explicit deployment approval."
+"Keep the $3 account limit for the first validation." "I would not raise
+the limit to $5 merely to get four markets running." Next campaign as the
+owner described it: shorter, supervised, "one market at two contracts or
+up to three at one contract, depending on available risk capacity",
+in-play ATP tennis first, strict competition authorization. "no new
+deployment or live authorization has been given" by that message.
+
+Asked with the exact commit and settings. Answer: **"Deploy locked"**.
+
+Done at about 22:20 UTC: `PMUS_TWO_SIDED_SUBMISSION_LOCK=1`,
+`PMUS_TWO_SIDED_STRICT_SPORTS=1`, `PMUS_TWO_SIDED_ACCOUNT_RISK=1` set;
+source connected to `release/pmus-sports-rn1-19ee9fdd1`, commit
+`19ee9fdd13df1b6ad066b9b9619647977146144e`. The account limit itself is
+unchanged at $3.00. Not authorised: arming, any order, a halt reset, any
+limit change, the halt drill, a campaign window.
