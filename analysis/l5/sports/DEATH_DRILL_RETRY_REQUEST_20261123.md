@@ -74,3 +74,47 @@ above, `PMUS_RN1_QTY` 1 (back to 2), `PMUS_TWO_SIDED_SLATE` both (back to
 live), permitted competitions plus Serie A (back to NBA and NFL), the two
 unpaired caps 0.60 (back to 3 and 6), the 3-minute submission window (back
 to 1), the death-drill window (back to off).
+
+## Second attempt, 16:30 to 16:33 UTC — the watchdog FAILED
+
+Build `62dca41cd`, watchdog `ce26e2a9e` with both settings on. Terms as
+authorised: one contract, YES at 0.48, `atc-sea-mon-fio-2026-11-23-fio`.
+
+| Time (UTC) | Event |
+|---|---|
+| 16:30:02 | window opened |
+| 16:30:04 | first bid placed (YES 0.48 x1); pulled by the bot about 11 s later when the international price dropped out |
+| 16:30:52.6 | second bid placed (YES 0.48 x1) |
+| 16:31:03.4 | bot exited with no cleanup; the bid was resting |
+| 16:31:10 to 16:33:51 | nine watchdog sweeps: bot's registry unreachable, one open order seen every time, bot counted as gone from 16:31:51; nothing cancelled, no halt |
+| 16:34:01 | bot booted, locked |
+| 16:34:02.4 | bot cancelled the bid itself, 179 s after the exit |
+
+No fill. No money lost. No halt latched. Inventory reconciled at 16:37 with
+zero positions and cash unchanged. Settings restored at 16:36 and seen in
+the 16:37:46 boot: locked, size 2, caps $3 and $6, live slate, NBA and NFL.
+
+**Cause.** The watchdog reads each bot's list of its own orders once per
+20-second sweep. Its last read before the death was at 16:30:50.9, 1.7
+seconds before the resting bid was placed. What it remembered was the
+earlier bid, already gone. The resting bid was never in its record, so
+neither the gone-executor rule nor the age rule could select it as the
+bot's. In play, where orders are replaced about once a minute, this would
+happen often.
+
+**Fix (not deployed).** The watchdog re-reads every bot's order list each
+2 seconds between sweeps. The read is internal: no venue request, no
+cancel, no halt. Release candidate `release/l5-halt-watchdog-8c9bee06f`
+(`8c9bee06fe0faf7d0ed22aec2453acc1a2cad6be`, code `36238dd10`). The
+production sequence is now a test, with and without the refresh; the
+watchdog's test files pass (608). An order placed less than about two
+seconds before a death can still be unknown to the watchdog; the bot's own
+restart and the halt cover that, as before.
+
+**Third attempt, for authorization.** Same terms as the second: one maker
+bid of 1 contract, YES only, at 49c or below on
+`atc-sea-mon-fio-2026-11-23-fio`; maximum settlement loss $0.49; 3-minute
+window at 17:30 UTC, or 18:30 UTC if 17:30 cannot be met; exit with no
+cleanup 60 s in; down 3 minutes; the shared halt latches if the watchdog
+acts; settings restored after. Sports build `62dca41cd` (running);
+watchdog `8c9bee06f` deployed first.
