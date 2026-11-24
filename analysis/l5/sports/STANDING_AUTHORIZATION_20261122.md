@@ -1039,3 +1039,22 @@ Trading: 2 fills, 0 pairs. Axenef–Alarub NO 1 @ 0.45 (market now YES
 and now without completing bids (locked). Cash $319.5538 = 320.5138 −
 0.96. Nothing settled. Owner's provisional view at 21:57: capital
 enforcement passes; the double count is conservative, not dangerous.
+
+## 42. Strategic direction changed by the owner — 24 Nov, 23:35 UTC
+
+Owner, typed: "Strategic direction has changed. We want to actively trade
+live sports events without requiring international reference prices. Use
+the existing inventory-aware controller. Do not build another trading
+system." Asked for a venue-native configuration ("Removes international
+pricing as a mandatory entry requirement, subject to explicit release
+approval"), reconsideration of table tennis, esports and tennis "based on
+actual net economics rather than international pricing availability", a
+bounded $5 / $30 configuration, targeted regression tests and the exact
+authorization request. "Do not arm or deploy money-capable changes without
+explicit authorization." This supersedes, for a profile the owner
+approves, the earlier rulings that table-tennis and Dota 2 rewards were
+not sufficient to enable those markets and the 22 Nov requirement of an
+international fair value for every bid. "No cricket!" is not superseded.
+
+Prepared, not active: `VENUE_NATIVE_CONFIG_20261124.md` (settings only on
+build `766a965ba`). Nothing changed in production.
