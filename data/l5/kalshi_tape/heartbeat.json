@@ -1,7 +1,7 @@
 {
-  "captured_at": "2026-11-24T01:15:28.619098+00:00",
+  "captured_at": "2026-11-24T01:24:48.189794+00:00",
   "failures": [],
-  "markets_captured": 1,
+  "markets_captured": 2,
   "note": "Raw tape only. Public quote/trade evidence never implies hypothetical queue fill certainty.",
   "order_entry": false,
   "read_only": true,
@@ -11,5 +11,5 @@
     "KXETH15M"
   ],
   "status": "ok",
-  "trades_captured_with_6m_overlap": 500
+  "trades_captured_with_6m_overlap": 1000
 }
