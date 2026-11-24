@@ -985,3 +985,22 @@ Samher–Yanale NO 1 @ 0.61 settled at 0 (−$0.61); Juagom–Bengeo NO 1 @
 0.44 settled at 0 (−$0.44). **Trading result −$0.95.** Rewards for 24 Nov
 not posted. Reward rows unchanged (PAID 122 / $24.09). The hourly
 post-campaign check is switched off.
+
+## 40. One-hour validation authorized — 24 Nov, 21:05 UTC
+
+Owner, typed: "Authorized: one-hour validation, 21:30–22:30 UTC 24 Nov, on
+these terms. Continue the opening-fill versus completed-position economic
+analysis in parallel. If capital enforcement passes, immediately present
+the $5 account limit / $30 campaign spend authorization for review."
+
+Terms: build `766a965ba`; window 21:30:00–22:30:00 UTC, relocks itself; $3
+account limit (room $2.04 at 21:00); 1 contract; up to 4 markets; spend
+16 / unpaired 6; per-market 8 / 3; loss stop 4; daily halt 5; maker-only;
+pair cap 0.97; ATP, Serie A, Premier League, La Liga, NBA, NFL, NHL;
+pre-game and in-play; no strategy change during the test. Pass: account
+figure plus resting and reserved bids never reads above 3.00; no
+place-and-pull cycle; reservations released only on venue reconciliation;
+audit and reconcile clean. Disclosed: signed emergency stop unverified;
+manual stop is the plain lock; session supervision not guaranteed. The
+$5 / $30 stage is not authorized by this. Baseline: cash $320.5138.
+Window set at 21:05:47.
