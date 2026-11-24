@@ -195,3 +195,36 @@ Break-even needs roughly nine or more legs paired for each one left unpaired.
 
 Not re-derived: the fees (-4.36); fills after the log's last line in a market (none affects a
 residual: every market that ended later was fully paired).
+
+## 11. Opening fills against the pairing rule, 24 Nov 2026 21:10Z
+
+Files: `pairing_cost_20261124/` (`analyze.py`, `result.md`, `result.json`). Before fees and
+rewards; every market settled from the venue's public record.
+
+**Correction to section 10.** It said the legs that would have won are the ones that get
+paired. The data does not support that half. Paired legs were a fair mix: 47.2% of them went
+on to win in 14-18 Nov (they had been opened at 0.471 on average) and 50% in 22-24 Nov. What
+the data does support is the other half: legs whose side is losing do not get paired, and
+every unpaired leg lost (0 of 74.6 contracts, 0 of 6).
+
+| | 14-18 Nov (173 markets) | 22-24 Nov (11 markets) |
+|---|---|---|
+| Exposure-adding fills, held to settlement | -33.91 (988 contracts, -3.4c each, win 43.6% at 0.471) | -4.23 (30 contracts, -14.1c each, win 40% at 0.541) |
+| Actual: pairs + residuals | -4.46 - 36.25 = -40.71 | +1.28 - 3.73 = -2.45 |
+| Effect of completing (actual minus hold) | -6.80 (95% range -57 to +42) | +1.78 (95% range -3.7 to +8.1) |
+
+- **The loss is in the opening fills.** About -34 of the -40.7 is their adverse selection at
+  settlement. Even that is only about 1.2 standard errors from zero when markets, not
+  contracts, are treated as the independent draws.
+- **Completing cost roughly nothing.** Its effect is within noise in both periods and has
+  opposite signs. What it does is move the loss into the residuals and cut the spread of
+  results about threefold.
+- A completion pays only if the held leg loses more often than the completion's price.
+  14-18 Nov: needed 53.6%, observed 52.8%. 22-24 Nov: needed 42.6%, observed 50%.
+- Given that every unpaired leg loses, the current controller's pairs (5.3c margin) need
+  about 92% of opening contracts to pair; 80% did in 22-24 Nov.
+- No split (pair cost, time to completion, sport, day) is distinguishable from noise.
+
+Limits: the counterfactual keeps the same opening fills; the older controller paid above $1
+and used taker exits; rewards and fees excluded; the Serie A and 24 Nov fills come from
+reports, not raw fill lines.
