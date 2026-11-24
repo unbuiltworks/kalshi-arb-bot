@@ -1475,6 +1475,15 @@ OPEN_GATE_ALLOW_SPORTS = frozenset(
     x.strip().lower() for x in os.getenv(
         "PMUS_TWO_SIDED_OPEN_GATE_ALLOW_SPORTS", "").split(",") if x.strip())
 SHARED_HALT_TTL_S = float(os.getenv("PMUS_TWO_SIDED_SHARED_HALT_TTL_S", "15"))
+# How old the watchdog's "no halt" attestation may be before this bot stops
+# trusting it. The watchdog writes one every sweep (20 s); the default of
+# 900 s meant a dead watchdog, or one withholding its attestation because
+# the operator's halt channel is down, left this bot opening exposure for
+# up to 15 more minutes. A stale attestation blocks NEW exposure only
+# (it reads as "unavailable", not as a halt); completions and cancels go
+# on. Default 900 = today.
+SHARED_HALT_MAX_AGE_S = float(os.getenv(
+    "PMUS_TWO_SIDED_SHARED_HALT_MAX_AGE_S", "900"))
 # OWNER 2026-11-15 "We're bleeding money" -> restart: reward quotes no
 # longer rest AT the touch, where they were picked off (10-lot CS2 YES@0.60
 # -> 0.08). They rest REWARD_MIN_DEPTH_PX (2c) under it like every other
@@ -3856,7 +3865,8 @@ class Engine:
             return hit[1]
         try:
             from src import l5_halt_gate as HG
-            st = HG.HaltGate(HG.HttpHaltStore(url)).state()
+            st = HG.HaltGate(HG.HttpHaltStore(url),
+                             max_age_s=SHARED_HALT_MAX_AGE_S).state()
             why = st.get("why")
             val = None if st.get("permitted") else (
                 "HALT" if why in ("halt_asserted", "env_halt")

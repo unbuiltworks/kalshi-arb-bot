@@ -332,3 +332,51 @@ def test_the_gate_can_be_switched_off_only_explicitly(g, monkeypatch):
     monkeypatch.setattr(M, "FINAL_GATE", False)
     e.place(S1, "YES", D("0.47"), D("2"), "rn1_open")
     assert len(sent(v)) == 1
+
+
+# ------------------------ a stale "no halt" attestation (owner 2026-11-24)
+def _attest(tmp_path, age_s):
+    import datetime as dt
+    import json as _j
+    from src import l5_halt_gate as HG
+    store = HG.FileStore(str(tmp_path))
+    t = dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=age_s)
+    store.put(HG.HALT_KEY, _j.dumps(
+        {"halt": False, "t": t.isoformat(), "who": "watchdog"}).encode())
+    return store
+
+
+def test_an_attestation_older_than_the_limit_blocks_new_exposure_only(
+        g, tmp_path, monkeypatch, capsys):
+    """The watchdog has stopped attesting (dead, or its halt channel is
+    down). After the bounded age the bot opens nothing; a completion still
+    goes, and nothing reads as a halt."""
+    from src import l5_halt_gate as HG
+    e, v = g
+    store = _attest(tmp_path / "latch", 130)
+    monkeypatch.setenv(M.SHARED_HALT_URL_ENV, "http://watchdog.test")
+    monkeypatch.setattr(HG, "HttpHaltStore", lambda url, **k: store)
+    monkeypatch.setattr(M, "SHARED_HALT_TTL_S", 0.0)
+    assert M.SHARED_HALT_MAX_AGE_S == 900          # default: still trusted
+    assert e.shared_halt() is None
+    monkeypatch.setattr(M, "SHARED_HALT_MAX_AGE_S", 120.0)
+    assert e.shared_halt() == "UNAVAILABLE"        # not "HALT"
+    e.b.m(S1)
+    e.step_market(S1)
+    assert sent(v) == []                           # no opening
+    mk = e.b.d["markets"][S1]
+    mk["pos"]["YES"], mk["cost"]["YES"] = D("1"), D("0.60")
+    e.place(S1, "NO", D("0.37"), D("1"), "two_sided_complete")
+    assert sent(v) == [(S1, "NO", "0.37", "1")]    # completion still goes
+
+
+def test_a_fresh_attestation_is_trusted_under_the_tighter_limit(
+        g, tmp_path, monkeypatch):
+    from src import l5_halt_gate as HG
+    e, v = g
+    store = _attest(tmp_path / "latch", 25)
+    monkeypatch.setenv(M.SHARED_HALT_URL_ENV, "http://watchdog.test")
+    monkeypatch.setattr(HG, "HttpHaltStore", lambda url, **k: store)
+    monkeypatch.setattr(M, "SHARED_HALT_TTL_S", 0.0)
+    monkeypatch.setattr(M, "SHARED_HALT_MAX_AGE_S", 120.0)
+    assert e.shared_halt() is None
