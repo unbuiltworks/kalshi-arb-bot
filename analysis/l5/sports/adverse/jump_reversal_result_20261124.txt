@@ -1,0 +1,21 @@
+markets: 13  market-hours: 5.5
+jumps of 2+ ticks by sport: {'atp': 61, 'cbb': 162, 'nhl': 4, 'nba': 33}
+
+sport depth | horizon: n, mean c, median c, share positive
+atp k=1 |    5s: n=60 mean -1.52 (se 0.17) med -1.50 pos 0% |   30s: n=57 mean -1.76 (se 0.37) med -1.50 pos 21% |  120s: n=47 mean -1.32 (se 0.70) med -1.50 pos 40% |  300s: n=34 mean -1.37 (se 1.14) med -1.00 pos 41%
+atp k=2 |    5s: n=31 mean -1.50 (se 0.20) med -1.50 pos 0% |   30s: n=29 mean -1.53 (se 0.59) med -1.50 pos 34% |  120s: n=23 mean -0.54 (se 1.25) med -0.50 pos 43% |  300s: n=14 mean -0.43 (se 1.72) med +0.50 pos 57%
+atp k=3 |    5s: n=20 mean -1.05 (se 0.23) med -0.50 pos 0% |   30s: n=18 mean -1.44 (se 0.82) med -0.50 pos 28% |  120s: n=12 mean -0.17 (se 1.77) med -1.00 pos 42% |  300s: n=6 mean +1.00 (se 2.50) med +0.50 pos 50%
+cbb k=1 |    5s: n=161 mean -2.28 (se 0.17) med -1.50 pos 1% |   30s: n=157 mean -2.22 (se 0.35) med -1.50 pos 24% |  120s: n=146 mean -1.93 (se 0.58) med -1.50 pos 34% |  300s: n=126 mean -1.02 (se 0.81) med -1.50 pos 44%
+cbb k=2 |    5s: n=102 mean -2.34 (se 0.21) med -1.50 pos 1% |   30s: n=99 mean -2.21 (se 0.47) med -1.50 pos 23% |  120s: n=94 mean -1.78 (se 0.82) med -1.50 pos 32% |  300s: n=75 mean -1.69 (se 1.08) med -2.50 pos 39%
+cbb k=3 |    5s: n=69 mean -2.25 (se 0.24) med -1.50 pos 0% |   30s: n=67 mean -2.35 (se 0.58) med -1.50 pos 24% |  120s: n=62 mean -2.50 (se 0.95) med -3.50 pos 29% |  300s: n=50 mean -3.65 (se 1.21) med -6.50 pos 24%
+nba k=1 |    5s: n=33 mean -1.50 (se 0.20) med -1.50 pos 0% |   30s: n=31 mean -1.29 (se 0.48) med -0.50 pos 23% |  120s: n=30 mean -1.02 (se 0.70) med -0.50 pos 37% |  300s: n=26 mean -1.33 (se 1.06) med -1.50 pos 38%
+nba k=2 |    5s: n=19 mean -1.24 (se 0.24) med -0.50 pos 0% |   30s: n=18 mean -0.89 (se 0.64) med -0.50 pos 39% |  120s: n=17 mean -0.38 (se 0.74) med +0.50 pos 53% |  300s: n=16 mean -0.84 (se 1.24) med -1.00 pos 44%
+nba k=3 |    5s: n=8 mean -1.25 (se 0.33) med -1.00 pos 0% |   30s: n=7 mean -1.93 (se 1.05) med -1.50 pos 14% |  120s: n=6 mean -0.17 (se 1.56) med +0.50 pos 50% |  300s: n=6 mean -1.00 (se 2.33) med -1.50 pos 50%
+nhl k=1 |    5s: n=4 |   30s: n=4 |  120s: n=4 |  300s: n=3
+nhl k=2 |    5s: n=3 |   30s: n=3 |  120s: n=3 |  300s: n=2
+nhl k=3 |    5s: n=3 |   30s: n=3 |  120s: n=3 |  300s: n=2
+
+all sports
+k=1 |    5s: n=258 mean -2.07 (se 0.13) pos 1% |   30s: n=249 mean -2.05 (se 0.25) pos 23% |  120s: n=227 mean -1.74 (se 0.42) pos 35% |  300s: n=189 mean -1.17 (se 0.60) pos 42%
+k=2 |    5s: n=155 mean -2.14 (se 0.17) pos 1% |   30s: n=149 mean -1.99 (se 0.35) pos 28% |  120s: n=137 mean -1.49 (se 0.62) pos 36% |  300s: n=107 mean -1.45 (se 0.82) pos 42%
+k=3 |    5s: n=100 mean -2.05 (se 0.21) pos 0% |   30s: n=95 mean -2.23 (se 0.46) pos 24% |  120s: n=83 mean -2.08 (se 0.78) pos 33% |  300s: n=64 mean -2.96 (se 1.03) pos 30%

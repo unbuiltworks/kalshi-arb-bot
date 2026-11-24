@@ -108,3 +108,45 @@ be re-run on them.
 - That opening fills lose money over time (the sample cannot say).
 - That any of the four changes helps. None has been replayed yet.
 - What rewards pay for tennis, or why some rows are skipped.
+
+---
+
+## Added 24 Nov, 00:45 UTC: the jump recording, and where the comparisons ended
+
+Two container restarts cut the comparisons short. By the owner's direction
+they are not being extended.
+
+**Jump recording** (public prices every 2 s, in-play markets, 23:37 to
+00:38 UTC, mostly basketball; `jumps_20261123_2337_0038.jsonl.gz`,
+`jump_reversal_result_20261124.txt`). A modelled bid k ticks behind the
+best price, counted as filled when the price moves strictly through it:
+
+| Depth | Events | 5 s | 30 s | 2 min | 5 min |
+|---|---|---|---|---|---|
+| 1 tick | 258 | −2.1c | −2.1c | −1.7c | −1.2c (± 0.6) |
+| 2 ticks | 155 | −2.1c | −2.0c | −1.5c | −1.5c (± 0.8) |
+| 3 ticks | 100 | −2.1c | −2.2c | −2.1c | −3.0c (± 1.0) |
+
+- The first seconds are partly built into the model (a bid only counts as
+  filled once the price is below it). What matters is the recovery, and
+  there is little: after five minutes the modelled fill is still about 1
+  to 3 cents under water.
+- **Bidding deeper did not help.** A deeper bid is filled only by a larger
+  jump, and larger jumps left it just as far under water. On this evidence
+  there is no case for changing the quote depth, and it stays at one tick.
+- So the live picture holds on a larger sample: a fill taken on a jump
+  does not pay for itself by the price coming back. In the two campaigns
+  the profit came from the opposite jump arriving later and completing the
+  pair.
+- Limits: about an hour, one evening, mostly basketball, no tennis to
+  speak of; a model of the fill with no queue; no rewards.
+
+**Side-by-side dry runs:** about 15 minutes each survived, with no
+cancels to compare. Insufficient; no conclusion drawn. The two persistence
+rules rest on their tests and on the live observation of 23 Nov, stay off
+by default in the release candidate, and are for the owner to switch on.
+
+**What this changes for the 12-hour campaign:** nothing in its settings.
+It sharpens what the campaign has to show: that unpaired inventory is
+rare and small enough, and paid rewards large enough, to cover fills that
+start about 2 cents behind.
