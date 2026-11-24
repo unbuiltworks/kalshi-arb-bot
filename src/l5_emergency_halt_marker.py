@@ -77,6 +77,22 @@ MARKER_SERVICE_ENV = "L5_EMERGENCY_HALT_SERVICE"
 MARKER_BEARER_ENV = "L5_EMERGENCY_HALT_BEARER"
 #: OPTIONAL `Accept` header (for example the raw-content media type).
 MARKER_ACCEPT_ENV = "L5_EMERGENCY_HALT_ACCEPT"
+#: A BROKEN HALT CHANNEL MUST NOT LEAVE AN UNATTENDED CONTROLLER TRADING
+#: (owner 2026-11-24). "Unreachable" used to be silent and to change
+#: nothing: with the marker file unreadable (host down, token expired or
+#: revoked, URL wrong) the operator's one stop had quietly stopped working
+#: and trading went on. With this set to N seconds, a channel that has not
+#: answered for N seconds makes the watchdog WITHHOLD its positive
+#: "no halt" attestation; the executor's gate then finds no fresh
+#: attestation and refuses new exposure by itself. Nothing is latched and
+#: nothing is cancelled: when the channel answers again the attestation
+#: resumes. "Answered" includes "there is no file" (HTTP 404), which is the
+#: normal no-halt state. 0 = off (unreachable stays silent, as before).
+CHANNEL_MAX_DOWN_ENV = "L5_EMERGENCY_HALT_CHANNEL_MAX_DOWN_S"
+#: the reason recorded while the attestation is withheld
+CHANNEL_DOWN = "EMERGENCY_HALT_CHANNEL_DOWN"
+#: outcomes of a check that prove the channel did NOT answer
+_CHANNEL_SILENT = ("MARKER_UNREACHABLE",)
 
 #: THE OWNER'S ONE-ACTION HALT, through Railway's own authentication.
 #:
@@ -258,7 +274,11 @@ class MarkerSource:
         self._opener = opener
         self._header = dict(header or {})
 
-    def fetch(self) -> bytes:
+    def fetch(self) -> Optional[bytes]:
+        """The marker's bytes; None when the host ANSWERS that there is no
+        such file (404) -- reachable, nothing published. Anything else
+        that is not a 200 raises."""
+        import urllib.error
         import urllib.request
         if self._opener is not None:
             return self._opener(self.url, self.timeout_s)
@@ -266,10 +286,16 @@ class MarkerSource:
         # publishing a halt should not be waiting on a CDN.
         req = urllib.request.Request(self.url, headers=dict(
             self._header, **{"Cache-Control": "no-cache", "Pragma": "no-cache"}))
-        with urllib.request.urlopen(req, timeout=self.timeout_s) as r:
-            if getattr(r, "status", 200) != 200:
-                raise RuntimeError("marker_http_%s" % getattr(r, "status", "?"))
-            return r.read()
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout_s) as r:
+                if getattr(r, "status", 200) != 200:
+                    raise RuntimeError("marker_http_%s"
+                                       % getattr(r, "status", "?"))
+                return r.read()
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return None
+            raise
 
 
 def _acted(store: Any) -> list:
@@ -314,6 +340,10 @@ def check(source: Any, asserter: Any, store: Any, *, service: str,
         out["error"] = type(exc).__name__
         return out
 
+    if raw is None:
+        # the host answered: no marker is published. Healthy and quiet.
+        out["reason"] = "MARKER_ABSENT"
+        return out
     acted = _acted(store)
     verdict = evaluate(raw, secret=secret, service=service,
                        acted_nonces=acted, now=now, max_age_s=max_age_s)
@@ -358,6 +388,41 @@ def check(source: Any, asserter: Any, store: Any, *, service: str,
     out["halt_record"] = {k: rec.get(k) for k in ("halt", "t", "who",
                                                   "reason")}
     return out
+
+
+class ChannelHealth:
+    """How long the halt channel has gone without answering.
+
+    Counted from the last check that got ANY answer (a marker, a rejected
+    marker, or "no such file"), or from when this process started if none
+    has yet. `down()` returns CHANNEL_DOWN once that exceeds the limit."""
+
+    def __init__(self, max_down_s: float, clock=None) -> None:
+        import time as _t
+        self.max_down_s = float(max_down_s or 0)
+        self._clock = clock or _t.monotonic
+        self._since = self._clock()         # last answer, or process start
+        self.answered = False
+
+    def note(self, reason: Any) -> None:
+        if str(reason) not in _CHANNEL_SILENT:
+            self._since = self._clock()
+            self.answered = True
+
+    def silent_s(self) -> float:
+        return max(0.0, self._clock() - self._since)
+
+    def down(self) -> Optional[str]:
+        if self.max_down_s <= 0:
+            return None
+        return CHANNEL_DOWN if self.silent_s() > self.max_down_s else None
+
+
+def channel_max_down_s() -> float:
+    try:
+        return max(0.0, float(os.getenv(CHANNEL_MAX_DOWN_ENV, "0") or 0))
+    except ValueError:
+        return 0.0
 
 
 def from_env(store: Any, asserter: Any) -> Optional[Dict[str, Any]]:

@@ -1059,6 +1059,16 @@ class Watchdog:
             #
             # It is not a clear: `heartbeat_no_halt` refuses to write over
             # a latched halt, so once latched this line cannot undo it.
+            hold = getattr(self, "attestation_hold", None)
+            if hold:
+                # WITHHELD, NOT A HALT. Something this watchdog depends on
+                # to be stoppable is not working (the operator's halt
+                # channel). No fresh "no halt" is written, so the executor
+                # stops opening exposure by itself when the last one goes
+                # stale, and resumes when this clears. Nothing is latched.
+                out["heartbeat"] = None
+                out["attestation_withheld"] = str(hold)
+                return out
             try:
                 out["heartbeat"] = self.asserter.heartbeat_no_halt()
             except PermissionError as exc:

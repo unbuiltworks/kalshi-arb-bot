@@ -174,6 +174,7 @@ def main() -> int:
         "url_env": EHM.MARKER_URL_ENV, "secret_env": EHM.MARKER_SECRET_ENV,
         "read_credential_set": bool(
             (os.getenv(EHM.MARKER_BEARER_ENV) or "").strip()),
+        "channel_max_down_s": EHM.channel_max_down_s(),
         "poll_s": poll_s,
         "timeout_s": (None if _ehm is None else _ehm["source"].timeout_s),
         "max_marker_age_s": EHM.MAX_MARKER_AGE_S,
@@ -196,6 +197,9 @@ def main() -> int:
                    "scripts/l5_halt_reset.py can, under its four gates. The "
                    "latch is what makes the EXECUTOR cancel by exact venue "
                    "order id via Runner.maybe_halt_deadman -> deadman().")})
+    _chan = EHM.ChannelHealth(EHM.channel_max_down_s()) \
+        if _ehm is not None else None
+    _chan_was = None
     while True:
         try:
             # FIRST in the sweep, before anything that could fail: the one
@@ -215,9 +219,25 @@ def main() -> int:
                 _m = EHM.check(_ehm["source"], _ehm["asserter"],
                                _ehm["store"], service=_ehm["service"],
                                secret=_ehm["secret"])
+                _chan.note(_m.get("reason"))
+                _down = _chan.down()
+                wd.attestation_hold = _down
+                if _down != _chan_was:
+                    _chan_was = _down
+                    emit("L5_EMERGENCY_HALT_CHANNEL", {
+                        "state": "DOWN" if _down else "OK",
+                        "silent_s": round(_chan.silent_s(), 1),
+                        "max_down_s": _chan.max_down_s,
+                        "last_reason": _m.get("reason"),
+                        "error": _m.get("error"),
+                        "labels": ("DOWN: the no-halt attestation is "
+                                   "withheld, so the executor stops "
+                                   "opening exposure when its last one "
+                                   "goes stale. Nothing is latched or "
+                                   "cancelled. OK: attestation resumed.")})
                 if _m.get("acted") or _m.get("reason") not in (
                         "MARKER_UNREACHABLE", "MARKER_COMMAND_NOT_HALT",
-                        "MARKER_ALREADY_ACTED"):
+                        "MARKER_ALREADY_ACTED", "MARKER_ABSENT"):
                     # quiet on the three steady-state outcomes; loud on
                     # anything that latched or looked wrong.
                     emit("L5_EMERGENCY_HALT_MARKER", _m)
