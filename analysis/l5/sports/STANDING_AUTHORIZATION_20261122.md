@@ -856,3 +856,31 @@ outside the competitions, unexplained cash, watchdog error.
 Baseline before the window: buying power $320.1638; account figure
 $1.3144 of $3.00; zero open orders; zero positions (11:17 reconcile);
 halt clear. Settings set at 16:26.
+
+## 34. Campaign stopped: account-limit check defect — 24 Nov, 18:49 UTC
+
+Plain lock set 18:49:01, effective 18:50:16 (deployment `e7f1b743`).
+Watchdog 18:50:36: 0 open orders, no halt. Reason: owner's rule "Stop if
+any existing safety control fails."
+
+Defect (confirmed in logs and code): the bot's account-limit verdict is
+cached for 10 s (`PMUS_TWO_SIDED_ACCOUNT_RISK_TTL_S`), and its capacity
+figure includes only the bids resting when the verdict was computed. Each
+new opening bid is checked against that cached capacity alone, so several
+bids placed within one cache period each pass. From 18:27:47 the bot
+looped about every 25 s: reading ok with nothing resting → place two to
+four opening bids → next reading over the limit → pull them → repeat.
+Worst-case totals (account figure + resting opening bids) on the over
+readings: 3.06, 3.36, 3.17, 3.34, 3.33 (repeatedly), 3.23, against 3.00.
+The account figure itself never exceeded 3.00 (peak 2.2644). Had two such
+bids filled inside one period, it would have.
+
+Campaign 17:00–18:50 UTC, venue-confirmed: 6 fills, all 1 contract, maker,
+ATP. Two pairs (0.55+0.39, 0.57+0.39): +$0.10 in cash, both markets
+settled. Two unpaired NO legs open at the lock: Juagom–Bengeo 1 @ 0.44,
+Samher–Yanale 1 @ 0.61 ($1.05); they ride to settlement (the plain lock
+also stops completions). Cash $319.2138 at 18:36 against $320.1638 at the
+start. No oversize, taker or out-of-scope order; no latch; audits at
+17:44 clean.
+
+Not changed: any limit. Proposed $5 / $30 stage: not activated.
