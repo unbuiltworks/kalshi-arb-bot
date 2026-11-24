@@ -74,23 +74,119 @@ def test_a_rejected_marker_is_also_an_answer():
     assert h.answered is True
 
 
-def test_http_404_reads_as_absent_and_other_errors_raise(monkeypatch):
-    src = M.MarkerSource("https://x/y")
+def _urlopen(table, seen=None):
+    """A fake urlopen: table maps url -> 200 bytes or an HTTP error code."""
+    class R:
+        status = 200
 
-    def nf(req, timeout=None):
-        raise urllib.error.HTTPError(req.full_url, 404, "nf", {},
-                                     io.BytesIO())
-    monkeypatch.setattr(urllib.request, "urlopen", nf)
-    assert src.fetch() is None
-    for code in (401, 403, 500, 502):
-        def bad(req, timeout=None, code=code):
-            raise urllib.error.HTTPError(req.full_url, code, "x", {},
+        def __init__(self, body):
+            self._b = body
+
+        def read(self):
+            return self._b
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def f(req, timeout=None):
+        if seen is not None:
+            seen.append((req.full_url,
+                         {k.lower(): v for k, v in req.header_items()}))
+        v = table[req.full_url]
+        if isinstance(v, int):
+            raise urllib.error.HTTPError(req.full_url, v, "x", {},
                                          io.BytesIO())
-        monkeypatch.setattr(urllib.request, "urlopen", bad)
-        with pytest.raises(urllib.error.HTTPError):
-            src.fetch()
-        assert M.check(src, object(), Mem(), service="svc",
-                       secret="s")["reason"] == "MARKER_UNREACHABLE"
+        return R(v)
+    return f
+
+
+MK, PR = "https://h/ops/EMERGENCY_HALT.json", "https://h/ops/README.md"
+
+
+def test_404_with_a_readable_probe_means_nothing_is_published(monkeypatch):
+    seen = []
+    monkeypatch.setattr(urllib.request, "urlopen",
+                        _urlopen({MK: 404, PR: b"readme"}, seen))
+    src = M.MarkerSource(MK, probe_url=PR,
+                         header={"Authorization": "Bearer tok"})
+    assert src.fetch() is None
+    assert [u for u, _h in seen] == [MK, PR]
+    assert seen[1][1]["authorization"] == "Bearer tok"   # same credential
+    assert M.check(src, object(), Mem(), service="svc",
+                   secret="s")["reason"] == "MARKER_ABSENT"
+
+
+@pytest.mark.parametrize("probe", [404, 401, 403, 500])
+def test_404_with_an_unreadable_probe_is_an_access_failure(monkeypatch,
+                                                           probe):
+    """An expired or revoked token on a private repository answers 404 for
+    BOTH files. That is not "no marker": it is a dead channel."""
+    monkeypatch.setattr(urllib.request, "urlopen",
+                        _urlopen({MK: 404, PR: probe}))
+    src = M.MarkerSource(MK, probe_url=PR)
+    with pytest.raises(Exception):
+        src.fetch()
+    assert M.check(src, object(), Mem(), service="svc",
+                   secret="s")["reason"] == "MARKER_UNREACHABLE"
+
+
+def test_404_without_a_probe_is_never_taken_as_absent(monkeypatch):
+    monkeypatch.setattr(urllib.request, "urlopen", _urlopen({MK: 404}))
+    src = M.MarkerSource(MK)
+    with pytest.raises(RuntimeError):
+        src.fetch()
+    assert M.check(src, object(), Mem(), service="svc",
+                   secret="s")["reason"] == "MARKER_UNREACHABLE"
+
+
+@pytest.mark.parametrize("code", [401, 403, 500, 502])
+def test_other_errors_on_the_marker_are_failures_whatever_the_probe_says(
+        monkeypatch, code):
+    monkeypatch.setattr(urllib.request, "urlopen",
+                        _urlopen({MK: code, PR: b"readme"}))
+    src = M.MarkerSource(MK, probe_url=PR)
+    with pytest.raises(urllib.error.HTTPError):
+        src.fetch()
+
+
+def test_a_present_marker_does_not_need_the_probe(monkeypatch):
+    seen = []
+    monkeypatch.setattr(urllib.request, "urlopen",
+                        _urlopen({MK: b"{}", PR: 500}, seen))
+    assert M.MarkerSource(MK, probe_url=PR).fetch() == b"{}"
+    assert [u for u, _h in seen] == [MK]
+
+
+def test_an_expired_token_takes_the_channel_down(monkeypatch):
+    """End to end on the timer: the token dies, both files answer 404, and
+    after the bounded silence the channel reads DOWN."""
+    monkeypatch.setattr(urllib.request, "urlopen",
+                        _urlopen({MK: 404, PR: b"readme"}))
+    src = M.MarkerSource(MK, probe_url=PR)
+    c = Clk()
+    h = M.ChannelHealth(120, clock=c)
+    h.note(M.check(src, object(), Mem(), service="svc",
+                   secret="s")["reason"])
+    assert h.down() is None
+    monkeypatch.setattr(urllib.request, "urlopen",
+                        _urlopen({MK: 404, PR: 404}))      # token dead
+    for _ in range(7):
+        c.t += 20
+        h.note(M.check(src, object(), Mem(), service="svc",
+                       secret="s")["reason"])
+    assert h.down() == M.CHANNEL_DOWN
+
+
+def test_the_probe_url_comes_from_the_environment(monkeypatch):
+    monkeypatch.setenv(M.MARKER_URL_ENV, MK)
+    monkeypatch.setenv(M.MARKER_SECRET_ENV, "s")
+    monkeypatch.setenv(M.MARKER_PROBE_URL_ENV, PR)
+    assert M.from_env(Mem(), object())["source"].probe_url == PR
+    monkeypatch.delenv(M.MARKER_PROBE_URL_ENV)
+    assert M.from_env(Mem(), object())["source"].probe_url is None
 
 
 # ------------------------------------------------------------ the timer

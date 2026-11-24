@@ -175,6 +175,8 @@ def main() -> int:
         "read_credential_set": bool(
             (os.getenv(EHM.MARKER_BEARER_ENV) or "").strip()),
         "channel_max_down_s": EHM.channel_max_down_s(),
+        "probe_set": bool((os.getenv(EHM.MARKER_PROBE_URL_ENV)
+                           or "").strip()),
         "poll_s": poll_s,
         "timeout_s": (None if _ehm is None else _ehm["source"].timeout_s),
         "max_marker_age_s": EHM.MAX_MARKER_AGE_S,

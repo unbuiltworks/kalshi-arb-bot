@@ -93,6 +93,15 @@ CHANNEL_MAX_DOWN_ENV = "L5_EMERGENCY_HALT_CHANNEL_MAX_DOWN_S"
 CHANNEL_DOWN = "EMERGENCY_HALT_CHANNEL_DOWN"
 #: outcomes of a check that prove the channel did NOT answer
 _CHANNEL_SILENT = ("MARKER_UNREACHABLE",)
+#: A 404 IS NOT PROOF THAT NO MARKER IS PUBLISHED (owner 2026-11-24). A
+#: private repository answers 404 -- not 401 or 403 -- to a token that has
+#: expired, been revoked or lost access, so "no such file" and "you may not
+#: see this" look the same. A 404 on the marker therefore counts as
+#: "nothing published" ONLY when a second file that is KNOWN to exist in
+#: the same place (the probe) is readable with the same credential in the
+#: same check. With no probe configured, or a probe that does not answer
+#: 200, a 404 is a failed read like any other.
+MARKER_PROBE_URL_ENV = "L5_EMERGENCY_HALT_PROBE_URL"
 
 #: THE OWNER'S ONE-ACTION HALT, through Railway's own authentication.
 #:
@@ -265,14 +274,15 @@ class MarkerSource:
     name = "EMERGENCY_HALT_MARKER"
 
     def __init__(self, url: str, *, timeout_s: float = DEFAULT_TIMEOUT_S,
-                 opener=None, header: Optional[Mapping[str, str]] = None
-                 ) -> None:
+                 opener=None, header: Optional[Mapping[str, str]] = None,
+                 probe_url: Optional[str] = None) -> None:
         if not isinstance(url, str) or not url.strip():
             raise ValueError("MarkerSource needs a url")
         self.url = url.strip()
         self.timeout_s = float(timeout_s)
         self._opener = opener
         self._header = dict(header or {})
+        self.probe_url = (probe_url or "").strip() or None
 
     def fetch(self) -> Optional[bytes]:
         """The marker's bytes; None when the host ANSWERS that there is no
@@ -293,9 +303,22 @@ class MarkerSource:
                                        % getattr(r, "status", "?"))
                 return r.read()
         except urllib.error.HTTPError as exc:
-            if exc.code == 404:
-                return None
-            raise
+            if exc.code != 404:
+                raise
+        # 404 on the marker. Only "nothing published" if the probe -- a
+        # file known to exist beside it -- is readable right now with the
+        # same credential. Otherwise this is an access failure in
+        # disguise, and it raises like one.
+        if not self.probe_url:
+            raise RuntimeError("marker_http_404_no_probe")
+        preq = urllib.request.Request(self.probe_url, headers=dict(
+            self._header, **{"Cache-Control": "no-cache", "Pragma": "no-cache"}))
+        with urllib.request.urlopen(preq, timeout=self.timeout_s) as r:
+            if getattr(r, "status", 200) != 200:
+                raise RuntimeError("probe_http_%s"
+                                   % getattr(r, "status", "?"))
+            r.read()
+        return None
 
 
 def _acted(store: Any) -> list:
@@ -443,6 +466,7 @@ def from_env(store: Any, asserter: Any) -> Optional[Dict[str, Any]]:
     return {
         "source": MarkerSource(
             (os.getenv(MARKER_URL_ENV) or "").strip(), header=header,
+            probe_url=(os.getenv(MARKER_PROBE_URL_ENV) or "").strip(),
             timeout_s=float(os.getenv("L5_EMERGENCY_HALT_TIMEOUT_S",
                                       DEFAULT_TIMEOUT_S) or
                             DEFAULT_TIMEOUT_S)),
