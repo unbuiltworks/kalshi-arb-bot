@@ -814,3 +814,13 @@ Market at 15:32: open, pre-game, start 19:30 UTC, international price
 present, 0.55 / 0.56. Pin and the 16:30–16:40 window set at 15:53 in one
 change (the bot stays locked until 16:30; the pre-flight is read in that
 locked period).
+
+## 32. Signed-marker drill stood down before the window — 24 Nov, 16:03 UTC
+
+Owner at about 16:00: no terminal available to sign the marker; "If the
+current drill cannot proceed, let the window expire safely and keep the
+controller locked." The window was removed before it opened: plain lock
+and normal settings restored at 16:03 (deployment `08e6dfae`). No order
+was placed. The drill authorization of sections 30–31 is spent; a new
+window needs a new authorization. Open: a browser-only way for the
+operator to sign (GitHub Codespaces proposed; nothing built).
