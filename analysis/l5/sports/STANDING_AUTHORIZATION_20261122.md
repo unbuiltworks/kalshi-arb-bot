@@ -738,3 +738,25 @@ pin off, 2 contracts, depth 1, live slate, NFL and NBA, caps 3 and 6,
 death drill off). No order was possible in between. Halt latched since
 05:01:32; latch digest at 11:17 `4004b056…3021693`; reset needs the
 owner's separate approval.
+
+## 28. Halt reset after drill 1 — 24 Nov, 11:28 UTC
+
+Owner, typed: "Approved: reset the halt latched at 05:01:32 UTC 24 Nov.
+Keep the sports controller locked throughout. Defer the interim
+Railway-variable drill. Prioritize fast emergency-stop validation and
+preparation of the 12-hour live campaign. No additional development unless
+a critical defect is discovered."
+
+Done by the existing procedure (watchdog startup hook), deployment
+`03361a74`. Digest re-read at 11:23:58, unchanged. `L5_HALT_BOOT_RESET`
+cleared at 11:28:21.01 UTC: prior latch digest `4004b056…3021693`, reason
+`UNMANAGED_RESTING_ORDER`, reset id `halt-reset-20261124-d1-7c3e9a41b2f6`
+(spent). Machine-verified at the clear: three registries readable, 0 live
+orders, submission disabled on each; venue 0 working orders, no positions.
+Sweeps at 11:33 attest halt false, 0 open orders. Reset settings disarmed
+afterwards without a further restart. Sports bot locked throughout.
+
+Drill 2 by the watchdog variable: deferred by the owner. Still required
+before unattended 12-hour operation: the signed-marker stop, which needs
+the operator's two secrets (marker mechanism still reads "configured
+false" at the 11:28 boot).
