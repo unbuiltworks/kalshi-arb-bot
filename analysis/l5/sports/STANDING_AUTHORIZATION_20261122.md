@@ -636,3 +636,41 @@ settings are not echoed at boot. They are service variables that were not
 touched, but their effect is only proven by drill 1.
 
 Rollback if needed: `release/l5-halt-watchdog-8c9bee06f`.
+
+## 25. Final release candidates deployed locked — 24 Nov, about 03:35 UTC
+
+Owner: configure the non-secret watchdog values "Yes"; watchdog
+`09e94cc9d` "Prepare for deployment with channel-loss detection enabled";
+sports `12d5d3daf` "Adopt as the final combined release"; operator setup
+"Reduce to the two secrets". Two further requirements, both met before
+asking: on a channel timeout the bot must also cancel resting
+exposure-increasing orders (it already did; now proven by a test), and a
+404 on the marker must not be taken as "no marker" when it may be an
+access failure (watchdog `f6a5900eb`, which supersedes `09e94cc9d`: a 404
+counts as absent only when a known file beside the marker is readable).
+
+Asked with exact commits and settings. Answers:
+
+- **Watchdog: "Deploy and set the five values".** Done: source
+  `release/l5-halt-watchdog-f6a5900eb`,
+  `f6a5900eb831ab752209d9ae7c39dabf42fc3e30`; set
+  `L5_EMERGENCY_HALT_URL`, `L5_EMERGENCY_HALT_PROBE_URL`,
+  `L5_EMERGENCY_HALT_ACCEPT=application/vnd.github.raw`,
+  `L5_EMERGENCY_HALT_SERVICE=pmus-spring-l5-probe`,
+  `L5_EMERGENCY_HALT_CHANNEL_MAX_DOWN_S=120`. No secret was set by this
+  session; the mechanism stays off until the operator sets
+  `L5_EMERGENCY_HALT_SECRET` and `L5_EMERGENCY_HALT_BEARER`.
+  Rollback: `release/l5-halt-watchdog-b79ad4a8b`.
+- **Sports: "Deploy locked, 12-hour ceiling".** Done: source
+  `release/pmus-sports-rn1-12d5d3daf`,
+  `12d5d3daf78efcc919f0060c63a922561cb0dc80`; set
+  `PMUS_TWO_SIDED_SUBMISSION_LOCK=1`, `PMUS_RN1_PAUSED_RELEASE_S=600`,
+  `PMUS_RN1_RESELECT=1`, `PMUS_RN1_GAP_HOLD_S=20`,
+  `PMUS_RN1_KEEP_DEEPER_TICKS=1`,
+  `PMUS_TWO_SIDED_SHARED_HALT_MAX_AGE_S=120`,
+  `PMUS_TWO_SIDED_WINDOW_MAX_S=43200`. Rollback:
+  `release/pmus-sports-rn1-e6e8b4e60`.
+
+Not authorised: any order, arming, either drill, a halt reset, any limit
+change, a campaign. A connection drop interrupted three of the four calls
+on the first attempt; each was repeated once and confirmed.
