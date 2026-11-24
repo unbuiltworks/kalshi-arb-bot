@@ -155,3 +155,43 @@ The pattern of section 4 holds on the new rows: reward plus pairing is positive
 (Sassuolo-Genoa -1.90). Unpaired positions that have settled since 14 Nov: 49 (the 47 of
 section 3, Sassuolo-Genoa, and the 24 Nov Samher-Yanale leg). All 49 settled worthless. One
 more (Juagom-Bengeo, 24 Nov) is still open.
+
+## 10. Independent audit of the unpaired residuals, 24 Nov 2026 21:10Z
+
+Owner: "49 out of 49 unpaired positions settling worthless is an extraordinary result ...
+verify that winning residual positions aren't being excluded or misclassified."
+
+Rebuilt from the 1,016 FILL lines alone and settled from the venue's public market record
+(`residual_audit_20261124/`: `rebuild.py`, `fetch.py`, `residuals.json`).
+
+- 173 markets with fills, 1,900.97 contracts, $953.91; 913.2 pairs (-4.46); **47 residual
+  markets (23 YES, 24 NO), cost 36.2485**. The list matches section 3 exactly by market,
+  side, quantity and cost. No fill lacks a side; no duplicates; no sells (the older
+  controller's "exits" were buys of the other side); each fill's logged position equals the
+  running total.
+- All 173 markets read RESOLVED with outcome prices 0/1. **Residuals: 0 won, 47 lost, 0
+  unknown: -36.25.** Settling every market in full, without any pairing convention, gives
+  -40.71, the same total.
+- Side mapping checked four ways: the code sends YES as the venue's long side; the two
+  `atc-` markets name the long side "Yes"; 10 of 11 markets last quoted above 0.70 for YES
+  settled YES; an inverted mapping would turn the period into +33.86, which the bot's own
+  book contradicts.
+- The three markets with positive venue "realized" figures: Gaskan-Hanbra and CS2 All-Nvo
+  were fully paired (+1.55, +4.32), not residuals; Det-Mia had 1 losing residual (-0.48)
+  inside the 47. The venue figures themselves (+5.00, +3.18, +1.64) cannot be reproduced
+  from the fills; that field's definition is unknown.
+- With the 22 Nov Sassuolo-Genoa leg and the two 24 Nov legs (venue-settled at 0), the count
+  is 50 of 50.
+
+**Why it is not a coincidence, and what it does and does not show.** A completion bid rests
+on the opposite side at a fixed price. When the held side is winning, the opposite side's
+price falls through that bid and the position is paired. When the held side is losing, the
+opposite price rises away and the bid never fills. So the legs that would have won are the
+ones that get paired, for a few cents, and only losers reach settlement unpaired. The 50 of
+50 is a selection effect of the pairing rule, not evidence that every opening fill is wrong.
+It does show the shape of the payoff: a win is capped at the pair margin (about 3 to 6 cents
+a contract at a 0.94 to 0.97 pair cost), a loss is the whole leg (about 44 to 67 cents).
+Break-even needs roughly nine or more legs paired for each one left unpaired.
+
+Not re-derived: the fees (-4.36); fills after the log's last line in a market (none affects a
+residual: every market that ended later was fully paired).
