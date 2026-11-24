@@ -1,4 +1,4 @@
-# Operator setup: the emergency halt (five Railway values)
+# Operator setup: the emergency halt (two secrets)
 
 For the owner. About 15 minutes. Do this after the watchdog release
 `b79ad4a8b` is deployed (scheduled 04:30 UTC, 24 Nov). Nothing here places
@@ -12,7 +12,8 @@ anywhere, without a deployment. The watchdog reads it from our private
 GitHub repository every 20 seconds. It can only stop trading; it can never
 start it.
 
-You will create two secret values and set five variables.
+You will create two secret values and set them. Everything else is set
+for you.
 
 ## Step 1 — Create the halt signing secret (2 minutes)
 
@@ -63,28 +64,36 @@ If "Resource owner" does not offer `unbuiltworks`, or the token shows
 an owner of the organisation: organisation **Settings** → **Personal
 access tokens** → allow fine-grained tokens / approve the request.
 
-## Step 3 — Set the five variables in Railway (5 minutes)
+## Step 3 — Set your two secrets in Railway (3 minutes)
+
+The fixed, non-secret settings (the file's address, the content type, the
+service name, the probe file and the channel timeout) are set for you by
+the session, on your approval. You set only the two secrets.
 
 1. Open the Railway project and click the service **`l5-halt-watchdog`**.
    Check the name: not the sports bot, not the ledger.
-2. Open the **Variables** tab → **New Variable**, and add these five.
-   Copy the three fixed values exactly.
+2. Open the **Variables** tab → **New Variable**, and add these two.
 
 | Name | Value |
 |---|---|
 | `L5_EMERGENCY_HALT_SECRET` | the secret from Step 1 |
 | `L5_EMERGENCY_HALT_BEARER` | the token from Step 2 |
-| `L5_EMERGENCY_HALT_URL` | `https://api.github.com/repos/unbuiltworks/kalshi-arb-bot/contents/ops/EMERGENCY_HALT.json?ref=ops/halt-marker` |
-| `L5_EMERGENCY_HALT_ACCEPT` | `application/vnd.github.raw` |
-| `L5_EMERGENCY_HALT_SERVICE` | `pmus-spring-l5-probe` |
 
 3. Railway shows the changes as pending. Click **Deploy** (or **Apply
    changes**) so the watchdog restarts with them. It is back within a
    minute or two.
-4. Tell this session "the five values are set". It will read the
+4. Tell this session "the two secrets are set". It will read the
    watchdog's start-up line and confirm the halt file is configured with a
-   read credential. It cannot see the values themselves, only that they
-   are set.
+   read credential, and that the channel reads healthy. It cannot see the
+   values themselves, only that they are set.
+
+**Once the secrets are set the channel is watched.** If the watchdog
+cannot read the halt location for two minutes (wrong or expired token,
+GitHub unreachable), it stops confirming "no halt" and the bot stops
+opening new exposure about two minutes after that, pulling its resting
+opening bids. Nothing is latched; it recovers by itself when the read
+works again. So a typo in the token shows up within minutes as "channel
+down", not as a silent gap.
 
 ## Step 4 — Prove it can read the file (no order, nothing halts)
 
@@ -134,14 +143,19 @@ Things to know:
 - **It cannot be undone by deleting the file.** After a halt, trading
   resumes only through the reset procedure, which needs your explicit
   approval each time.
-- **If GitHub is unreachable the file does nothing.** The bot's own stops
-  and the watchdog's own rules still act.
+- **If GitHub is unreachable the file cannot be read,** and after about
+  four minutes the bot stops opening new exposure by itself and pulls its
+  opening bids, until the read works again. The bot's own stops and the
+  watchdog's own rules act throughout.
+- **The token expires after 90 days.** When it does, the channel reads
+  "down" and the bot stops opening exposure. Renew it before then.
 
 ## If something goes wrong
 
 | What you see | What it means | What to do |
 |---|---|---|
-| This session reports the halt file is "not configured" | The secret or the URL is missing or misspelt | Check the names in Step 3 exactly, and that you clicked Deploy |
+| This session reports the halt file is "not configured" | The secret is missing or its name is misspelt | Check the names in Step 3 exactly, and that you clicked Deploy |
+| "Channel down" after you set the secrets | The watchdog cannot read the halt location: token wrong, expired, or without access to this repository | Recreate the token (Step 2) and set it again. Until it reads, the bot will not open new exposure |
 | The wrong-secret test logs nothing | The watchdog cannot read the file | Check the token (not expired, Contents: Read-only, this repository), the URL, and that the file is on the branch `ops/halt-marker` in the folder `ops` |
 | The real file logs "signature invalid" | It was signed with a different secret from the one in Railway | Sign again with the Step 1 secret |
 | "wrong service" | The file was signed for another service name | Sign with `--service pmus-spring-l5-probe` |
