@@ -705,3 +705,36 @@ Drill 2: owner chose the watchdog halt variable as an interim validation,
 "not a substitute for the fast emergency stop"; it needs its own exact
 authorization after drill 1's halt reset. The signed-marker stop must be
 validated "before unattended 12-hour operation".
+
+## 27. Drill 1 result — 24 Nov, 05:00–05:10 UTC (written 11:25 UTC)
+
+Sports `12d5d3daf`, watchdog `f6a5900eb`. Source: production logs of the
+sports bot, the watchdog and the ledger.
+
+| Time (UTC) | Event |
+|---|---|
+| 04:06 | locked production pre-flight: market selected, pre-game, YES edge passes, only the lock blocking |
+| 04:15 | account audit complete, ok |
+| 04:52 | venue: market open, not closed, start 08:00, 0.50 / 0.51 |
+| 05:00:01 | bot reads shared halt PERMITTED (first read on this build) |
+| 05:00:02 | one order, YES 1 @ 0.47 (three ticks behind 0.50), id ending `55P1` |
+| 05:01:00 | bot exits, no cleanup |
+| 05:01:12 | watchdog: bot unreachable, using its last ownership read (12 s old), 1 open order |
+| 05:01:32 | watchdog selects the order (executor unreachable), sends the cancel with no error, latches the halt `UNMANAGED_RESTING_ORDER`; its immediate re-read still showed the order NEW with 0 filled |
+| 05:01:52 | watchdog: 0 open orders at the venue |
+
+Result: **pass, with one gap in the evidence.** The order left the venue's
+open orders between 33 and 53 s after the exit, inside the 90 s limit. No
+fill: filled quantity 0 at the re-read, buying power $320.1638 before,
+during and six hours after, venue positions 0 at the 11:17 reconcile. No
+other order. The gap: the watchdog's re-read came before the venue showed
+the cancel, so no log line carries the order's terminal state; "cancelled"
+rests on the open-order list, the zero fill and the unchanged cash.
+
+Afterwards: the bot restarted at 05:11 into the expired window (locked).
+The session's worker was down from about 05:03 to 11:12, so the drill
+settings were restored only at 11:12 (deployment `8a6b6afe`, plain lock,
+pin off, 2 contracts, depth 1, live slate, NFL and NBA, caps 3 and 6,
+death drill off). No order was possible in between. Halt latched since
+05:01:32; latch digest at 11:17 `4004b056…3021693`; reset needs the
+owner's separate approval.
