@@ -85,3 +85,45 @@ without a deployment (drill 2). Not proven: behaviour with many orders
 across several markets, or with the repository host unreachable (the
 marker then does nothing; the watchdog's own rules and the bot's own
 stops still act).
+
+---
+
+## Status and follow-up — 24 Nov, 03:25 UTC
+
+**`b79ad4a8b` is deployed** (03:13 UTC, verified: sweeping every 20 s,
+zero open orders, not halted; halt marker not yet configured by the
+operator). The `ops/halt-marker` branch exists with no marker on it.
+
+**Follow-up release for the owner's new requirement** ("losing access to
+the emergency-halt channel is detected and prevents new exposure after a
+bounded timeout"). Not approved, not deployed.
+
+| | Watchdog | Sports bot |
+|---|---|---|
+| Release candidate | `release/l5-halt-watchdog-09e94cc9d` (`09e94cc9da92b15e68ddb0ac8f75b80e872c1291`, code `092cb1c98`) | `release/pmus-sports-rn1-12d5d3daf` (`12d5d3daf78efcc919f0060c63a922561cb0dc80`, code `3146c04b7`), which replaces `0969ddadf` |
+| Change | A halt channel that has not answered for a set time makes the watchdog withhold its "no halt" attestation. "No such file" counts as an answer. | How old that attestation may be before the bot stops opening exposure becomes a setting. |
+| Setting (proposed) | `L5_EMERGENCY_HALT_CHANNEL_MAX_DOWN_S=120` | `PMUS_TWO_SIDED_SHARED_HALT_MAX_AGE_S=120` |
+| Default in code | 0 = off (as before) | 900 (as before) |
+| Tests | 10 new; 557 watchdog tests pass | 2 new; full suite 5,528 passed, same 24 failures as the running build |
+
+**The bound, with both proposed settings:** channel lost → watchdog
+withholds after 120 s → the bot's last attestation is stale 120 s later →
+no new exposure. About four minutes, plus one 20-second sweep and one
+15-second read. Without the bot-side setting it would be about seventeen
+minutes.
+
+**What it does and does not do**
+- Stops new exposure only. Nothing is latched; cancels and completions
+  continue; trading resumes by itself when the channel answers.
+- The watchdog's own cancel rules are unaffected by a channel outage.
+- A side effect worth having: a dead watchdog now stops the bot opening
+  exposure within two minutes, not fifteen.
+- A cost: an outage of the repository host, or an expired token, pauses
+  new exposure. The token's 90-day expiry becomes an operational date.
+- Not tested against the real host from inside the service; the
+  wrong-signature read test and a deliberately broken URL would show it.
+
+**Operator setup, simplified** (if approved): the operator sets two
+secrets (`L5_EMERGENCY_HALT_SECRET`, `L5_EMERGENCY_HALT_BEARER`); this
+session sets the fixed, non-secret values (`_URL`, `_ACCEPT`, `_SERVICE`,
+and the channel timeout).
