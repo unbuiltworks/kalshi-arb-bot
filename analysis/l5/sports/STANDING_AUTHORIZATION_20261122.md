@@ -949,3 +949,24 @@ Prepared, not deployed: `766a965ba03330dcb1dbb05db517b59d8131e33a`
 (see `DEPLOY_REQUEST_SPORTS_c2e4e0b3f.md`, last section). Production
 stays on `c2e4e0b3f`, plain lock. Reward reconciliation updated in
 `analysis/l5/rewards/SPORTS_REWARD_RECONCILIATION_20261122.md` section 9.
+
+## 38. `766a965ba` approved for locked deployment — 24 Nov, about 19:50 UTC
+
+Owner, typed: "Deploy 766a965ba03330dcb1dbb05db517b59d8131e33a locked.
+Verify production health and prepare the earliest possible one-hour live
+validation authorization at $3. Following successful validation,
+immediately prepare the $5 account limit / $30 campaign spend
+authorization." Also: do not increase unpaired inventory caps; verify the
+49-of-49 losing residuals against venue settlements; investigate the
+daily bonus; "Obtain explicit authorization for live trading and capital
+increases." Scaling gates restated by the owner as evidence-based, without
+fixed waiting periods ($3 corrected enforcement shown live; $5 repeatable
+positive reward-adjusted economics; $10 sufficient paid-reward evidence
+and verified emergency stop; $25 consistent profitability across markets;
+$50 scaling without deteriorating returns).
+
+Source switched to `release/pmus-sports-rn1-766a965ba` with the plain lock
+on. This session's worker was down from about 19:50 to 20:53 UTC; the
+platform created the deployment (`4d714f1b`) at 20:53:45. Verification and
+an independent audit of the unpaired-residual settlements are running.
+The validation window is NOT authorized by this.
