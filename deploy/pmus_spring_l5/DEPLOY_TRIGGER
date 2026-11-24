@@ -288,3 +288,4 @@
 2026-11-22T16:20Z registry freshness follows the trading loop's own progress (a wedged loop goes STALE to the watchdog).
 2026-11-22T16:45Z RN1 reward-aware selection ranking; marginal-edge test for adding to an unpaired side.
 2026-11-22T17:05Z stalled loop reports manages_own_resting=false with a fresh stamp, so the watchdog both latches and can cancel the listed orders.
+2026-11-24T03:3xZ CANDIDATE 3146c04b7 (supersedes 0969ddadf; one addition): PMUS_TWO_SIDED_SHARED_HALT_MAX_AGE_S (default 900 = as before) bounds how old the watchdog's no-halt attestation may be before new exposure stops. Everything else as 0969ddadf. NOT approved, NOT deployed.
