@@ -1058,3 +1058,29 @@ international fair value for every bid. "No cricket!" is not superseded.
 
 Prepared, not active: `VENUE_NATIVE_CONFIG_20261124.md` (settings only on
 build `766a965ba`). Nothing changed in production.
+
+## 43. Venue-native validation authorized — 24 Nov, 23:55 UTC
+
+Owner, typed: "Authorized: venue-native validation, $5 account limit, $30
+campaign spend, table tennis (Setka Ukraine and Moldova), UTR tennis and
+Dota 2, 00:30–03:30 UTC 25 Nov, on these terms. Keep same-side
+accumulation and continuous replenishment enabled. Prioritize live
+reward-eligible events. Preserve all existing capital limits, loss stops,
+reconciliation and watchdog protections. Report actual trading activity,
+accumulated inventory, reward-qualifying resting time and settled
+economics. If the proposed start time has passed or insufficient
+preparation time remains, request authorization for a revised window."
+
+Terms (`VENUE_NATIVE_CONFIG_20261124.md`): build `766a965ba` unchanged;
+window 00:30:00–03:30:00 UTC 25 Nov, relocks itself; international price
+not required (guard still on where a price exists); fair-value test off;
+same-side additions without a fair value on; competitions setkameua,
+setkamemd, utr, dota2; account limit $5.00 (ledger); campaign spend $30;
+1 contract; up to 4 markets; in-play and pre-game; unpaired caps $6 / $3;
+per-market spend $8; loss stop $4; daily halt $5; maker-only; pair cap
+0.97; 10-contract depth gate; band 0.30–0.70; all other controls
+unchanged. Disclosed: no independent price check; ranking by pool size;
+signed emergency stop unverified; rewards post one to two days later.
+Settings set at 23:57 UTC (ledger limit and sports profile), 33 minutes
+before the window. To be restored and relocked afterwards; the account
+limit stays at $5 only until the owner decides otherwise at the close-out.
