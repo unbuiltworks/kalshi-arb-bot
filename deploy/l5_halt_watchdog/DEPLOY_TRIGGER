@@ -7,3 +7,5 @@
 2026-11-18T01:5xZ promote 98caa3073 (reset reads comma-separated registries like the sweep; every registry must attest). Owner-approved watchdog-only deploy; no halt change, no reset.
 
 2026-11-23T02:5xZ CANDIDATE 0a4c1fa1a (a gone executor's last claim is remembered for a bounded time and its orders are cancelled after a short grace; both settings unset = deployed behaviour exactly). NOT approved, NOT deployed: prepared for the owner's decision. No halt change, no reset.
+
+2026-11-24T03:3xZ CANDIDATE 092cb1c98 on top of ef478c0df (running as b79ad4a8b): L5_EMERGENCY_HALT_CHANNEL_MAX_DOWN_S (default 0 = off) -- a halt-marker channel that has not answered for that long makes the watchdog withhold its no-halt attestation, so the executor stops opening exposure; a 404 (no file) counts as an answer. NOT approved, NOT deployed.
