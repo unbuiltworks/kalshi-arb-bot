@@ -117,7 +117,8 @@ Two container restarts cut the comparisons short. By the owner's direction
 they are not being extended.
 
 **Jump recording** (public prices every 2 s, in-play markets, 23:37 to
-00:38 UTC, mostly basketball; `jumps_20261123_2337_0038.jsonl.gz`,
+00:38 UTC; 13 markets, 5.5 market-hours; jumps: college basketball 162,
+ATP 61, NBA 33, NHL 4; `jumps_20261123_2337_0038.jsonl.gz`,
 `jump_reversal_result_20261124.txt`). A modelled bid k ticks behind the
 best price, counted as filled when the price moves strictly through it:
 
@@ -138,8 +139,9 @@ best price, counted as filled when the price moves strictly through it:
   does not pay for itself by the price coming back. In the two campaigns
   the profit came from the opposite jump arriving later and completing the
   pair.
-- Limits: about an hour, one evening, mostly basketball, no tennis to
-  speak of; a model of the fill with no queue; no rewards.
+- Limits: about an hour, one evening, mostly college basketball (not a
+  competition we trade), 61 tennis jumps; a model of the fill with no
+  queue; no rewards.
 
 **Side-by-side dry runs:** about 15 minutes each survived, with no
 cancels to compare. Insufficient; no conclusion drawn. The two persistence
