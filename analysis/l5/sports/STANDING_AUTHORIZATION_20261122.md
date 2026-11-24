@@ -824,3 +824,35 @@ and normal settings restored at 16:03 (deployment `08e6dfae`). No order
 was placed. The drill authorization of sections 30–31 is spent; a new
 window needs a new authorization. Open: a browser-only way for the
 operator to sign (GitHub Codespaces proposed; nothing built).
+
+## 33. 12-hour supervised campaign authorized — 24 Nov, about 16:25 UTC
+
+Owner, typed: "Authorized: 12-hour supervised campaign, 17:00 UTC 24 Nov
+to 05:00 UTC 25 Nov, on these terms, with the signed emergency stop
+unverified. Preserve all existing risk limits and automatic shutdown
+protections. Prioritize profitable inventory accumulation, sustained
+liquidity provision and reward capture. Report confirmed realized net
+profit, paid rewards, inventory and capital utilization. No additional
+development or strategy experiments during the campaign. Stop if any
+existing safety control fails." The signed-marker drill was deferred by
+the owner beforehand ("Defer the signed-marker drill").
+
+Terms: sports `12d5d3daf`, watchdog `f6a5900eb`, no build change. Window
+17:00:00 UTC 24 Nov to 05:00:00 UTC 25 Nov, relocks itself. ATP, Serie A,
+Premier League, La Liga, NBA, NFL, NHL; pre-game and in-play; 1 contract;
+up to 4 markets; maker-only; pair cap 0.97; campaign spend 16 / unpaired
+6; per-market spend 8 / unpaired 3; campaign loss stop 4; daily halt 5;
+account limit 3.00 enforced; depth 10, international price, band
+0.30–0.70, stale-audit block; quoting as deployed (pause hold 600 s,
+reselect, gap hold 20 s, keep deeper 1 tick).
+
+Disclosed and accepted: signed emergency stop unverified and no signed
+marker held; manual stop is the plain lock (1 to 15+ minutes); watchdog
+proven once on process death; supervision by this session at +5 min and
+every 30 min, not guaranteed. Lock without waiting on: reconciliation or
+audit failure, safety latch, order above 1 contract, taker order, order
+outside the competitions, unexplained cash, watchdog error.
+
+Baseline before the window: buying power $320.1638; account figure
+$1.3144 of $3.00; zero open orders; zero positions (11:17 reconcile);
+halt clear. Settings set at 16:26.
