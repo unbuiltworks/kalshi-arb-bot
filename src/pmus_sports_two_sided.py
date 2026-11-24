@@ -1263,6 +1263,30 @@ RN1_KEEP_MAX_S = float(os.getenv("PMUS_RN1_KEEP_MAX_S", "60"))
 #     block, pause, lock or halt pulls it, as now).
 # It never places a new bid and never moves one. 0 = off (today).
 RN1_GAP_HOLD_S = float(os.getenv("PMUS_RN1_GAP_HOLD_S", "0"))
+# FINAL ORDER GATE (owner 2026-11-24). On the RN1 path the order size, the
+# campaign and per-market ceilings and the pair-cost ceiling were applied
+# where the quote is BUILT and not again where the order is SENT; an
+# oversize order was only caught on the next pass. With FINAL_GATE on
+# (default) every order is checked again, independently, immediately before
+# submission, and a violation prevents the submission:
+#   * size:      qty <= the largest size any phase may use
+#   * maker:     on the RN1 path a non-post-only order is refused unless
+#                ALLOW_TAKER=1 (the older two-sided path keeps its own
+#                taker authorization)
+#   * ceilings:  this market's and the campaign's worst-case spend and
+#                unpaired cost, counting every resting order already
+#                recorded PLUS this one (so two orders that each fit alone
+#                cannot both be sent when together they do not)
+#   * pair cost: this bid plus the dearest thing it could pair with -- the
+#                other side's filled average if it would complete held
+#                inventory, and every bid resting on the other side -- must
+#                not exceed the pair cap. It never refuses a bid for NOT
+#                pairing: adding to the heavier side is untouched.
+# The checks already at the gate stay where they are: authorization (lock /
+# window / campaign file), the emergency halt, strict scope, the account
+# limit with its fail-closed read, the portfolio budget and depth.
+FINAL_GATE = os.getenv("PMUS_TWO_SIDED_FINAL_GATE", "1").strip() != "0"
+ALLOW_TAKER = os.getenv("PMUS_TWO_SIDED_ALLOW_TAKER", "0").strip() == "1"
 # DO NOT CHASE THE BEST PRICE UPWARD. Today a resting bid is cancelled and
 # re-posted whenever its target moves by one tick, in either direction.
 # When the target has moved AWAY (the best price improved, so our bid is
@@ -4294,6 +4318,13 @@ class Engine:
             log("place_refused_shared_halt", slug=slug, side=side, px=px,
                 qty=qty, stage=stage)
             return
+        why = self.final_gate(slug, side, px, qty, stage, post_only)
+        if why:
+            log("place_refused_final_gate", slug=slug, side=side, px=px,
+                qty=qty, stage=stage, post_only=post_only, reason=why,
+                label="refused immediately before submission; nothing "
+                      "was sent")
+            return
         oid = (self.v.place(slug, side, px, qty, stage) if post_only else
                self.v.place(slug, side, px, qty, stage, post_only=False))
         mk = self.b.m(slug)
@@ -4309,6 +4340,71 @@ class Engine:
             order_id=oid, phase=mk.get("phase_now"))
 
     # ------------------------------------------------ RN1 replica (default off)
+    def final_gate(self, slug: str, side: str, px: Any, qty: Any,
+                   stage: str, post_only: bool = True) -> Optional[str]:
+        """Why this order may not be sent, or None. Independent of whatever
+        built the order. Unknown or unreadable figures refuse."""
+        if not FINAL_GATE:
+            return None
+        try:
+            p, q = D(str(px)), D(str(qty))
+            if not (p.is_finite() and q.is_finite()) or q <= 0 or \
+                    not (D(0) < p < D(1)):
+                return "order_unreadable"
+            if not RN1.ON:
+                # the older two-sided path keeps its own limits and its
+                # own, separately authorized, taker exits
+                return None
+            if not post_only and not ALLOW_TAKER:
+                return "taker_not_authorized"
+            if q > rn1_max_clip():
+                return "size_above_maximum:%s>%s" % (q, rn1_max_clip())
+            mk = self.b.m(slug)
+            sd = "YES" if str(side).upper() == "YES" else "NO"
+            ot = "NO" if sd == "YES" else "YES"
+            pos = {k: D(str(mk["pos"][k])) for k in ("YES", "NO")}
+            cost = {k: D(str(mk["cost"][k])) for k in ("YES", "NO")}
+            rest = [(o["side"], D(str(o["px"])),
+                     D(str(o["qty"])) - D(str(o.get("filled") or "0")))
+                    for o in (mk.get("orders") or {}).values()
+                    if o.get("open")]
+            # ---- pair cost: against what this bid could pair with
+            cap = D(str(RN1.PAIR_CAP))
+            partners = [rp for rs, rp, rl in rest if rs == ot and rl > 0]
+            if pos[ot] > pos[sd] and pos[ot] > 0:
+                partners.append(cost[ot] / pos[ot])   # held, unpaired
+            if partners and p + max(partners) > cap + D("0.0000001"):
+                return "pair_cost_above_cap:%s+%s>%s" % (
+                    p, max(partners).quantize(D("0.0001")), cap)
+            if is_completion_stage(stage):
+                # it reduces risk and its cost is already reserved; the
+                # pair-cost ceiling above is its limit
+                return None
+            # ---- ceilings: everything recorded plus this order
+            every = [(rs, rp, rl, False) for rs, rp, rl in rest] + \
+                [(sd, p, q, False)]
+            c = RN1.committed(mk["pos"], mk["cost"], every)
+            tol = D("0.000001")
+            if c["spend"] > D(str(RN1.PER_MARKET_USD)) + tol:
+                return "per_market_spend:%s>%s" % (
+                    c["spend"], RN1.PER_MARKET_USD)
+            if c["unmatched"] > D(str(RN1.RESIDUAL_CAP_USD)) + tol:
+                return "per_market_unpaired:%s>%s" % (
+                    c["unmatched"], RN1.RESIDUAL_CAP_USD)
+            other = self.rn1_campaign_exposure(exclude=slug)
+            if other["spend"] + c["spend"] > \
+                    D(str(RN1.TOTAL_SPEND_USD)) + tol:
+                return "campaign_spend:%s>%s" % (
+                    other["spend"] + c["spend"], RN1.TOTAL_SPEND_USD)
+            if other["unmatched"] + c["unmatched"] > \
+                    D(str(RN1.TOTAL_UNMATCHED_USD)) + tol:
+                return "campaign_unpaired:%s>%s" % (
+                    other["unmatched"] + c["unmatched"],
+                    RN1.TOTAL_UNMATCHED_USD)
+            return None
+        except Exception as exc:                          # noqa: BLE001
+            return "gate_error:%s" % type(exc).__name__
+
     def rn1_campaign_exposure(self, exclude: Optional[str] = None
                               ) -> Dict[str, D]:
         """Committed spend / unmatched across RN1 markets not yet settled:
