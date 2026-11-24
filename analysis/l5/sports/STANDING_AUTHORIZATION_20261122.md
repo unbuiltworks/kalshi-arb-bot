@@ -795,3 +795,22 @@ after the bot restarts; worst case $0.70; no arming and no retry if the
 locked pre-flight fails; afterwards relocked, settings restored, halt
 latched until a separate reset approval. The campaign itself is not
 authorized by this.
+
+## 31. Signed-marker drill: market changed — 24 Nov, 15:52 UTC
+
+The locked pre-flight at 15:29 refused `aec-atp-chdp-leosto-2026-11-24`
+(`no_international_price_yet`; none exists for it) and nothing was armed.
+My error: the market was chosen from the venue price list without the full
+selection check. Five alternatives were then run through the full check.
+
+Owner, typed: "Authorized: same signed-marker drill, market
+aec-atp-benwil-matalv-2026-11-23, 16:30–16:40 UTC on 24 Nov. All
+previously approved limits remain unchanged. Prepare the exact 12-hour
+campaign authorization now. Once the drill passes and the halt is reset,
+proceed directly to requesting campaign approval. No additional tests or
+development unless a critical defect appears."
+
+Market at 15:32: open, pre-game, start 19:30 UTC, international price
+present, 0.55 / 0.56. Pin and the 16:30–16:40 window set at 15:53 in one
+change (the bot stays locked until 16:30; the pre-flight is read in that
+locked period).
