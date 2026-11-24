@@ -1004,3 +1004,38 @@ audit and reconcile clean. Disclosed: signed emergency stop unverified;
 manual stop is the plain lock; session supervision not guaranteed. The
 $5 / $30 stage is not authorized by this. Baseline: cash $320.5138.
 Window set at 21:05:47.
+
+## 41. Validation hour result — 24 Nov, 21:30–22:30 UTC (written 22:40)
+
+Build `766a965ba`, $3 account limit. Source: production logs read at
+21:37, 21:54, 22:14, 22:18 and 22:35.
+
+| Criterion | Result |
+|---|---|
+| Account figure + resting opening bids | max 2.9644, never above 3.00 (8 limit readings, 60 heartbeats sampled) |
+| Bids placed beyond the limit | 0; 193 refused at placement for lack of room |
+| Place-and-pull cycle on opening bids | none (re-placements 52 s or more apart, on price moves) |
+| Reservations | 12 held (all sends deferred by the bot's own request budget), 12 released on venue order and position reconciliation, 17 to 35 s each; none outstanding |
+| Audit / reconcile | 22:18:00 reconciled, no mismatches, cash explained exactly |
+| Orders | 99, all 1 contract, maker, ATP or NBA |
+| Safety latch, errors, watchdog | clear; none; healthy, 0 open orders after the window |
+| Relock | by itself at 22:30:00 (window_ended); plain lock set 22:34, effective 22:35:10 |
+
+Not clean:
+- Two readings (21:46:58, 21:56:16) showed 3.41 and 3.39 because a fill was
+  counted both in the ledger figure and as "not yet in the ledger" for a
+  few seconds. True figures 2.96 and 2.88. Each made the bot pull and
+  re-place its opening bids once. Conservative, costs quoting time.
+- Two "account figure unreadable" blips (21:49:29, 21:59:44) did the same.
+- The completing bid on Axenef–Alarub was re-placed 45 times at the same
+  price: each two-tick jump marks fair value unsettled, the quote decision
+  drops the completion, and it returns about 13 s later. 50 of the 99
+  orders were completions.
+- The hourly audit took about ten minutes under traffic and no heartbeat
+  was logged while it ran (22:08–22:18); the loop and orders continued.
+
+Trading: 2 fills, 0 pairs. Axenef–Alarub NO 1 @ 0.45 (market now YES
+0.93/0.94); Jiecui–Benhas YES 1 @ 0.51 (market 0.52/0.53). Both unpaired
+and now without completing bids (locked). Cash $319.5538 = 320.5138 −
+0.96. Nothing settled. Owner's provisional view at 21:57: capital
+enforcement passes; the double count is conservative, not dangerous.
