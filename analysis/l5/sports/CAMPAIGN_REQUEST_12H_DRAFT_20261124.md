@@ -28,8 +28,8 @@ block and the safety latch all act without a session.
 | Field | Value |
 |---|---|
 | Window | 12 hours, start TBC (chosen so both a soccer slate and tennis fall inside it) |
-| Competitions | ATP, Serie A, Premier League, La Liga; NBA, NFL, NHL if the owner wants them in the comparison |
-| Markets at once | up to 4 |
+| Competitions | ATP, Serie A, Premier League, La Liga, NBA, NFL, NHL (owner, 24 Nov). Eligible is not the same as quoted: every market must still pass the price, economic, inventory and risk gates |
+| Markets at once | up to 4, subject to the room left under the account limit |
 | Order size | 1 contract |
 | Slate | pre-game and in-play |
 | Campaign spend / unpaired | $16 / $6 |
