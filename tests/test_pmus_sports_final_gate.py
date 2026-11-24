@@ -380,3 +380,46 @@ def test_a_fresh_attestation_is_trusted_under_the_tighter_limit(
     monkeypatch.setattr(M, "SHARED_HALT_TTL_S", 0.0)
     monkeypatch.setattr(M, "SHARED_HALT_MAX_AGE_S", 120.0)
     assert e.shared_halt() is None
+
+
+def test_a_stale_attestation_cancels_resting_opening_orders(
+        g, tmp_path, monkeypatch):
+    """Owner 2026-11-24: "On channel timeout, the controller should cancel
+    outstanding exposure-increasing orders, block new exposure and preserve
+    reconciliation and settlement operations." Opening bids already
+    resting are pulled on the next pass; the bid that completes a held leg
+    stays; nothing is latched."""
+    from src import l5_halt_gate as HG
+    e, v = g
+    box = {"store": _attest(tmp_path / "a", 5)}
+    monkeypatch.setenv(M.SHARED_HALT_URL_ENV, "http://watchdog.test")
+    monkeypatch.setattr(HG, "HttpHaltStore", lambda url, **k: box["store"])
+    monkeypatch.setattr(M, "SHARED_HALT_TTL_S", 0.0)
+    monkeypatch.setattr(M, "SHARED_HALT_MAX_AGE_S", 120.0)
+    e.b.m(S1)
+    e.step_market(S1)                              # fresh: both sides rest
+    opens = [o for o in v.orders.values() if o["open"]]
+    assert len(opens) == 2
+    mk2 = e.b.m(S2)                                # a second market holding
+    mk2["pos"]["YES"], mk2["cost"]["YES"] = D("1"), D("0.44")   # a lone leg
+    e.step_market(S2)
+    comp = [o for o in e.b.d["markets"][S2]["orders"].values()
+            if o.get("open")]
+    # a held leg rests its completion and, here, an extension as well
+    assert "two_sided_complete" in [o["stage"] for o in comp]
+    # the watchdog stops attesting; two minutes later the record is stale
+    box["store"] = _attest(tmp_path / "b", 130)
+    assert e.shared_halt() == "UNAVAILABLE"
+    e.step_market(S1)
+    e.step_market(S2)
+    left = [(s, o["stage"]) for s, mk in e.b.d["markets"].items()
+            for o in mk["orders"].values() if o.get("open")]
+    assert left == [(S2, "two_sided_complete")]    # openings gone
+    assert not e.b.d.get("safety_latch")
+    # reconciliation still runs: the account read and the book are intact
+    assert e.own_exposure_usd() > 0
+    # and when the attestation is fresh again the bot quotes again
+    box["store"] = _attest(tmp_path / "c", 5)
+    e.step_market(S1)
+    assert len([o for o in e.b.d["markets"][S1]["orders"].values()
+                if o.get("open")]) == 2
