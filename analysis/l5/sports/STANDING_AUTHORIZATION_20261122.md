@@ -970,3 +970,18 @@ on. This session's worker was down from about 19:50 to 20:53 UTC; the
 platform created the deployment (`4d714f1b`) at 20:53:45. Verification and
 an independent audit of the unpaired-residual settlements are running.
 The validation window is NOT authorized by this.
+
+## 39. `766a965ba` verified locked; campaign of 24 Nov closed — 21:00 UTC
+
+Deployment `4d714f1b` SUCCESS on `766a965ba`, booted 20:54:54, plain lock
+(new exposure and completions). No order, fill, traceback or reservation
+line. Audit 20:58:28: reconciled, no mismatches, venue positions 0, no
+open orders. Watchdog 20:59:38: 0 open orders, no halt, no read error.
+Safety latch clear. Cash $320.5138. Account figure $0.9644 of $3.00 (room
+$2.0356).
+
+Campaign 17:00–18:50 UTC, final, venue records: two pairs +$0.10;
+Samher–Yanale NO 1 @ 0.61 settled at 0 (−$0.61); Juagom–Bengeo NO 1 @
+0.44 settled at 0 (−$0.44). **Trading result −$0.95.** Rewards for 24 Nov
+not posted. Reward rows unchanged (PAID 122 / $24.09). The hourly
+post-campaign check is switched off.
