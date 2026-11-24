@@ -607,3 +607,32 @@ At about 02:30 UTC the pre-window settings were restored in one call:
 `PMUS_TWO_SIDED_OPEN_GATE_ALLOW_SPORTS=nfl,nba`,
 `PMUS_TWO_SIDED_MAX_MARKETS=2`, `PMUS_RN1_QTY=2`. The window's
 authorization is spent; no window is authorised.
+
+## 24. Watchdog `b79ad4a8b` deployed — 24 Nov, 03:13 UTC
+
+Pre-check at 02:46 UTC: sports bot restarted 02:31 on the plain lock
+(NFL and NBA, two markets); zero open orders on the watchdog (02:45:22)
+and ledger (02:45:24) venue reads; no order or fill since 02:14:54; the
+bot's 02:34 audit attributes the +$0.03 to the one pair with nothing
+unexplained.
+
+Source switched at about 02:50 UTC to
+`release/l5-halt-watchdog-b79ad4a8b`,
+`b79ad4a8ba54fe96853de34d112f235424e99e42`. No variable was set. The
+platform created the deployment at 03:11:49 (about 20 minutes later) and
+it started at 03:13:01.
+
+Verified read-only at 03:16: deployment `139e7cf8` SUCCESS on that
+commit; gap between the old deployment's last sweep and the new one's
+first 10.4 s (no sweep missed); ten sweeps 20 s apart, all 0 open orders,
+not halted, no read error, all three registries OK; cancel enabled, order
+age limit 300 s; halt marker reported "configured false, read credential
+not set" (the operator has not set its values); no error. Sports bot
+unchanged and locked, no halt-state change logged; ledger reconcile clean
+and reading the new watchdog's latch (clear).
+
+Not visible in the logs: the claim-refresh, claim-memory and dead-after
+settings are not echoed at boot. They are service variables that were not
+touched, but their effect is only proven by drill 1.
+
+Rollback if needed: `release/l5-halt-watchdog-8c9bee06f`.
