@@ -545,3 +545,33 @@ once the 03:10–04:10 ATP window has relocked. Rollback:
 `release/l5-halt-watchdog-8c9bee06f`. Not authorised: either drill, a halt
 reset, setting the marker's secret or token (the operator sets those), any
 order.
+
+## 21. ATP window moved earlier — 24 Nov, 00:45 UTC
+
+Owner: "We can't move that up sooner?" Checked the slate: one ATP match in
+play, three starting 01:00 UTC with prices in band (0.41, 0.53, 0.66).
+Asked whether to replace the 03:10–04:10 window "on exactly the same terms
+(build e6e8b4e60, ATP only strict scope, in-play only, up to 3 markets, 1
+contract, maker-only, $3.00 account limit enforced, all other limits
+unchanged, automatic relock, armed only if the preflight passes)".
+Answer: **"01:20-02:20 UTC"**. The 03:10–04:10 window is cancelled; its
+scheduled tasks were deleted before arming.
+
+Preflight at 00:45 UTC: running commit exact, locked, account limit in
+enforce mode ($3.00 limit, ledger $1.3444, capacity $1.6556, snapshot
+0.9 s old), last audit complete, no order in the last hour, watchdog
+sweeping with 0 open orders and no halt, ledger reconcile clean, no safety
+latch, no tracebacks. The only error-named lines were the two known
+info-level ones seen in every check since 23 Nov (a websocket
+"invalid_message" frame and the shadow combo reader deferred by the
+request budget).
+
+Armed at 00:46:28 UTC in one call:
+`PMUS_TWO_SIDED_SUBMISSION_LOCK=window:2026-11-24T01:20:00Z/2026-11-24T02:20:00Z`,
+`PMUS_TWO_SIDED_OPEN_GATE_ALLOW_SPORTS=atp`, `PMUS_TWO_SIDED_MAX_MARKETS=3`,
+`PMUS_TWO_SIDED_SLATE=live`, `PMUS_RN1_QTY=1`. Nothing else changed.
+
+Scheduled as separate tasks: verification before opening 01:12; first
+minutes 01:24; mid 01:48; close-out 02:25; watchdog deployment 02:45
+(section 20, moved up with the window). Each locks the bot if its check
+cannot be completed.
