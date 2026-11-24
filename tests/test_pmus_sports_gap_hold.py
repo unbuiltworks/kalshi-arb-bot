@@ -196,3 +196,97 @@ def test_a_fill_during_a_hold_is_handled_as_usual(rig, monkeypatch):
     assert [o for o in mk["orders"].values()
             if o.get("open") and o["side"] == "YES"] == []
     assert len([o for o in mk["orders"].values() if o.get("open")]) <= 1
+
+
+# ----------------------------------------- do not chase the best price up
+def test_baseline_a_one_tick_better_market_reposts_both_bids(rig):
+    e, v, box = rig
+    assert M.RN1_KEEP_DEEPER_TICKS == 0
+    e.step_market(SLUG)
+    first = ids(e)
+    v.bid, v.ask = D("0.49"), D("0.51")      # YES target moves up a tick
+    box["band"] = band(mid="0.50")
+    e.step_market(SLUG)
+    e.step_market(SLUG)
+    assert set(ids(e)) != set(first)          # today: cancelled and re-sent
+
+
+def _yes(e):
+    return [(oid, o["px"]) for oid, o in
+            e.b.d["markets"][SLUG]["orders"].items()
+            if o.get("open") and o["side"] == "YES"]
+
+
+def test_a_bid_left_one_tick_deeper_keeps_its_place(rig, monkeypatch):
+    e, v, box = rig
+    monkeypatch.setattr(M, "RN1_KEEP_DEEPER_TICKS", 1)
+    e.step_market(SLUG)
+    yes0 = _yes(e)
+    v.bid, v.ask = D("0.49"), D("0.51")      # best bid improved by a tick
+    box["band"] = band(mid="0.50")
+    e.step_market(SLUG)
+    e.step_market(SLUG)
+    assert _yes(e) == yes0                    # same order, same price
+
+
+def test_two_ticks_deeper_is_repriced(rig, monkeypatch):
+    e, v, box = rig
+    monkeypatch.setattr(M, "RN1_KEEP_DEEPER_TICKS", 1)
+    e.step_market(SLUG)
+    yes0 = _yes(e)
+    v.bid, v.ask = D("0.50"), D("0.52")
+    box["band"] = band(mid="0.51")
+    e.step_market(SLUG)
+    e.step_market(SLUG)
+    now = _yes(e)
+    assert now and now != yes0
+    assert D(str(now[0][1])) > D(str(yes0[0][1]))
+
+
+def test_a_bid_now_above_its_target_is_never_kept(rig, monkeypatch):
+    """The market came toward us: our bid is closer than intended. That is
+    re-priced exactly as today, whatever the setting."""
+    e, v, box = rig
+    monkeypatch.setattr(M, "RN1_KEEP_DEEPER_TICKS", 3)
+    e.step_market(SLUG)
+    yes0 = _yes(e)
+    v.bid, v.ask = D("0.47"), D("0.49")
+    box["band"] = band(mid="0.48")
+    e.step_market(SLUG)
+    e.step_market(SLUG)
+    now = _yes(e)
+    assert now != yes0
+    assert all(D(str(px)) < D(str(yes0[0][1])) for _oid, px in now)
+
+
+def test_a_completion_is_always_priced_at_its_target(rig, monkeypatch):
+    e, v, box = rig
+    monkeypatch.setattr(M, "RN1_KEEP_DEEPER_TICKS", 2)
+    mk = e.b.d["markets"][SLUG]
+    mk["pos"]["YES"], mk["cost"]["YES"] = D("2"), D("0.88")
+    e.step_market(SLUG)
+    c0 = [(oid, o["px"]) for oid, o in mk["orders"].items() if o.get("open")
+          and o.get("stage") == "two_sided_complete"]
+    assert c0
+    v.bid, v.ask = D("0.47"), D("0.49")      # NO target moves up a tick
+    box["band"] = band(mid="0.48")
+    e.step_market(SLUG)
+    e.step_market(SLUG)
+    c1 = [(oid, o["px"]) for oid, o in mk["orders"].items() if o.get("open")
+          and o.get("stage") == "two_sided_complete"]
+    assert c1 and c1 != c0
+
+
+def test_a_deeper_bid_can_still_be_held_through_a_gap(rig, monkeypatch):
+    e, v, box = rig
+    monkeypatch.setattr(M, "RN1_KEEP_DEEPER_TICKS", 1)
+    monkeypatch.setattr(M, "RN1_GAP_HOLD_S", 20.0)
+    e.step_market(SLUG)
+    yes0 = _yes(e)
+    v.bid, v.ask = D("0.49"), D("0.51")
+    box["band"] = band(mid="0.50")
+    e.step_market(SLUG)
+    assert _yes(e) == yes0
+    box["band"] = band(mid=None, settled=False)
+    e.step_market(SLUG)
+    assert _yes(e) == yes0

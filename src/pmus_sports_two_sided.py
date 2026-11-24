@@ -1263,6 +1263,16 @@ RN1_KEEP_MAX_S = float(os.getenv("PMUS_RN1_KEEP_MAX_S", "60"))
 #     block, pause, lock or halt pulls it, as now).
 # It never places a new bid and never moves one. 0 = off (today).
 RN1_GAP_HOLD_S = float(os.getenv("PMUS_RN1_GAP_HOLD_S", "0"))
+# DO NOT CHASE THE BEST PRICE UPWARD. Today a resting bid is cancelled and
+# re-posted whenever its target moves by one tick, in either direction.
+# When the target has moved AWAY (the best price improved, so our bid is
+# now deeper than intended) the resting bid is still wanted, at a better
+# price than the one the test just passed, and it has its place in the
+# queue. With RN1_KEEP_DEEPER_TICKS = n an opening/extension bid up to n
+# ticks BELOW its target is left alone. A bid ABOVE its target (the market
+# came toward us) is re-priced or pulled exactly as now, and so is a
+# completion. 0 = off (today).
+RN1_KEEP_DEEPER_TICKS = int(os.getenv("PMUS_RN1_KEEP_DEEPER_TICKS", "0"))
 # DURABLE HALT ON A RECONCILIATION FAILURE, with no session involved
 # (owner 2026-11-23: "reconciliation failures must trigger a durable halt";
 # LIVE 2026-11-22 22:10Z a fill was recorded 89 s after the venue made it,
@@ -4712,10 +4722,12 @@ class Engine:
                 lp.pop(side, None)
                 q["why_" + side] = "no_fair:intl_price_moving"
                 continue
+            # the bid that passed, or one left resting below it (never one
+            # above the price the test passed)
             rest = [o for o in mk["orders"].values()
                     if o.get("open") and o.get("side") == side
                     and not is_completion_stage(o.get("stage"))
-                    and D(str(o["px"])) == D(rec["px"])]
+                    and D(str(o["px"])) <= D(rec["px"])]
             if len(rest) != 1:
                 lp.pop(side, None)
                 continue
@@ -4724,7 +4736,7 @@ class Engine:
                 q["why_" + side] = "no_fair:depth"
                 continue
             o = rest[0]
-            want[side] = {"px": D(rec["px"]),
+            want[side] = {"px": D(str(o["px"])),
                           "qty": D(str(o["qty"])) - D(str(o.get("filled")
                                                           or "0")),
                           "role": rec["role"], "held": True}
@@ -4899,10 +4911,18 @@ class Engine:
                 continue
             tg = want.get(o["side"])
             left = D(o["qty"]) - D(o.get("filled") or "0")
+            gap = None if tg is None else tg["px"] - D(o["px"])
+            near = gap is not None and abs(gap) < RN1.REPRICE_TICKS * tick
+            deeper = gap is not None and RN1_KEEP_DEEPER_TICKS > 0 and \
+                tg["role"] != "complete" and \
+                not is_completion_stage(o.get("stage")) and \
+                D(0) < gap <= RN1_KEEP_DEEPER_TICKS * tick
             if tg is not None and o["side"] not in keep and \
-                    abs(D(o["px"]) - tg["px"]) < RN1.REPRICE_TICKS * tick and \
-                    left <= tg["qty"]:
+                    (near or deeper) and left <= tg["qty"]:
                 keep[o["side"]] = oid
+                if deeper and not near:
+                    self._kept_deeper = int(getattr(
+                        self, "_kept_deeper", 0)) + 1
             else:
                 stale.append((oid, o))
         if stale:
