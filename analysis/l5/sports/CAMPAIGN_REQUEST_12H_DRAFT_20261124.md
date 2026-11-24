@@ -4,30 +4,32 @@
 request once its preconditions are met; figures marked TBC are filled from
 evidence, not assumed.
 
-## Preconditions (each is a separate approval or result)
+## Preconditions (state at 11:35 UTC, 24 Nov)
 
 | # | Precondition | State |
 |---|---|---|
-| 1 | Tonight's 60-minute ATP window shows the account limit and the audit protection working under live traffic | 03:10–04:10 UTC, 24 Nov |
-| 2 | Watchdog `b79ad4a8b` deployed, marker configured, wrong-signature check passed | awaiting approval and the operator's values |
-| 3 | Drill 1 (cancel after process death) passed | awaiting authorization |
-| 4 | Drill 2 (signed marker) passed | awaiting authorization |
-| 5 | Combined sports release deployed locked: runtime authorization plus the persistence rules the evidence supports | release being prepared |
-| 6 | Report-only check: the bot reads a test campaign file from the repository and shows the right verdict while locked | after 5 |
-| 7 | Hard ceilings deployed, including the 12-hour maximum window | with 5 |
+| 1 | Account limit and audit protection shown under live traffic | done, 01:20–02:20 UTC window |
+| 2 | Watchdog `f6a5900eb` deployed | done; marker mechanism still off (operator's two secrets not set) |
+| 3 | Combined sports release `12d5d3daf` deployed locked, 12-hour maximum window | done |
+| 4 | Drill 1 (cancel after process death) | passed 05:01 UTC; halt reset 11:28 UTC |
+| 5 | Interim variable drill | deferred by the owner |
+| 6 | Fast emergency stop: two secrets set, wrong-signature check, signed-marker drill, halt reset | **open: waits on the operator's two secrets** |
+| 7 | Exact campaign authorization (window, terms below) | open |
 
 ## How it runs
 
-One signed campaign file, committed by the operator, valid for 12 hours.
-No redeploy. It expires by itself. The halt marker, the watchdog's own
-rules, the account limit, the loss stop, the daily halt, the stale-audit
-block and the safety latch all act without a session.
+One 12-hour submission window set on the sports bot (one settings change,
+one restart before the window). It relocks by itself at the end. Runtime
+campaign files stay off: they would need a third secret and add nothing
+to this first run. The halt marker, the watchdog's own rules, the account
+limit, the loss stop, the daily halt, the stale-audit block and the safety
+latch all act without a session.
 
 ## Proposed campaign file
 
 | Field | Value |
 |---|---|
-| Window | 12 hours, start TBC (chosen so both a soccer slate and tennis fall inside it) |
+| Window | 12 hours, start set in the authorization (chosen so both a soccer slate and tennis fall inside it) |
 | Competitions | ATP, Serie A, Premier League, La Liga, NBA, NFL, NHL (owner, 24 Nov). Eligible is not the same as quoted: every market must still pass the price, economic, inventory and risk gates |
 | Markets at once | up to 4, subject to the room left under the account limit |
 | Order size | 1 contract |
