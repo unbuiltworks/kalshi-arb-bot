@@ -593,3 +593,17 @@ refuses any order on them (checked again at 01:24).
 deployment with the window needed its own approval; it was put back to
 04:30. Asked with the exact commit. Answer: **"Deploy at 02:45 UTC"**,
 only after a clean 02:25 close-out leaves the bot locked with zero orders.
+
+## 23. Close-out of the 01:20–02:20 window — 24 Nov, 02:30 UTC
+
+The bot relocked itself at 02:20:03 ("window_ended"). Zero open orders on
+three venue reads (watchdog 02:26:17, ledger reconcile 02:25:17, bot audit
+01:50:53, the last of which predates the 02:14 fills). Result: 29 orders,
+2 fills, 1 pair at $0.97, venue cash +$0.03, nothing unpaired, no safety
+event. Report: `CAMPAIGN_20261124_REPORT.md`.
+
+At about 02:30 UTC the pre-window settings were restored in one call:
+`PMUS_TWO_SIDED_SUBMISSION_LOCK=1`,
+`PMUS_TWO_SIDED_OPEN_GATE_ALLOW_SPORTS=nfl,nba`,
+`PMUS_TWO_SIDED_MAX_MARKETS=2`, `PMUS_RN1_QTY=2`. The window's
+authorization is spent; no window is authorised.
