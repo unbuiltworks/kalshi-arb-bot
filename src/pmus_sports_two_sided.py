@@ -4063,23 +4063,73 @@ class Engine:
                   "stays reserved until an account read newer than it has "
                   "been reconciled")
 
-    def release_reconciled_reservations(self, read_mono: Optional[float]
-                                        ) -> int:
-        """After an orphan sweep over an account read taken at `read_mono`:
-        an uncertain submission older than that read by RESERVATION_HOLD_S
-        is either in the book now (the sweep adopted it) or was never
-        accepted. Either way its reservation has done its work."""
-        if read_mono is None:
+    def release_reconciled_reservations(
+            self, read_mono: Optional[float],
+            acct: Optional[Mapping[str, Any]] = None) -> int:
+        """Release an uncertain submission's reservation ONLY on definitive
+        venue evidence (owner 2026-11-24: "Require definitive venue order
+        and position reconciliation before releasing reserved capital").
+        All of:
+          * an orphan sweep has run over an account read (`acct`, taken at
+            `read_mono`) at least RESERVATION_HOLD_S newer than the send;
+          * every order the venue shows open in that market is an order in
+            the book (an accepted order would have been adopted by now);
+          * a COMPLETE positions walk shows the venue's position in that
+            market equal to the book's. An unanswered order that was
+            accepted and filled in full is in no open-order list; only its
+            position shows it. Then the reservation stays, and the
+            position-mismatch latch stops the bot.
+        Anything unread, incomplete or unequal holds the reservation. A
+        ledger reading plays no part."""
+        if read_mono is None or acct is None:
             return 0
         res = self._reservations()
-        gone = [k for k, r in res.items() if r.get("state") == "uncertain"
-                and float(r.get("mono") or 1e18) + RESERVATION_HOLD_S
-                <= read_mono]
+        due = [k for k, r in res.items() if r.get("state") == "uncertain"
+               and float(r.get("mono") or 1e18) + RESERVATION_HOLD_S
+               <= read_mono]
+        if not due:
+            return 0
+        try:
+            venue_open: Dict[str, set] = {}
+            for o in acct.get("open_orders") or []:
+                venue_open.setdefault(str(o.get("marketSlug") or ""),
+                                      set()).add(str(o.get("id")))
+        except Exception:                                # noqa: BLE001
+            return 0
+        gone = []
+        for k in due:
+            r = res[k]
+            slug = str(r.get("slug") or "")
+            why = None
+            try:
+                mk = self.b.m(slug)
+                known = set((mk.get("orders") or {}).keys())
+                if not venue_open.get(slug, set()) <= known:
+                    why = "venue_order_not_in_book"
+                else:
+                    net = self._venue_net_complete(slug)
+                    have = abs(D(str(mk["pos"]["YES"])) -
+                               D(str(mk["pos"]["NO"])))
+                    if net is None:
+                        why = "venue_positions_not_complete"
+                    elif net != have:
+                        why = "venue_position_differs_from_book"
+            except Exception as exc:                     # noqa: BLE001
+                why = "reconcile_error:%s" % type(exc).__name__
+            if why is None:
+                gone.append(k)
+            elif r.get("held_why") != why:
+                r["held_why"] = why
+                log("ORDER_RESERVATION_HELD", slug=slug, side=r.get("side"),
+                    px=r.get("px"), qty=r.get("qty"), stage=r.get("stage"),
+                    err=why, label="not released: the venue's orders and "
+                                   "positions do not yet prove this "
+                                   "submission left nothing behind")
         for k in gone:
             r = res.pop(k)
             log("ORDER_RESERVATION_RELEASED", slug=r.get("slug"),
                 side=r.get("side"), px=r.get("px"), qty=r.get("qty"),
-                why="reconciled")
+                why="venue_orders_and_positions_reconciled")
         if gone:
             try:
                 self.b.save()
@@ -6757,12 +6807,15 @@ class Engine:
                     fresh = self._acct_cache is not None and \
                         self._acct_ok_at is not None and \
                         time.monotonic() - self._acct_ok_at <= 30
-                    read_at = self._acct_ok_at if fresh else \
-                        time.monotonic()
+                    read_at = self._acct_ok_at if fresh else None
                     self.orphan_sweep(self._acct_cache["open_orders"]
                                       if fresh else None)
-                    if not getattr(self, "_orphan_sweep_failed", False):
-                        self.release_reconciled_reservations(read_at)
+                    if fresh and not getattr(self, "_orphan_sweep_failed",
+                                             False):
+                        # only over a fresh account read: its order list is
+                        # the one the sweep has just reconciled
+                        self.release_reconciled_reservations(
+                            read_at, self._acct_cache)
                 if SETTLE_CHECK_S > 0 and time.monotonic() - getattr(
                         self, "_last_settle", -1e9) > SETTLE_CHECK_S:
                     self._last_settle = time.monotonic()

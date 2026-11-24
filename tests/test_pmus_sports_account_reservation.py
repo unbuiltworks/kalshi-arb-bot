@@ -278,22 +278,126 @@ def test_a_send_that_fails_without_an_answer_keeps_its_reservation(
     assert kinds(capsys, "ORDER_RESERVATION_HELD")[0]["slug"] == S1
 
 
+def _lose(e, v, slug=S1, px="0.55"):
+    """One unanswered send: the reservation is held."""
+    real = v.place
+    v.place = lambda *a_, **k: (_ for _ in ()).throw(TimeoutError("lost"))
+    with pytest.raises(TimeoutError):
+        e.place(slug, "YES", D(px), D("1"), "rn1_open")
+    v.place = real
+    return e.reserved_orders()[0]["mono"] + M.RESERVATION_HOLD_S + 0.1
+
+
+def _venue(v, rows=(), complete=True):
+    v.positions_snapshot = lambda: {"rows": list(rows), "open_orders": [],
+                                    "complete": complete}
+
+
+def _pos(slug, net):
+    return {"marketSlug": slug, "netPositionDecimal": str(net)}
+
+
 def test_an_uncertain_reservation_is_released_only_by_a_newer_reconcile(
         a, capsys):
     e, v, box = a
-    v.place = lambda *a_, **k: (_ for _ in ()).throw(TimeoutError("lost"))
-    with pytest.raises(TimeoutError):
-        e.place(S1, "YES", D("0.55"), D("1"), "rn1_open")
-    made = e.reserved_orders()[0]["mono"]
-    assert e.release_reconciled_reservations(None) == 0
-    assert e.release_reconciled_reservations(made - 30) == 0   # older read
-    assert e.release_reconciled_reservations(made + 1) == 0    # too close
+    due = _lose(e, v)
+    _venue(v)                                    # venue: no position
+    acct = {"open_orders": [], "positions": {}}
+    assert e.release_reconciled_reservations(None, acct) == 0
+    assert e.release_reconciled_reservations(due - 60, acct) == 0  # older
+    assert e.release_reconciled_reservations(due - 4, acct) == 0   # too close
     assert e.own_resting_worst() == D("0.55")
-    assert e.release_reconciled_reservations(
-        made + M.RESERVATION_HOLD_S + 0.1) == 1
+    assert e.release_reconciled_reservations(due, acct) == 1
     assert e.reserved_orders() == [] and e.own_resting_worst() == D("0")
     assert kinds(capsys, "ORDER_RESERVATION_RELEASED")[0]["why"] == \
-        "reconciled"
+        "venue_orders_and_positions_reconciled"
+
+
+def test_a_newer_reading_alone_never_releases(a):
+    """A later ledger reading, or a later time, proves nothing about the
+    order. Without the venue's order list there is no release."""
+    e, v, box = a
+    due = _lose(e, v)
+    _venue(v)
+    box["doc"] = _doc("0.10")                    # a newer, roomier ledger
+    assert e.account_risk(fresh=True)["ok"]
+    assert e.release_reconciled_reservations(due + 3600) == 0
+    assert e.release_reconciled_reservations(due + 3600, None) == 0
+    assert e.own_resting_worst() == D("0.55")
+
+
+def test_an_unanswered_order_that_filled_in_full_is_not_released(a,
+                                                                 capsys):
+    """The send got no answer, the venue accepted it and it filled before
+    any sweep. No open order shows it; the position does. The capital
+    stays reserved and nothing new fits."""
+    e, v, box = a
+    due = _lose(e, v)
+    _venue(v, [_pos(S1, 1)])                     # venue long 1; book flat
+    acct = {"open_orders": [], "positions": {S1: 1}}
+    for _ in range(3):
+        assert e.release_reconciled_reservations(due + 60, acct) == 0
+    assert [r["state"] for r in e.reserved_orders()] == ["uncertain"]
+    assert e.own_resting_worst() == D("0.55")
+    e.place(S2, "YES", D("0.52"), D("1"), "rn1_open")
+    assert sent(v) == []
+    held = kinds(capsys, "ORDER_RESERVATION_HELD")
+    assert [h["err"] for h in held] == [
+        "TimeoutError", "venue_position_differs_from_book"]   # logged once
+
+
+def test_once_the_book_holds_the_fill_the_reservation_goes(a):
+    """The fill reaches the book (the unpaired cost now counts there), so
+    the reservation would count it twice: with venue and book equal it is
+    released, and the room is still taken by the inventory."""
+    e, v, box = a
+    due = _lose(e, v)
+    _venue(v, [_pos(S1, 1)])
+    acct = {"open_orders": [], "positions": {S1: 1}}
+    assert e.release_reconciled_reservations(due, acct) == 0
+    mk = e.b.m(S1)
+    mk["pos"]["YES"], mk["cost"]["YES"] = D("1"), D("0.55")
+    assert e.release_reconciled_reservations(due, acct) == 1
+    e.place(S2, "YES", D("0.52"), D("1"), "rn1_open")    # 0.55 held + 0.52
+    assert sent(v) == []
+
+
+def test_an_incomplete_or_unreadable_positions_walk_holds(a):
+    e, v, box = a
+    due = _lose(e, v)
+    acct = {"open_orders": [], "positions": {}}
+    _venue(v, complete=False)
+    assert e.release_reconciled_reservations(due, acct) == 0
+    v.positions_snapshot = lambda: (_ for _ in ()).throw(OSError("down"))
+    assert e.release_reconciled_reservations(due, acct) == 0
+    del v.positions_snapshot
+    assert e.release_reconciled_reservations(due, acct) == 0
+    assert len(e.reserved_orders()) == 1
+
+
+def test_a_venue_order_the_book_does_not_know_holds(a):
+    """The unanswered order IS resting at the venue and has not been
+    adopted into the book yet."""
+    e, v, box = a
+    due = _lose(e, v)
+    _venue(v)
+    acct = {"open_orders": [{"id": "VENUE1", "marketSlug": S1}],
+            "positions": {}}
+    assert e.release_reconciled_reservations(due, acct) == 0
+    e.b.m(S1)["orders"]["VENUE1"] = {"side": "YES", "px": "0.55",
+                                     "qty": "1", "filled": "0",
+                                     "open": True, "stage": "orphan"}
+    assert e.release_reconciled_reservations(due, acct) == 1
+    assert e.own_resting_worst() == D("0.55")    # the adopted order counts
+
+
+def test_an_unreadable_order_list_holds(a):
+    e, v, box = a
+    due = _lose(e, v)
+    _venue(v)
+    assert e.release_reconciled_reservations(
+        due, {"open_orders": [None], "positions": {}}) == 0
+    assert len(e.reserved_orders()) == 1
 
 
 def test_a_failed_orphan_sweep_releases_nothing(a):
@@ -336,8 +440,11 @@ def test_an_uncertain_reservation_survives_a_restart(a, tmp_path):
     e2.place(S2, "YES", D("0.52"), D("1"), "rn1_open")
     assert v2.orders == {}
     born = e2.reserved_orders()[0]["mono"]       # as old as the new process
-    assert e2.release_reconciled_reservations(
-        born + M.RESERVATION_HOLD_S + 0.1) == 1
+    due = born + M.RESERVATION_HOLD_S + 0.1
+    acct = {"open_orders": [], "positions": {}}
+    assert e2.release_reconciled_reservations(due, acct) == 0   # no walk yet
+    _venue(v2)
+    assert e2.release_reconciled_reservations(due, acct) == 1
 
 
 def test_a_cancelled_order_frees_its_room_only_when_the_book_says_closed(a):
