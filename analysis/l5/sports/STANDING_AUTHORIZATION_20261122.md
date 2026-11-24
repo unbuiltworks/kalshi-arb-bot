@@ -884,3 +884,24 @@ start. No oversize, taker or out-of-scope order; no latch; audits at
 17:44 clean.
 
 Not changed: any limit. Proposed $5 / $30 stage: not activated.
+
+## 35. Account-limit correction prepared — 24 Nov, 19:10 UTC
+
+Owner, about 18:55: "Proceed immediately with the account-limit
+correction" (reserve each submitted order immediately including in-flight
+and uncertain; no reuse of cached capacity; release only after confirmed
+cancellation, rejection or reconciliation; regression-test simultaneous
+submissions, concurrent fills, partial fills, stale readings; eliminate
+the place-and-cancel cycle; preserve everything else). "Prepare the
+corrected build for locked deployment and provide the exact SHA and
+regression results. Prepare the $5 account limit / $30 campaign spend
+configuration for separate authorization, but do not activate it.
+Reconcile the remaining inventory through settlement." Owner's correction
+to my figures: campaign trading result ranges from −$0.95 to +$1.05
+including the settled +$0.10.
+
+Done: release candidate `c2e4e0b3fe9cef43690f104cbaef636b03422e74`
+(`DEPLOY_REQUEST_SPORTS_c2e4e0b3f.md`). Not deployed; needs the owner's
+approval of that exact build. Inventory at 19:07 (public prices, not
+settled): Juagom–Bengeo YES 0.84/0.85, Samher–Yanale YES 0.98/0.99; our
+two NO legs are marked near $0.15 and $0.01 against $1.05 paid.
