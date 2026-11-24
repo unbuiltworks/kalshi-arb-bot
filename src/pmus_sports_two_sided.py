@@ -343,6 +343,24 @@ _ACCOUNT_RISK_MODE = os.getenv("PMUS_TWO_SIDED_ACCOUNT_RISK", "0").strip()
 ACCOUNT_RISK_ON = _ACCOUNT_RISK_MODE == "1"
 ACCOUNT_RISK_OBSERVE = _ACCOUNT_RISK_MODE.lower() == "observe"
 ACCOUNT_RISK_TTL_S = float(os.getenv("PMUS_TWO_SIDED_ACCOUNT_RISK_TTL_S", "10"))
+# LIVE 2026-11-24 18:27-18:50Z: the cached verdict's capacity counted only
+# the bids resting when it was computed, and every new bid was checked
+# against that same figure, so several bids inside one cache period each
+# passed (account figure + resting bids read 3.06 to 3.36 against 3.00).
+# Owner: "Reserve capital for each submitted order immediately, including
+# in-flight and uncertain submissions. Prevent subsequent orders from
+# spending the same cached available capacity. Release reservations only
+# after confirmed cancellation, rejection or reconciliation."
+#   * a placement is checked against a verdict computed AT THAT MOMENT;
+#   * a submission is reserved before it is sent; a failed send keeps its
+#     reservation until an account read newer than it has been swept;
+#   * a bid must leave this much room, so one that exactly fits cannot put
+#     the reading at the limit and have every bid pulled (the place-and-
+#     cancel cycle of that half hour).
+ACCOUNT_RISK_ROOM_MARGIN_USD = _env_d(
+    "PMUS_TWO_SIDED_ACCOUNT_RISK_ROOM_MARGIN_USD", "0.01")
+RESERVATION_HOLD_S = float(os.getenv(
+    "PMUS_TWO_SIDED_RESERVATION_HOLD_S", "5"))
 # The account-risk document is read on its OWN thread once the loop runs
 # (ACCOUNT_RISK_ASYNC, on): the loop only looks at the last snapshot. A
 # snapshot older than ACCOUNT_RISK_SNAPSHOT_MAX_S, or none yet, refuses new
@@ -3994,7 +4012,80 @@ class Engine:
                         out += max(D(0), left) * D(str(o.get("px")))
                     except Exception:                    # noqa: BLE001
                         return D("Infinity")             # unknown: fail closed
+        try:
+            for r in self.reserved_orders():
+                out += D(str(r["px"])) * D(str(r["qty"]))
+        except Exception:                                # noqa: BLE001
+            return D("Infinity")
         return out
+
+    # ---- reservations: a submission counts from before it is sent --------
+    def _reservations(self) -> Dict[str, Any]:
+        res = self.b.d.setdefault("acct_reservations", {})
+        if not getattr(self, "_res_rebased", False):
+            # a reservation from an earlier process is as old as this one
+            self._res_rebased = True
+            for r in res.values():
+                r["mono"] = time.monotonic()
+                r["state"] = "uncertain"
+        return res
+
+    def reserved_orders(self, slug: Optional[str] = None) -> list:
+        return [r for r in self._reservations().values()
+                if slug is None or r.get("slug") == slug]
+
+    def reserve_order(self, slug: str, side: str, px: Any, qty: Any,
+                      stage: str) -> str:
+        self._res_seq = getattr(self, "_res_seq", 0) + 1
+        rid = "res-%d-%d" % (int(time.time() * 1000), self._res_seq)
+        self._reservations()[rid] = {
+            "slug": slug, "side": side, "px": str(px), "qty": str(qty),
+            "stage": stage, "state": "in_flight", "at": time.time(),
+            "mono": time.monotonic()}
+        return rid
+
+    def release_reservation(self, rid: str) -> None:
+        self._reservations().pop(rid, None)
+
+    def reservation_uncertain(self, rid: str, exc: BaseException) -> None:
+        r = self._reservations().get(rid)
+        if not r:
+            return
+        r["state"] = "uncertain"
+        try:
+            self.b.save()
+        except Exception:                                # noqa: BLE001
+            pass
+        log("ORDER_RESERVATION_HELD", slug=r["slug"], side=r["side"],
+            px=r["px"], qty=r["qty"], stage=r["stage"],
+            err=type(exc).__name__,
+            label="the send failed without a definite answer: its capital "
+                  "stays reserved until an account read newer than it has "
+                  "been reconciled")
+
+    def release_reconciled_reservations(self, read_mono: Optional[float]
+                                        ) -> int:
+        """After an orphan sweep over an account read taken at `read_mono`:
+        an uncertain submission older than that read by RESERVATION_HOLD_S
+        is either in the book now (the sweep adopted it) or was never
+        accepted. Either way its reservation has done its work."""
+        if read_mono is None:
+            return 0
+        res = self._reservations()
+        gone = [k for k, r in res.items() if r.get("state") == "uncertain"
+                and float(r.get("mono") or 1e18) + RESERVATION_HOLD_S
+                <= read_mono]
+        for k in gone:
+            r = res.pop(k)
+            log("ORDER_RESERVATION_RELEASED", slug=r.get("slug"),
+                side=r.get("side"), px=r.get("px"), qty=r.get("qty"),
+                why="reconciled")
+        if gone:
+            try:
+                self.b.save()
+            except Exception:                            # noqa: BLE001
+                pass
+        return len(gone)
 
     def own_unaccounted_losses(self, retired: set) -> D:
         """Today's mark-to-market change of markets the shared ledger has NOT
@@ -4009,14 +4100,17 @@ class Engine:
                 out += D(mk["mark"]) - D(base["value"])
         return out
 
-    def account_risk(self) -> Dict[str, Any]:
+    def account_risk(self, fresh: bool = False) -> Dict[str, Any]:
         """Cached shared-limit verdict; {"ok": True, "off": True} when the
-        switch is off. Logs every change of verdict."""
+        switch is off. Logs every change of verdict. `fresh` recomputes it
+        from the last ledger snapshot and the book as they are NOW (no
+        network): a placement must never be judged on room that an earlier
+        placement has already taken."""
         if not (ACCOUNT_RISK_ON or ACCOUNT_RISK_OBSERVE):
             return {"ok": True, "off": True}
         now = time.monotonic()
         hit = getattr(self, "_acct_risk", None)
-        if hit and now - hit[0] < ACCOUNT_RISK_TTL_S:
+        if hit and not fresh and now - hit[0] < ACCOUNT_RISK_TTL_S:
             return hit[1]
         from src import l5_account_risk as AR
         url = (os.getenv(AR.RISK_URL_ENV) or "").strip()
@@ -4156,11 +4250,19 @@ class Engine:
             tot = D(0)
             markets = self.b.d.get("markets") or {}
             seen = False
+            held: Dict[str, list] = {}
+            for r in self.reserved_orders():
+                held.setdefault(r["slug"], []).append(
+                    (r["side"], D(str(r["px"])), D(str(r["qty"])), False))
+            for s_, legs in held.items():
+                if s_ not in markets:          # no book entry: face value
+                    tot += sum(px_ * q_ for _sd, px_, q_, _c in legs)
             for s_, mk_ in markets.items():
                 resting = [(o["side"], o["px"], D(str(o["qty"])) - D(str(
                     o.get("filled") or "0")), False)
                     for o in (mk_.get("orders") or {}).values()
                     if o.get("open")]
+                resting += held.get(s_, [])
                 if extra is not None and extra[0] == s_:
                     resting.append((extra[1], extra[2], extra[3], False))
                     seen = True
@@ -4180,8 +4282,10 @@ class Engine:
                             qty: Optional[D] = None,
                             slug: Optional[str] = None,
                             side: Optional[str] = None) -> Optional[str]:
-        """Reason a NEW opening/extension is refused, or None."""
-        v = self.account_risk()
+        """Reason a NEW opening/extension is refused, or None. With a price
+        and quantity (a placement) the verdict is computed now, so its
+        capacity already excludes every bid resting or reserved."""
+        v = self.account_risk(fresh=px is not None and qty is not None)
         if v.get("off") or not ACCOUNT_RISK_ON:          # observe: log only
             return None
         if not v.get("ok"):
@@ -4202,6 +4306,9 @@ class Engine:
                 cap_need = self.own_resting_worst(
                     (slug, side, D(str(px)), D(str(qty)))) - \
                     self.own_resting_worst()
+            dd_ = v.get("drawdown")
+            if isinstance(dd_, Mapping) and dd_.get("state") == "ON":
+                cap_need = cap_need + ACCOUNT_RISK_ROOM_MARGIN_USD
             if not AR.capacity_allows(v, cap_need):
                 return "ACCOUNT_RISK_CAPACITY"
         return None
@@ -4356,12 +4463,22 @@ class Engine:
                 label="refused immediately before submission; nothing "
                       "was sent")
             return
-        oid = (self.v.place(slug, side, px, qty, stage) if post_only else
-               self.v.place(slug, side, px, qty, stage, post_only=False))
+        rid = self.reserve_order(slug, side, px, qty, stage)
+        try:
+            oid = (self.v.place(slug, side, px, qty, stage) if post_only
+                   else self.v.place(slug, side, px, qty, stage,
+                                     post_only=False))
+        except BaseException as exc:
+            if type(exc).__name__ == "RejectedNoFill":
+                self.release_reservation(rid)    # the venue said no
+            else:
+                self.reservation_uncertain(rid, exc)
+            raise
         mk = self.b.m(slug)
         mk["orders"][oid] = {"side": side, "px": str(px), "qty": str(qty),
                              "filled": "0", "open": True, "stage": stage,
                              "placed_at": time.time()}
+        self.release_reservation(rid)            # the book holds it now
         if mk.get("phase_now"):
             mk["orders"][oid]["phase"] = mk["phase_now"]
             self._phase_count(mk, mk["phase_now"], "orders", 1)
@@ -4399,6 +4516,8 @@ class Engine:
                      D(str(o["qty"])) - D(str(o.get("filled") or "0")))
                     for o in (mk.get("orders") or {}).values()
                     if o.get("open")]
+            rest += [(r["side"], D(str(r["px"])), D(str(r["qty"])))
+                     for r in self.reserved_orders(slug)]
             # ---- pair cost: against what this bid could pair with
             cap = D(str(RN1.PAIR_CAP))
             partners = [rp for rs, rp, rl in rest if rs == ot and rl > 0]
@@ -6337,7 +6456,9 @@ class Engine:
                           if isinstance(o, Mapping)]
             except Exception as exc:                      # noqa: BLE001
                 log("orphan_sweep_error", err=str(exc)[:160])
+                self._orphan_sweep_failed = True
                 return
+        self._orphan_sweep_failed = False
         mine = set(self.b.d.get("markets") or {})
         tracked = {oid for mk in self.b.d["markets"].values()
                    for oid, o in (mk.get("orders") or {}).items()
@@ -6636,8 +6757,12 @@ class Engine:
                     fresh = self._acct_cache is not None and \
                         self._acct_ok_at is not None and \
                         time.monotonic() - self._acct_ok_at <= 30
+                    read_at = self._acct_ok_at if fresh else \
+                        time.monotonic()
                     self.orphan_sweep(self._acct_cache["open_orders"]
                                       if fresh else None)
+                    if not getattr(self, "_orphan_sweep_failed", False):
+                        self.release_reconciled_reservations(read_at)
                 if SETTLE_CHECK_S > 0 and time.monotonic() - getattr(
                         self, "_last_settle", -1e9) > SETTLE_CHECK_S:
                     self._last_settle = time.monotonic()
