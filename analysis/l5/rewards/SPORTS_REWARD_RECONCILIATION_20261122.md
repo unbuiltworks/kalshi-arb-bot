@@ -111,3 +111,47 @@ order size x about $1 (both sides). Both are approximations from the log, not ve
   pools, not who qualified.
 - The thin markets that paid most (table tennis, Dota 2, CS2) have no usable international
   price, so the price guard cannot protect quotes there; CS2 is currently blocked outright.
+
+## 9. Update, 24 Nov 2026 19:30Z: the 22 Nov Serie A rows were paid
+
+Venue record at 19:29:59Z: PAID 122 rows / $24.09, SKIPPED 65 / $4.00, PENDING none.
+Change since 22 Nov: two rows PENDING -> PAID (+$1.30); the two 21 Nov Valorant rows
+PENDING -> SKIPPED ($0.04, not paid). No rows yet for 23 or 24 Nov.
+
+| Reward days | Paid | Who earned it |
+|---|---|---|
+| 8-14 Sep (pre-bot) | 7.04 | older account activity |
+| 14-18 Nov | 15.75 | this bot, 76 market-days |
+| 22 Nov | 1.30 | this bot, Serie A window 14:05-15:20Z, 2 markets, 2-contract quotes |
+| **Total** | **24.09** | |
+
+22 Nov Serie A window, by market (fills and settlement from `sports/CAMPAIGN_20261122_SERIE_A_LOG.md`):
+
+| Market | Reward | Trading | Net | What happened |
+|---|---|---|---|---|
+| Bologna-Udinese | 0.52 | +0.28 | **+0.80** | 6 pairs at 0.9533, flat |
+| Sassuolo-Genoa | 0.78 | -2.68 | **-1.90** | 4 NO unpaired, settled worthless |
+| Window | 1.30 | -2.40 | **-1.10** | |
+
+Reward intensity, same estimate as section 6: $1.30 over about 2.5 market-hours = about $0.52
+per market-hour (14-18 Nov rewarded markets: $0.32).
+
+Bot era, 14-24 Nov, CONFIRMED rewards against settled trading:
+
+| Period | Trading after fees | Rewards paid | Net |
+|---|---|---|---|
+| 14-18 Nov (older controller, wide slate) | -45.07 | +15.75 | -29.32 |
+| 21 Nov NBA | +0.35 | 0 | +0.35 |
+| 22 Nov Serie A | -2.40 | +1.30 | -1.10 |
+| 22 Nov NBA | +0.54 | 0 (no row) | +0.54 |
+| 23 Nov ATP | +0.33 | not posted | +0.33 |
+| 24 Nov ATP 01:20Z | +0.03 | not posted | +0.03 |
+| 24 Nov 17:00-18:50Z | -0.51 settled; one NO leg (cost 0.44) open | not posted | -0.51 |
+| **Bounded campaigns since 21 Nov** | **-1.66** | **+1.30** | **-0.36** |
+| **Bot era total** | **-46.73** | **+17.05** | **-29.68** |
+
+The pattern of section 4 holds on the new rows: reward plus pairing is positive
+(Bologna-Udinese +0.80); an unpaired leg outweighs the reward on its market
+(Sassuolo-Genoa -1.90). Of the 50 unpaired positions left in settled markets since 14 Nov
+(47 in 14-18 Nov, Sassuolo-Genoa, and the 24 Nov Samher-Yanale leg, with one still open),
+49 settled worthless.
