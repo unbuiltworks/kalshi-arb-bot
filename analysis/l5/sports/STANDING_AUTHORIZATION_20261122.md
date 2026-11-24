@@ -527,3 +527,21 @@ refused). No order or fill; watchdog 0 open orders, not halted; ledger
 reconcile clean. Campaign of 23 Nov still +$0.33 at the venue; the ledger
 has $0.29 (Karpol–Benwei +$0.04 not booked). No reward row dated 23 Nov.
 The bot still tracks two NHL markets from 23 Nov; both blocked by the lock.
+
+## 20. Watchdog `b79ad4a8b` — asked 00:10 UTC, 24 Nov
+
+Owner: watchdog `b79ad4a8b` "Prepare for immediate deployment approval";
+both drills "Proceed after exact authorization"; 12-hour scope "ATP, Serie
+A, Premier League, La Liga, NBA, NFL and NHL", up to four markets "subject
+to available risk capacity", one contract, "$3 for initial validation".
+"No additional production deployment, live drill, capital increase or
+campaign is authorized by this recommendation."
+
+Asked with the exact commit
+(`b79ad4a8ba54fe96853de34d112f235424e99e42`,
+`release/l5-halt-watchdog-b79ad4a8b`) and three timings. Answer:
+**"After tonight's window (Recommended)"**: deploy at about 04:20 UTC,
+once the 03:10–04:10 ATP window has relocked. Rollback:
+`release/l5-halt-watchdog-8c9bee06f`. Not authorised: either drill, a halt
+reset, setting the marker's secret or token (the operator sets those), any
+order.
