@@ -52,9 +52,25 @@ this campaign's results.
 | Hold a resting bid through a short price-feed gap | on, 20 s | side-by-side dry runs, 24 Nov |
 | Keep a bid left one tick deeper than its target | on, 1 tick | same |
 | Quote depth | 1 or 2 ticks behind the best price | same, plus the jump recording |
-| Ranking by net economics | off unless paid reward rows support it | reward rows for 22 and 23 Nov |
+| Market selection | by expected economics, not equal shares: the ranking that is already built orders candidates by the expected trading result of a first bid. Its reward term is added per competition only where the venue has actually PAID rewards on our quoting | reward rows for 22 and 23 Nov |
 
-## What it must answer (reported at 3, 6, 9 and 12 hours and at close)
+## The report (at 3, 6, 9 and 12 hours and at close), in the owner's order
+
+1. Confirmed realized net profit (venue cash and settlement records).
+2. Paid liquidity rewards and rebates; pending and skipped shown apart
+   and not counted.
+3. Stand-alone inventory profitability: each fill by role, held to
+   settlement, apart from pairing.
+4. Capital utilization and turnover: dollars committed against the room
+   available, by hour; capital released on settlement.
+5. Reward-qualifying resting time against total resting time.
+6. Adverse selection and execution cost: marks at 5 s to 5 min by role,
+   order age at fill, cancels per order.
+
+Each by competition, so soccer and tennis can be compared per dollar
+committed.
+
+## What it must answer
 
 1. **Soccer against tennis:** trading result plus paid rewards per dollar
    committed per hour, by competition.
