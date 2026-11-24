@@ -1263,6 +1263,27 @@ RN1_KEEP_MAX_S = float(os.getenv("PMUS_RN1_KEEP_MAX_S", "60"))
 #     block, pause, lock or halt pulls it, as now).
 # It never places a new bid and never moves one. 0 = off (today).
 RN1_GAP_HOLD_S = float(os.getenv("PMUS_RN1_GAP_HOLD_S", "0"))
+# A PAUSE IS NOT A REASON TO ABANDON A MARKET. LIVE 2026-11-24 01:20Z: a
+# flat market with nothing to quote for 120 s gives up its slot, a
+# price-move pause counted as "nothing to quote", and a released market was
+# never looked at again. In-play tennis pauses on almost every point: all
+# three markets were dropped within eight minutes and the bot sat idle for
+# the rest of an authorised hour while one of them traded in band.
+#   RN1_PAUSED_RELEASE_S  how long a flat market that is only PAUSED (price
+#       move, or the international price missing) keeps its slot before it
+#       is released. It is still released after that, so a market that
+#       never calms down does not hold a slot against better ones.
+#       Default 120 = today.
+#   RN1_RESELECT          1 = a market released flat is a candidate again
+#       once RN1_RESELECT_COOLDOWN_S has passed, through the SAME filters
+#       as any other candidate (in the slate, in band, in scope, not late,
+#       priced). Its record (orders, fills, inventory, costs) is the same
+#       one, so nothing about its accounting restarts. A market that
+#       closed, settled or holds anything is never reselected. Default 0.
+RN1_PAUSED_RELEASE_S = float(os.getenv("PMUS_RN1_PAUSED_RELEASE_S", "120"))
+RN1_RESELECT = os.getenv("PMUS_RN1_RESELECT", "0").strip() == "1"
+RN1_RESELECT_COOLDOWN_S = float(os.getenv(
+    "PMUS_RN1_RESELECT_COOLDOWN_S", "60"))
 # FINAL ORDER GATE (owner 2026-11-24). On the RN1 path the order size, the
 # campaign and per-market ceilings and the pair-cost ceiling were applied
 # where the quote is BUILT and not again where the order is SENT; an
@@ -5031,12 +5052,23 @@ class Engine:
         flat = y == 0 and n == 0
         if flat and not any(want.values()) and not account_block:
             idle = mk.setdefault("idle_since", now)
-            if now - float(idle) > 120 and \
+            # only paused: the price is moving, or the international price
+            # is missing this pass. Anything else (late, out of scope, no
+            # edge, thin) is about the market itself.
+            paused = new_block in ("jump_pause", "vol_pause") or (
+                new_block is None and any(
+                    str(q.get("why_" + s_) or "").startswith("no_fair")
+                    for s_ in ("YES", "NO")))
+            limit = max(120.0, RN1_PAUSED_RELEASE_S) if paused else 120.0
+            if now - float(idle) > limit and \
                     not any(o.get("open") for o in mk["orders"].values()):
                 mk["done"] = True
+                mk["released_flat"] = now
                 self.b.save()
                 log("released_flat_market", slug=slug, pos=mk["pos"],
-                    bid=bbo["bid"], ask=bbo["ask"], mode="rn1")
+                    bid=bbo["bid"], ask=bbo["ask"], mode="rn1",
+                    paused=paused, idle_s=round(now - float(idle), 1),
+                    reselectable=RN1_RESELECT)
             return
         mk.pop("idle_since", None)
         for side in ("YES", "NO"):
@@ -5108,6 +5140,8 @@ class Engine:
                     self.b.save()
                     return
                 mk["done"] = True
+                mk["closed"] = True               # never reselected
+                mk.pop("released_flat", None)
                 if mk.get("lone_since") is not None:
                     self._recovery_resolved(slug, mk, "held_to_close")
                 self.b.save()
@@ -5628,7 +5662,8 @@ class Engine:
         for tg in targets:
             slug = tg["slug"]
             _seen.add(slug)
-            if slug in self.b.d["markets"]:
+            if slug in self.b.d["markets"] and \
+                    not self.reselectable(self.b.d["markets"][slug]):
                 if _pinned and slug in _pinned and \
                         self.b.d["markets"][slug].get("done"):
                     _pin_why[slug] = "already_traded_and_released"
@@ -5759,6 +5794,28 @@ class Engine:
     def rewarded_active(self) -> int:
         return sum(1 for s in self.active() if self.b.m(s).get("reward"))
 
+    @staticmethod
+    def reselectable(mk: Mapping[str, Any],
+                     now: Optional[float] = None) -> bool:
+        """A market the bot released while FLAT may be picked again. Never
+        one that closed, settled, still holds contracts or has an order
+        resting, and not before the cooldown."""
+        if not RN1_RESELECT or not mk.get("done"):
+            return False
+        at = mk.get("released_flat")
+        if at is None or mk.get("settle_px") is not None or \
+                mk.get("closed"):
+            return False
+        try:
+            if D(str(mk["pos"]["YES"])) != 0 or D(str(mk["pos"]["NO"])) != 0:
+                return False
+        except Exception:                                 # noqa: BLE001
+            return False
+        if any(o.get("open") for o in (mk.get("orders") or {}).values()):
+            return False
+        now = time.time() if now is None else now
+        return now - float(at) >= RN1_RESELECT_COOLDOWN_S
+
     def _try_select(self, slug: str, acct: Mapping[str, Any],
                     rp: Optional[Mapping[str, Any]],
                     est: Optional[Mapping[str, Any]] = None) -> bool:
@@ -5778,6 +5835,16 @@ class Engine:
                                                spec["tick"]) is None:
             return False
         mk = self.b.m(slug)
+        if mk.get("done"):
+            if not self.reselectable(mk):
+                return False             # closed, settled or holding: never
+            mk["done"] = False
+            mk.pop("released_flat", None)
+            mk.pop("idle_since", None)
+            mk["reselected"] = int(mk.get("reselected") or 0) + 1
+            log("RESELECTED", slug=slug, times=mk["reselected"],
+                label="released flat earlier; eligible again; the same "
+                      "record, so its orders, fills and costs carry on")
         if slug in self._game_start:
             mk["game_start"] = self._game_start[slug]
         if rp:
