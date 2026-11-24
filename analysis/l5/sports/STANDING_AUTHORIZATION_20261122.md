@@ -905,3 +905,30 @@ Done: release candidate `c2e4e0b3fe9cef43690f104cbaef636b03422e74`
 approval of that exact build. Inventory at 19:07 (public prices, not
 settled): Juagom–Bengeo YES 0.84/0.85, Samher–Yanale YES 0.98/0.99; our
 two NO legs are marked near $0.15 and $0.01 against $1.05 paid.
+
+## 36. Corrected build deployed locked; first reward credit — 24 Nov, 19:35 UTC
+
+Owner, typed: "Deploy c2e4e0b3fe9cef43690f104cbaef636b03422e74 locked."
+(verify locked boot, reservations, watchdog, zero open orders; prepare the
+$5 / $30 authorization; "Do not arm or increase limits until separately
+authorized.")
+
+Deployment `5b34f7aa`, created 19:26:34, booted 19:27:51 on
+`c2e4e0b3f`. Verified 19:28–19:33 (read-only): locked (new exposure and
+completions), no order or fill since boot, no traceback, no reservation
+lines, safety latch clear. First audit 19:31:30: reconciled, no
+mismatches, one venue position (Juagom–Bengeo NO 1, cost $0.44), no open
+orders. Watchdog 19:32:45: 0 open orders, no halt, no read error, all
+three registries OK. Cash $320.5138.
+
+Campaign of 17:00–18:50, venue records: two pairs +$0.10 (settled);
+Samher–Yanale settled, lone NO lost $0.61; Juagom–Bengeo NO 1 @ 0.44
+still open. Settled trading result so far −$0.51; −$0.95 if the open leg
+loses, +$0.05 if it wins.
+
+Reward rows at 19:29:59: PAID 122 / $24.09 (was 120 / $22.79). The two
+rows for 22 Nov, Serie A (Bologna–Udinese $0.52, Sassuolo–Genoa $0.78),
+moved from PENDING to PAID: **$1.30 credited**, matching the bot's
+otherwise unexplained cash of +$1.30. The two 21 Nov rows were SKIPPED
+($0.04). No rows yet for 23 or 24 Nov. The account drawdown figure fell
+to $0.9644 with the credit (limit $3.00, room $2.04).
