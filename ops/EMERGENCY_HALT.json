@@ -1,0 +1,8 @@
+{
+ "command": "HALT",
+ "hmac": "c3d2e2e1ae509af4c90fd86b1967679e7d451e289de7e1e5132f1d244816d4ee",
+ "issued_utc": "2026-11-24T02:39:09.250670+00:00",
+ "nonce": "halt-a5c97db2aca74016",
+ "reason": "read test: deliberately wrong signature",
+ "service": "pmus-spring-l5-probe"
+}
