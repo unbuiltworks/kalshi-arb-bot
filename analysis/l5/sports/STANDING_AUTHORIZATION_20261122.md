@@ -760,3 +760,19 @@ Drill 2 by the watchdog variable: deferred by the owner. Still required
 before unattended 12-hour operation: the signed-marker stop, which needs
 the operator's two secrets (marker mechanism still reads "configured
 false" at the 11:28 boot).
+
+## 29. Fast-stop credentials set; wrong-signature check passed — 24 Nov, 14:50 UTC
+
+Operator set the two watchdog values (deployment `572232d3`, 14:46 UTC,
+same build `f6a5900eb`). Boot line: marker "configured true", read
+credential set, service `pmus-spring-l5-probe`, timeout 3 s. I saw neither
+value.
+
+Wrong-signature check (no order, sports bot locked): test marker committed
+to `ops/halt-marker` at 14:49:00 (`af39fe36d`), signed with a throwaway
+key. Watchdog at 14:49:17, 17 s later: `MARKER_SIGNATURE_INVALID`,
+`acted false`, repeated each 20 s poll. Marker removed 14:50:32
+(`c2208c581`). Sweeps at 14:50:52 and 14:51:12: halt false, 0 open orders,
+no channel alarm. This proves the watchdog reads the private file with the
+token and rejects a bad signature. Not yet proven: a valid marker halting
+and cancelling (the signed-marker drill, needs its own authorization).
