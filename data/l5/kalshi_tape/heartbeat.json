@@ -1,7 +1,12 @@
 {
-  "captured_at": "2026-11-24T09:46:57.522417+00:00",
-  "failures": [],
-  "markets_captured": 2,
+  "captured_at": "2026-11-24T09:54:40.791809+00:00",
+  "failures": [
+    {
+      "error": "HTTPError:HTTP Error 429: Too Many Requests",
+      "series": "KXETH15M"
+    }
+  ],
+  "markets_captured": 1,
   "note": "Raw tape only. Public quote/trade evidence never implies hypothetical queue fill certainty.",
   "order_entry": false,
   "read_only": true,
@@ -10,6 +15,6 @@
     "KXBTC15M",
     "KXETH15M"
   ],
-  "status": "ok",
-  "trades_captured_with_6m_overlap": 747
+  "status": "partial",
+  "trades_captured_with_6m_overlap": 500
 }
