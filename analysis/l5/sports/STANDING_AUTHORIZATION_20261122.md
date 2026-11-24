@@ -575,3 +575,21 @@ Scheduled as separate tasks: verification before opening 01:12; first
 minutes 01:24; mid 01:48; close-out 02:25; watchdog deployment 02:45
 (section 20, moved up with the window). Each locks the bot if its check
 cannot be completed.
+
+## 22. Pre-open verification and watchdog timing — 24 Nov, 01:05 UTC
+
+**Pre-open verification of the 01:20–02:20 window: PASS** (01:03 UTC,
+read-only). Deployment `65bca0fe` on commit `e6e8b4e60a2c…`, started
+00:47; locked until 01:20 ("window_not_started"); strict scope on, allowed
+ATP only, 3 markets, 1 contract, pair cap 0.97, taker off, account risk on
+and not on observe. First audit complete at 00:50:55 (positions reconciled,
+no mismatch; 87 safety requests, none refused). Account limit: enforce,
+$3.00 limit, ledger $1.3444, capacity $1.6556. No order; watchdog 0 open
+orders, not halted; ledger reconcile clean; no safety latch.
+Noted: the bot still tracks two NHL markets from 23 Nov; strict scope
+refuses any order on them (checked again at 01:24).
+
+**Watchdog timing.** The owner pointed out that moving the watchdog
+deployment with the window needed its own approval; it was put back to
+04:30. Asked with the exact commit. Answer: **"Deploy at 02:45 UTC"**,
+only after a clean 02:25 close-out leaves the bot locked with zero orders.
