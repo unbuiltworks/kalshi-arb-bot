@@ -121,3 +121,23 @@ Do not run this build again. The next live run should be the combined
 release with the pause hold and reselection on, after the watchdog drills.
 Tonight's failure is the best argument for it: on this build a 12-hour
 campaign would have gone idle in the same way.
+
+---
+
+## Added 02:50 UTC: reconciliation after the window
+
+The bot restarted at 02:31 (plain lock, pre-window settings) and ran its
+audit at 02:34:
+
+- **The +$0.03 is now attributed.** Venue cash $320.1638 against the
+  $320.1338 baseline: change $0.0300, explained by the campaign $0.0300,
+  unexplained $0.0000. The audit lists the pair: YES 1 @ 0.31, NO 1 @
+  0.66, pair cost $0.97, edge +$0.03, both contracts confirmed traded at
+  the venue, no fees, no rebates, nothing unconfirmed.
+- **Position walk after the fills:** reconciled, no mismatch, no non-zero
+  venue position, no open orders (02:34:43). With the watchdog (02:45:22)
+  and the ledger (02:45:24) that is three venue reads agreeing on zero
+  open orders, all after the fills.
+- It is still **not settled profit**: the market has not settled, and the
+  ledger shows $0 realized for 24 Nov. It is venue-confirmed paired cash.
+- No order and no fill since 02:14:54.
