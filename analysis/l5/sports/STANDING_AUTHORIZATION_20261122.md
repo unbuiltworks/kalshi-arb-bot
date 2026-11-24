@@ -776,3 +776,22 @@ key. Watchdog at 14:49:17, 17 s later: `MARKER_SIGNATURE_INVALID`,
 no channel alarm. This proves the watchdog reads the private file with the
 token and rejects a bad signature. Not yet proven: a valid marker halting
 and cancelling (the signed-marker drill, needs its own authorization).
+
+## 30. Signed-marker drill authorized — 24 Nov, about 14:55 UTC
+
+Owner, typed: "Authorized: signed-marker drill, 16:30–16:40 UTC 24 Nov, on
+these terms. Prepare the exact 12-hour campaign authorization in parallel.
+Once the drill passes and the halt is reset, prioritize starting the
+campaign without further delay. No additional engineering or strategy
+experiments unless a critical defect appears."
+
+Terms: sports `12d5d3daf`, watchdog `f6a5900eb`; market
+`aec-atp-chdp-leosto-2026-11-24`, YES only (pre-game, start 19:25 UTC);
+one maker bid, 1 contract, three ticks behind the best bid, inside
+0.30–0.70; window 16:30:00–16:40:00 UTC; the operator publishes a validly
+signed marker 2 to 7 minutes in; pass = order gone at the venue within
+90 s of the commit, no fill, no order after the halt, latch still present
+after the bot restarts; worst case $0.70; no arming and no retry if the
+locked pre-flight fails; afterwards relocked, settings restored, halt
+latched until a separate reset approval. The campaign itself is not
+authorized by this.
