@@ -932,3 +932,20 @@ moved from PENDING to PAID: **$1.30 credited**, matching the bot's
 otherwise unexplained cash of +$1.30. The two 21 Nov rows were SKIPPED
 ($0.04). No rows yet for 23 or 24 Nov. The account drawdown figure fell
 to $0.9644 with the credit (limit $3.00, room $2.04).
+
+## 37. Reservation-release gap closed in a new candidate — 24 Nov, 19:45 UTC
+
+Owner, about 19:38: "Close the remaining uncertain-order reservation gap
+immediately. Require definitive venue order and position reconciliation
+before releasing reserved capital. Cover the fully filled unanswered-order
+case with regression tests. Keep the correction narrowly scoped and
+prepare the locked release immediately." Then: a one-hour live validation
+at $3, a separately authorized $5 / $30 campaign if it holds, reward
+reconciliation of the whole $24.09, scaling path to $10, $25, $50.
+"Obtain explicit authorization for deployment, resumption and capital
+increases."
+
+Prepared, not deployed: `766a965ba03330dcb1dbb05db517b59d8131e33a`
+(see `DEPLOY_REQUEST_SPORTS_c2e4e0b3f.md`, last section). Production
+stays on `c2e4e0b3f`, plain lock. Reward reconciliation updated in
+`analysis/l5/rewards/SPORTS_REWARD_RECONCILIATION_20261122.md` section 9.

@@ -152,6 +152,6 @@ Bot era, 14-24 Nov, CONFIRMED rewards against settled trading:
 
 The pattern of section 4 holds on the new rows: reward plus pairing is positive
 (Bologna-Udinese +0.80); an unpaired leg outweighs the reward on its market
-(Sassuolo-Genoa -1.90). Of the 50 unpaired positions left in settled markets since 14 Nov
-(47 in 14-18 Nov, Sassuolo-Genoa, and the 24 Nov Samher-Yanale leg, with one still open),
-49 settled worthless.
+(Sassuolo-Genoa -1.90). Unpaired positions that have settled since 14 Nov: 49 (the 47 of
+section 3, Sassuolo-Genoa, and the 24 Nov Samher-Yanale leg). All 49 settled worthless. One
+more (Juagom-Bengeo, 24 Nov) is still open.

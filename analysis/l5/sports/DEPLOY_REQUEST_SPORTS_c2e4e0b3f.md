@@ -73,3 +73,30 @@ will show it (`ORDER_RESERVATION_HELD` / `_RELEASED` log lines).
 | `L5_PORTFOLIO_MAX_DRAWDOWN_USD` (account limit) | `l5-pmus-live` (restarts the ledger) | 3 | 5 |
 | `PMUS_RN1_TOTAL_SPEND_USD` (campaign spend) | `pmus-spring-l5-probe` | 16 | 30 |
 | Order size, markets, unpaired caps, per-market spend, loss stop, daily halt | | | unchanged |
+
+## Superseding candidate `766a965ba` (24 Nov, 19:43 UTC) — not approved, not deployed
+
+`c2e4e0b3f` was deployed locked at 19:27 UTC with the owner's approval and is
+running. One gap remained: an unanswered order that the venue accepted and
+filled in full is in no open-order list, so a sweep of open orders alone
+could release its reservation before the book held the position.
+
+| | |
+|---|---|
+| Release commit | `766a965ba03330dcb1dbb05db517b59d8131e33a` |
+| Branch | `release/pmus-sports-rn1-766a965ba` |
+| Code commit | `6a9a3e20a4252bc3c3c606cac0d3bfb51cc6446a` |
+| Change against `c2e4e0b3f` | `src/pmus_sports_two_sided.py` (+70 −13), one test file |
+| Rollback | `release/pmus-sports-rn1-c2e4e0b3f` |
+
+An uncertain reservation is now released only when ALL hold: an orphan sweep
+has run over a fresh account read at least 5 s newer than the send; every
+order the venue shows open in that market is in the book; a COMPLETE
+positions walk shows the venue's position in that market equal to the
+book's. Anything unread, incomplete or unequal holds it. No ledger reading
+takes part. If the venue holds a position the book does not, the
+reservation stays and the existing position-mismatch latch stops the bot.
+
+Tests: 32 in the reservation file (7 new, including the fully filled
+unanswered order, a newer reading alone, an incomplete walk, a venue order
+the book does not know). Full suite 5,561 passed, 24 failed (the same 24).
