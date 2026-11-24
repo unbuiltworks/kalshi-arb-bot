@@ -674,3 +674,34 @@ Asked with exact commits and settings. Answers:
 Not authorised: any order, arming, either drill, a halt reset, any limit
 change, a campaign. A connection drop interrupted three of the four calls
 on the first attempt; each was repeated once and confirmed.
+
+## 26. Drill 1 (bot process death) authorized — 24 Nov, about 04:03 UTC
+
+Owner, typed: "Authorized: drill 1, 05:00–05:10 UTC 24 Nov (fallback
+05:30–05:40), on these terms."
+
+Terms as put to the owner:
+
+| Term | Value |
+|---|---|
+| Window | 05:00:00–05:10:00 UTC; fallback 05:30:00–05:40:00 only if the redeploy is not live by 04:55 |
+| Sports build | `12d5d3daf78efcc919f0060c63a922561cb0dc80` |
+| Watchdog build | `f6a5900eb831ab752209d9ae7c39dabf42fc3e30` |
+| Market | `aec-atp-andmar-radpap-2026-11-23`, YES only (pre-game, scheduled start 08:00 UTC) |
+| Order | one maker bid, 1 contract, three ticks behind the best bid (0.44 at 0.47 / 0.48), never outside 0.30–0.70 |
+| Bot exit | 60 s into the window, no cleanup; down until 60 s after it |
+| Pass | venue shows that exact order cancelled by the watchdog within 90 s of the exit; no fill; no other order |
+| Worst case | the bid fills first: at most $0.70 |
+| Stop | production pre-flight must show the market open, pre-game, selected, start not within 30 min of the window end, shared-halt reading fresh; otherwise nothing is armed, no retry |
+| After | bot relocked, settings restored; shared halt stays latched until a separate owner-approved reset |
+
+Temporary settings (restored afterwards): pin, 1 contract (back to 2),
+three-tick depth (back to 1), slate both (back to live), ATP added to the
+permitted list (back to NFL and NBA), both unpaired caps 0.60 (back to 3
+and 6). Market count left at 2: the carried-over paired tennis market holds
+one slot and the pin allows it no new exposure.
+
+Drill 2: owner chose the watchdog halt variable as an interim validation,
+"not a substitute for the fast emergency stop"; it needs its own exact
+authorization after drill 1's halt reset. The signed-marker stop must be
+validated "before unattended 12-hour operation".
