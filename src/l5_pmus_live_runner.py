@@ -1694,7 +1694,8 @@ class Runner:
             ex = getattr(self, "executor", None)
             if ex is not None:
                 ex.portfolio_manual_measurement = m
-            brief = {"orders": m["orders"], "rejected": m["rejected"]}
+            brief = {"orders": m["orders"], "rejected": m["rejected"],
+                     "unclassified": m.get("unclassified")}
             if brief != getattr(self, "_manual_emitted", None):
                 self._manual_emitted = brief
                 emit("L5_MANUAL_COMMITMENT", brief)

@@ -54,15 +54,16 @@ is the cost.
 
     manual adjustment = open commitment + settled net (signed)
 
-OPEN: the cost, while the account still holds those contracts (pro rata
-when it holds fewer); it never takes the bot figure below zero. SETTLED:
-cost - payout from the ledger's retired row, so the result stays manual
-after settlement without the anchor being moved. A manual LOSS stays off
-the bot figure. A manual WIN is added back to it -- its cash would
+Per market the attested orders are signed cash: a buy is +cost, a closing
+sell is -proceeds. OPEN: the net cash still out while the account holds
+the contracts; it never takes the bot figure below zero. CLOSED (bought and
+sold by hand) or SETTLED (cost - payout from the ledger's retired row): the
+result stays manual without the anchor being moved. A manual LOSS stays
+off the bot figure. A manual GAIN is added back to it -- its cash would
 otherwise hide the same amount of bot losses -- so the bot figure can
-exceed the total. A manual result that cannot be measured is counted as a
-possible full win. Every doubt therefore makes the BOT figure LARGER, the
-safe direction; the TOTAL figure is never adjusted at all.
+exceed the total. A manual result that cannot be measured credits no loss
+and is counted as a possible full win. Every doubt therefore makes the BOT
+figure LARGER, the safe direction; the TOTAL figure is never adjusted.
 
 PUBLISHED SO AN UNCHANGED READER ENFORCES BOTH. A reader computes
 max_drawdown_usd - drawdown_usd, so `max_drawdown_usd` stays the bot limit
@@ -179,7 +180,7 @@ def order_tail(order_id: Any) -> str:
 AUTOMATED_ORIGINS = ("BTC15M", "BTC5M", "SPORTS")
 
 
-def _settled_payout(row: Any, side: str, group_filled: D,
+def _settled_payout(row: Any, side: str, remaining: D,
                     all_terminal: bool) -> Dict[str, Any]:
     """{"per_contract": D} from one `retired_markets` row, or {"why"}.
 
@@ -200,7 +201,7 @@ def _settled_payout(row: Any, side: str, group_filled: D,
     qty = _dec(qty) if qty is not None else None
     if qty is None:
         return {"why": "RETIRED_ROW_QUANTITY_UNREADABLE"}
-    if qty != group_filled:
+    if qty != remaining:
         return {"why": "SETTLED_QUANTITY_NOT_ONLY_MANUAL"}
     return {"per_contract": v if side == "UP" else D(1) - v}
 
@@ -212,37 +213,56 @@ def manual_commitment(measurement: Optional[Mapping[str, Any]],
                       ) -> Dict[str, Any]:
     """What the attested manual orders account for, from STORED readings.
 
-    `measurement` is what `l5_manual_commitment.Reader` stored on the tick:
-    {"t": epoch, "orders": [{order_id_tail, market, side, filled, cost_usd,
-    state, terminal}], "rejected": [{order_id_tail, why}]}. `retired` is
-    the ledger's `retired_markets`. No venue request here.
+    `measurement` is what `l5_manual_commitment.Reader` stored on the tick
+    (its docstring has the shape); `positions` is the mapping the value is
+    computed from; `retired` is the ledger's `retired_markets`. No venue
+    request here.
 
-    OPEN (market not retired). cost x min(1, held / filled) against
-    `positions`, the mapping the value is computed from; orders on one
-    market and side share that holding, in order.
+    SIGNED CASH PER MARKET. Every attested manual order is a cash flow:
 
-    SETTLED (market retired). The signed result cost - payout stays
-    attributed to manual: positive is a manual loss (taken OFF the bot
-    figure), negative a manual win (put back ON it, because the win's cash
-    would otherwise hide the same amount of bot losses). It is MEASURED
-    only when every attested order on that market and side was read
-    terminal, the retired row carries a binary `yes_value`, is not
-    labelled an automated strategy's, and settled EXACTLY the attested
-    quantity on that side.
+        BUY  -> +cost      and +filled on its outcome side
+        SELL -> -proceeds  and -filled on its outcome side (a closing sell)
 
-    UNMEASURED IS A POSSIBLE FULL WIN. A settled order that fails any test
-    above, and the part of an open order the account no longer holds (sold
-    by hand: proceeds unknown), is counted as if it paid $1 a contract:
-    cost - filled, never positive. The bot figure can then only be
-    OVERSTATED, and every such order is listed in `settled_unmeasured`.
+        cash_out  = buys' cost - sells' proceeds - $1 x pairs
+        remaining = what the orders leave on each side; an UP and a DOWN
+                    remainder in one market are a PAIR, worth exactly $1
+                    whichever way it settles (and already counted at $1 by
+                    the value), so pairs are netted out at $1 first.
 
-    A stale or absent reading, or unreadable positions: open counts 0,
-    measured settled LOSSES count 0, wins and worst cases still count.
+    Then, per market, `manual_net` (positive = manual money out or lost,
+    negative = a manual gain):
+
+      CLOSED       nothing remains            -> cash_out, exactly
+      OPEN_HELD    the account holds at least the remainder, market not
+                   retired                    -> cash_out (the remainder is
+                   valued 0, as the total figure values it)
+      SETTLED      market retired, the retired row measurable (every order
+                   read terminal, binary `yes_value`, not an automated
+                   strategy's row, its quantity on that side EXACTLY the
+                   remainder)                 -> cash_out - payout
+      UNMEASURED   anything else: fewer held than the remainder, position
+                   gone with no measurable retired row, more sold than
+                   bought, an unclassified manual row in the market.
+                   NO manual loss is credited AND the largest possible
+                   manual gain is charged: every remaining (and every
+                   unclassified) contract paying $1, i.e.
+                   min(0, cash_out - remainder). The bot figure can then
+                   only be OVERSTATED.
+
+    `manual_commitment_usd` is the sum of the positive OPEN_HELD nets (a
+    commitment still on the table); everything else, signed, is
+    `manual_settled_net_usd`.
+
+    A STALE OR ABSENT TICK READING (older than MANUAL_MAX_AGE_S), or
+    unreadable positions: every positive contribution counts 0; every
+    negative one -- measured gains and worst cases, from the stored
+    readings and the positions and retired rows read now -- still counts.
+    A stale reading can therefore never make the bot figure smaller.
     """
     out: Dict[str, Any] = {
         "manual_commitment_usd": D(0), "manual_settled_net_usd": D(0),
-        "manual_orders": [], "rejected": [], "settled_unmeasured": [],
-        "age_s": None, "why": None}
+        "manual_orders": [], "manual_markets": [], "rejected": [],
+        "unmeasured": [], "age_s": None, "why": None}
     if not isinstance(measurement, Mapping):
         out["why"] = "MANUAL_NOT_MEASURED"
         return out
@@ -253,84 +273,123 @@ def manual_commitment(measurement: Optional[Mapping[str, Any]],
     except (TypeError, ValueError):
         age = None
     out["age_s"] = None if age is None else round(age, 1)
-    stale = age is None or age > MANUAL_MAX_AGE_S or age < -5
-    if stale:
+    if age is None or age > MANUAL_MAX_AGE_S or age < -5:
         out["why"] = "MANUAL_MEASUREMENT_STALE"
     elif positions is None:
         out["why"] = "POSITIONS_UNREADABLE"
     rows = retired if isinstance(retired, Mapping) else {}
-    good: List[Dict[str, Any]] = []
+    mk: Dict[str, Dict[str, Any]] = {}
+
+    def slot(market: Any) -> Dict[str, Any]:
+        return mk.setdefault(str(market), {
+            "cash": D(0), "qty": {"UP": D(0), "DOWN": D(0)},
+            "terminal": True, "extra": D(0), "why": None, "tails": []})
+
     for o in (measurement.get("orders") or ()):
         if not isinstance(o, Mapping):
             continue
+        act = str(o.get("action") or "BUY").upper()
+        side = str(o.get("side") or "").upper()
         row = {"order_id_tail": order_tail(o.get("order_id_tail")),
                "market": o.get("market"), "side": o.get("side"),
-               "filled": str(o.get("filled")),
-               "cost_usd": str(o.get("cost_usd")),
-               "counted_usd": "0", "state": o.get("state"),
+               "action": act, "filled": str(o.get("filled")),
+               "state": o.get("state"),
                "settled": str(o.get("market")) in rows}
+        key = "cost_usd" if act == "BUY" else "proceeds_usd"
+        row[key] = str(o.get(key))
         out["manual_orders"].append(row)
-        filled, cost = _dec(o.get("filled")), _dec(o.get("cost_usd"))
-        side = str(o.get("side") or "").upper()
-        if filled is None or cost is None or filled <= 0 or cost < 0 \
-                or side not in ("UP", "DOWN"):
+        filled, cash = _dec(o.get("filled")), _dec(o.get(key))
+        m = slot(o.get("market"))
+        m["tails"].append(row["order_id_tail"])
+        m["terminal"] = m["terminal"] and bool(o.get("terminal"))
+        if filled is None or cash is None or filled < 0 or cash < 0 \
+                or side not in ("UP", "DOWN") or act not in ("BUY", "SELL"):
+            m["why"] = m["why"] or "ORDER_READING_UNUSABLE"
+            m["extra"] += max(D(0), filled) if filled is not None else D(0)
             continue
-        good.append({"row": row, "filled": filled, "cost": cost,
-                     "side": side, "key": "%s|%s" % (o.get("market"), side),
-                     "terminal": bool(o.get("terminal"))})
-    group: Dict[str, Dict[str, Any]] = {}
-    for g in good:
-        t = group.setdefault(g["key"], {"filled": D(0), "terminal": True})
-        t["filled"] += g["filled"]
-        t["terminal"] = t["terminal"] and g["terminal"]
-    left: Dict[str, D] = {}
-    open_total, settled_total = D(0), D(0)
-
-    def unmeasured(g: Dict[str, Any], qty: D, cost: D, why: str) -> D:
-        worst = min(D(0), cost - qty)            # as if it paid $1 each
-        out["settled_unmeasured"].append({
-            "order_id_tail": g["row"]["order_id_tail"], "why": why,
-            "counted_as_possible_win_usd": str(worst)})
-        g["row"]["not_counted_why"] = why
-        return worst
-
-    for g in good:
-        row, filled, cost = g["row"], g["filled"], g["cost"]
-        market = str(row["market"])
-        if row["settled"]:
-            got = _settled_payout(rows.get(market), g["side"],
-                                  group[g["key"]]["filled"],
-                                  group[g["key"]]["terminal"])
+        sign = D(1) if act == "BUY" else D(-1)
+        m["cash"] += sign * cash
+        m["qty"][side] += sign * filled
+    for u in (measurement.get("unclassified") or ()):
+        if not isinstance(u, Mapping):
+            continue
+        tail = order_tail(u.get("order_id_tail"))
+        q = _dec(u.get("filled"))
+        q = max(D(0), q) if q is not None else D(0)
+        out["manual_orders"].append({
+            "order_id_tail": tail, "market": u.get("market"),
+            "filled": str(u.get("filled")), "state": u.get("state"),
+            "not_counted_why": u.get("why")})
+        if u.get("market") is None:
+            # no market to charge it to: its whole quantity, at $1
+            out["unmeasured"].append({
+                "order_id_tail": tail, "market": None, "why": u.get("why"),
+                "counted_as_possible_win_usd": str(-q)})
+            out["manual_settled_net_usd"] -= q
+            continue
+        m = slot(u.get("market"))
+        m["tails"].append(tail)
+        m["why"] = m["why"] or str(u.get("why"))
+        m["extra"] += q
+    open_total = D(0)
+    for market in mk:
+        m = mk[market]
+        up, dn = m["qty"]["UP"], m["qty"]["DOWN"]
+        pair = max(D(0), min(up, dn))
+        cash = m["cash"] - pair
+        up, dn = up - pair, dn - pair
+        side = "UP" if up != 0 else "DOWN" if dn != 0 else None
+        rem = up if up != 0 else dn
+        line: Dict[str, Any] = {
+            "market": market, "order_id_tails": list(m["tails"]),
+            "net_cash_out_usd": str(cash), "paired_qty": str(pair),
+            "remaining_side": side, "remaining_qty": str(rem),
+            "settled": market in rows}
+        why, net, status = m["why"], cash, None
+        if why is None and (up < 0 or dn < 0 or (up != 0 and dn != 0)):
+            why = "MORE_SOLD_THAN_ATTESTED_BOUGHT"
+        if why is None and rem == 0:
+            status = "CLOSED"
+        elif why is None and market in rows:
+            got = _settled_payout(rows.get(market), side, rem, m["terminal"])
             if "per_contract" in got:
-                payout = filled * got["per_contract"]
-                result = cost - payout
-                row["payout_usd"] = str(payout)
-                row["result_usd"] = str(result)
-                if out["why"] and result > 0:
-                    row["not_counted_why"] = out["why"]
-                    result = D(0)
+                payout = rem * got["per_contract"]
+                line["payout_usd"] = str(payout)
+                net, status = cash - payout, "SETTLED"
             else:
-                result = unmeasured(g, filled, cost, got["why"])
-            row["counted_usd"] = str(result)
-            settled_total += result
-            continue
-        if out["why"]:
-            continue
-        if g["key"] not in left:
-            held = _dec(((positions or {}).get(market) or {})
-                        .get(g["side"], 0))
-            left[g["key"]] = max(D(0), held) if held is not None else D(0)
-        use = min(filled, left[g["key"]])
-        left[g["key"]] -= use
-        counted = cost if use >= filled else cost * use / filled
-        row["counted_usd"] = str(counted)
-        open_total += counted
-        if use < filled:
-            settled_total += unmeasured(
-                g, filled - use, cost - counted,
-                "POSITION_NOT_HELD_AND_MARKET_NOT_RETIRED")
+                why = got["why"]
+        elif why is None:
+            held = None if positions is None else _dec(
+                ((positions or {}).get(market) or {}).get(side, 0))
+            line["held_qty"] = None if held is None else str(held)
+            if held is None:
+                why = "POSITIONS_UNREADABLE"
+            elif held >= rem:
+                status = "OPEN_HELD"
+            elif held > 0:
+                why = "HOLDS_LESS_THAN_ATTESTED_REMAINDER"
+            else:
+                why = "POSITION_NOT_HELD_AND_MARKET_NOT_RETIRED"
+        if why is not None:
+            status = "UNMEASURED"
+            net = min(D(0), cash - max(D(0), up) - max(D(0), dn)
+                      - m["extra"])
+            out["unmeasured"].append({
+                "market": market, "order_id_tails": list(m["tails"]),
+                "why": why, "counted_as_possible_win_usd": str(net)})
+            line["why"] = why
+        if out["why"] and net > 0:
+            # a stale reading never makes the bot figure smaller
+            line["not_counted_why"] = out["why"]
+            net = D(0)
+        line["status"] = status
+        line["manual_net_usd"] = str(net)
+        out["manual_markets"].append(line)
+        if status == "OPEN_HELD" and net > 0:
+            open_total += net
+        else:
+            out["manual_settled_net_usd"] += net
     out["manual_commitment_usd"] = open_total
-    out["manual_settled_net_usd"] = settled_total
     return out
 
 
@@ -405,22 +464,23 @@ SPLIT_LABELS = (
     "against the bot limit. Both bind; the published drawdown_usd is the "
     "bot limit minus the tighter room, so max_drawdown_usd - drawdown_usd "
     "is what may still be lost. manual adjustment = open commitment + "
-    "settled net. Both are measured from the venue's own rows for the "
-    "order ids in " + MANUAL_ORDERS_ENV + ": filled quantity x average "
-    "price + commission, buys only, only when the venue marks the order "
-    "manual. OPEN: while the contracts are still held (pro rata if fewer), "
-    "never below 0 and never taking the bot figure below 0. SETTLED: cost "
-    "- payout, signed, from the ledger's retired row (yes_value and the "
-    "settled quantity, which must equal the attested quantity exactly): a "
-    "manual loss stays off the bot figure; a manual WIN is added to it, "
-    "so the bot figure can exceed the total. settled_unmeasured lists "
-    "every manual result that could NOT be measured; each is counted as "
-    "a possible full win ($1 a contract), which can only OVERSTATE the "
-    "bot figure -- remove the id from the attestation and correct "
-    + ANCHOR_ENV + " by the documented deposit/withdrawal path to clear "
-    "it. Unreadable or not-manual orders count 0. A reading older than "
-    + str(int(MANUAL_MAX_AGE_S)) + "s: open commitment and settled losses "
-    "count 0, wins still count.")
+    "settled net, measured from the venue's own rows for the order ids in "
+    + MANUAL_ORDERS_ENV + " (only rows the venue marks manual): a buy is "
+    "+cost, a closing sell is -proceeds, netted per market. OPEN_HELD: "
+    "the net cash still out while the contracts are held; it never takes "
+    "the bot figure below 0. CLOSED (bought and sold) and SETTLED (cost - "
+    "payout from the ledger's retired row, whose quantity must equal the "
+    "attested remainder exactly) are signed: a manual loss stays off the "
+    "bot figure; a manual GAIN is added to it, so the bot figure can "
+    "exceed the total and the gain cannot hide bot losses. `unmeasured` "
+    "lists every manual result that could NOT be measured: no loss is "
+    "credited and each is counted as a possible full win ($1 a contract), "
+    "which can only OVERSTATE the bot figure -- attest the missing order "
+    "(for example the sell), or remove the ids and correct " + ANCHOR_ENV
+    + " by the documented deposit/withdrawal path. Not-manual or "
+    "unreadable orders count 0. A reading older than "
+    + str(int(MANUAL_MAX_AGE_S)) + "s: nothing is taken off the bot "
+    "figure; gains and worst cases still count.")
 
 
 def refusal(value: Optional[D], cfg: Optional[Dict[str, Any]] = None, *,
@@ -493,9 +553,10 @@ def report(value: Optional[D], cfg: Optional[Dict[str, Any]] = None, *,
         blk["manual_orders"] = [dict(o) for o in
                                 (m.get("manual_orders") or ())]
         blk["rejected"] = [dict(r) for r in (m.get("rejected") or ())]
+        blk["manual_markets"] = [dict(r) for r in
+                                 (m.get("manual_markets") or ())]
         #: PROMINENT: each of these is counted as a possible full win
-        blk["settled_unmeasured"] = [dict(r) for r in
-                                     (m.get("settled_unmeasured") or ())]
+        blk["unmeasured"] = [dict(r) for r in (m.get("unmeasured") or ())]
         blk["manual_measurement"] = {
             "age_s": m.get("age_s"), "max_age_s": MANUAL_MAX_AGE_S,
             "counted_zero_because": (m.get("why") if isinstance(
