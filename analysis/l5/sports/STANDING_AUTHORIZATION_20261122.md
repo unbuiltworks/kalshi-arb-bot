@@ -1458,3 +1458,25 @@ Defect found in review (fixed in `7a0535450`, not deployed): while a block
 was in force, ladder levels behind a completing bid (openings) were still
 placed — NO 0.27 / 0.25 rested behind the completion during the loss stop.
 `6755062ad` refuses them at the loss stop through the final gate.
+
+## 58. Revised Campaign B authorized — 25 Nov, 23:26 UTC
+
+Owner, typed: "Authorized: deploy 7a053545094473432cca296ec7bfb0d284228b36
+locked now, then revised campaign B for two hours, 23:45 to 01:45 UTC 25–26
+Nov (or, if the deploy checks are not complete by 23:45, from the next
+quarter hour for two hours), with exactly the settings and limits in "FINAL
+TERMS" of CAMPAIGN_B_NET_20261125.md (ledger account limit $20; loss stop
+and daily halt $10; sports lane $20 unchanged; esports off); crypto
+unchanged and disarmed."
+
+Done:
+- 23:27 deployed `7a0535450` locked (deployment `2e3cc3b9`, SUCCESS 23:28).
+- 23:28 ledger `L5_PORTFOLIO_MAX_DRAWDOWN_USD` 13 → 20 (deployment
+  `055ecc76`, SUCCESS 23:29). Bot reads limit 20, figure 6.5843,
+  capacity 13.4157.
+- Watchdog 23:30–23:31: 0 open orders.
+- 23:32 applied the FINAL TERMS settings, with
+  `PMUS_TWO_SIDED_SUBMISSION_LOCK=window:2026-11-25T23:45:00Z/2026-11-26T01:45:00Z`
+  and grace 7,200 s.
+
+Crypto and watchdog not touched; esports bypass off.
