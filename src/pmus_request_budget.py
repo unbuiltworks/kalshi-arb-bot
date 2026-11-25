@@ -228,7 +228,10 @@ class GovernedTransport:
         if base is not None and "gateway" in str(base):
             # public, unsigned gateway reads are not on the key's budget
             return self._inner.request(method, path, *a, **kw)
-        cls = classify(method, path)
+        # a caller may raise ONE read to "critical" (never to anything
+        # lower): the open-order list that replaces per-order status polls
+        want = kw.pop("budget_class", None)
+        cls = "critical" if want == "critical" else classify(method, path)
         if cls != "critical" and self.budget.in_safety():
             cls = "safety"
         self.budget.acquire(cls)

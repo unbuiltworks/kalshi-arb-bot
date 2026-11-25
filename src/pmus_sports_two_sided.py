@@ -1286,6 +1286,36 @@ RN1_GAP_HOLD_S = float(os.getenv("PMUS_RN1_GAP_HOLD_S", "0"))
 #: does (see Engine._rn1_slot_holder).
 RN1_SLOTS_COUNT_INVENTORY = os.getenv(
     "PMUS_RN1_SLOTS_COUNT_INVENTORY", "1").strip() != "0"
+# FILL DETECTION FROM ONE LIST READ (owner 2026-11-25: "Eliminate redundant
+# requests ... Support substantially more concurrent markets within the
+# existing venue request budget"). Measured live, 4 markets: about 70% of
+# all signed requests were one GET /v1/order/{id} per open order per pass
+# (2,669 of them in 70 minutes); at 8 markets those polls alone exceed the
+# one-request-a-second budget, and they are never deferred, so placements
+# and audits starve.
+# With FILL_LIST_POLL on, one GET /v1/orders/open per pass stands in for
+# them. An order's own status is still read EXACTLY, as now, unless the
+# list PROVES nothing happened to it, i.e. ALL of:
+#   * the list was read no more than FILL_LIST_MAX_AGE_S ago;
+#   * the order was placed at least FILL_LIST_SETTLE_S before that read;
+#   * the order is in the list, in an ordinary resting state;
+#   * the list row carries a readable filled quantity and it equals the
+#     quantity the book has already recorded;
+#   * the order's exact status was read no more than FILL_EXACT_EVERY_S ago.
+# A fill is recorded only from the exact read, never from the list. An
+# order missing from the list, changed, unreadable or too new is read
+# exactly at once, so detection is as fast as before. A failed list read
+# falls back to exact polls for every order. 0 = off (as before).
+FILL_LIST_POLL = os.getenv("PMUS_TWO_SIDED_FILL_LIST_POLL",
+                           "0").strip() == "1"
+FILL_LIST_REFRESH_S = float(os.getenv(
+    "PMUS_TWO_SIDED_FILL_LIST_REFRESH_S", "4"))
+FILL_LIST_MAX_AGE_S = float(os.getenv(
+    "PMUS_TWO_SIDED_FILL_LIST_MAX_AGE_S", "8"))
+FILL_LIST_SETTLE_S = float(os.getenv(
+    "PMUS_TWO_SIDED_FILL_LIST_SETTLE_S", "2"))
+FILL_EXACT_EVERY_S = float(os.getenv(
+    "PMUS_TWO_SIDED_FILL_EXACT_EVERY_S", "60"))
 # A PAUSE IS NOT A REASON TO ABANDON A MARKET. LIVE 2026-11-24 01:20Z: a
 # flat market with nothing to quote for 120 s gives up its slot, a
 # price-move pause counted as "nothing to quote", and a released market was
@@ -2234,6 +2264,21 @@ class Venue:
         oo = self.t.request("GET", "/v1/orders/open")
         orders = [o for o in (oo.get("orders") or []) if isinstance(o, Mapping)]
         return {"positions": held, "open_orders": orders}
+
+    def open_orders(self) -> Dict[str, Any]:
+        """The venue's open-order list in ONE signed read, never deferred
+        by the request budget (it replaces reads that never were).
+        {"rows": {order id: row}}. A list may be one page of several: an
+        order MISSING from it therefore proves nothing and is read
+        exactly; an order PRESENT in it is the venue's own word."""
+        kw = {"budget_class": "critical"} if hasattr(self.t, "budget") \
+            else {}
+        oo = self.t.request("GET", "/v1/orders/open", **kw)
+        if not isinstance(oo, Mapping) or \
+                not isinstance(oo.get("orders"), list):
+            raise ValueError("open-order list unreadable")
+        return {"rows": {str(o.get("id")): o for o in oo["orders"]
+                         if isinstance(o, Mapping) and o.get("id")}}
 
     def positions_snapshot(self, max_pages: int = 20) -> Dict[str, Any]:
         """EVERY venue position row (account-wide, all strategies) plus all
@@ -3579,6 +3624,115 @@ class Engine:
             effect="every own order is cancelled and every placement "
                    "refused until the owner sets %s to this id; held "
                    "positions are kept and reconciled" % SAFETY_LATCH_ACK_ENV)
+
+    # ---- fill detection from the open-order list (FILL_LIST_POLL) -------
+    _FILLED_KEYS = ("cumQuantity", "cumQuantityDecimal", "cumQty",
+                    "filledQuantity", "filledQuantityDecimal")
+
+    def _exact_read(self, oid: str) -> None:
+        ex = getattr(self, "_exact_at", None)
+        if ex is None:
+            ex = self._exact_at = {}
+        ex[oid] = time.monotonic()
+        st = self._fill_stats()
+        st["exact_reads"] += 1
+        if len(ex) > 5000:                      # closed orders drop out
+            keep = sorted(ex, key=ex.get)[-1000:]
+            self._exact_at = {k: ex[k] for k in keep}
+
+    def _fill_stats(self) -> Dict[str, int]:
+        st = getattr(self, "_fill_poll", None)
+        if st is None:
+            st = self._fill_poll = {"list_reads": 0, "list_errors": 0,
+                                    "exact_reads": 0, "skipped": 0}
+        return st
+
+    def _fill_list(self) -> Optional[Dict[str, Any]]:
+        """The current open-order list, read at most once per
+        FILL_LIST_REFRESH_S; None when it cannot be had (then every order
+        is read exactly, as before)."""
+        now = time.monotonic()
+        cur = getattr(self, "_oo", None)
+        if cur is not None and now - cur["t"] < FILL_LIST_REFRESH_S:
+            return cur if cur.get("ok") else None
+        st = self._fill_stats()
+        try:
+            wall = time.time()
+            got = self.v.open_orders()
+            st["list_reads"] += 1
+            rows = got["rows"]
+            if rows and not getattr(self, "_oo_keys_logged", False):
+                self._oo_keys_logged = True
+                log("fill_list_row_keys",
+                    keys=sorted(str(k) for k in next(iter(rows.values()))),
+                    label="field NAMES of one open-order row, logged once")
+            self._oo = {"t": now, "wall": wall, "rows": rows, "ok": True}
+            return self._oo
+        except Exception as exc:                          # noqa: BLE001
+            st["list_errors"] += 1
+            self._oo = {"t": now, "ok": False}
+            if now - getattr(self, "_oo_err_at", -1e9) > 60:
+                self._oo_err_at = now
+                log("fill_list_error", err=type(exc).__name__,
+                    effect="every open order is read exactly this pass")
+            return None
+
+    def _row_filled(self, row: Mapping[str, Any]) -> Optional[D]:
+        """The filled quantity a list row states, or None when it states
+        none in a form this can read (then nothing is proved)."""
+        try:
+            for k in self._FILLED_KEYS:
+                if row.get(k) is not None and str(row.get(k)).strip() != "":
+                    v = D(str(row.get(k)))
+                    return v if v.is_finite() and v >= 0 else None
+            q = next((row.get(k) for k in ("quantity", "quantityDecimal",
+                                           "qty") if row.get(k) is not None),
+                     None)
+            lv = next((row.get(k) for k in ("leavesQuantity",
+                                            "leavesQuantityDecimal",
+                                            "leavesQty")
+                       if row.get(k) is not None), None)
+            if q is not None and lv is not None:
+                v = D(str(q)) - D(str(lv))
+                return v if v.is_finite() and v >= 0 else None
+        except Exception:                                 # noqa: BLE001
+            return None
+        return None
+
+    def fill_list_proves_unchanged(self, oid: str,
+                                   o: Mapping[str, Any]) -> bool:
+        """True only when the venue's open-order list proves this order is
+        still resting with nothing filled beyond what the book holds (see
+        FILL_LIST_POLL). Any doubt is False: the caller reads it exactly."""
+        if not FILL_LIST_POLL:
+            return False
+        try:
+            last = (getattr(self, "_exact_at", None) or {}).get(oid)
+            if last is None or \
+                    time.monotonic() - last > FILL_EXACT_EVERY_S:
+                return False
+            lst = self._fill_list()
+            if lst is None or \
+                    time.monotonic() - lst["t"] > FILL_LIST_MAX_AGE_S:
+                return False
+            placed = o.get("placed_at")
+            if placed is None or \
+                    float(placed) > lst["wall"] - FILL_LIST_SETTLE_S:
+                return False
+            row = lst["rows"].get(str(oid))
+            if row is None:
+                return False     # gone, or on a page this read lacks
+            state = str(row.get("state") or row.get("status") or "").upper()
+            if any(x in state for x in ("CANCEL", "PENDING", "FILLED",
+                                        "REJECT", "EXPIRED", "PARTIAL")):
+                return False
+            got = self._row_filled(row)
+            if got is None or got != D(str(o.get("filled") or "0")):
+                return False
+            self._fill_stats()["skipped"] += 1
+            return True
+        except Exception:                                 # noqa: BLE001
+            return False
 
     def refresh_fills(self, slug: str) -> None:
         """Re-read every own open order of one market from the venue now
@@ -5351,7 +5505,10 @@ class Engine:
         for oid, o in list(mk["orders"].items()):
             if not o.get("open"):
                 continue
+            if self.fill_list_proves_unchanged(oid, o):
+                continue                 # resting, nothing filled: no read
             st = self.v.status(oid)
+            self._exact_read(oid)
             self._record_fill(slug, o["side"], oid, st)
             o["open"] = st["open"]
             if not st["open"] and D(o.get("filled") or "0") < D(o["qty"]):
@@ -6311,6 +6468,27 @@ class Engine:
             return True
         return False
 
+    def reconcile_orders_now(self) -> None:
+        """The 30-second orphan sweep and, over a fresh account read, the
+        release of reconciled reservations. One place, called from the
+        main loop and from service_pass, so a long read-only job cannot
+        hold either back."""
+        if time.monotonic() - getattr(self, "_last_orphan", 0) <= 30:
+            return
+        self._last_orphan = time.monotonic()
+        # reuse the account read's open orders when it is fresh (one
+        # signed GET instead of two)
+        fresh = self._acct_cache is not None and \
+            self._acct_ok_at is not None and \
+            time.monotonic() - self._acct_ok_at <= 30
+        read_at = self._acct_ok_at if fresh else None
+        self.orphan_sweep(self._acct_cache["open_orders"]
+                          if fresh else None)
+        if fresh and not getattr(self, "_orphan_sweep_failed", False):
+            # only over a fresh account read: its order list is the one
+            # the sweep has just reconciled
+            self.release_reconciled_reservations(read_at, self._acct_cache)
+
     def service_pass(self) -> None:
         """Order management in the middle of a long read-only job (the
         audit): queued price events are drained every time, and every
@@ -6337,6 +6515,21 @@ class Engine:
                     log("safety_check_error", at="service_pass",
                         err=f"{type(exc).__name__}:{str(exc)[:160]}")
                 latched = latched or bool(self.b.d.get("safety_latch"))
+                # LIVE 2026-11-25: while the hourly audit ran (about ten
+                # minutes) the orphan sweep and the release of reconciled
+                # reservations waited for it, so capital stayed reserved
+                # for up to 402 s, and no heartbeat was logged. Both run
+                # here on their usual cadence; neither reads anything the
+                # audit depends on.
+                self.reconcile_orders_now()
+            if time.monotonic() - float(getattr(self, "_last_hb",
+                                                0.0)) > 60:
+                self._last_hb = time.monotonic()
+                try:
+                    self.report()
+                except Exception as exc:                  # noqa: BLE001
+                    log("report_error", at="service_pass",
+                        err=type(exc).__name__)
             if latched:
                 self.enforce_lock()
             for slug in ([] if latched else list(self.active())):
@@ -6678,6 +6871,7 @@ class Engine:
         extra = {} if self.ws is None else {
             "ws": self.ws.status(), "reactive_pulls": self.reactive_pulls,
             "orphan_stale_snapshot": self.orphan_stale,
+            "fill_poll": dict(self._fill_stats(), on=FILL_LIST_POLL),
             "jump_pauses": self.jump_pauses}
         if self.guard is not None:
             extra["intl_guard"] = self.guard.status()
@@ -6887,22 +7081,7 @@ class Engine:
                     except Exception as exc:          # noqa: BLE001
                         log("sharp_shadow_error",
                             err=type(exc).__name__)
-                if time.monotonic() - getattr(self, "_last_orphan", 0) > 30:
-                    self._last_orphan = time.monotonic()
-                    # reuse the account read's open orders when it is fresh
-                    # (one signed GET instead of two)
-                    fresh = self._acct_cache is not None and \
-                        self._acct_ok_at is not None and \
-                        time.monotonic() - self._acct_ok_at <= 30
-                    read_at = self._acct_ok_at if fresh else None
-                    self.orphan_sweep(self._acct_cache["open_orders"]
-                                      if fresh else None)
-                    if fresh and not getattr(self, "_orphan_sweep_failed",
-                                             False):
-                        # only over a fresh account read: its order list is
-                        # the one the sweep has just reconciled
-                        self.release_reconciled_reservations(
-                            read_at, self._acct_cache)
+                self.reconcile_orders_now()
                 if SETTLE_CHECK_S > 0 and time.monotonic() - getattr(
                         self, "_last_settle", -1e9) > SETTLE_CHECK_S:
                     self._last_settle = time.monotonic()
@@ -6911,9 +7090,10 @@ class Engine:
                     except Exception as exc:              # noqa: BLE001
                         log("settle_lookup_error",
                             err=f"{type(exc).__name__}:{str(exc)[:160]}")
-                if time.monotonic() - last_hb > 60:
+                if time.monotonic() - max(last_hb, float(getattr(
+                        self, "_last_hb", 0.0))) > 60:
                     self.report()
-                    last_hb = time.monotonic()
+                    last_hb = self._last_hb = time.monotonic()
                 if reward_first_on() and \
                         time.monotonic() - last_acc > REWARD_ACCRUAL_LOG_S:
                     last_acc = time.monotonic()
