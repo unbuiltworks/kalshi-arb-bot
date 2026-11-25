@@ -1411,3 +1411,16 @@ Carried out (section 55): lock set back to the 19:58 window (no restart),
 release `a46a41b6a` deployed (deployment `621db2a0`, live 18:17:21 UTC).
 Boot 18:17:27: new exposure and completions unlocked, window to 19:58 UTC,
 grace 7,200 s.
+
+## 56. Locked deployment of 6755062ad authorized — 25 Nov, about 19:55 UTC
+
+Owner, typed: "Authorized: deploy 6755062ad1e4ccdd9299982205f223e2a686ff37
+locked after the existing campaign and authorized completion period
+conclude. ... Do not arm, increase capital or change production risk
+limits without separate authorization."
+
+To do after 21:58 UTC: close out; set `PMUS_TWO_SIDED_SUBMISSION_LOCK=1`;
+deploy `6755062ad` (rollback `a46a41b6a`); verify locked, zero open
+orders, watchdog healthy, limits unchanged. Settings stay as they are;
+`PMUS_RN1_FIT_QTY` and `PMUS_RN1_PULL_THREATENED_ONLY` stay off;
+`PMUS_RN1_LOSS_STOP_COUNTS_RESTING` is on by default in the build.
