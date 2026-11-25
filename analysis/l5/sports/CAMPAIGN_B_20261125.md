@@ -94,3 +94,74 @@ case of the run is the $20 loss stop.
 > Authorized: deploy 71445cf30 locked, then campaign B for two hours,
 > ____ to ____ UTC, on the terms in CAMPAIGN_B_20261125.md, including the
 > limit increases listed there; crypto unchanged and disarmed.
+
+## Exact settings (update 20:45 UTC)
+
+Applied only after the owner's approval, after tonight's close-out.
+
+**Sports service `pmus-spring-l5-probe`** (deploy `71445cf30` locked first):
+
+| Variable | Value | Was |
+|---|---|---|
+| `PMUS_RN1_QTY` / `PMUS_RN1_PREGAME_QTY` / `PMUS_RN1_LIVE_QTY` | 10 / 10 / 10 | 1 / 2 / 2 |
+| `PMUS_RN1_LADDER_LEVELS` / `_STEP_TICKS` / `_QTY` | 2 / 2 / 5 | 3 / 2 / — |
+| `PMUS_RN1_FIT_QTY` | 1 | 0 |
+| `PMUS_RN1_PULL_THREATENED_ONLY` | 1 | 0 |
+| `PMUS_RN1_JOIN_TOUCH` / `PMUS_RN1_JOIN_ONE_TICK` | 1 / 1 | 1 / 0 |
+| `PMUS_RN1_REWARD_ONLY` | 1 | 0 |
+| `PMUS_RN1_RANK_SHARE` | 1 | 1 |
+| `PMUS_RN1_RELEASE_UNQUALIFIED_S` | 120 | 0 |
+| `PMUS_RN1_REFILL_COOLDOWN_S` | 10 | 10 |
+| `PMUS_TWO_SIDED_MAX_MARKETS` / `_MAX_TRACKED` | 2 / 4 | 4 / 8 |
+| `PMUS_TWO_SIDED_SLATE` | live | live |
+| `PMUS_TWO_SIDED_OPEN_GATE_ALLOW_SPORTS` | setkameua,setkamemd,utr,atp,wta,atpdb | without atpdb |
+| `PMUS_RN1_RESIDUAL_CAP_USD` (per-market unpaired) | 8 | 3 |
+| `PMUS_RN1_PER_MARKET_USD` | 20 | 8 |
+| `PMUS_RN1_TOTAL_UNMATCHED_USD` | 16 | 6 |
+| `PMUS_RN1_TOTAL_SPEND_USD` | 100 | 60 |
+| `PMUS_RN1_PILOT_LOSS_USD` (loss stop, counts resting) | 20 | 4 |
+| `PMUS_TWO_SIDED_DAILY_LOSS_USD` | 20 | 5 |
+| `PMUS_TWO_SIDED_AT_RISK_BUDGET_USD` | 40 | 16 |
+| `L5_ACCOUNT_MAX_EXPOSURE_USD` / `L5_ACCOUNT_LANES` — **on this service only** | 40 / 1 | sports lane cap $20 |
+| `PMUS_TWO_SIDED_WINDOW_COMPLETE_GRACE_S` | 7200 | 7200 |
+| `PMUS_TWO_SIDED_SUBMISSION_LOCK` | `window:<start>/<start+2h>` | 1 |
+
+**Ledger `l5-pmus-live`:** `L5_PORTFOLIO_MAX_DRAWDOWN_USD` 13 → 45
+(anchor unchanged). Crypto services: nothing touched; crypto stays disarmed.
+
+Unchanged: maker-only (post-only), no taker, pair-cost limit 0.97, depth
+filter 3, jump and volatility pauses, kickoff and late rules,
+reconciliation, reservations, final gate, watchdog, cricket and esports
+exclusion.
+
+## Break-even
+
+Inventory losses per hour = fills an hour × 10 contracts × loss per
+contract filled. Measured loss per contract: −3.4c (14–18 Nov, 988
+contracts) to −7.6c (today, 19 contracts).
+
+| 10-contract fills an hour | at −3.4c | at −7.6c |
+|---|---|---|
+| 1 | $0.34 | $0.76 |
+| 2 | $0.68 | $1.52 |
+| 4 | $1.36 | $3.04 |
+
+Reward needed to break even = the row's cost. Modelled reward for two
+qualifying markets with one side at the best bid: about **$0.65/h** if each
+market has its own pool, about $0.30/h if pools are shared. So the campaign
+breaks even only at about one fill an hour or fewer at the better loss
+rate — and joining the best bid makes fills more frequent. Today's rate at
+1–2 contracts was about 2.5 fills an hour across four markets.
+
+Expected two-hour result: about −$1 to −$5 trading, +$0.6 to +$1.3
+reward if the model holds (paid in 1–7 days, only if the account's total
+for the day reaches $1). Worst case: the $20 loss stop. What the run
+establishes: whether the venue actually pays our size at the modelled rate.
+
+## Authorization line
+
+> Authorized: deploy 71445cf3071721d43db33b7ac4c2d9cb415ac5a8 locked after
+> tonight's close-out, then campaign B for two hours, ____ to ____ UTC,
+> with exactly the settings and limits in CAMPAIGN_B_20261125.md (ledger
+> account limit $45; loss stop and daily halt $20; sports lane $40 on the
+> sports service only); crypto unchanged and disarmed.
