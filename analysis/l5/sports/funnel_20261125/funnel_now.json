@@ -1,0 +1,1610 @@
+{
+ "t": "2026-11-25T23:11:43Z",
+ "rows": [
+  {
+   "slug": "aec-nba-mia-phi-2026-11-25",
+   "title": "MIA Heat vs. PHI 76ers",
+   "comp": "nba",
+   "bid": 0.31,
+   "ask": 0.32,
+   "bq": 23459.33,
+   "aq": 29661.13,
+   "rej": {
+    "cricket_esports": false,
+    "competition": true,
+    "no_two_sided": false,
+    "band_30_70": false,
+    "spread_gt_6": false,
+    "no_paying_programme": false,
+    "touch_depth_lt_3": false
+   },
+   "net": {
+    "campaign (5c/3.5c)": [
+     -0.105,
+     1,
+     1,
+     0.0,
+     0.105,
+     2
+    ],
+    "measured markout (6c/1.4c)": [
+     -0.042,
+     1,
+     1,
+     0.0,
+     0.042,
+     2
+    ],
+    "half (2.5c/1.75c)": [
+     -0.052,
+     1,
+     1,
+     0.0,
+     0.053,
+     2
+    ]
+   },
+   "pool_h": 10.0,
+   "target": 75000.0
+  },
+  {
+   "slug": "aec-cbb-xav-txam-2026-11-25",
+   "title": "Xavier vs. Texas A&M",
+   "comp": "cbb",
+   "bid": 0.59,
+   "ask": 0.6,
+   "bq": 174.0,
+   "aq": 16.0,
+   "rej": {
+    "cricket_esports": false,
+    "competition": true,
+    "no_two_sided": false,
+    "band_30_70": false,
+    "spread_gt_6": false,
+    "no_paying_programme": true,
+    "touch_depth_lt_3": false
+   }
+  },
+  {
+   "slug": "aec-wcbb-mia-utah-2026-11-25",
+   "title": "Miami (FL) (W) vs. Utah (W)",
+   "comp": "wcbb",
+   "rej": {
+    "cricket_esports": false,
+    "competition": true,
+    "no_two_sided": true,
+    "band_30_70": false,
+    "spread_gt_6": false,
+    "no_paying_programme": true,
+    "touch_depth_lt_3": false
+   }
+  },
+  {
+   "slug": "aec-cbb-grmbst-no-2026-11-25",
+   "title": "Grambling State vs. New Orleans",
+   "comp": "cbb",
+   "bid": 0.85,
+   "ask": 0.86,
+   "bq": 1011.88,
+   "aq": 4574.2,
+   "rej": {
+    "cricket_esports": false,
+    "competition": true,
+    "no_two_sided": false,
+    "band_30_70": true,
+    "spread_gt_6": false,
+    "no_paying_programme": true,
+    "touch_depth_lt_3": false
+   }
+  },
+  {
+   "slug": "aec-wcbb-monst-mtnst-2026-11-25",
+   "title": "Montana State (W) vs. MTSU (W)",
+   "comp": "wcbb",
+   "rej": {
+    "cricket_esports": false,
+    "competition": true,
+    "no_two_sided": true,
+    "band_30_70": false,
+    "spread_gt_6": false,
+    "no_paying_programme": true,
+    "touch_depth_lt_3": false
+   }
+  },
+  {
+   "slug": "aec-cbb-usc-sc-2026-11-25",
+   "title": "USC vs. South Carolina",
+   "comp": "cbb",
+   "bid": 0.67,
+   "ask": 0.68,
+   "bq": 48035.02,
+   "aq": 28556.1,
+   "rej": {
+    "cricket_esports": false,
+    "competition": true,
+    "no_two_sided": false,
+    "band_30_70": false,
+    "spread_gt_6": false,
+    "no_paying_programme": true,
+    "touch_depth_lt_3": false
+   }
+  },
+  {
+   "slug": "aec-wcbb-mphs-smu-2026-11-25",
+   "title": "Memphis (W) vs. SMU (W)",
+   "comp": "wcbb",
+   "rej": {
+    "cricket_esports": false,
+    "competition": true,
+    "no_two_sided": true,
+    "band_30_70": false,
+    "spread_gt_6": false,
+    "no_paying_programme": true,
+    "touch_depth_lt_3": false
+   }
+  },
+  {
+   "slug": "aec-cbb-south-nebr-2026-11-25",
+   "title": "Southern vs. Nebraska",
+   "comp": "cbb",
+   "rej": {
+    "cricket_esports": false,
+    "competition": true,
+    "no_two_sided": true,
+    "band_30_70": false,
+    "spread_gt_6": false,
+    "no_paying_programme": true,
+    "touch_depth_lt_3": false
+   }
+  },
+  {
+   "slug": "aec-wcbb-uscb-port-2026-11-25",
+   "title": "UC Santa Barbara (W) vs. Portland (W)",
+   "comp": "wcbb",
+   "bid": 0.24,
+   "ask": 0.31,
+   "bq": 8.0,
+   "aq": 230.0,
+   "rej": {
+    "cricket_esports": false,
+    "competition": true,
+    "no_two_sided": false,
+    "band_30_70": true,
+    "spread_gt_6": true,
+    "no_paying_programme": true,
+    "touch_depth_lt_3": false
+   }
+  },
+  {
+   "slug": "aec-cbb-holy-dart-2026-11-25",
+   "title": "Holy Cross vs. Dartmouth",
+   "comp": "cbb",
+   "bid": 0.06,
+   "ask": 0.08,
+   "bq": 79.8,
+   "aq": 1422.38,
+   "rej": {
+    "cricket_esports": false,
+    "competition": true,
+    "no_two_sided": false,
+    "band_30_70": true,
+    "spread_gt_6": false,
+    "no_paying_programme": true,
+    "touch_depth_lt_3": false
+   }
+  },
+  {
+   "slug": "aec-wcbb-oral-butl-2026-11-25",
+   "title": "Oral Roberts (W) vs. Butler (W)",
+   "comp": "wcbb",
+   "rej": {
+    "cricket_esports": false,
+    "competition": true,
+    "no_two_sided": true,
+    "band_30_70": false,
+    "spread_gt_6": false,
+    "no_paying_programme": true,
+    "touch_depth_lt_3": false
+   }
+  },
+  {
+   "slug": "aec-cbb-portst-ucrvs-2026-11-25",
+   "title": "Portland State vs. UC Riverside",
+   "comp": "cbb",
+   "bid": 0.67,
+   "ask": 0.68,
+   "bq": 21758.28,
+   "aq": 11572.21,
+   "rej": {
+    "cricket_esports": false,
+    "competition": true,
+    "no_two_sided": false,
+    "band_30_70": false,
+    "spread_gt_6": false,
+    "no_paying_programme": true,
+    "touch_depth_lt_3": false
+   }
+  },
+  {
+   "slug": "aec-wcbb-camp-merc-2026-11-25",
+   "title": "Campbell (W) vs. Mercer (W)",
+   "comp": "wcbb",
+   "bid": 0.32,
+   "ask": 0.39,
+   "bq": 24.0,
+   "aq": 53.0,
+   "rej": {
+    "cricket_esports": false,
+    "competition": true,
+    "no_two_sided": false,
+    "band_30_70": false,
+    "spread_gt_6": true,
+    "no_paying_programme": true,
+    "touch_depth_lt_3": false
+   }
+  },
+  {
+   "slug": "aec-cbb-alcst-txst-2026-11-25",
+   "title": "Alcorn State vs. Texas State",
+   "comp": "cbb",
+   "rej": {
+    "cricket_esports": false,
+    "competition": true,
+    "no_two_sided": true,
+    "band_30_70": false,
+    "spread_gt_6": false,
+    "no_paying_programme": true,
+    "touch_depth_lt_3": false
+   }
+  },
+  {
+   "slug": "aec-cbb-uwfl-nwst-2026-11-25",
+   "title": "West Florida vs. Northwestern State",
+   "comp": "cbb",
+   "bid": 0.44,
+   "ask": 0.45,
+   "bq": 6808.17,
+   "aq": 10.0,
+   "rej": {
+    "cricket_esports": false,
+    "competition": true,
+    "no_two_sided": false,
+    "band_30_70": false,
+    "spread_gt_6": false,
+    "no_paying_programme": true,
+    "touch_depth_lt_3": false
+   }
+  },
+  {
+   "slug": "aec-cbb-albny-syra-2026-11-25",
+   "title": "UAlbany vs. Syracuse",
+   "comp": "cbb",
+   "bid": 0.01,
+   "ask": 0.02,
+   "bq": 8546.13,
+   "aq": 6007.62,
+   "rej": {
+    "cricket_esports": false,
+    "competition": true,
+    "no_two_sided": false,
+    "band_30_70": true,
+    "spread_gt_6": false,
+    "no_paying_programme": true,
+    "touch_depth_lt_3": false
+   }
+  },
+  {
+   "slug": "aec-cbb-csunr-webst-2026-11-25",
+   "title": "Cal State Northridge vs. Weber State",
+   "comp": "cbb",
+   "bid": 0.77,
+   "ask": 0.78,
+   "bq": 3552.29,
+   "aq": 793.51,
+   "rej": {
+    "cricket_esports": false,
+    "competition": true,
+    "no_two_sided": false,
+    "band_30_70": true,
+    "spread_gt_6": false,
+    "no_paying_programme": true,
+    "touch_depth_lt_3": false
+   }
+  },
+  {
+   "slug": "aec-cbb-bcook-rich-2026-11-25",
+   "title": "Bethune-Cookman vs. Richmond",
+   "comp": "cbb",
+   "bid": 0.22,
+   "ask": 0.23,
+   "bq": 4223.9,
+   "aq": 14005.25,
+   "rej": {
+    "cricket_esports": false,
+    "competition": true,
+    "no_two_sided": false,
+    "band_30_70": true,
+    "spread_gt_6": false,
+    "no_paying_programme": true,
+    "touch_depth_lt_3": false
+   }
+  },
+  {
+   "slug": "aec-sheffield-wae-tas-2026-11-23",
+   "title": "Western Australia vs. Tasmania",
+   "comp": "sheffield",
+   "bid": 0.7,
+   "ask": 0.86,
+   "bq": 5.0,
+   "aq": 38.0,
+   "rej": {
+    "cricket_esports": true,
+    "competition": true,
+    "no_two_sided": false,
+    "band_30_70": false,
+    "spread_gt_6": true,
+    "no_paying_programme": true,
+    "touch_depth_lt_3": false
+   }
+  },
+  {
+   "slug": "aec-utr-broosc-stajer-2026-11-22",
+   "title": "Oscar Brown vs. Jera Staley",
+   "comp": "utr",
+   "bid": 0.96,
+   "ask": 0.98,
+   "bq": 0.1,
+   "aq": 154.65,
+   "rej": {
+    "cricket_esports": false,
+    "competition": false,
+    "no_two_sided": false,
+    "band_30_70": true,
+    "spread_gt_6": false,
+    "no_paying_programme": false,
+    "touch_depth_lt_3": true
+   },
+   "net": {
+    "campaign (5c/3.5c)": null,
+    "measured markout (6c/1.4c)": null,
+    "half (2.5c/1.75c)": null
+   },
+   "pool_h": 16.67,
+   "target": 500.0
+  },
+  {
+   "slug": "aec-utr-ishhar-valemm-2026-11-22",
+   "title": "Haruto Ishikawa vs. Emmanuel Valsamis",
+   "comp": "utr",
+   "bid": 0.07,
+   "ask": 0.13,
+   "bq": 0.1,
+   "aq": 25.1,
+   "rej": {
+    "cricket_esports": false,
+    "competition": false,
+    "no_two_sided": false,
+    "band_30_70": true,
+    "spread_gt_6": false,
+    "no_paying_programme": false,
+    "touch_depth_lt_3": true
+   },
+   "net": {
+    "campaign (5c/3.5c)": [
+     -0.053,
+     1,
+     1,
+     0.0,
+     0.053,
+     1
+    ],
+    "measured markout (6c/1.4c)": [
+     -0.021,
+     1,
+     1,
+     0.0,
+     0.021,
+     1
+    ],
+    "half (2.5c/1.75c)": [
+     -0.026,
+     1,
+     1,
+     0.0,
+     0.026,
+     1
+    ]
+   },
+   "pool_h": 16.67,
+   "target": 500.0
+  },
+  {
+   "slug": "aec-utr-nanlea-tsaval-2026-11-23",
+   "title": "Leana Nannapaneni vs. Valenova Tsai",
+   "comp": "utr",
+   "bid": 0.84,
+   "ask": 0.97,
+   "bq": 0.1,
+   "aq": 0.1,
+   "rej": {
+    "cricket_esports": false,
+    "competition": false,
+    "no_two_sided": false,
+    "band_30_70": true,
+    "spread_gt_6": true,
+    "no_paying_programme": false,
+    "touch_depth_lt_3": true
+   },
+   "net": {
+    "campaign (5c/3.5c)": [
+     -0.053,
+     1,
+     1,
+     0.0,
+     0.053,
+     1
+    ],
+    "measured markout (6c/1.4c)": [
+     -0.021,
+     1,
+     1,
+     0.0,
+     0.021,
+     1
+    ],
+    "half (2.5c/1.75c)": [
+     -0.026,
+     1,
+     1,
+     0.0,
+     0.026,
+     1
+    ]
+   },
+   "pool_h": 16.67,
+   "target": 500.0
+  },
+  {
+   "slug": "aec-sheffield-sao-vic-2026-11-24",
+   "title": "South Australia vs. Victoria",
+   "comp": "sheffield",
+   "bid": 0.07,
+   "ask": 0.88,
+   "bq": 0.01,
+   "aq": 6.01,
+   "rej": {
+    "cricket_esports": true,
+    "competition": true,
+    "no_two_sided": false,
+    "band_30_70": true,
+    "spread_gt_6": true,
+    "no_paying_programme": true,
+    "touch_depth_lt_3": true
+   }
+  },
+  {
+   "slug": "aec-utr-garcar-borvic-2026-11-23",
+   "title": "Carlota Garcia Alonso vs. Victoria Borodulina",
+   "comp": "utr",
+   "bid": 0.4,
+   "ask": 0.43,
+   "bq": 10.45,
+   "aq": 327.2,
+   "rej": {
+    "cricket_esports": false,
+    "competition": false,
+    "no_two_sided": false,
+    "band_30_70": false,
+    "spread_gt_6": false,
+    "no_paying_programme": false,
+    "touch_depth_lt_3": false
+   },
+   "net": {
+    "campaign (5c/3.5c)": [
+     -0.084,
+     1,
+     1,
+     0.021,
+     0.105,
+     2
+    ],
+    "measured markout (6c/1.4c)": [
+     -0.021,
+     1,
+     1,
+     0.021,
+     0.042,
+     2
+    ],
+    "half (2.5c/1.75c)": [
+     -0.031,
+     1,
+     1,
+     0.021,
+     0.053,
+     2
+    ]
+   },
+   "pool_h": 16.67,
+   "target": 500.0
+  },
+  {
+   "slug": "aec-utr-cekkuz-avdfil-2026-11-23",
+   "title": "Kuzey Cekirge vs. Filip Avdeev",
+   "comp": "utr",
+   "bid": 0.79,
+   "ask": 0.84,
+   "bq": 0.1,
+   "aq": 30.51,
+   "rej": {
+    "cricket_esports": false,
+    "competition": false,
+    "no_two_sided": false,
+    "band_30_70": true,
+    "spread_gt_6": false,
+    "no_paying_programme": false,
+    "touch_depth_lt_3": true
+   },
+   "net": {
+    "campaign (5c/3.5c)": [
+     0.354,
+     10,
+     0,
+     1.854,
+     1.5,
+     1
+    ],
+    "measured markout (6c/1.4c)": [
+     0.449,
+     10,
+     1,
+     0.659,
+     0.21,
+     1
+    ],
+    "half (2.5c/1.75c)": [
+     1.104,
+     10,
+     0,
+     1.854,
+     0.75,
+     1
+    ]
+   },
+   "pool_h": 16.67,
+   "target": 500.0
+  },
+  {
+   "slug": "aec-utr-fonori-danjul-2026-11-23",
+   "title": "Oriol Font vs. Julien Dando",
+   "comp": "utr",
+   "bid": 0.09,
+   "ask": 0.19,
+   "bq": 3.1,
+   "aq": 3.1,
+   "rej": {
+    "cricket_esports": false,
+    "competition": false,
+    "no_two_sided": false,
+    "band_30_70": true,
+    "spread_gt_6": true,
+    "no_paying_programme": false,
+    "touch_depth_lt_3": false
+   },
+   "net": {
+    "campaign (5c/3.5c)": [
+     -0.053,
+     1,
+     1,
+     0.0,
+     0.053,
+     1
+    ],
+    "measured markout (6c/1.4c)": [
+     -0.021,
+     1,
+     1,
+     0.0,
+     0.021,
+     1
+    ],
+    "half (2.5c/1.75c)": [
+     -0.026,
+     1,
+     1,
+     0.0,
+     0.026,
+     1
+    ]
+   },
+   "pool_h": 16.67,
+   "target": 500.0
+  },
+  {
+   "slug": "aec-utr-kawgab-duadan-2026-11-24",
+   "title": "Gabriela Kawano Cho vs. Agustina Daniela Duarte",
+   "comp": "utr",
+   "bid": 0.32,
+   "ask": 0.34,
+   "bq": 102.08,
+   "aq": 161.46,
+   "rej": {
+    "cricket_esports": false,
+    "competition": false,
+    "no_two_sided": false,
+    "band_30_70": false,
+    "spread_gt_6": false,
+    "no_paying_programme": false,
+    "touch_depth_lt_3": false
+   },
+   "net": {
+    "campaign (5c/3.5c)": [
+     -0.081,
+     1,
+     1,
+     0.024,
+     0.105,
+     2
+    ],
+    "measured markout (6c/1.4c)": [
+     -0.018,
+     1,
+     1,
+     0.024,
+     0.042,
+     2
+    ],
+    "half (2.5c/1.75c)": [
+     -0.029,
+     1,
+     1,
+     0.024,
+     0.053,
+     2
+    ]
+   },
+   "pool_h": 16.67,
+   "target": 500.0
+  },
+  {
+   "slug": "atc-bra-cam-scp-2026-11-25-cam",
+   "title": "CA Mineiro vs. SC Corinthians Paulista",
+   "comp": "bra",
+   "bid": 0.36,
+   "ask": 0.37,
+   "bq": 2402.0,
+   "aq": 12165.27,
+   "rej": {
+    "cricket_esports": false,
+    "competition": true,
+    "no_two_sided": false,
+    "band_30_70": false,
+    "spread_gt_6": false,
+    "no_paying_programme": true,
+    "touch_depth_lt_3": false
+   }
+  },
+  {
+   "slug": "atc-bra-cam-scp-2026-11-25-draw",
+   "title": "CA Mineiro vs. SC Corinthians Paulista",
+   "comp": "bra",
+   "bid": 0.3,
+   "ask": 0.31,
+   "bq": 20612.43,
+   "aq": 13336.09,
+   "rej": {
+    "cricket_esports": false,
+    "competition": true,
+    "no_two_sided": false,
+    "band_30_70": false,
+    "spread_gt_6": false,
+    "no_paying_programme": true,
+    "touch_depth_lt_3": false
+   }
+  },
+  {
+   "slug": "atc-bra-cam-scp-2026-11-25-scp",
+   "title": "CA Mineiro vs. SC Corinthians Paulista",
+   "comp": "bra",
+   "bid": 0.33,
+   "ask": 0.34,
+   "bq": 17901.99,
+   "aq": 10393.0,
+   "rej": {
+    "cricket_esports": false,
+    "competition": true,
+    "no_two_sided": false,
+    "band_30_70": false,
+    "spread_gt_6": false,
+    "no_paying_programme": true,
+    "touch_depth_lt_3": false
+   }
+  },
+  {
+   "slug": "aec-atpdb-nikleszarate-fernanrebelo-2026-11-23",
+   "title": "Nikles / Zarate vs. Fernandez / Rebelo",
+   "comp": "atpdb",
+   "bid": 0.97,
+   "ask": 0.98,
+   "bq": 347.25,
+   "aq": 0.25,
+   "rej": {
+    "cricket_esports": false,
+    "competition": false,
+    "no_two_sided": false,
+    "band_30_70": true,
+    "spread_gt_6": false,
+    "no_paying_programme": false,
+    "touch_depth_lt_3": true
+   },
+   "net": {
+    "campaign (5c/3.5c)": null,
+    "measured markout (6c/1.4c)": null,
+    "half (2.5c/1.75c)": null
+   },
+   "pool_h": 23.33,
+   "target": 4000.0
+  },
+  {
+   "slug": "aec-cs2-alka-ln-2026-11-25",
+   "title": "ALKA GAMING vs. Los Ninos",
+   "comp": "cs2",
+   "bid": 0.64,
+   "ask": 0.65,
+   "bq": 0.21,
+   "aq": 1351.4,
+   "rej": {
+    "cricket_esports": true,
+    "competition": true,
+    "no_two_sided": false,
+    "band_30_70": false,
+    "spread_gt_6": false,
+    "no_paying_programme": false,
+    "touch_depth_lt_3": true
+   },
+   "net": {
+    "campaign (5c/3.5c)": [
+     5.561,
+     10,
+     1,
+     6.611,
+     1.05,
+     2
+    ],
+    "measured markout (6c/1.4c)": [
+     6.191,
+     10,
+     1,
+     6.611,
+     0.42,
+     2
+    ],
+    "half (2.5c/1.75c)": [
+     6.086,
+     10,
+     1,
+     6.611,
+     0.525,
+     2
+    ]
+   },
+   "pool_h": 26.67,
+   "target": 7500.0
+  },
+  {
+   "slug": "aec-wta-solsie-carmon-2026-11-25",
+   "title": "Solana Sierra vs. Carole Monnet",
+   "comp": "wta",
+   "bid": 0.03,
+   "ask": 0.05,
+   "bq": 225.0,
+   "aq": 3.0,
+   "rej": {
+    "cricket_esports": false,
+    "competition": false,
+    "no_two_sided": false,
+    "band_30_70": true,
+    "spread_gt_6": false,
+    "no_paying_programme": false,
+    "touch_depth_lt_3": false
+   },
+   "net": {
+    "campaign (5c/3.5c)": null,
+    "measured markout (6c/1.4c)": null,
+    "half (2.5c/1.75c)": null
+   },
+   "pool_h": 61.33,
+   "target": 19000.0
+  },
+  {
+   "slug": "aec-czechligapro-id2503634977138618",
+   "title": "Jaroslav Prokupek vs. Jiri Dedek",
+   "comp": "czechligapro",
+   "bid": 0.44,
+   "ask": 0.55,
+   "bq": 1.66,
+   "aq": 35.0,
+   "rej": {
+    "cricket_esports": false,
+    "competition": true,
+    "no_two_sided": false,
+    "band_30_70": false,
+    "spread_gt_6": true,
+    "no_paying_programme": true,
+    "touch_depth_lt_3": true
+   }
+  },
+  {
+   "slug": "aec-czechligapro-id2503634977138688",
+   "title": "Ondrej Svacha vs. Radim Urbaniec",
+   "comp": "czechligapro",
+   "bid": 0.03,
+   "ask": 0.89,
+   "bq": 2.0,
+   "aq": 25.0,
+   "rej": {
+    "cricket_esports": false,
+    "competition": true,
+    "no_two_sided": false,
+    "band_30_70": true,
+    "spread_gt_6": true,
+    "no_paying_programme": true,
+    "touch_depth_lt_3": true
+   }
+  },
+  {
+   "slug": "aec-czechligapro-id2503634977138704",
+   "title": "Petr Zmuda vs. Martin Vizek",
+   "comp": "czechligapro",
+   "bid": 0.69,
+   "ask": 0.85,
+   "bq": 25.0,
+   "aq": 7.0,
+   "rej": {
+    "cricket_esports": false,
+    "competition": true,
+    "no_two_sided": false,
+    "band_30_70": false,
+    "spread_gt_6": true,
+    "no_paying_programme": true,
+    "touch_depth_lt_3": false
+   }
+  },
+  {
+   "slug": "aec-setkameua-novrus-paryur-2026-11-25",
+   "title": "Novak Ruslan vs. Parahailo Yurii",
+   "comp": "setkameua",
+   "bid": 0.89,
+   "ask": 0.9,
+   "bq": 4079.99,
+   "aq": 3322.98,
+   "rej": {
+    "cricket_esports": false,
+    "competition": false,
+    "no_two_sided": false,
+    "band_30_70": true,
+    "spread_gt_6": false,
+    "no_paying_programme": false,
+    "touch_depth_lt_3": false
+   },
+   "net": {
+    "campaign (5c/3.5c)": [
+     -0.052,
+     1,
+     1,
+     0.0,
+     0.053,
+     1
+    ],
+    "measured markout (6c/1.4c)": [
+     -0.021,
+     1,
+     1,
+     0.0,
+     0.021,
+     1
+    ],
+    "half (2.5c/1.75c)": [
+     -0.026,
+     1,
+     1,
+     0.0,
+     0.026,
+     1
+    ]
+   },
+   "pool_h": 5.67,
+   "target": 4800.0
+  },
+  {
+   "slug": "aec-setkameua-kimdmy-usdan-2026-11-25",
+   "title": "Kim Dmytro vs. Us Danylo",
+   "comp": "setkameua",
+   "bid": 0.26,
+   "ask": 0.28,
+   "bq": 4780.0,
+   "aq": 8560.94,
+   "rej": {
+    "cricket_esports": false,
+    "competition": false,
+    "no_two_sided": false,
+    "band_30_70": true,
+    "spread_gt_6": false,
+    "no_paying_programme": false,
+    "touch_depth_lt_3": false
+   },
+   "net": {
+    "campaign (5c/3.5c)": [
+     -0.105,
+     1,
+     1,
+     0.0,
+     0.105,
+     2
+    ],
+    "measured markout (6c/1.4c)": [
+     -0.042,
+     1,
+     1,
+     0.0,
+     0.042,
+     2
+    ],
+    "half (2.5c/1.75c)": [
+     -0.052,
+     1,
+     1,
+     0.0,
+     0.053,
+     2
+    ]
+   },
+   "pool_h": 5.67,
+   "target": 4800.0
+  },
+  {
+   "slug": "aec-setkamemd-ciumir-petste-2026-11-25",
+   "title": "Ciubinidze Miroslav vs. Petrea Stefan",
+   "comp": "setkamemd",
+   "bid": 0.53,
+   "ask": 0.64,
+   "bq": 2.0,
+   "aq": 7013.38,
+   "rej": {
+    "cricket_esports": false,
+    "competition": false,
+    "no_two_sided": false,
+    "band_30_70": false,
+    "spread_gt_6": true,
+    "no_paying_programme": false,
+    "touch_depth_lt_3": true
+   },
+   "net": {
+    "campaign (5c/3.5c)": [
+     -0.104,
+     1,
+     1,
+     0.001,
+     0.105,
+     2
+    ],
+    "measured markout (6c/1.4c)": [
+     -0.041,
+     1,
+     1,
+     0.001,
+     0.042,
+     2
+    ],
+    "half (2.5c/1.75c)": [
+     -0.052,
+     1,
+     1,
+     0.001,
+     0.053,
+     2
+    ]
+   },
+   "pool_h": 5.67,
+   "target": 4800.0
+  },
+  {
+   "slug": "aec-cbb-prov-byu-2026-11-25",
+   "title": "Providence vs. BYU",
+   "comp": "cbb",
+   "bid": 0.43,
+   "ask": 0.44,
+   "bq": 33966.5,
+   "aq": 14112.55,
+   "rej": {
+    "cricket_esports": false,
+    "competition": true,
+    "no_two_sided": false,
+    "band_30_70": false,
+    "spread_gt_6": false,
+    "no_paying_programme": true,
+    "touch_depth_lt_3": false
+   }
+  },
+  {
+   "slug": "aec-atp-olibon-luimig-2026-11-25",
+   "title": "Oliver Bonding vs. Luis Guto Miguel",
+   "comp": "atp",
+   "bid": 0.53,
+   "ask": 0.54,
+   "bq": 1206.11,
+   "aq": 454.98,
+   "rej": {
+    "cricket_esports": false,
+    "competition": false,
+    "no_two_sided": false,
+    "band_30_70": false,
+    "spread_gt_6": false,
+    "no_paying_programme": false,
+    "touch_depth_lt_3": false
+   },
+   "net": {
+    "campaign (5c/3.5c)": [
+     -0.097,
+     1,
+     1,
+     0.008,
+     0.105,
+     2
+    ],
+    "measured markout (6c/1.4c)": [
+     -0.034,
+     1,
+     1,
+     0.008,
+     0.042,
+     2
+    ],
+    "half (2.5c/1.75c)": [
+     -0.044,
+     1,
+     1,
+     0.008,
+     0.053,
+     2
+    ]
+   },
+   "pool_h": 61.33,
+   "target": 19000.0
+  },
+  {
+   "slug": "atc-ebfpl-mca-che-2026-11-25-dh3-mca",
+   "title": "eBattles: Man City (Dov1n) vs. Chelsea (marto1505)",
+   "comp": "ebfpl",
+   "bid": 0.9,
+   "ask": 0.91,
+   "bq": 0.02,
+   "aq": 0.02,
+   "rej": {
+    "cricket_esports": true,
+    "competition": true,
+    "no_two_sided": false,
+    "band_30_70": true,
+    "spread_gt_6": false,
+    "no_paying_programme": false,
+    "touch_depth_lt_3": true
+   },
+   "net": {
+    "campaign (5c/3.5c)": [
+     -0.053,
+     1,
+     1,
+     0.0,
+     0.053,
+     1
+    ],
+    "measured markout (6c/1.4c)": [
+     -0.021,
+     1,
+     1,
+     0.0,
+     0.021,
+     1
+    ],
+    "half (2.5c/1.75c)": [
+     -0.026,
+     1,
+     1,
+     0.0,
+     0.026,
+     1
+    ]
+   },
+   "pool_h": 2.0,
+   "target": 2000.0
+  },
+  {
+   "slug": "atc-ebfpl-mca-che-2026-11-25-dh3-draw",
+   "title": "eBattles: Man City (Dov1n) vs. Chelsea (marto1505)",
+   "comp": "ebfpl",
+   "bid": 0.11,
+   "ask": 0.12,
+   "bq": 0.02,
+   "aq": 0.03,
+   "rej": {
+    "cricket_esports": true,
+    "competition": true,
+    "no_two_sided": false,
+    "band_30_70": true,
+    "spread_gt_6": false,
+    "no_paying_programme": false,
+    "touch_depth_lt_3": true
+   },
+   "net": {
+    "campaign (5c/3.5c)": [
+     -0.053,
+     1,
+     1,
+     0.0,
+     0.053,
+     1
+    ],
+    "measured markout (6c/1.4c)": [
+     -0.021,
+     1,
+     1,
+     0.0,
+     0.021,
+     1
+    ],
+    "half (2.5c/1.75c)": [
+     -0.026,
+     1,
+     1,
+     0.0,
+     0.026,
+     1
+    ]
+   },
+   "pool_h": 2.0,
+   "target": 2000.0
+  },
+  {
+   "slug": "atc-ebfpl-mca-che-2026-11-25-dh3-che",
+   "title": "eBattles: Man City (Dov1n) vs. Chelsea (marto1505)",
+   "comp": "ebfpl",
+   "rej": {
+    "cricket_esports": true,
+    "competition": true,
+    "no_two_sided": true,
+    "band_30_70": false,
+    "spread_gt_6": false,
+    "no_paying_programme": false,
+    "touch_depth_lt_3": false
+   }
+  },
+  {
+   "slug": "atc-ebfpl-liv-tot-2026-11-25-dh3-liv",
+   "title": "eBattles: Liverpool (Noltzer) vs. Tottenham (pecat",
+   "comp": "ebfpl",
+   "bid": 0.37,
+   "ask": 0.38,
+   "bq": 0.01,
+   "aq": 1337.05,
+   "rej": {
+    "cricket_esports": true,
+    "competition": true,
+    "no_two_sided": false,
+    "band_30_70": false,
+    "spread_gt_6": false,
+    "no_paying_programme": false,
+    "touch_depth_lt_3": true
+   },
+   "net": {
+    "campaign (5c/3.5c)": [
+     0.876,
+     1,
+     1,
+     0.981,
+     0.105,
+     2
+    ],
+    "measured markout (6c/1.4c)": [
+     0.939,
+     1,
+     1,
+     0.981,
+     0.042,
+     2
+    ],
+    "half (2.5c/1.75c)": [
+     0.928,
+     1,
+     1,
+     0.981,
+     0.053,
+     2
+    ]
+   },
+   "pool_h": 2.0,
+   "target": 2000.0
+  },
+  {
+   "slug": "atc-ebfpl-liv-tot-2026-11-25-dh3-draw",
+   "title": "eBattles: Liverpool (Noltzer) vs. Tottenham (pecat",
+   "comp": "ebfpl",
+   "bid": 0.54,
+   "ask": 0.58,
+   "bq": 6.01,
+   "aq": 13.02,
+   "rej": {
+    "cricket_esports": true,
+    "competition": true,
+    "no_two_sided": false,
+    "band_30_70": false,
+    "spread_gt_6": false,
+    "no_paying_programme": false,
+    "touch_depth_lt_3": false
+   },
+   "net": {
+    "campaign (5c/3.5c)": [
+     -0.103,
+     1,
+     1,
+     0.002,
+     0.105,
+     2
+    ],
+    "measured markout (6c/1.4c)": [
+     -0.04,
+     1,
+     1,
+     0.002,
+     0.042,
+     2
+    ],
+    "half (2.5c/1.75c)": [
+     -0.051,
+     1,
+     1,
+     0.002,
+     0.053,
+     2
+    ]
+   },
+   "pool_h": 2.0,
+   "target": 2000.0
+  },
+  {
+   "slug": "atc-ebfpl-liv-tot-2026-11-25-dh3-tot",
+   "title": "eBattles: Liverpool (Noltzer) vs. Tottenham (pecat",
+   "comp": "ebfpl",
+   "bid": 0.12,
+   "ask": 0.2,
+   "bq": 0.01,
+   "aq": 26.0,
+   "rej": {
+    "cricket_esports": true,
+    "competition": true,
+    "no_two_sided": false,
+    "band_30_70": true,
+    "spread_gt_6": true,
+    "no_paying_programme": false,
+    "touch_depth_lt_3": true
+   },
+   "net": {
+    "campaign (5c/3.5c)": [
+     -0.052,
+     1,
+     1,
+     0.001,
+     0.053,
+     1
+    ],
+    "measured markout (6c/1.4c)": [
+     -0.02,
+     1,
+     1,
+     0.001,
+     0.021,
+     1
+    ],
+    "half (2.5c/1.75c)": [
+     -0.025,
+     1,
+     1,
+     0.001,
+     0.026,
+     1
+    ]
+   },
+   "pool_h": 2.0,
+   "target": 2000.0
+  },
+  {
+   "slug": "atc-ebfsa-roma-juv-2026-11-25-dh9-roma",
+   "title": "eBattles: Roma (believer) vs. Juventus (Nightxx)",
+   "comp": "ebfsa",
+   "rej": {
+    "cricket_esports": true,
+    "competition": true,
+    "no_two_sided": true,
+    "band_30_70": false,
+    "spread_gt_6": false,
+    "no_paying_programme": false,
+    "touch_depth_lt_3": false
+   }
+  },
+  {
+   "slug": "atc-ebfsa-roma-juv-2026-11-25-dh9-draw",
+   "title": "eBattles: Roma (believer) vs. Juventus (Nightxx)",
+   "comp": "ebfsa",
+   "bid": 0.01,
+   "ask": 0.12,
+   "bq": 10.2,
+   "aq": 0.22,
+   "rej": {
+    "cricket_esports": true,
+    "competition": true,
+    "no_two_sided": false,
+    "band_30_70": true,
+    "spread_gt_6": true,
+    "no_paying_programme": false,
+    "touch_depth_lt_3": true
+   },
+   "net": {
+    "campaign (5c/3.5c)": [
+     0.578,
+     5,
+     1,
+     0.841,
+     0.263,
+     1
+    ],
+    "measured markout (6c/1.4c)": [
+     0.736,
+     5,
+     1,
+     0.841,
+     0.105,
+     1
+    ],
+    "half (2.5c/1.75c)": [
+     0.709,
+     5,
+     1,
+     0.841,
+     0.131,
+     1
+    ]
+   },
+   "pool_h": 2.0,
+   "target": 2000.0
+  },
+  {
+   "slug": "atc-ebfsa-roma-juv-2026-11-25-dh9-juv",
+   "title": "eBattles: Roma (believer) vs. Juventus (Nightxx)",
+   "comp": "ebfsa",
+   "rej": {
+    "cricket_esports": true,
+    "competition": true,
+    "no_two_sided": true,
+    "band_30_70": false,
+    "spread_gt_6": false,
+    "no_paying_programme": false,
+    "touch_depth_lt_3": false
+   }
+  },
+  {
+   "slug": "atc-ebfsa-nap-sas-2026-11-25-dh9-nap",
+   "title": "eBattles: Napoli (tizzy) vs. Sassuolo (Kavviro)",
+   "comp": "ebfsa",
+   "bid": 0.6,
+   "ask": 0.63,
+   "bq": 38.02,
+   "aq": 0.02,
+   "rej": {
+    "cricket_esports": true,
+    "competition": true,
+    "no_two_sided": false,
+    "band_30_70": false,
+    "spread_gt_6": false,
+    "no_paying_programme": false,
+    "touch_depth_lt_3": true
+   },
+   "net": {
+    "campaign (5c/3.5c)": [
+     0.857,
+     1,
+     1,
+     0.962,
+     0.105,
+     2
+    ],
+    "measured markout (6c/1.4c)": [
+     0.92,
+     1,
+     1,
+     0.962,
+     0.042,
+     2
+    ],
+    "half (2.5c/1.75c)": [
+     0.91,
+     1,
+     1,
+     0.962,
+     0.053,
+     2
+    ]
+   },
+   "pool_h": 2.0,
+   "target": 2000.0
+  },
+  {
+   "slug": "atc-ebfsa-nap-sas-2026-11-25-dh9-draw",
+   "title": "eBattles: Napoli (tizzy) vs. Sassuolo (Kavviro)",
+   "comp": "ebfsa",
+   "bid": 0.21,
+   "ask": 0.22,
+   "bq": 0.04,
+   "aq": 0.05,
+   "rej": {
+    "cricket_esports": true,
+    "competition": true,
+    "no_two_sided": false,
+    "band_30_70": true,
+    "spread_gt_6": false,
+    "no_paying_programme": false,
+    "touch_depth_lt_3": true
+   },
+   "net": {
+    "campaign (5c/3.5c)": [
+     0.456,
+     2,
+     1,
+     0.666,
+     0.21,
+     2
+    ],
+    "measured markout (6c/1.4c)": [
+     0.797,
+     10,
+     1,
+     1.217,
+     0.42,
+     2
+    ],
+    "half (2.5c/1.75c)": [
+     0.716,
+     5,
+     1,
+     0.979,
+     0.263,
+     2
+    ]
+   },
+   "pool_h": 2.0,
+   "target": 2000.0
+  },
+  {
+   "slug": "atc-ebfsa-nap-sas-2026-11-25-dh9-sas",
+   "title": "eBattles: Napoli (tizzy) vs. Sassuolo (Kavviro)",
+   "comp": "ebfsa",
+   "bid": 0.12,
+   "ask": 0.14,
+   "bq": 0.02,
+   "aq": 0.02,
+   "rej": {
+    "cricket_esports": true,
+    "competition": true,
+    "no_two_sided": false,
+    "band_30_70": true,
+    "spread_gt_6": false,
+    "no_paying_programme": false,
+    "touch_depth_lt_3": true
+   },
+   "net": {
+    "campaign (5c/3.5c)": [
+     -0.052,
+     1,
+     1,
+     0.001,
+     0.053,
+     1
+    ],
+    "measured markout (6c/1.4c)": [
+     -0.02,
+     1,
+     1,
+     0.001,
+     0.021,
+     1
+    ],
+    "half (2.5c/1.75c)": [
+     -0.025,
+     1,
+     1,
+     0.001,
+     0.026,
+     1
+    ]
+   },
+   "pool_h": 2.0,
+   "target": 2000.0
+  },
+  {
+   "slug": "aec-cbb-kenest-char-2026-11-25",
+   "title": "Kennesaw State vs. Charleston",
+   "comp": "cbb",
+   "bid": 0.28,
+   "ask": 0.29,
+   "bq": 224.0,
+   "aq": 1271.0,
+   "rej": {
+    "cricket_esports": false,
+    "competition": true,
+    "no_two_sided": false,
+    "band_30_70": true,
+    "spread_gt_6": false,
+    "no_paying_programme": true,
+    "touch_depth_lt_3": false
+   }
+  },
+  {
+   "slug": "aec-cs2-tet-axe-2026-11-25",
+   "title": "TTG Esports vs. AXE",
+   "comp": "cs2",
+   "bid": 0.52,
+   "ask": 0.53,
+   "bq": 0.11,
+   "aq": 1068.1,
+   "rej": {
+    "cricket_esports": true,
+    "competition": true,
+    "no_two_sided": false,
+    "band_30_70": false,
+    "spread_gt_6": false,
+    "no_paying_programme": false,
+    "touch_depth_lt_3": true
+   },
+   "net": {
+    "campaign (5c/3.5c)": [
+     0.827,
+     10,
+     1,
+     1.877,
+     1.05,
+     2
+    ],
+    "measured markout (6c/1.4c)": [
+     1.457,
+     10,
+     1,
+     1.877,
+     0.42,
+     2
+    ],
+    "half (2.5c/1.75c)": [
+     1.352,
+     10,
+     1,
+     1.877,
+     0.525,
+     2
+    ]
+   },
+   "pool_h": 26.67,
+   "target": 7500.0
+  },
+  {
+   "slug": "aec-valorant-amr-tme-2026-11-25",
+   "title": "ARG.MIX vs. TRAMITE",
+   "comp": "valorant",
+   "rej": {
+    "cricket_esports": true,
+    "competition": true,
+    "no_two_sided": true,
+    "band_30_70": false,
+    "spread_gt_6": false,
+    "no_paying_programme": false,
+    "touch_depth_lt_3": false
+   }
+  }
+ ]
+}
