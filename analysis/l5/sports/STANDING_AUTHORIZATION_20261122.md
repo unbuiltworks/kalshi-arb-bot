@@ -1084,3 +1084,26 @@ signed emergency stop unverified; rewards post one to two days later.
 Settings set at 23:57 UTC (ledger limit and sports profile), 33 minutes
 before the window. To be restored and relocked afterwards; the account
 limit stays at $5 only until the owner decides otherwise at the close-out.
+
+## 44. Manual NHL order confirmed by the owner — 25 Nov, about 02:56 UTC
+
+Owner, verbatim: "FYI I spent $25 on the nhl game in order to get the free
+$5 reward" and "I confirm that the manual NHL order was mine."
+
+- The order on `aec-nhl-veg-edm-2026-11-24` seen from about 02:19 UTC is
+  the owner's own manual activity (venue promotion: trade $25 in a day for
+  a $5 bonus). Not bot trading. The watchdog had already marked it
+  manual-exempt.
+- Instruction: "Complete the current campaign reconciliation and
+  distinguish manual account activity from bot trading P&L. Preserve
+  total portfolio exposure protections."
+- Consequence observed, by design: the account figure the ledger publishes
+  moved with the manual cash change (to $21–27 against the $5 limit), so
+  the bot refused all new exposure from 02:19 UTC. No limit was changed to
+  work around it. The $5 bonus, if credited, is a promotion credit and is
+  not trading P&L or a liquidity reward.
+- Same message: add props, spreads, totals and combos to research and
+  market discovery (read-only scan started); prepare $10 / $25 / $50
+  configurations; "obtain explicit authorization before deployment or
+  capital increases." No deployment, arming or limit change is authorized
+  by this message.
