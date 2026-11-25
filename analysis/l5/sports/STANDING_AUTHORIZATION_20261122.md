@@ -1480,3 +1480,32 @@ Done:
   and grace 7,200 s.
 
 Crypto and watchdog not touched; esports bypass off.
+
+## 59. New exposure stopped after 4 minutes — negative-net quoting (25 Nov, 23:49 UTC)
+
+The window opened at 23:45. Markets carried over from before the window
+(UTR `quioli-kimeli`, ATP `olibon-luimig`), both flat, quoted openings at
+a negative estimate (−$0.07 and −$0.10 an hour). The block applied only to
+markets holding inventory; a flat market quoted until its 120 s release.
+`quioli` filled YES 1 @ 0.46 and 1 @ 0.45 at 23:47. The owner's rule is
+"Do not force negative-EV trades", so new exposure was stopped: 23:49 the
+lock was set to `window:2026-11-25T23:45:00Z/2026-11-25T23:49:00Z`
+(completions only until 01:49).
+
+Before the stop, the rotation worked as designed. Negative markets were
+passed over, and the two positive markets were selected and quoted
+before their match: Setka `kimdmy-elfiva` (+$0.33/h, YES 0.49/0.47,
+NO 0.48/0.46) and ATP doubles `delanedelane-falcksuarez` (+$0.61/h,
+YES 0.34/0.32, NO 0.63/0.61). Those bids were cancelled at the restart
+(`cancelled_all_own`, still_open []).
+
+After the stop, completions: `quioli` NO 1 @ 0.49 and 1 @ 0.46 filled
+(23:50, 23:51), so it is paired 2 / 2 at 0.93 a pair. Garcar–Borvic
+completion NO 0.32 × 2 rests. Watchdog 23:52: 1 open order, ours.
+
+Fix: code `0511865ab`, release `afd8a611d650a18603ab4e833278cd806c6331f5`
+(branch `release/pmus-sports-rn1-afd8a611d`). With net ranking on, no
+opening or extension in any market whose fresh net is not positive, flat
+or not. Such a flat market is still released; completions continue. Test
+added. Regression: 5,706 passed, the same 24 unrelated failures. Not
+deployed; resuming needs the owner's authorization with new times.
