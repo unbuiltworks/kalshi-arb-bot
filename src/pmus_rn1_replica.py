@@ -78,6 +78,14 @@ RESIDUAL_CAP_USD = _d("PMUS_RN1_RESIDUAL_CAP_USD", "3")
 PER_MARKET_USD = _d("PMUS_RN1_PER_MARKET_USD", "8")
 EXTEND_MAX_UP = _d("PMUS_RN1_EXTEND_MAX_UP", "0.02")
 REFILL_COOLDOWN_S = _f("PMUS_RN1_REFILL_COOLDOWN_S", "60")
+# SIZE DOWN TO FIT (owner 2026-11-25: "If two contracts exceed available
+# capacity but one fits, evaluate one instead of refusing the entire
+# addition"). With 1, an opening or extension bid that would breach the
+# per-market unpaired cap or the per-market spend cap at the full clip is
+# tried at each smaller whole size down to the venue minimum; the largest
+# size that fits is bid. The caps themselves are unchanged. 0 = refuse the
+# whole bid, as before.
+FIT_QTY = os.getenv("PMUS_RN1_FIT_QTY", "0").strip() == "1"
 # A BALANCED POSITION IS A FRESH ENTRY (owner 2026-11-25: "Separate
 # fresh-entry restrictions from genuine same-side inventory extensions").
 # Without this, a market holding 3 YES and 3 NO (every pair complete,
@@ -340,6 +348,21 @@ def quotes(*, yes_bid: Any, yes_ask: Any, tick: Any,
                         "edge": str(fair_s - px), "need": str(need),
                         "unpaired_clips": clips}
                     continue
+            if k.get("fit_qty", FIT_QTY):
+                # largest whole size, down to the venue minimum, that keeps
+                # both per-market caps (unpaired, spend incl. reserve)
+                def _fits(qq: D) -> bool:
+                    na = (cs[s] + px * qq) / (p[s] + qq)
+                    if max(ZERO, p[s] + qq - p[o]) * na > rcap:
+                        return False
+                    qa = p[s] + qq - p[o]
+                    res = max(ZERO, qa) * max(ZERO, pcap - na)
+                    return spent + px * qq + res <= mcap
+                qq = qty
+                while qq > mq and not _fits(qq):
+                    qq = max(mq, qq - ONE)
+                if _fits(qq):
+                    qty = qq
             # unpaired cost if this fills: excess shares at the new average
             new_avg = (cs[s] + px * qty) / (p[s] + qty)
             unm_after = max(ZERO, p[s] + qty - p[o]) * new_avg

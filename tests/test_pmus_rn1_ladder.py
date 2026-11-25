@@ -269,3 +269,106 @@ def test_the_caps_hold_through_any_sequence_of_fills(live):
         _cool_down(e)
         mk = e.b.m(SLUG)
         assert R.unmatched_usd(mk["pos"], mk["cost"]) <= D("3")
+
+
+# ------------------------------------------ size down to fit (FIT_QTY)
+def test_fit_qty_bids_the_largest_size_that_fits():
+    """2 YES held at 0.45 ($0.90 unpaired), clip 4, $2 unpaired cap: the
+    full clip would pass the cap; 2 contracts fit."""
+    from tests.test_pmus_rn1_replica import qt
+    args = dict(pos={"YES": "2", "NO": "0"}, cost={"YES": "0.90", "NO": "0"},
+                qty="4", residual_cap_usd="2", per_market_usd="20")
+    assert qt("0.45", "0.47", **args)["YES"] is None          # default
+    q = qt("0.45", "0.47", fit_qty=True, **args)
+    assert q["YES"]["qty"] == D("2") and q["YES"]["role"] == "extend"
+
+
+def test_fit_qty_never_goes_below_the_venue_minimum():
+    from tests.test_pmus_rn1_replica import qt
+    q = qt("0.45", "0.47", pos={"YES": "2", "NO": "0"},
+           cost={"YES": "0.90", "NO": "0"}, qty="4",
+           residual_cap_usd="1.00", per_market_usd="20", fit_qty=True)
+    assert q["YES"] is None and q["why_YES"] == "residual_cap"
+
+
+def test_fit_qty_sizes_down_a_ladder_level(live, monkeypatch):
+    """$3 unpaired: YES 0.47 x2 + 0.45 x2 = $1.84; a third level of 2 at
+    0.43 ($0.86) passes $3 with the NO side's worst case counted, one fits
+    only when sizing down is on."""
+    e, v = live
+    monkeypatch.setattr(R, "RESIDUAL_CAP_USD", D("2.40"))
+    e.step_market(SLUG)
+    off = sorted((px, q) for sd, px, q in resting(v) if sd == "YES")
+    for o in v.orders.values():
+        o["open"] = False
+    e.b.m(SLUG)["orders"] = {}
+    monkeypatch.setattr(R, "FIT_QTY", True)
+    e.step_market(SLUG)
+    on = sorted((px, q) for sd, px, q in resting(v) if sd == "YES")
+    assert off == [("0.45", "2"), ("0.47", "2")]
+    assert on == [("0.43", "1"), ("0.45", "2"), ("0.47", "2")]
+
+
+# --------------------------------- pull only the threatened bid
+def _react_one_tick_down(e, monkeypatch):
+    calls = []
+    monkeypatch.setattr(e, "step_market", lambda s: calls.append(s))
+    prev = {"bid": D("0.48"), "ask": D("0.50")}
+    new = {"bid": D("0.47"), "ask": D("0.49")}
+    import time as _t
+    e.react(SLUG, [(prev, new, _t.monotonic())])
+
+
+def test_by_default_a_threatened_bid_pulls_every_bid(live, monkeypatch):
+    e, v = live
+    monkeypatch.setattr(M, "depth_ticks", lambda t: 1)
+    e.step_market(SLUG)
+    assert len(resting(v)) == 6
+    _react_one_tick_down(e, monkeypatch)
+    assert resting(v) == []
+
+
+def test_threatened_only_keeps_the_bids_the_move_did_not_reach(
+        live, monkeypatch):
+    """A one-tick fall puts YES 0.47 at the touch; YES 0.45/0.43 and all
+    three NO bids are untouched and keep their place."""
+    e, v = live
+    monkeypatch.setattr(M, "depth_ticks", lambda t: 1)
+    monkeypatch.setattr(M, "RN1_PULL_THREATENED_ONLY", True)
+    e.step_market(SLUG)
+    _react_one_tick_down(e, monkeypatch)
+    assert resting(v) == [("NO", "0.45", "2"), ("NO", "0.47", "2"),
+                          ("NO", "0.49", "2"), ("YES", "0.43", "2"),
+                          ("YES", "0.45", "2")]
+
+
+def test_a_jump_still_pulls_everything_with_threatened_only(
+        live, monkeypatch):
+    e, v = live
+    monkeypatch.setattr(M, "RN1_PULL_THREATENED_ONLY", True)
+    e.step_market(SLUG)
+    monkeypatch.setattr(e, "step_market", lambda s: None)
+    import time as _t
+    e.react(SLUG, [({"bid": D("0.48"), "ask": D("0.50")},
+                    {"bid": D("0.44"), "ask": D("0.46")}, _t.monotonic())])
+    assert resting(v) == []
+
+
+# ------------------------------- reward measurement: the best level
+def test_reward_estimate_uses_the_bid_nearest_the_touch(live, monkeypatch):
+    e, v = live
+    e.step_market(SLUG)
+    seen = {}
+    from src import pmus_sports_rewards as RW
+
+    def est(book, per, yes_px, no_px, qty, tick, own_yes=0.0, own_no=0.0):
+        seen.update(yes=yes_px, no=no_px, qty=qty)
+        return {"share": 0.1, "est_usd_per_hour": 0.1,
+                "max_spread_ok": None}
+    monkeypatch.setattr(RW, "quote_estimate", est)
+    monkeypatch.setattr(e, "_reward_get", lambda: (lambda p: {}))
+    mk = e.b.m(SLUG)
+    mk.pop("rn1_reward_est", None)
+    e._rn1_reward_estimate(SLUG, mk, {"pool_rate_usd_s": 0.01},
+                           D("0.01"))
+    assert seen == {"yes": 0.47, "no": 0.49, "qty": 2.0}

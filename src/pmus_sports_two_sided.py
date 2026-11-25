@@ -1410,6 +1410,18 @@ RN1_KEEP_DEEPER_TICKS = int(os.getenv("PMUS_RN1_KEEP_DEEPER_TICKS", "0"))
 RN1_LADDER_LEVELS = max(1, int(os.getenv("PMUS_RN1_LADDER_LEVELS", "1")))
 RN1_LADDER_STEP_TICKS = max(1, int(os.getenv(
     "PMUS_RN1_LADDER_STEP_TICKS", "2")))
+# PULL ONLY THE THREATENED BID (owner 2026-11-25: "Determine whether
+# economically acceptable individual ladder levels are being unnecessarily
+# pulled. Preserve hard safety cancellations."). The reactive pull fired
+# when ANY resting bid came within a tick of its touch or of crossing, and
+# then cancelled EVERY bid in the market: the other side and every deeper
+# ladder level with it (live 18:23-18:38 UTC 25 Nov: median bid life 21 s).
+# With 1, only the bids that themselves meet a pull condition are
+# cancelled; the rest keep their place and the next pass re-prices as
+# usual. The jump pause (a move of 2+ ticks) still cancels everything, and
+# so do every lock, halt, cap and account block. 0 = as before.
+RN1_PULL_THREATENED_ONLY = os.getenv(
+    "PMUS_RN1_PULL_THREATENED_ONLY", "0").strip() == "1"
 # JOIN THE BEST BID WHEN IT IS JUSTIFIED (owner 2026-11-25: "Competitive
 # maker quoting that can join the best bid when economically justified").
 # PMUS_RN1_DEPTH_TICKS=1 rests every bid one tick behind the touch. The
@@ -2692,7 +2704,24 @@ class Engine:
         why = adverse_reasons(legs, {"bid": D(str(new["bid"])),
                                      "ask": D(str(new["ask"]))},
                               tick, 0 if joined else depth_ticks(tick))
-        if why:
+        if why and RN1.ON and RN1_PULL_THREATENED_ONLY:
+            nb = {"bid": D(str(new["bid"])), "ask": D(str(new["ask"]))}
+            dep = 0 if joined else depth_ticks(tick)
+            hit = [(oid, o) for oid, o in mk["orders"].items()
+                   if o.get("open") and adverse_reasons(
+                       {o["side"]: D(o["px"])}, nb, tick, dep)]
+            kept = sum(1 for o in mk["orders"].values() if o.get("open")) \
+                - len(hit)
+            c0 = time.monotonic()
+            self._cancel_legs(slug, hit)
+            self.reactive_pulls += 1
+            log("reactive_pull", slug=slug, reason=",".join(why),
+                legs=len(hit), kept=kept, mode="threatened_only",
+                latency_ms=round((time.monotonic() - t0) * 1000),
+                cancel_ms=round((time.monotonic() - c0) * 1000),
+                pos=mk["pos"])
+            self.step_market(slug)
+        elif why:
             self._pull(slug, ",".join(why), t0)
             self.step_market(slug)          # re-set both legs at the new touch
 
@@ -5042,18 +5071,26 @@ class Engine:
                 px = D(str(tg["px"])) - k * RN1_LADDER_STEP_TICKS * t
                 if px < D(str(RN1.PX_MIN)) or px <= 0:
                     break
-                trial = planned + [(l_["side"], l_["px"], l_["qty"], False)
-                                   for l_ in out] + \
-                    [(side, px, qty, False)]
-                c = RN1.committed(mk["pos"], mk["cost"], trial)
-                if c["spend"] > D(str(RN1.PER_MARKET_USD)) + tol or \
-                        c["unmatched"] > D(str(RN1.RESIDUAL_CAP_USD)) + tol \
-                        or other["spend"] + c["spend"] > \
-                        D(str(RN1.TOTAL_SPEND_USD)) + tol or \
-                        other["unmatched"] + c["unmatched"] > \
-                        D(str(RN1.TOTAL_UNMATCHED_USD)) + tol:
+
+                def _fits(qq: D) -> bool:
+                    trial = planned + [(l_["side"], l_["px"], l_["qty"],
+                                        False) for l_ in out] + \
+                        [(side, px, qq, False)]
+                    c = RN1.committed(mk["pos"], mk["cost"], trial)
+                    return not (
+                        c["spend"] > D(str(RN1.PER_MARKET_USD)) + tol or
+                        c["unmatched"] > D(str(RN1.RESIDUAL_CAP_USD)) + tol
+                        or other["spend"] + c["spend"] >
+                        D(str(RN1.TOTAL_SPEND_USD)) + tol or
+                        other["unmatched"] + c["unmatched"] >
+                        D(str(RN1.TOTAL_UNMATCHED_USD)) + tol)
+                lq = qty
+                if RN1.FIT_QTY:
+                    while lq > 1 and not _fits(lq):
+                        lq -= 1
+                if not _fits(lq):
                     break
-                out.append({"side": side, "px": px, "qty": qty,
+                out.append({"side": side, "px": px, "qty": lq,
                             "role": role, "level": k})
         return out
 
@@ -5294,7 +5331,20 @@ class Engine:
         under the venue's published scoring rule, kept in `rn1_reward_est`
         (one public book read per REWARD_WALK_CHECK_S, or when the legs
         change). Its own key: the reward-first path's state is untouched."""
-        legs = self._open_legs(mk)
+        # the bid nearest the touch on each side, with every contract resting
+        # at that price (with a ladder, `_open_legs` kept whichever order of
+        # a side it met last, often a deeper level that does not score)
+        legs: Dict[str, tuple] = {}
+        for o in (mk.get("orders") or {}).values():
+            if not o.get("open"):
+                continue
+            px_ = D(o["px"])
+            left_ = D(o["qty"]) - D(o.get("filled", "0"))
+            cur = legs.get(o["side"])
+            if cur is None or px_ > cur[0]:
+                legs[o["side"]] = (px_, left_)
+            elif px_ == cur[0]:
+                legs[o["side"]] = (px_, cur[1] + left_)
         key = {s: [str(p), str(q)] for s, (p, q) in sorted(legs.items())}
         est = mk.get("rn1_reward_est")
         if est and est.get("legs") == key and \
