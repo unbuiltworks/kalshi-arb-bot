@@ -1273,3 +1273,21 @@ Carried out (section 49), 25 Nov:
 - Boot 13:36:00: lock `window_not_started`, window and grace as set,
   cooldown 10, spend 60, 8/16 markets, competitions as set, 1 contract.
 - Scheduled checks re-enabled at :05 and :35.
+
+## 50. Owner direction — inventory accumulation is the strategy (25 Nov, about 14:25 UTC)
+
+Owner, verbatim extracts: "Inventory accumulation and management is the
+strategy. Rewards and pair completion are secondary." "Our primary
+strategy is active inventory accumulation and intelligent inventory
+management." "Liquidity rewards are supplemental income. Pair completion
+is incidental." "Identify which existing settings and controller
+behaviors prevent this strategy from operating effectively. Prepare the
+necessary configuration changes for immediate authorization. Do not build
+another controller. Preserve hard risk limits." "...recognizing that
+accumulating more inventory at unfavorable prices will increase losses."
+"Profitability across the entire inventory portfolio is the objective."
+
+Strategic direction; not an authorization. The earlier rule "Do not
+increase unpaired inventory caps" (24 Nov) is in tension with it and is
+changed only if the owner approves specific new caps. Campaign of section
+49 continues unchanged until then.
