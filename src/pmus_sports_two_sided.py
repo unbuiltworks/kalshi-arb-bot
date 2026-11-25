@@ -1513,6 +1513,220 @@ def pregame_targets(events: Iterable[Mapping[str, Any]], now: float
                                         ("bestBidQuote", "bestAskQuote")
                                         if m.get(k) is not None}})
     return out
+
+
+# MARKET EXPANSION: MAIN-LINE SPREADS AND TOTALS (owner 2026-11-25: "For the
+# next market expansion, prioritize NBA, NHL and NFL main-line spreads and
+# totals. Extend existing discovery to secondary event markets and introduce
+# aggregate event exposure accounting. Do not build a separate controller.")
+# Evidence (analysis/l5/props/PROPS_COMBOS_SCAN_20261125.md): the event list
+# this bot reads carries only each event's primary market (70 of 2,326 live
+# markets), so it has never seen a spread or a total; the full set comes
+# from one PUBLIC call per event, /v1/events/slug/{event}, up to 3.5 MB.
+# With SECONDARY_MARKETS on, for a game of a SECONDARY_LEAGUES competition
+# that the existing live / pre-game discovery ALREADY returned, that call is
+# made (unsigned, never on the signed request budget; at most
+# SECONDARY_NEW_PER_ROUND events per selection round; each answer kept
+# SECONDARY_TTL_S) and at most TWO markets are added as candidates:
+#   - the full-game MAIN-LINE spread, and
+#   - the full-game MAIN-LINE game total,
+# "main line" being, among that type's open full-game lines with a
+# two-sided listing quote, the line whose bid is closest to 0.50. Period
+# lines (quarter, half, period), team totals, props and anything not open or
+# with a side marked not tradable are never added: a line that cannot be
+# recognised with every signal agreeing is left out (fail closed).
+# A candidate added this way is the SAME kind of candidate as the moneyline
+# of its game: it carries the game's league, state and start time, and the
+# venue's game state is registered under its slug, so the game's own late
+# rule, the kickoff hold, the cricket and esports rules, the price band, the
+# international-price guard, the fair-value test and every cap apply to it
+# unchanged. Nothing here can price these markets: with the guard required
+# or the fair-value test on they have no international price and are
+# refused, exactly as an unmapped market is today. One market per game
+# stays the rule (the moneyline, spread and total of one game are tied
+# together), so this adds candidates, never a second position on a game.
+# 0 = off: discovery, candidates and requests are exactly as before.
+SECONDARY_MARKETS = os.getenv("PMUS_TWO_SIDED_SECONDARY_MARKETS",
+                              "0").strip() == "1"
+SECONDARY_LEAGUES = frozenset(
+    x.strip().lower() for x in os.getenv(
+        "PMUS_TWO_SIDED_SECONDARY_LEAGUES", "nba,nhl,nfl").split(",")
+    if x.strip())
+SECONDARY_TTL_S = float(os.getenv("PMUS_TWO_SIDED_SECONDARY_TTL_S", "120"))
+SECONDARY_NEW_PER_ROUND = int(os.getenv(
+    "PMUS_TWO_SIDED_SECONDARY_NEW_PER_ROUND", "2"))
+#: an answer the venue could not refresh is still used this many TTLs (the
+#: order itself is always priced from a fresh book); after that the game's
+#: secondary candidates are dropped until a read succeeds
+SECONDARY_STALE_TTLS = 3
+SECONDARY_PREFIXES = ("asc-", "tsc-")
+# Slug shapes seen on the venue 2026-11-25 (17,066 markets, scan above):
+#   full-game spread  asc-<event>-neg-7pt5 / -pos-7pt5
+#   full-game total   tsc-<event>-221pt5 (NBA, NHL), tsc-<event>-total-43pt5
+#   period lines      ...-q1-.. -fh-.. -sh-.. -p1-.. -1h-.. -1q-..
+#   team totals       tsc-<event>-tt-<team>-.., -tt1h-<team>-..
+# Every line is a half point (no pushes). The venue's own type field does
+# not separate game totals from team totals ("basketball_team_full_game_
+# total" is the GAME total), so the slug shape, the market type, the type
+# field and the title must ALL agree.
+_SEC_SPREAD_SUFFIX = re.compile(r"^(?:neg|pos)-\d+pt5$")
+_SEC_TOTAL_SUFFIX = re.compile(r"^(?:total-)?\d+pt5$")
+_SEC_PERIOD_TITLE = re.compile(
+    r"\b(1st|2nd|3rd|4th|first|second|third|fourth) (half|quarter|period)\b"
+    r"| in (the )?(first|second) half", re.I)
+_SEC_PERIOD_TYPE = ("first_half", "second_half", "quarter", "_period")
+
+# AGGREGATE EVENT EXPOSURE (same owner instruction: "introduce aggregate
+# event exposure accounting"). One NBA game carried 703 open markets whose
+# prices move together; until now the only event-level control was one
+# market per game AT SELECTION, and no dollar figure summed the markets of
+# one game (a line released with an unpaired leg, then another line of the
+# same game selected, is two per-market caps on one result).
+# Engine.event_exposure(slug) = over every tracked, unsettled market of the
+# same game (event_key): unpaired filled cost plus the worst case of every
+# resting and in-flight order. It is reported in the heartbeat whether or
+# not a limit is set. PMUS_RN1_EVENT_CAP_USD, when set, makes the final gate
+# refuse an opening or extension order that would take the game above it
+# ("event_exposure:..."); a completing order is never refused by it. Unset
+# or empty = no limit (as before). A value that cannot be read, or a
+# negative one, is a limit of zero (fail closed), not no limit.
+
+
+def _event_cap(raw: Any) -> Optional[D]:
+    if raw is None or not str(raw).strip():
+        return None
+    try:
+        v = D(str(raw).strip())
+    except Exception:                                     # noqa: BLE001
+        return D(0)
+    return v if (v.is_finite() and v >= 0) else D(0)
+
+
+EVENT_CAP_USD = _event_cap(os.getenv("PMUS_RN1_EVENT_CAP_USD"))
+
+
+def _quote_num(v: Any) -> Optional[D]:
+    if isinstance(v, Mapping):
+        v = v.get("value", v.get("price", v.get("px")))
+    try:
+        d = D(str(v))
+    except Exception:                                     # noqa: BLE001
+        return None
+    return d if d.is_finite() else None
+
+
+def secondary_kind(m: Mapping[str, Any], ek: str) -> Optional[str]:
+    """"spread" / "total" for a FULL-GAME spread or game-total line of the
+    game `ek`, else None. Every signal must agree; anything else is None."""
+    slug = str(m.get("slug") or "")
+    if not slug.startswith(SECONDARY_PREFIXES) or event_key(slug) != ek:
+        return None
+    prefix = slug.split("-", 1)[0]
+    if not slug.startswith(prefix + "-" + ek + "-"):
+        return None
+    suffix = slug[len(prefix) + len(ek) + 2:]
+    mt = str(m.get("marketType") or "").lower()
+    smt = str(m.get("sportsMarketType") or "").lower()
+    title = str(m.get("title") or "")
+    if "full_game" not in smt or any(t in smt for t in _SEC_PERIOD_TYPE) \
+            or _SEC_PERIOD_TITLE.search(title):
+        return None
+    if prefix == "asc" and mt == "spreads" and \
+            _SEC_SPREAD_SUFFIX.match(suffix):
+        return "spread"
+    if prefix == "tsc" and mt == "totals" and \
+            _SEC_TOTAL_SUFFIX.match(suffix) and \
+            title.lower().startswith("over "):
+        return "total"
+    return None
+
+
+def secondary_untradable(m: Mapping[str, Any]) -> Optional[str]:
+    """Why this market may not be a candidate, else None. A field that is
+    missing counts against it."""
+    if m.get("active") is not True:
+        return "not_active"
+    if m.get("closed") or m.get("archived") or m.get("hidden"):
+        return "closed"
+    if str(m.get("ep3Status") or "").upper() != "OPEN":
+        return "not_open"
+    sides = m.get("marketSides")
+    if not isinstance(sides, list) or len(sides) < 2 or any(
+            not isinstance(s, Mapping) or s.get("tradable") is not True
+            for s in sides):
+        return "side_not_tradable"
+    b, a = _quote_num(m.get("bestBidQuote")), _quote_num(
+        m.get("bestAskQuote"))
+    if b is None or a is None or not (D(0) < b < a < ONE):
+        return "no_two_sided_quote"
+    return None
+
+
+def secondary_main_lines(event: Mapping[str, Any], ek: str
+                         ) -> Dict[str, Any]:
+    """{"spread": pick | None, "total": pick | None, "lines": {kind: n
+    usable}, "skipped": {reason: n}} from one event record. A pick is
+    {"slug", "bid", "ask", "market_meta"}: the usable full-game line of
+    its kind whose listing bid is closest to 0.50 (then the tighter
+    spread, then the slug, so the answer is stable)."""
+    usable: Dict[str, list] = {"spread": [], "total": []}
+    skipped: Dict[str, int] = {}
+    for m in (event.get("markets") or []) if isinstance(event, Mapping) \
+            else []:
+        if not isinstance(m, Mapping):
+            continue
+        kind = secondary_kind(m, ek)
+        if kind is None:
+            continue
+        why = secondary_untradable(m)
+        if why:
+            skipped[kind + ":" + why] = skipped.get(kind + ":" + why, 0) + 1
+            continue
+        b, a = _quote_num(m["bestBidQuote"]), _quote_num(m["bestAskQuote"])
+        usable[kind].append((abs(b - D("0.5")), a - b, str(m["slug"]), b, a,
+                             m))
+    out: Dict[str, Any] = {"lines": {k: len(v) for k, v in usable.items()},
+                           "skipped": skipped}
+    for kind, rows in usable.items():
+        if not rows:
+            out[kind] = None
+            continue
+        _d, _s, slug, b, a, m = min(rows, key=lambda r: r[:3])
+        out[kind] = {"slug": slug, "bid": str(b), "ask": str(a),
+                     "market_meta": {k: m.get(k) for k in
+                                     ("bestBidQuote", "bestAskQuote")}}
+    return out
+
+
+def spread_secondary_states(states: Mapping[str, Any],
+                            by_event: Mapping[str, Any]) -> Dict[str, Any]:
+    """The venue's game state, copied to each registered secondary market
+    of the same game. The event list carries a state only under the slugs
+    it lists (each event's primary market); a spread or a total has none
+    of its own, and a market with no state has no late rule. A game that
+    is no longer listed (so its moneyline has no state either) leaves its
+    secondary markets with none. Returns a new dict."""
+    out = dict(states or {})
+    by_event = dict(by_event or {})    # one snapshot: another thread may
+    if not by_event:                   # read the live list while this
+        return out                     # registry is being updated
+    members = {s for slugs in by_event.values() for s in slugs}
+    game: Dict[str, Any] = {}
+    for slug, st in out.items():
+        if slug in members or not str(slug).startswith(SPORTS_PREFIXES):
+            continue
+        ek = event_key(slug)
+        if ek in by_event:
+            game.setdefault(ek, st)
+    for ek, slugs in by_event.items():
+        for s in slugs:
+            if ek in game:
+                out[s] = game[ek]
+            else:
+                out.pop(s, None)
+    return out
+
+
 # OWNER 2026-11-15: "never override watchdog or reconciliation halts". The
 # shared latch (l5_halt_gate, the record the watchdog writes and BTC5m
 # reads) is read every SHARED_HALT_TTL_S when L5_HALT_URL is set:
@@ -1934,6 +2148,7 @@ def safeguards_cfg() -> Dict[str, Any]:
     """The opening safeguards as this process actually runs them (boot log,
     so a deployment can be verified from its own output)."""
     from src import pmus_sports_xv as XV
+    from src import pmus_sports_rewards as _RW
     return {"min_touch_qty": str(MIN_TOUCH_QTY),
             "depth_ttl_s": DEPTH_TTL_S,
             "late_cutoff": LATE_CUTOFF,
@@ -1942,6 +2157,14 @@ def safeguards_cfg() -> Dict[str, Any]:
             "intl_name_match": list(XV.NAME_MATCH_LEAGUES),
             "intl_three_way": list(XV.THREE_WAY_LEAGUES),
             "one_market_per_game": True,
+            "secondary_markets": {"on": SECONDARY_MARKETS,
+                                  "leagues": sorted(SECONDARY_LEAGUES),
+                                  "ttl_s": SECONDARY_TTL_S,
+                                  "new_per_round": SECONDARY_NEW_PER_ROUND},
+            "event_cap_usd": None if EVENT_CAP_USD is None
+            else str(EVENT_CAP_USD),
+            "reward_pool": {"scope": _RW.POOL_SCOPE,
+                            "require_census": _RW.POOL_REQUIRE_CENSUS},
             "loop_stall_s": LOOP_STALL_S,
             "rn1_reward_rank": RN1_REWARD_RANK,
             "rn1_reward_only": RN1_REWARD_ONLY,
@@ -2210,6 +2433,9 @@ class Venue:
         return self.gw.http_get_json(path)
 
     states: Dict[str, Any] = {}
+    #: {event key: secondary slugs of that game}; the Engine owns it (see
+    #: SECONDARY_MARKETS). Empty = no market beyond the listed ones.
+    secondary_by_event: Dict[str, Any] = {}
 
     def crypto_targets(self) -> list:
         """OWNER 2026-11-15 SOL/ETH 1d reward trial: explicit prefixes only
@@ -2259,7 +2485,10 @@ class Venue:
         if st:
             keep = {k: v for k, v in self.states.items()
                     if (v or {}).get("type") == "crypto-1d"}
-            self.states = {**keep, **st}
+            # a registered spread / total gets its game's state here, at
+            # every rebuild, so its late rule is as fresh as the moneyline's
+            self.states = {**keep, **spread_secondary_states(
+                st, self.secondary_by_event)}
         return [tg for tg in self.gw.live_event_targets(events)
                 if str(tg["slug"]).startswith(SPORTS_PREFIXES)]
 
@@ -2529,9 +2758,31 @@ class Engine:
         # reward mode only: {slug: (fetched_monotonic, program_row | None)}
         self._prog: Dict[str, Any] = {}
         self._rget = None
+        # shared reward pools (PMUS_REWARD_POOL_SCOPE): {(event, product):
+        # monotonic time every market of it was last looked up}
+        self._census: Dict[Any, float] = {}
+        self._pool_counts: Optional[tuple] = None
         # realtime mode only (PMUS_TWO_SIDED_WS=1 -> venue.ws is set)
         self.ws = getattr(venue, "ws", None)
         self._game_start: Dict[str, float] = {}
+        # secondary markets (SECONDARY_MARKETS): per-event answers, and the
+        # slugs whose game state the venue object must keep registered. A
+        # spread or total already in the book is registered at start,
+        # whatever the setting says now, so a held one never loses its
+        # late rule.
+        self._sec_cache: Dict[str, Any] = {}
+        self._sec_reg: Dict[str, Any] = {}
+        for s_, mk_ in (book.d.get("markets") or {}).items():
+            if str(s_).startswith(SECONDARY_PREFIXES) and \
+                    mk_.get("settle_px") is None:
+                ek_ = event_key(s_)
+                self._sec_reg[ek_] = tuple(sorted(
+                    set(self._sec_reg.get(ek_, ())) | {s_}))
+        if SECONDARY_MARKETS or self._sec_reg:
+            try:
+                venue.secondary_by_event = self._sec_reg
+            except Exception:                             # noqa: BLE001
+                pass
         self._wake = threading.Event()
         self._evq: "queue.Queue" = queue.Queue()
         self.reactive_pulls = 0
@@ -2760,9 +3011,15 @@ class Engine:
             pm = R.build_program_map(found)
             for s in stale:
                 self._prog[s] = (now, pm.get(s))
+            self._pool_counts = None
             log("reward_discovery", queried=len(stale), rewarded=len(pm),
                 requests=diag["requests"], errors=diag["errors"][:3],
                 label=R.LABEL)
+        if R.POOL_SCOPE != "market":
+            try:
+                self._pool_census(slugs)
+            except Exception as exc:                  # noqa: BLE001
+                log("reward_pool_census_error", err=str(exc)[:160])
         out = {}
         for s in slugs:
             prog = (self._prog.get(s) or (0, None))[1]
@@ -2771,8 +3028,78 @@ class Engine:
             per = R.paying_period(prog, time.time(),
                                   event_live=self.event_live(s))
             if per:
-                out[s] = per
+                out[s] = self.pool_scoped(s, per)
         return out
+
+    def _pool_census(self, slugs: list) -> None:
+        """Look up EVERY market of one product (asc-, tsc-, aec- ...) in a
+        game, so the number of them sharing a programme's pool is a count
+        and not a lower bound. Only for games whose full market list the
+        bot holds (the secondary-market read); at most
+        R.POOL_CENSUS_PER_ROUND games a call, each good REWARD_REFRESH_S.
+        Public reads only."""
+        from src import pmus_sports_rewards as R
+        nowm = time.monotonic()
+        done = 0
+        seen = set()
+        for s in slugs:
+            key = (event_key(s), str(s).split("-", 1)[0])
+            if key in seen:
+                continue
+            seen.add(key)
+            ent = self._sec_cache.get(key[0])
+            if not ent or not ent.get("slugs"):
+                continue
+            hit = self._census.get(key)
+            if hit is not None and nowm - hit <= REWARD_REFRESH_S:
+                continue
+            if done >= max(0, R.POOL_CENSUS_PER_ROUND):
+                break
+            done += 1
+            sib = [x for x in ent["slugs"] if x.startswith(key[1] + "-")]
+            stale = [x for x in sib if x not in self._prog or
+                     nowm - self._prog[x][0] > REWARD_REFRESH_S]
+            found, diag = R.fetch_programs(self._reward_get(), stale) \
+                if stale else ({}, {"requests": 0, "errors": []})
+            if diag["errors"]:
+                log("reward_pool_census_error", event=key[0],
+                    product=key[1], errors=diag["errors"][:3],
+                    label="count for this game stays a lower bound")
+                continue
+            pm = R.build_program_map(found)
+            for x in stale:
+                self._prog[x] = (nowm, pm.get(x))
+            self._pool_counts = None
+            self._census[key] = nowm
+            log("reward_pool_census", event=key[0], product=key[1],
+                markets=len(sib), looked_up=len(stale),
+                with_a_programme=sum(1 for x in sib if (
+                    self._prog.get(x) or (0, None))[1]),
+                requests=diag["requests"], label=R.LABEL)
+
+    def pool_scoped(self, slug: str,
+                    per: Optional[Mapping[str, Any]]) -> Any:
+        """The paying period with the pool-sharing reading attached (see
+        PMUS_REWARD_POOL_SCOPE in src/pmus_sports_rewards). The default
+        reading returns the period untouched."""
+        from src import pmus_sports_rewards as R
+        scope = R.POOL_SCOPE
+        if scope == "market" or not per:
+            return per
+        nowm = time.monotonic()
+        hit = self._pool_counts
+        if hit is None or nowm - hit[0] > 15.0:
+            recs = {s_: p for s_, (t_, p) in self._prog.items()
+                    if p and nowm - t_ <= 4 * REWARD_REFRESH_S}
+            hit = self._pool_counts = (nowm, R.pool_counts(
+                recs, time.time(), self.event_live, event_key))
+        n = R.pool_divisor(hit[1], slug, per.get("programId"), scope,
+                           event_key)
+        c = self._census.get((event_key(slug), str(slug).split("-", 1)[0]))
+        counted = c is not None and nowm - c <= 3 * REWARD_REFRESH_S
+        return R.scoped_period(
+            per, scope, None if (R.POOL_REQUIRE_CENSUS and not counted)
+            else n, complete=(scope == "event" and counted))
 
     def event_live(self, slug: str) -> bool:
         """Is this market's game on? Decides which reward period can be
@@ -3011,7 +3338,7 @@ class Engine:
         from src import pmus_sports_rewards as R
         cands = sorted(((s, p) for s, p in rewarded.items()
                         if p.get("period") in REWARD_FIRST_PERIODS),
-                       key=lambda sp: -float(sp[1]["pool_rate_usd_s"]))
+                       key=lambda sp: -R.pool_rate(sp[1]))
         out = []
         for slug, per in cands[:max(0, REWARD_SCAN_MAX)]:
             try:
@@ -3043,7 +3370,11 @@ class Engine:
                   "share": e["share"], "depth": e["depth"],
                   "pool_rate_usd_s": rewarded[s]["pool_rate_usd_s"],
                   "est_usd_per_hour": e["est_usd_per_hour"],
-                  "est_usd_per_day": e["est_usd_per_day"]}
+                  "est_usd_per_day": e["est_usd_per_day"],
+                  "pool_scope": e.get("pool_scope"),
+                  "pool_divisor": e.get("pool_divisor"),
+                  "est_usd_per_hour_per_market_reading": e.get(
+                      "est_usd_per_hour_per_market_reading")}
                  for s, e in out[:8]],
             label="THEORETICAL reward ranking; never P&L")
         return out
@@ -4633,6 +4964,88 @@ class Engine:
         except Exception:                                # noqa: BLE001
             return D("Infinity")
 
+    def event_exposure(self, slug: str,
+                       extra: Optional[tuple] = None) -> D:
+        """Dollars at risk on ONE GAME: over every tracked, unsettled
+        market sharing event_key(slug), the unpaired filled cost plus the
+        worst case of its resting and in-flight orders (RN1.committed: a
+        bid on each side of one market is not the sum of the two).
+        `extra` = (slug, side, px, qty) adds one hypothetical bid. Unknown
+        figures return Infinity (a limit then refuses)."""
+        try:
+            ek = event_key(slug)
+            markets = self.b.d.get("markets") or {}
+            held: Dict[str, list] = {}
+            for r in self.reserved_orders():
+                if event_key(r["slug"]) == ek:
+                    held.setdefault(r["slug"], []).append(
+                        (r["side"], D(str(r["px"])), D(str(r["qty"])),
+                         False))
+            if extra is not None:
+                held.setdefault(extra[0], []).append(
+                    (extra[1], D(str(extra[2])), D(str(extra[3])), False))
+            tot = D(0)
+            for s_, mk_ in markets.items():
+                if event_key(s_) != ek or mk_.get("settle_px") is not None:
+                    continue
+                resting = [(o["side"], D(str(o["px"])), D(str(o["qty"]))
+                            - D(str(o.get("filled") or "0")), False)
+                           for o in (mk_.get("orders") or {}).values()
+                           if o.get("open")]
+                resting += held.pop(s_, [])
+                tot += RN1.committed(mk_["pos"], mk_["cost"],
+                                     resting)["unmatched"]
+            for legs in held.values():         # no book entry: face value
+                tot += sum(px_ * q_ for _sd, px_, q_, _c in legs)
+            return tot if tot.is_finite() else D("Infinity")
+        except Exception:                                # noqa: BLE001
+            return D("Infinity")
+
+    def event_exposure_report(self, top: int = 5) -> Dict[str, Any]:
+        """Per-game exposure for the heartbeat: the largest few games."""
+        seen: Dict[str, D] = {}
+        for s_, mk_ in (self.b.d.get("markets") or {}).items():
+            ek = event_key(s_)
+            if ek in seen or mk_.get("settle_px") is not None:
+                continue
+            seen[ek] = self.event_exposure(s_)
+        rows = sorted(((v, k) for k, v in seen.items() if v > 0),
+                      reverse=True)
+        return {"cap_usd": None if EVENT_CAP_USD is None
+                else str(EVENT_CAP_USD),
+                "events_with_exposure": len(rows),
+                "top": [{"event": k, "usd": str(v), "markets": sum(
+                    1 for s_, mk_ in self.b.d["markets"].items()
+                    if event_key(s_) == k and
+                    mk_.get("settle_px") is None)}
+                        for v, k in rows[:max(0, top)]],
+                "label": "unpaired filled cost plus worst-case resting and "
+                         "in-flight orders, summed over the markets of one "
+                         "game"}
+
+    def event_cap_block(self, slug: str, side: str, px: D, qty: D,
+                        stage: str) -> Optional[str]:
+        """Why PMUS_RN1_EVENT_CAP_USD refuses this order, else None. No
+        limit set, or a completing order: never refused here."""
+        if EVENT_CAP_USD is None or is_completion_stage(stage):
+            return None
+        ev = self.event_exposure(slug, extra=(slug, side, px, qty))
+        if ev <= EVENT_CAP_USD + D("0.000001"):
+            return None
+        key = "%s:%s:%s:%s" % (slug, side, px, qty)
+        if getattr(self, "_event_cap_logged", None) != key:
+            self._event_cap_logged = key
+            log("EVENT_CAP_REFUSED", slug=slug, event=event_key(slug),
+                side=side, px=px, qty=qty, stage=stage,
+                event_exposure_with_order_usd=ev,
+                event_exposure_now_usd=self.event_exposure(slug),
+                cap_usd=EVENT_CAP_USD,
+                label="unpaired cost plus worst-case resting orders across "
+                      "every market of this game, plus this order, would "
+                      "exceed the per-game limit; completions are never "
+                      "refused by it")
+        return "event_exposure:%s>%s" % (ev, EVENT_CAP_USD)
+
     def account_risk_blocks(self, px: Optional[D] = None,
                             qty: Optional[D] = None,
                             slug: Optional[str] = None,
@@ -4864,8 +5277,11 @@ class Engine:
                 return "order_unreadable"
             if not RN1.ON:
                 # the older two-sided path keeps its own limits and its
-                # own, separately authorized, taker exits
-                return None
+                # own, separately authorized, taker exits (the per-game
+                # limit, when one is set, applies to both paths)
+                return self.event_cap_block(
+                    slug, "YES" if str(side).upper() == "YES" else "NO",
+                    p, q, stage)
             if not post_only and not ALLOW_TAKER:
                 return "taker_not_authorized"
             if q > rn1_max_clip():
@@ -4914,7 +5330,8 @@ class Engine:
                 return "campaign_unpaired:%s>%s" % (
                     other["unmatched"] + c["unmatched"],
                     RN1.TOTAL_UNMATCHED_USD)
-            return None
+            # ---- one game: every market of it, plus this order
+            return self.event_cap_block(slug, sd, p, q, stage)
         except Exception as exc:                          # noqa: BLE001
             return "gate_error:%s" % type(exc).__name__
 
@@ -5077,8 +5494,8 @@ class Engine:
             return None
         try:
             from src import pmus_sports_rewards as R
-            return R.paying_period(prog, time.time(),
-                                   event_live=self.event_live(slug))
+            return self.pool_scoped(slug, R.paying_period(
+                prog, time.time(), event_live=self.event_live(slug)))
         except Exception:                                 # noqa: BLE001
             return None
 
@@ -5242,6 +5659,11 @@ class Engine:
                                 "share": r.get("share"),
                                 "est_usd_per_hour": r.get("est_usd_per_hour"),
                                 "max_spread_ok": r.get("max_spread_ok")}
+        if r.get("pool_scope") not in (None, "market"):
+            # a shared-pool reading: say which, next to the figure
+            mk["rn1_reward_est"].update({k: r.get(k) for k in (
+                "pool_scope", "pool_divisor", "pool_divisor_complete",
+                "est_usd_per_hour_per_market_reading")})
 
     def rn1_incentive(self, slug: str, mk: Optional[Dict[str, Any]] = None,
                       tick: Any = None) -> Dict[str, Any]:
@@ -5269,6 +5691,11 @@ class Engine:
             out.update(projected_usd=round(proj, 4),
                        min_payout_usd=RN1_REWARD_MIN_DAY_USD,
                        label="THEORETICAL reward projection; not a payment")
+            if per.get("pool_scope") not in (None, "market"):
+                out.update(pool_scope=per.get("pool_scope"),
+                           pool_divisor=per.get("pool_divisor"),
+                           pool_divisor_complete=per.get(
+                               "pool_divisor_complete"))
             if proj + 1e-9 < RN1_REWARD_MIN_DAY_USD:
                 out["why"] = "below_minimum_payout"
                 return out
@@ -6067,13 +6494,138 @@ class Engine:
         progress comes first and a market is listed once."""
         sl = slate()
         if sl == "pregame":
-            return self.v.pregame_sports()
+            return self.with_secondary(self.v.pregame_sports())
         live = self.v.live_sports()
         if sl == "live":
-            return live
+            return self.with_secondary(live)
         seen = {t["slug"] for t in live}
-        return live + [t for t in self.v.pregame_sports()
-                       if t["slug"] not in seen]
+        return self.with_secondary(
+            live + [t for t in self.v.pregame_sports()
+                    if t["slug"] not in seen])
+
+    def with_secondary(self, targets: list) -> list:
+        """The listed candidates plus, for each listed game of a
+        SECONDARY_LEAGUES competition, its full-game main-line spread and
+        main-line total (see SECONDARY_MARKETS). Off = the list unchanged.
+        Public reads only, through the venue object's unsigned getter."""
+        if not SECONDARY_MARKETS:
+            return targets
+        try:
+            return self._with_secondary(targets)
+        except Exception as exc:                          # noqa: BLE001
+            log("secondary_discovery_error", err="%s:%s" % (
+                type(exc).__name__, str(exc)[:160]))
+            return targets
+
+    def _with_secondary(self, targets: list) -> list:
+        import urllib.parse
+        nowm = time.monotonic()
+        prim: Dict[str, Any] = {}
+        for tg in targets:
+            slug = str(tg.get("slug") or "")
+            if not slug.startswith(SPORTS_PREFIXES) or \
+                    sport_of(slug) not in SECONDARY_LEAGUES or \
+                    excluded(slug):
+                continue
+            prim.setdefault(event_key(slug), tg)
+        cache = self._sec_cache
+        for ek in [k for k in cache if k not in prim]:
+            del cache[ek]
+        # never-read games first, then the longest since a try
+        due = sorted((ek for ek in prim
+                      if ek not in cache or
+                      nowm - cache[ek]["tried"] > SECONDARY_TTL_S),
+                     key=lambda ek: (ek in cache,
+                                     cache.get(ek, {}).get("tried", 0.0),
+                                     ek))
+        for ek in due[:max(0, SECONDARY_NEW_PER_ROUND)]:
+            ent = cache.setdefault(ek, {"t": None, "tried": nowm,
+                                        "pick": {}, "slugs": []})
+            ent["tried"] = nowm
+            try:
+                d = self.v.gget("/v1/events/slug/"
+                                + urllib.parse.quote(ek, safe=""))
+                ev = d.get("event") if isinstance(d, Mapping) else None
+                if not isinstance(ev, Mapping) or \
+                        str(ev.get("slug") or "") != ek:
+                    raise ValueError("not_this_event")
+                got = secondary_main_lines(ev, ek)
+            except Exception as exc:                      # noqa: BLE001
+                log("secondary_discovery_error", event=ek, err="%s:%s" % (
+                    type(exc).__name__, str(exc)[:120]),
+                    label="public event read failed; the last answer is "
+                          "used until it is too old, then none")
+                continue
+            ent.update(t=nowm, pick=got, slugs=sorted(
+                str(m.get("slug")) for m in ev.get("markets") or []
+                if isinstance(m, Mapping) and m.get("slug")))
+            sig = json.dumps([(got.get(k) or {}).get("slug")
+                              for k in ("spread", "total")])
+            if sig != ent.get("sig"):
+                ent["sig"] = sig
+                log("SECONDARY_MARKETS", event=ek,
+                    markets_in_event=len(ent["slugs"]),
+                    spread=None if not got.get("spread") else {
+                        k: got["spread"][k] for k in ("slug", "bid", "ask")},
+                    total=None if not got.get("total") else {
+                        k: got["total"][k] for k in ("slug", "bid", "ask")},
+                    full_game_lines_usable=got["lines"],
+                    full_game_lines_skipped=got["skipped"],
+                    label="main line = the open full-game line with a "
+                          "two-sided listing quote whose bid is closest "
+                          "to 0.50; a candidate only, every gate and cap "
+                          "applies; one market per game")
+        have = {str(tg.get("slug")) for tg in targets}
+        out = list(targets)
+        chosen: Dict[str, set] = {}
+        for ek, tg in prim.items():
+            ent = cache.get(ek)
+            if not ent or ent["t"] is None or \
+                    nowm - ent["t"] > SECONDARY_STALE_TTLS * SECONDARY_TTL_S:
+                continue
+            for kind in ("spread", "total"):
+                pick = ent["pick"].get(kind)
+                if not pick or pick["slug"] in have:
+                    continue
+                have.add(pick["slug"])
+                chosen.setdefault(ek, set()).add(pick["slug"])
+                # the same fields the game's listed market carries (league,
+                # event state, start time), so every rule keyed on them
+                # treats this market as it treats the moneyline
+                new = {k: v for k, v in tg.items()
+                       if k not in ("slug", "why", "market_meta")}
+                new.update(slug=pick["slug"],
+                           why="secondary_main_line_" + kind,
+                           market_meta=dict(pick["market_meta"]))
+                new.setdefault("league", sport_of(pick["slug"]))
+                out.append(new)
+        # registered = chosen now + whatever of that game the book holds
+        book = self.b.d.get("markets") or {}
+        held: Dict[str, set] = {}
+        for s_, mk_ in book.items():
+            if str(s_).startswith(SECONDARY_PREFIXES) and \
+                    mk_.get("settle_px") is None:
+                held.setdefault(event_key(s_), set()).add(s_)
+        reg = self._sec_reg
+        was = {s_ for slugs in reg.values() for s_ in slugs}
+        for ek in set(reg) | set(chosen) | set(held):
+            slugs = chosen.get(ek, set()) | held.get(ek, set())
+            if slugs:
+                reg[ek] = tuple(sorted(slugs))
+            else:
+                reg.pop(ek, None)
+        gone = was - {s_ for slugs in reg.values() for s_ in slugs}
+        try:
+            self.v.secondary_by_event = reg
+            self.v.states = spread_secondary_states(
+                {k: v_ for k, v_ in (getattr(self.v, "states", None)
+                                     or {}).items() if k not in gone}, reg)
+        except Exception as exc:                          # noqa: BLE001
+            # no state = no late rule: do not offer what cannot be judged
+            log("secondary_discovery_error", err="state:%s"
+                % type(exc).__name__)
+            return targets
+        return out
 
     def _reward_share_score(self, slug: str,
                             per: Mapping[str, Any]) -> Dict[str, Any]:
@@ -6101,12 +6653,18 @@ class Engine:
                                float(qty), float(tick))
         cap = qty * (yes_px + no_px)
         rate = float(est.get("est_usd_per_hour") or 0.0)
-        return {"usd_per_hour": round(rate, 6),
-                "capital_usd": str(cap),
-                "per_dollar_hour": round(rate / float(cap), 6)
-                if cap > 0 else 0.0,
-                "share": est.get("share"),
-                "max_spread_ok": est.get("max_spread_ok")}
+        out = {"usd_per_hour": round(rate, 6),
+               "capital_usd": str(cap),
+               "per_dollar_hour": round(rate / float(cap), 6)
+               if cap > 0 else 0.0,
+               "share": est.get("share"),
+               "max_spread_ok": est.get("max_spread_ok")}
+        if est.get("pool_scope") not in (None, "market"):
+            # usd_per_hour above is already the shared-pool figure
+            out.update({k: est.get(k) for k in (
+                "pool_scope", "pool_divisor", "pool_divisor_complete",
+                "est_usd_per_hour_per_market_reading")})
+        return out
 
     def rn1_join_touch(self, slug: str, mk: Dict[str, Any],
                        bbo: Mapping[str, Any], tick: D, rng: Any,
@@ -6146,6 +6704,7 @@ class Engine:
         estimated (pool rate, as before), then those estimated at zero or
         unreadable, then markets with no paying programme. Never drops a
         candidate."""
+        from src import pmus_sports_rewards as R
         cache = getattr(self, "_share_cache", None)
         if cache is None:
             cache = self._share_cache = {}
@@ -6181,7 +6740,7 @@ class Engine:
                 return (3, 0.0)
             hit = cache.get(slug)
             if not hit or nowm - hit[0] > RANK_SHARE_TTL_S:
-                return (1, -float(rn1_rw[slug]["pool_rate_usd_s"]))
+                return (1, -R.pool_rate(rn1_rw[slug]))
             v = float(hit[1].get("per_dollar_hour") or 0.0)
             return (0, -v) if v > 0 else (2, 0.0)
         out = sorted(scored, key=lambda r: (cls(r), r))
@@ -6196,7 +6755,14 @@ class Engine:
                         "per_dollar_hour": o.get("per_dollar_hour"),
                         "usd_per_hour": o.get("usd_per_hour"),
                         "capital_usd": o.get("capital_usd"),
-                        "why": o.get("why")} for s_, o in top],
+                        "why": o.get("why"),
+                        **({k: o.get(k) for k in (
+                            "pool_scope", "pool_divisor",
+                            "pool_divisor_complete",
+                            "est_usd_per_hour_per_market_reading")}
+                           if o.get("pool_scope") else {})}
+                       for s_, o in top],
+                pool_scope=R.POOL_SCOPE,
                 label="THEORETICAL reward of our own quote per dollar "
                       "committed; ranking only, not a payment")
         return out
@@ -6386,9 +6952,10 @@ class Engine:
                 rn1_rw = self.reward_programs([s for *_x, s in scored])
             except Exception as exc:                  # noqa: BLE001
                 log("reward_discovery_error", err=str(exc)[:160])
+            from src import pmus_sports_rewards as _R
             scored.sort(key=lambda r: (
                 0 if r[2] in rn1_rw else 1,
-                -rn1_rw[r[2]]["pool_rate_usd_s"] if r[2] in rn1_rw else 0,
+                -_R.pool_rate(rn1_rw[r[2]]) if r[2] in rn1_rw else 0,
                 r))
             if RN1_RANK_SHARE:
                 scored = self.rank_by_reward_share(scored, rn1_rw)
@@ -6405,7 +6972,11 @@ class Engine:
                     first=[{"slug": r[2],
                             "pool_rate_usd_s": (rn1_rw.get(r[2]) or {}).get(
                                 "pool_rate_usd_s"),
-                            "period": (rn1_rw.get(r[2]) or {}).get("period")}
+                            "period": (rn1_rw.get(r[2]) or {}).get("period"),
+                            "pool_scope": (rn1_rw.get(r[2]) or {}).get(
+                                "pool_scope", "market"),
+                            "pool_divisor": (rn1_rw.get(r[2]) or {}).get(
+                                "pool_divisor", 1)}
                            for r in scored[:4]],
                     label="published programme, not a payment")
         if RN1.ON and RN1_RANK_NET and scored:
@@ -6419,9 +6990,10 @@ class Engine:
             if not reward_first_on():
                 # rewarded in-band markets FIRST, richest pool rate first;
                 # the rest keep today's order (tightest spread, nearest 0.50)
+                from src import pmus_sports_rewards as _R2
                 scored.sort(key=lambda r: (
                     0 if r[2] in rewarded else 1,
-                    -rewarded[r[2]]["pool_rate_usd_s"] if r[2] in rewarded
+                    -_R2.pool_rate(rewarded[r[2]]) if r[2] in rewarded
                     else 0, r))
         if reward_first_on() and rewarded:
             # REWARD-FIRST: up to REWARD_MARKETS rewarded markets, best
@@ -6518,6 +7090,8 @@ class Engine:
                 period=rp["period"], period_s=rp["period_s"],
                 targetSize=rp["targetSize"], maxSpread=rp["maxSpread"],
                 pool_rate_usd_s=rp["pool_rate_usd_s"],
+                pool_scope=rp.get("pool_scope", "market"),
+                pool_divisor=rp.get("pool_divisor", 1),
                 qualifies=None if est is None else est.get("share", 0) > 0,
                 est_share=None if est is None else est.get("share"),
                 inside_walk=None if est is None else est.get("inside_walk"),
@@ -7130,6 +7704,10 @@ class Engine:
                                         self, "_audit_incomplete", 0))})
             except Exception:                             # noqa: BLE001
                 pass
+        try:
+            extra = dict(extra, event_exposure=self.event_exposure_report())
+        except Exception:                                 # noqa: BLE001
+            pass
         extra = dict(extra, submission_lock={
             "new_exposure_locked": _ls["new"], "completions_locked":
             _ls["all"], "why": _ls["why"],

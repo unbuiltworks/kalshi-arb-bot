@@ -20,6 +20,7 @@ bid; our NO bid at ``n`` is economically a YES offer at ``1 - n``.
 from __future__ import annotations
 
 import math
+import os
 import time
 import urllib.parse
 from collections import defaultdict
@@ -325,14 +326,270 @@ def estimate(book_md: Mapping[str, Any], period: Mapping[str, Any],
     s = quote_shares(bids, asks, tick, period["df"], period["targetSize"], q,
                      period["maxSpread"])
     sb, sa = s["bid"]["share"], s["ask"]["share"]
+    _scope, _div, factor, fields = pool_reading(period)
+    per_market = period["pool_rate_usd_s"] * 0.5 * (sb + sa)
     return {"qualifies": bool(sb > 0 and sa > 0) if period["maxSpread"]
             else bool(sb > 0 or sa > 0),
             "est_share": round(0.5 * (sb + sa), 6),
             "bid_share": round(sb, 6), "ask_share": round(sa, 6),
             "max_spread_ok": s["max_spread_ok"], "mid": s["mid"],
             "est_usd_per_day_per_market_reading": round(
-                period["pool_rate_usd_s"] * 0.5 * (sb + sa) * 86400.0, 4),
-            "label": LABEL}
+                per_market * 86400.0, 4),
+            "est_usd_per_hour": round(per_market * factor * 3600.0, 6),
+            "est_usd_per_hour_per_market_reading": round(
+                per_market * 3600.0, 6),
+            **fields, "label": LABEL}
+
+
+# ------------------------------------------------- shared pools (2026-11-25)
+# OWNER 2026-11-25: "Correct the reward model to account for shared program
+# pools. We cannot make capital allocation decisions using potentially
+# duplicated reward estimates."
+#
+# WHAT THE VENUE SAYS. polymarket.us/rewards: "Reward pool -- The total
+# amount paid out for a time period, shared across the program's markets --
+# never summed per market" and "each program's reward pool is split
+# pro-rata by score". docs .../incentives/liquidity.md: a Time Period is
+# "a window during the event lifecycle (e.g., pre-event, event day,
+# mid-event) with its own reward pool".
+#
+# WHAT THE MODEL DID. quote_estimate multiplied our share of ONE market's
+# score by the whole pool rate, as if every market had a pool of its own.
+# For a ladder type (34 spread lines a game on one programme) that counts
+# the same dollars once per line.
+#
+# WHAT THE DATA SUPPORTS (GET /v1/incentives, 9,111 markets, 83 programmes,
+# 2026-11-25). A programme row carries: programId (a name such as
+# nba_regular_spreads_live_20261118: competition, market type, period,
+# date), programType, period (early / day_of / live / daily_event), start,
+# an optional end, rewardPool, discountFactor, targetSize, an optional
+# maxSpread, status. The market row adds marketSlug, eventStartTime,
+# category, subcategory, instrumentProduct. For every programme the pool
+# and the parameters are the SAME on every market and every event (0 of 83
+# programmes showed two pool values); start/end are the programme's own
+# dates (days long, often open-ended), not a game's. There is NO list or
+# count of a programme's markets, NO event identifier and NO per-event
+# pool in the response; membership is only learnt by asking, slug by slug.
+# So the data cannot tell a pool shared by the programme's markets WITHIN
+# ONE GAME from a pool shared across ALL the programme's games. The docs'
+# "event lifecycle" wording leans to per game; nothing confirms it.
+#
+# WHAT THIS DOES. our reward = pool rate * our score / (total score across
+# every market sharing the pool). The total across markets is not visible
+# from one book, so the pool is split EVENLY across the markets that share
+# it -- an approximation: the venue splits by score, so a busy line takes
+# more than an empty one -- and the sharing reading is a setting:
+#   PMUS_REWARD_POOL_SCOPE=market     each market its own pool: the figure
+#                                     as it always was (default: nothing
+#                                     changes until the owner approves)
+#                         =event      the programme's markets in the SAME
+#                                     GAME share it: divide by how many of
+#                                     them have a paying period now
+#                         =programme  ALL the programme's markets paying
+#                                     now share it: divide by that count
+# An unrecognised value is read as programme (the smallest figure), never
+# as market. The count comes from the programme rows the bot holds: it is
+# COMPLETE for a game only after every market of that product in the game
+# has been looked up (the census the controller runs for games whose full
+# market list it has); otherwise it is a LOWER BOUND, so the figure is an
+# UPPER bound, and `pool_divisor_complete` says which. For the programme
+# reading it is always a lower bound (the venue publishes no member list).
+# PMUS_REWARD_POOL_REQUIRE_CENSUS=1 turns an estimate whose game has no
+# complete count into zero instead of an upper bound (default 0).
+# Every estimate carries pool_scope, pool_divisor, the divided figure and
+# est_usd_per_hour_per_market_reading (the undivided one). THEORETICAL.
+POOL_SCOPES = ("market", "event", "programme")
+POOL_READING = {
+    "market": "each market read as having the whole pool to itself (may "
+              "count one pool once per market)",
+    "event": "pool split EVENLY across the programme's markets paying in "
+             "the same game (the venue splits by score, not evenly)",
+    "programme": "pool split EVENLY across all the programme's markets "
+                 "paying now (the venue splits by score, not evenly)",
+}
+
+
+def pool_scope_from(raw: Any) -> str:
+    v = str(raw or "").strip().lower()
+    if not v:
+        return "market"
+    v = {"program": "programme", "game": "event"}.get(v, v)
+    return v if v in POOL_SCOPES else "programme"
+
+
+POOL_SCOPE = pool_scope_from(os.getenv("PMUS_REWARD_POOL_SCOPE"))
+POOL_REQUIRE_CENSUS = os.getenv("PMUS_REWARD_POOL_REQUIRE_CENSUS",
+                                "0").strip() == "1"
+#: games whose markets of one product are looked up per programme read, to
+#: complete a count (public GET /v1/incentives, 60 symbols a request)
+POOL_CENSUS_PER_ROUND = int(os.getenv("PMUS_REWARD_POOL_CENSUS_PER_ROUND",
+                                      "1"))
+
+
+def pool_counts(records: Mapping[str, Mapping[str, Any]], now: float,
+                live_of: Callable[[str], bool],
+                event_of: Callable[[str], str]) -> dict:
+    """{"programme": {programId: n}, "event": {(programId, event): n}}:
+    how many of the held programme rows (build_program_map shape) have a
+    paying period of each programme right now."""
+    prog: dict = defaultdict(int)
+    ev: dict = defaultdict(int)
+    for slug, row in records.items():
+        if not row:
+            continue
+        est = _ts(row.get("eventStartTime"))
+        live = bool(live_of(slug))
+        seen = set()
+        for p in row.get("periods") or ():
+            pid = p.get("programId")
+            if pid in seen:
+                continue
+            paying, secs, _basis = period_pacing(p, est, now, live)
+            if paying and secs:
+                seen.add(pid)
+                prog[pid] += 1
+                ev[(pid, event_of(slug))] += 1
+    return {"programme": dict(prog), "event": dict(ev)}
+
+
+def pool_divisor(counts: Mapping[str, Any], slug: str, program_id: Any,
+                 scope: str, event_of: Callable[[str], str]) -> int:
+    """How many markets share the pool under `scope` (never below 1: the
+    market itself)."""
+    if scope == "event":
+        n = (counts.get("event") or {}).get((program_id, event_of(slug)), 0)
+    elif scope == "programme":
+        n = (counts.get("programme") or {}).get(program_id, 0)
+    else:
+        n = 1
+    return max(1, int(n))
+
+
+def scoped_period(period: Mapping[str, Any], scope: str,
+                  divisor: Optional[int], complete: bool) -> dict:
+    """The paying-period dict with the sharing reading attached; every
+    estimate made from it is divided. divisor None = not known: zero."""
+    return dict(period, pool_scope=scope, pool_divisor=divisor,
+                pool_divisor_complete=bool(complete))
+
+
+def pool_reading(period: Mapping[str, Any]) -> tuple:
+    """(scope, divisor | None, factor, fields) for one period dict. A
+    period with nothing attached is the per-market reading, divisor 1."""
+    scope = str(period.get("pool_scope") or "market")
+    if "pool_divisor" not in period:
+        div: Optional[float] = 1
+    else:
+        try:
+            div = int(period["pool_divisor"])
+            if div < 1:
+                div = None
+        except (TypeError, ValueError):
+            div = None
+    factor = 0.0 if div is None else 1.0 / div
+    fields = {"pool_scope": scope, "pool_divisor": div,
+              "pool_divisor_complete": (scope == "market") or bool(
+                  period.get("pool_divisor_complete")),
+              "pool_reading": POOL_READING.get(scope, scope) if div
+              else "number of markets sharing the pool not known: no "
+                   "estimate"}
+    return scope, div, factor, fields
+
+
+def pool_rate(period: Mapping[str, Any]) -> float:
+    """Pool rate (USD/s) per market under the period's sharing reading: the
+    headline rate when nothing is attached."""
+    return float(period.get("pool_rate_usd_s") or 0.0) * pool_reading(
+        period)[2]
+
+
+def pool_scope_fit(credited_rows: Iterable[Mapping[str, Any]],
+                   measured: Mapping[str, Mapping[str, Any]],
+                   min_payout_usd: float = 1.0) -> dict:
+    """Which sharing reading fits what the venue actually paid. NOT wired
+    to anything: a tool for the day credited rows exist.
+
+    credited_rows: the venue's reward rows for ONE day that it marks as
+      paid -- {"marketSlug", "reward" or "amount"} (the shape
+      /v1/incentives/earnings returned to src/pmus_incentive_audit; those
+      rows carry no programId, so the market slug is the join key). The
+      caller filters by status: a pending or skipped row is not a payment.
+    measured: {slug: {"share_seconds": sum over the day's seconds of our
+      modelled share of THAT market's score (0..1 each second),
+      "pool_rate_usd_s", "event_divisor", "programme_divisor"}} from the
+      bot's own record.
+
+    For each reading, predicted_m = pool_rate * share_seconds / divisor
+    (divisor 1 / event / programme). Returns per reading the predicted and
+    credited totals over the markets present in both, their ratio, and the
+    mean absolute log error per market; `best` is the reading with the
+    smallest error (that figure plus the fraction of compared markets the
+    reading said were payable and the venue did not pay), or None with a
+    reason when it cannot be judged.
+
+    LIMITS, all of which bias the answer: the even split (the venue splits
+    by score); our share is modelled from sampled public books; a market
+    measured but not credited is counted against a reading only when that
+    reading predicted at least the minimum payout; whether the minimum
+    applies per market, per programme or per day is not known."""
+    paid: dict = defaultdict(float)
+    for r in credited_rows or ():
+        if not isinstance(r, Mapping) or not r.get("marketSlug"):
+            continue
+        amt = _num(r.get("reward"))
+        if amt is None:
+            amt = _num(r.get("amount"))
+        if amt is None:
+            continue
+        paid[str(r["marketSlug"])] += amt
+    div_key = {"market": None, "event": "event_divisor",
+               "programme": "programme_divisor"}
+    out: dict = {"markets_measured": len(measured or {}),
+                 "markets_credited": len(paid), "readings": {},
+                 "label": LABEL}
+    for scope, key in div_key.items():
+        pred_tot = paid_tot = err = 0.0
+        n = missing = 0
+        for slug, m in (measured or {}).items():
+            ss, rate = _num(m.get("share_seconds")), _num(
+                m.get("pool_rate_usd_s"))
+            d = 1.0 if key is None else _num(m.get(key))
+            if ss is None or rate is None or not d or d < 1 or ss <= 0 \
+                    or rate <= 0:
+                continue
+            pred = rate * ss / d
+            got = paid.get(slug)
+            if got is None or got <= 0:
+                if pred >= min_payout_usd:
+                    missing += 1
+                continue
+            n += 1
+            pred_tot += pred
+            paid_tot += got
+            err += abs(math.log(pred / got))
+        out["readings"][scope] = {
+            "markets_compared": n, "predicted_usd": round(pred_tot, 6),
+            "credited_usd": round(paid_tot, 6),
+            "credited_over_predicted": round(paid_tot / pred_tot, 6)
+            if pred_tot > 0 else None,
+            "mean_abs_log_error": round(err / n, 6) if n else None,
+            "predicted_payable_but_not_credited": missing}
+    judged = {s: r["mean_abs_log_error"] + r[
+        "predicted_payable_but_not_credited"] / max(1, r["markets_compared"])
+        for s, r in out["readings"].items()
+        if r["mean_abs_log_error"] is not None}
+    if not judged:
+        out.update(best=None, why="no market both measured and credited")
+    else:
+        lo = min(judged.values())
+        best = [s for s in POOL_SCOPES if s in judged
+                and judged[s] <= lo + 1e-9]
+        if len(best) > 1:
+            out.update(best=None, why="readings not distinguishable on "
+                       "this data (equal divisors): %s" % ",".join(best))
+        else:
+            out.update(best=best[0], why="smallest error")
+    return out
 
 
 # ------------------------------------------------- reward-first (2026-11-15)
@@ -406,7 +663,11 @@ def quote_estimate(book_md: Mapping[str, Any], period: Mapping[str, Any],
     to 1.0 per snapshot, so the two sides are equal halves of the pool);
     with maxSpread BOTH sides must qualify and have their size-adjusted
     price within maxSpread of the mid, or neither side scores.
-    rate_usd_s = pool_rate_usd_s * share; est_usd_per_day = rate * 86400."""
+    rate_usd_s = pool_rate_usd_s * share / pool_divisor (the number of
+    markets sharing the pool under the period's `pool_scope`; a period with
+    nothing attached is the per-market reading, divisor 1, as before);
+    est_usd_per_hour / est_usd_per_day are that divided rate, and
+    est_usd_per_hour_per_market_reading is the undivided one."""
     bids, asks = book_sides(book_md or {})
     df, target = float(period["df"]), float(period["targetSize"])
     b = side_score(bids, yes_px, qty if yes_px is not None else 0.0, tick,
@@ -427,7 +688,9 @@ def quote_estimate(book_md: Mapping[str, Any], period: Mapping[str, Any],
     sb = b["share"] if ms_ok in (None, True) else 0.0
     sa = a["share"] if ms_ok in (None, True) else 0.0
     share = 0.5 * (sb + sa)
-    rate = float(period.get("pool_rate_usd_s") or 0.0) * share
+    _scope, _div, factor, fields = pool_reading(period)
+    rate_market = float(period.get("pool_rate_usd_s") or 0.0) * share
+    rate = rate_market * factor
     legs = [x for x, px in ((b, yes_px), (a, no_px)) if px is not None]
     return {"share": round(share, 9), "bid_share": round(sb, 9),
             "ask_share": round(sa, 9),
@@ -438,4 +701,7 @@ def quote_estimate(book_md: Mapping[str, Any], period: Mapping[str, Any],
             "ask_ticks_from_best": a["ticks_from_best"],
             "max_spread_ok": ms_ok, "mid": mid,
             "rate_usd_s": rate, "est_usd_per_hour": round(rate * 3600.0, 6),
-            "est_usd_per_day": round(rate * 86400.0, 6), "label": LABEL}
+            "est_usd_per_day": round(rate * 86400.0, 6),
+            "est_usd_per_hour_per_market_reading": round(
+                rate_market * 3600.0, 6),
+            **fields, "label": LABEL}
