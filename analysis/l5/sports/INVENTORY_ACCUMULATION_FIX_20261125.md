@@ -45,3 +45,32 @@ full ladders in about two markets at once.
 Risk: the ladder buys more as the price falls. Today both same-side
 additions lost (11 and 18.5c within five minutes). The worst case per
 market stays $3 unpaired; for the campaign, the $4 loss stop.
+
+## Update 17:57 UTC — release `5b4584db4` supersedes `5425d94d3` and `0abb52a38`
+
+Release `5b4584db418787d183afba7d58e48513b6766484` (branch
+`release/pmus-sports-rn1-5b4584db4`, code `b88375075`). Regression 5,658
+passed, the same 24 unrelated failures.
+
+Two defects found by replaying the live configuration before resuming:
+
+1. Under the in-play-only setting, a market already tracked from before
+   still placed pre-game bids (live 17:08 UTC). Fixed: no opening or
+   extension in a pre-game market under the live slate.
+2. One fill collapsed both ladders to a single completing bid: the filled
+   side's cooldown cancelled its deeper bids, and the other side became a
+   lone completion. Fixed: a side in cooldown keeps its resting deeper
+   bids (unless a pause or other block applies); behind a completion the
+   ladder rests ordinary opening bids, each cheaper than the completion.
+
+Confirmed by test, on the live configuration (in play, 2 contracts, 3
+levels 2 ticks apart, $3 / $8 / $6 caps):
+
+| Requirement | Test |
+|---|---|
+| Several levels rest at once in a live market | 3 YES + 3 NO resting |
+| Same-side inventory builds through successive fills | YES fills at 0.47, 0.45, 0.43: 6 contracts, average 0.45, $2.70 unpaired; then no further YES bid (next clip would pass $3) |
+| A filled level is replenished | after the 10 s cooldown the 0.47 level is placed again; the deeper bids stayed |
+| Both sides accumulate independently | after a YES fill, NO rests its completion plus two cheaper opening bids; after pairs form both sides ladder again |
+| Pauses still pull everything | a volatility pause removes the whole ladder, cooldown or not |
+| Caps hold through any fill sequence | filling every YES bid pass after pass never takes unpaired above $3 |
