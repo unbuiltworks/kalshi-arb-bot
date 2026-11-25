@@ -1107,3 +1107,56 @@ $5 reward" and "I confirm that the manual NHL order was mine."
   configurations; "obtain explicit authorization before deployment or
   capital increases." No deployment, arming or limit change is authorized
   by this message.
+
+## 45. Venue-native validation result — 25 Nov, 00:30–03:30 UTC (written 04:00)
+
+Build `766a965ba`, $5 account limit, $30 spend, one contract, Setka and
+UTR (Dota 2 refused by the esports format rule throughout). Read from
+production logs by a read-only pass; figures marked (c) are computed.
+
+Bot trading only:
+
+| | |
+|---|---|
+| Fills | 15 (14.00 contracts, $6.61 (c)); 14 on campaign markets, 1 completing an ATP leg carried from the validation hour |
+| Pairs | 5 on UTR Traemm–Zylame at 0.96, 0.93, 0.91, 0.92, 0.90: +$0.38 locked; 1 ATP pair at 0.97: +$0.03 (belongs to the validation hour) |
+| Settled unpaired | Setka Korvol–Kozden YES 0.63 lost: −$0.63 |
+| Open at close | UTR Carjem–Caltes NO ×2 at 0.45, cost $0.90, unsettled (worst −$0.90, best +$1.10) |
+| Campaign result | −$0.25 settled and locked; −$1.15 to +$0.85 once Carjem–Caltes settles |
+| Same-side additions while unpaired | 2 (Traemm–Zylame 02:16, Carjem–Caltes 03:26); 3 fresh entries after a completed pair |
+| Orders placed | 153 (108 opening, 27 extension, 18 completing); 15 filled |
+| Fees / rebates logged | 0 / 0 |
+| Able to quote new exposure | about 127 of 180 minutes (c); refused 02:19–03:10 by the account limit after the manual purchase |
+| Two-sided resting, minutes (c) | 70, 59, 30, 9, 5, 5, 4 across seven UTR/Setka markets |
+
+Safety: largest order 1 contract; every order post-only; new opening
+orders only in UTR and Setka; no safety latch, halt, HTTP 429 or
+reconciliation mismatch; watchdog 602 sweeps with no action; loss stop not
+reached. Relocked itself at 03:30:00 (`window_ended`), all own orders
+cancelled by 03:30:04, zero open bot orders from then. Plain lock set at
+03:46 UTC (restart; boot shows new exposure and completions locked).
+Not proven either way: whether a fifth market briefly held an order at
+00:32–00:34 while the carried ATP completion rested beside four new
+markets.
+
+Manual activity, kept separate (owner's own, section 44):
+
+- 02:18:46 UTC: 35.46 contracts bought at 0.69 on
+  `aec-nhl-veg-edm-2026-11-24` (about $24.47).
+- 03:10:32 UTC: account value rose $31.56 = 35.46 × 0.89; consistent with
+  the position being sold at 0.89 (about +$7.09). Inferred from the value
+  change; no fill line was read.
+- 02:20 UTC: account value rose exactly $5.00; unexplained by the logs
+  (possibly the venue's promotion credit; not confirmed).
+
+Account figure the bots read (ledger): 1.92 at 00:30; 2.61 at 02:18; 27.61
+at 02:19; −9.93 at 03:10; −9.03 at 03:30. **It is now negative: the manual
+gain and the $5 step sit inside the same figure as the bot's results, so
+the $5 limit would currently allow about $14 of bot loss.** The bot is
+locked, so nothing is at risk now; this must be corrected before any
+window opens (ledger change in preparation: separate bot-only and
+total-account figures).
+
+Reward rows for this window: not posted yet.
+Left as they are pending the owner's decision: venue-native profile
+settings (locked), account limit $5.
