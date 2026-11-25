@@ -1355,3 +1355,12 @@ To do: deploy `5425d94d3` (sports only; rollback `bc3a5b6b9`); set
 `PMUS_TWO_SIDED_SLATE=live`. Size stays 2 (pre-game and in-play settings
 unchanged). Window unchanged (ends 19:58 UTC; completions-only grace to
 21:58 as already authorized in section 49).
+
+Carried out (section 53): ladder settings set 16:36 UTC without restart;
+release `5425d94d3` deployed (deployment `27ec5dec`, live 17:03:49 UTC;
+the build started at 17:02 after a session worker restart). Boot 17:03:53:
+slate live, window open to 19:58 UTC with 2 h completion grace, size 2,
+4 markets, depth 3, five competitions, caps unchanged. New code confirmed
+(`ladder` field in RN1_QUOTE). Carried in at the restart: ATP
+Joagui–Lucamb YES 2 at 0.42 (unpaired $0.84, completion NO bid 0.55);
+ATP Matalm–Carzar paired 1/1.
