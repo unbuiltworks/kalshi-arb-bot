@@ -251,3 +251,77 @@ the bot, with doubles charged 8c and 6c.
   deeper level, within the $13.42 room.
 - **Window:** 23:30 to 01:30 UTC, the earliest after a locked deploy and
   its checks (about 10 minutes).
+
+## FINAL TERMS — window 23:45 to 01:45 UTC, 25–26 Nov (for authorization)
+
+Release `7a053545094473432cca296ec7bfb0d284228b36`, deployed locked first,
+verified, then the settings below, then the window. Every value is exact.
+Variables not listed stay as they are now.
+
+**Sports service `pmus-spring-l5-probe`:**
+
+| Variable | Value |
+|---|---|
+| `PMUS_RN1_NET_RANK` | 1 |
+| `PMUS_RN1_NET_SIZES` | 1,2 |
+| `PMUS_RN1_FILL_RATE_TOUCH` / `_BEHIND` | 3.0 / 1.5 |
+| `PMUS_RN1_FILL_LOSS_TOUCH` | 0.05,atpdb:0.08,wtadb:0.08 |
+| `PMUS_RN1_FILL_LOSS_BEHIND` | 0.035,atpdb:0.06,wtadb:0.06 |
+| `PMUS_RN1_QTY` / `_PREGAME_QTY` / `_LIVE_QTY` | 2 / 2 / 2 |
+| `PMUS_RN1_LADDER_LEVELS` / `_STEP_TICKS` / `_QTY` | 2 / 2 / 2 |
+| `PMUS_RN1_FIT_QTY` | 1 |
+| `PMUS_RN1_PULL_THREATENED_ONLY` | 1 |
+| `PMUS_RN1_JOIN_TOUCH` / `PMUS_RN1_JOIN_ONE_TICK` | 1 / 1 |
+| `PMUS_RN1_REWARD_ONLY` / `PMUS_RN1_RANK_SHARE` | 1 / 1 |
+| `PMUS_RN1_RELEASE_UNQUALIFIED_S` | 120 |
+| `PMUS_RN1_REFILL_COOLDOWN_S` | 10 |
+| `PMUS_TWO_SIDED_SLATE` | both |
+| `PMUS_TWO_SIDED_MIN_TOUCH_QTY` | 0 |
+| `PMUS_TWO_SIDED_BAND_LO` / `_BAND_HI` | 0.20 / 0.80 |
+| `PMUS_TWO_SIDED_MAX_MARKETS` / `_MAX_TRACKED` | 2 / 4 |
+| `PMUS_TWO_SIDED_OPEN_GATE_ALLOW_SPORTS` | setkameua,setkamemd,utr,atp,wta,atpdb,wtadb |
+| `PMUS_RN1_RESIDUAL_CAP_USD` | 5 |
+| `PMUS_RN1_PER_MARKET_USD` | 12 |
+| `PMUS_RN1_TOTAL_UNMATCHED_USD` | 10 |
+| `PMUS_RN1_TOTAL_SPEND_USD` | 60 |
+| `PMUS_RN1_PILOT_LOSS_USD` | 10 |
+| `PMUS_TWO_SIDED_DAILY_LOSS_USD` | 10 |
+| `PMUS_TWO_SIDED_AT_RISK_BUDGET_USD` | 20 |
+| `L5_ACCOUNT_MAX_EXPOSURE_USD` / `L5_ACCOUNT_LANES` (this service only) | 20 / 1 |
+| `PMUS_TWO_SIDED_WINDOW_COMPLETE_GRACE_S` | 7200 |
+| `PMUS_TWO_SIDED_SUBMISSION_LOCK` | `window:2026-11-25T23:45:00Z/2026-11-26T01:45:00Z` |
+
+**Ledger `l5-pmus-live`:** `L5_PORTFOLIO_MAX_DRAWDOWN_USD` 13 → 20.
+The anchor is unchanged. The ledger restarts.
+
+**Not touched:** crypto services (disarmed, ceiling unchanged), watchdog,
+the esports rule (`PMUS_TWO_SIDED_ESPORTS_UNKNOWN_FIRST_MAP` stays off),
+cricket exclusion, maker-only, no taker, pair-cost limit 0.97, per-bid range
+0.20–0.92, jump and volatility pauses, kickoff pull 300 s, late rules,
+reconciliation, final gate, loss stop counting resting bids.
+
+**Sequence:**
+1. Deploy locked and check the build, the lock, zero orders and the
+   watchdog.
+2. Set the ledger limit and verify that the ledger publishes $20.
+3. Set the sports settings with the window value. This deploys once,
+   still locked until 23:45.
+4. At boot, check that the settings line matches the table and that at
+   least one market ranks positive. If none does, report it; the bot
+   quotes nothing.
+5. Relock at 01:45, completions only until 03:45, then close out.
+
+If any check fails, relock and roll back to `6755062ad`.
+
+**Measured during the run (existing logs, no new code):**
+- fill markouts at 5, 30, 120 and 300 s per fill: `FILL_MARKOUT`, with
+  the book before each fill, so dust-book fills can be identified;
+- net placement and size choices: `RN1_NET_PLACEMENT`;
+- qualifying resting time: the reward estimate on the actual resting legs
+  (`incentive`, `qualifying_contract_s`);
+- acquisition cost, pairs and settled residual: `PILOT_PNL`;
+- paid rewards: `REWARD_CHECK` hourly. Rows post 1–7 days later.
+
+If the window cannot start at 23:45 (deploy or checks still running), it
+starts at the next quarter hour, for two hours. The times used will be
+reported.
