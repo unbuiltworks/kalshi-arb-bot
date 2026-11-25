@@ -195,3 +195,30 @@ secondary-market discovery; per-event exposure accounting; shared-pool
 reward model): in development on the existing controller, every part off
 by default, separate from the releases in Part A. Not part of this
 request.
+
+## Update 12:05 UTC — owner: freeze features and expansion; focus on execution
+
+Market-expansion work is stopped and parked on `dev/pmus-market-expansion`
+(a partial, unreviewed hardening is stashed locally, not committed). It is
+not part of any release.
+
+One addition to the C2 settings, an existing setting in the release, no
+code: `PMUS_TWO_SIDED_WINDOW_COMPLETE_GRACE_S=7200`. For two hours after
+the window ends the bot may keep resting maker completing bids for legs it
+already holds; openings and extensions stop at the window end as before.
+Reason: on 25 Nov the window ended with 2 NO held at 0.45 on UTR
+Carjem–Caltes and a completing YES bid at 0.52 ready; the lock refused it
+214 times, the leg settled worthless (−$0.90). Completed, that pair cost
+0.97. Completing bids only reduce exposure.
+
+How the owner's execution list maps to the release, all by settings:
+
+| Aim | Setting in C2 |
+|---|---|
+| Fill frequency, competitive maker pricing | `PMUS_RN1_JOIN_TOUCH=1` |
+| Rapid replenishment | `PMUS_RN1_REFILL_COOLDOWN_S=10` |
+| Same-side accumulation | already on; `PMUS_RN1_BALANCED_IS_OPEN=1` removes the stale price ceiling after a pair |
+| Dynamic order sizing | existing `PMUS_RN1_PREGAME_QTY` / `PMUS_RN1_LIVE_QTY` with the volatility shrink; C2 holds both at 1 contract. Raising size is a capital decision for a later stage |
+| Inventory-aware quoting | already on (unpaired caps, extension limits, completion pricing) |
+| Reward-adjusted selection | `PMUS_RN1_RANK_SHARE=1` |
+| Residual inventory through settlement | completion grace above |
