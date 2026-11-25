@@ -319,3 +319,45 @@ def test_pair_cap_repricing_keeps_both_when_they_fit():
                                              pair_cap="0.80"))
     assert q["YES"]["px"] + q["NO"]["px"] <= D("0.80")
     assert q["NO"]["why"] == "pair_cap_repriced"
+
+
+# ------------------------------------- fresh entry versus extension
+def test_balanced_position_is_an_extension_by_default():
+    """3 YES and 3 NO, nothing unpaired: as before, each next bid is an
+    extension capped at that side's lifetime average + 0.02."""
+    q = qt("0.60", "0.62", pos={"YES": "3", "NO": "3"},
+           cost={"YES": "1.20", "NO": "1.50"}, per_market_usd="20")
+    assert q["YES"]["role"] == "extend"
+    assert q["YES"]["px"] == D("0.42")           # avg 0.40 + 0.02, not 0.59
+
+
+def test_balanced_position_can_be_a_fresh_entry():
+    q = qt("0.60", "0.62", pos={"YES": "3", "NO": "3"},
+           cost={"YES": "1.20", "NO": "1.50"}, per_market_usd="20",
+           balanced_is_open=True)
+    assert q["YES"]["role"] == "open" and q["NO"]["role"] == "open"
+    assert q["YES"]["px"] == D("0.59")           # the market's price now
+    assert q["YES"]["px"] + q["NO"]["px"] <= D(str(CFG.get(
+        "pair_cap", R.PAIR_CAP)))
+
+
+def test_fresh_entry_setting_leaves_a_real_extension_capped():
+    """4 YES against 3 NO: YES is the heavier side, a genuine same-side
+    addition, and keeps its ceiling; NO is the completion."""
+    q = qt("0.60", "0.62", pos={"YES": "4", "NO": "3"},
+           cost={"YES": "1.60", "NO": "1.50"}, per_market_usd="20",
+           residual_cap_usd="10", balanced_is_open=True)
+    assert q["YES"]["role"] == "extend" and q["YES"]["px"] == D("0.42")
+    assert q["NO"]["role"] == "complete"
+
+
+def test_fresh_entry_setting_keeps_the_cooldown_and_the_caps():
+    q = qt("0.60", "0.62", pos={"YES": "3", "NO": "3"},
+           cost={"YES": "1.20", "NO": "1.50"}, per_market_usd="20",
+           balanced_is_open=True, last={"YES": 990.0, "NO": 900.0},
+           now=1000.0)
+    assert q["YES"] is None and q["why_YES"] == "refill_cooldown"
+    q = qt("0.60", "0.62", pos={"YES": "3", "NO": "3"},
+           cost={"YES": "1.20", "NO": "1.50"}, per_market_usd="3",
+           balanced_is_open=True)
+    assert q["YES"] is None and q["NO"] is None  # market spend cap holds

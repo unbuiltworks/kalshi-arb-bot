@@ -796,3 +796,186 @@ def test_without_a_pin_no_reason_is_logged(eng, monkeypatch, capsys):
     monkeypatch.setattr(M, "BAND_LO", D("0.99"))
     e.select(v.account())
     assert _pin_reasons(capsys) is None
+
+
+# ------------------------------------------- ranking by our reward share
+def _share_rows(*slugs):
+    return [(D("0.02"), D("0.01"), s) for s in slugs]
+
+
+def test_share_ranking_puts_our_best_reward_per_dollar_first(
+        eng, monkeypatch):
+    """Pool size alone does not decide: a small pool where our one quote
+    takes a large share ranks above a large pool where it takes nothing."""
+    e, _v = eng
+    monkeypatch.setattr(M, "RANK_SHARE_NEW_PER_ROUND", 10)
+    rw = {"aec-atp-a-b-2026-11-25": {"pool_rate_usd_s": 0.017},
+          "aec-utr-c-d-2026-11-25": {"pool_rate_usd_s": 0.004},
+          "aec-nhl-e-f-2026-11-25": {"pool_rate_usd_s": 0.097}}
+    per = {"aec-atp-a-b-2026-11-25": 0.003, "aec-utr-c-d-2026-11-25": 0.4,
+           "aec-nhl-e-f-2026-11-25": 0.0}
+    monkeypatch.setattr(e, "_reward_share_score", lambda s, _p: {
+        "per_dollar_hour": per[s], "usd_per_hour": per[s],
+        "capital_usd": "1"})
+    scored = _share_rows("aec-nhl-e-f-2026-11-25", "aec-atp-a-b-2026-11-25",
+                         "aec-zzz-no-prog-2026-11-25",
+                         "aec-utr-c-d-2026-11-25")
+    got = [r[2] for r in e.rank_by_reward_share(scored, rw)]
+    assert got == ["aec-utr-c-d-2026-11-25", "aec-atp-a-b-2026-11-25",
+                   "aec-nhl-e-f-2026-11-25", "aec-zzz-no-prog-2026-11-25"]
+    assert len(got) == len(scored)                 # nothing is dropped
+
+
+def test_share_ranking_reads_a_few_books_per_round_across_competitions(
+        eng, monkeypatch):
+    e, _v = eng
+    monkeypatch.setattr(M, "RANK_SHARE_NEW_PER_ROUND", 2)
+    slugs = ["aec-atp-a-b-2026-11-25", "aec-atp-c-d-2026-11-25",
+             "aec-atp-e-f-2026-11-25", "aec-utr-g-h-2026-11-25"]
+    rw = {s: {"pool_rate_usd_s": 0.01} for s in slugs}
+    seen = []
+
+    def score(s, _p):
+        seen.append(s)
+        return {"per_dollar_hour": 0.1}
+    monkeypatch.setattr(e, "_reward_share_score", score)
+    e.rank_by_reward_share(_share_rows(*slugs), rw)
+    # one from each competition, not two from the deepest one
+    assert seen == ["aec-atp-a-b-2026-11-25", "aec-utr-g-h-2026-11-25"]
+    e.rank_by_reward_share(_share_rows(*slugs), rw)
+    assert sorted(seen) == sorted(slugs)
+    e.rank_by_reward_share(_share_rows(*slugs), rw)
+    assert len(seen) == 4                          # cached: no new reads
+
+
+def test_share_ranking_survives_an_unreadable_book(eng, monkeypatch):
+    e, _v = eng
+    rw = {"aec-atp-a-b-2026-11-25": {"pool_rate_usd_s": 0.01},
+          "aec-utr-c-d-2026-11-25": {"pool_rate_usd_s": 0.02}}
+
+    def score(s, _p):
+        if "atp" in s:
+            raise RuntimeError("boom")
+        return {"per_dollar_hour": 0.2}
+    monkeypatch.setattr(e, "_reward_share_score", score)
+    got = [r[2] for r in e.rank_by_reward_share(
+        _share_rows("aec-atp-a-b-2026-11-25", "aec-utr-c-d-2026-11-25"), rw)]
+    assert got == ["aec-utr-c-d-2026-11-25", "aec-atp-a-b-2026-11-25"]
+
+
+def test_share_score_uses_our_size_one_tick_behind_and_public_book(
+        eng, monkeypatch):
+    e, v = eng
+    monkeypatch.setattr(R, "DEPTH_TICKS", 1)
+    monkeypatch.setattr(M, "rn1_max_clip", lambda: D("1"))
+    monkeypatch.setattr(v, "spec", lambda s: {"tick": D("0.01"),
+                                              "min_qty": D("1")},
+                        raising=False)
+    paths = []
+
+    def get(path):
+        paths.append(path)
+        return {"marketData": {
+            "bids": [{"px": "0.50", "qty": "5"}, {"px": "0.49", "qty": "5"}],
+            "offers": [{"px": "0.52", "qty": "5"},
+                       {"px": "0.53", "qty": "5"}]}}
+    monkeypatch.setattr(e, "_reward_get", lambda: get)
+    # the venue scores only the levels needed to reach targetSize: with the
+    # touch (5) short of the target (10) the level behind it still scores
+    per = {"df": 0.5, "targetSize": 10, "pool_rate_usd_s": 0.01,
+           "maxSpread": None}
+    got = e._reward_share_score("aec-utr-c-d-2026-11-25", per)
+    assert paths == ["/v1/markets/aec-utr-c-d-2026-11-25/book"]
+    # YES bid 0.49 and NO bid 1 - 0.52 - 0.01 = 0.47: one dollar... 0.96
+    assert got["capital_usd"] == "0.96"
+    assert got["usd_per_hour"] > 0
+    assert got["per_dollar_hour"] == pytest.approx(
+        got["usd_per_hour"] / 0.96, rel=1e-3)
+    # a touch that already meets the target leaves a bid one tick behind
+    # it outside the scored levels: estimated at zero, ranked last
+    deep = e._reward_share_score("aec-utr-c-d-2026-11-25",
+                                 dict(per, targetSize=5))
+    assert deep["usd_per_hour"] == 0 and deep["per_dollar_hour"] == 0
+    # a one-sided book gives no estimate, never an error
+    monkeypatch.setattr(e, "_reward_get", lambda: (lambda p: {
+        "marketData": {"bids": [{"px": "0.50", "qty": "5"}]}}))
+    assert e._reward_share_score("aec-utr-c-d-2026-11-25", per) == {
+        "why": "no_two_sided_book"}
+
+
+# ------------------------------------------------ joining the best bid
+@pytest.mark.rn1_edge_gate
+def test_join_is_off_by_default_bids_rest_one_tick_behind(eng):
+    e, v = eng
+    e.b.m(SLUG)
+    e.step_market(SLUG)
+    assert resting(v) == [("NO", "0.49", "4"), ("YES", "0.47", "4")]
+
+
+@pytest.mark.rn1_edge_gate
+def test_join_rests_at_the_touch_on_a_wide_calm_market(eng, monkeypatch):
+    """bid 0.48 / ask 0.50 (two ticks), calm: YES joins 0.48, NO joins
+    1 - 0.50 = 0.50; the pair-cost limit (0.97) then lowers the dearer
+    side, so the pair still costs no more than the limit."""
+    e, v = eng
+    monkeypatch.setattr(M, "RN1_JOIN_TOUCH", True)
+    e.b.m(SLUG)
+    e.step_market(SLUG)
+    got = {s: D(px) for s, px, _q in resting(v)}
+    assert got["YES"] == D("0.48")                 # at the best bid
+    assert got["NO"] <= D("0.50")
+    assert got["YES"] + got["NO"] <= R.PAIR_CAP
+    assert all(D(px) < (v.ask if s == "YES" else 1 - v.bid)
+               for s, px, _q in resting(v))        # never crossing
+
+
+@pytest.mark.rn1_edge_gate
+def test_join_never_happens_on_a_one_tick_spread(eng, monkeypatch):
+    e, v = eng
+    monkeypatch.setattr(M, "RN1_JOIN_TOUCH", True)
+    v.bid, v.ask = D("0.48"), D("0.49")
+    mk = e.b.m(SLUG)
+    assert e.rn1_join_touch(SLUG, mk, {"bid": v.bid, "ask": v.ask},
+                            D("0.01"), D("0"), time.time()) \
+        == "spread_too_tight"
+    # even if the setting asks for one tick, two is the floor
+    monkeypatch.setattr(M, "RN1_JOIN_MIN_SPREAD_TICKS", 1)
+    assert e.rn1_join_touch(SLUG, mk, {"bid": v.bid, "ask": v.ask},
+                            D("0.01"), D("0"), time.time()) \
+        == "spread_too_tight"
+
+
+@pytest.mark.rn1_edge_gate
+def test_join_steps_back_when_the_price_moves_or_just_jumped(
+        eng, monkeypatch, capsys):
+    e, v = eng
+    monkeypatch.setattr(M, "RN1_JOIN_TOUCH", True)
+    mk = e.b.m(SLUG)
+    bbo = {"bid": D("0.48"), "ask": D("0.51")}
+    now = time.time()
+    assert e.rn1_join_touch(SLUG, mk, bbo, D("0.01"), D("0"), now) is None
+    assert e._rn1_joined[SLUG] is True
+    assert e.rn1_join_touch(SLUG, mk, bbo, D("0.01"), D("0.02"), now) \
+        == "price_moving"
+    assert e._rn1_joined[SLUG] is False
+    mk["jump_pause_until"] = now + M.JUMP_PAUSE_S - 5     # jumped 5 s ago
+    assert e.rn1_join_touch(SLUG, mk, bbo, D("0.01"), D("0"), now) \
+        == "recent_jump"
+    mk["jump_pause_until"] = now - 600
+    assert e.rn1_join_touch(SLUG, mk, bbo, D("0.01"), D("0"), now) is None
+    rows = logged(capsys, "RN1_JOIN_TOUCH")
+    assert [r["joined"] for r in rows] == [False, True]
+
+
+def test_a_joined_bid_is_pulled_only_when_within_a_tick_of_crossing():
+    legs = {"YES": D("0.48")}
+    t = D("0.01")
+    # at the touch: the legacy rule (depth 1) calls that too close
+    assert M.adverse_reasons(legs, {"bid": D("0.48"), "ask": D("0.50")},
+                             t, 1) == ["yes_closer_than_1t"]
+    # joined on purpose (depth 0): left resting
+    assert M.adverse_reasons(legs, {"bid": D("0.48"), "ask": D("0.50")},
+                             t, 0) == []
+    # the spread closes to one tick: pulled whatever the depth
+    assert M.adverse_reasons(legs, {"bid": D("0.48"), "ask": D("0.49")},
+                             t, 0) == ["yes_near_cross"]

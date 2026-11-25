@@ -505,3 +505,80 @@ def test_a_failing_heartbeat_does_not_stop_order_service(f, monkeypatch):
     e._last_service = -1e9
     e.service_pass()
     assert stepped == [S1]
+
+
+# ------------------------------------------------------------------------
+# What must be identical with the list on and off (owner 2026-11-25:
+# "Verify that batched fill detection preserves exact fill accounting,
+# cancellation safety and reservation integrity").
+def test_a_cancel_always_reads_the_orders_own_final_state(f):
+    """The list vouched for both orders a moment ago. A pull still cancels
+    each by its exact id and reads each one's own status afterwards."""
+    e, v = f
+    oids = rest(e, v)
+    e.step_market(S1)
+    assert v.exact == []                           # the list vouched
+    e._pull(S1, "test", time.time())
+    assert sorted(v.exact) == sorted(oids)         # one exact read each
+    assert not any(o["open"] for o in v.orders.values())
+    assert not any(o["open"] for o in e.b.m(S1)["orders"].values())
+
+
+def test_a_fill_that_raced_the_cancel_is_booked_once_from_the_status(f):
+    e, v = f
+    oids = rest(e, v)
+    e.step_market(S1)                              # list says: unchanged
+    hit = oids[0]
+    side = e.b.m(S1)["orders"][hit]["side"]
+    v.orders[hit]["filled"] = D("1")               # filled after that list
+    e._pull(S1, "test", time.time())
+    mk = e.b.m(S1)
+    assert D(mk["pos"][side]) == D("1")
+    for _ in range(3):                             # and never booked again
+        e._oo = None
+        e.step_market(S1)
+    assert D(e.b.m(S1)["pos"][side]) == D("1")
+
+
+def test_fills_book_the_same_with_the_list_on_and_off(tmp_path, monkeypatch,
+                                                       f):
+    """Same sequence of venue events, list on and list off: the same
+    position, cost and filled quantities."""
+    def run(e, v):
+        oids = rest(e, v)
+        a, b = oids
+        v.orders[a]["filled"], v.orders[a]["open"] = D("1"), False
+        e.step_market(S1)
+        e._oo = None
+        e.step_market(S1)
+        mk = e.b.m(S1)
+        return ({s: str(D(str(mk["pos"][s]))) for s in ("YES", "NO")},
+                {s: str(D(str(mk["cost"][s]))) for s in ("YES", "NO")},
+                sorted((o["side"], str(D(str(o["filled"]))))
+                       for o in mk["orders"].values()
+                       if D(str(o["filled"])) > 0))
+    e, v = f
+    on = run(e, v)
+    monkeypatch.setattr(M, "FILL_LIST_POLL", False)
+    v2 = FakeVenue()
+    v2.bid, v2.ask = D("0.45"), D("0.47")
+    v2.exact, v2.lists = [], 0
+    e2 = M.Engine(v2, M.Book(tmp_path / "off.json"))
+    e2._sleep = lambda s: None
+    off = run(e2, v2)
+    assert on == off and on[0] != {"YES": "0", "NO": "0"}
+
+
+def test_the_list_never_releases_or_changes_a_reservation(f):
+    """An uncertain submission's reservation is held whatever the list
+    shows: only the reconciliation over a fresh account read releases."""
+    e, v = f
+    rest(e, v)
+    rid = e.reserve_order(S1, "YES", D("0.44"), D("1"), "rn1_open")
+    e.reservation_uncertain(rid, "test")
+    before = e.own_exposure_usd()
+    for _ in range(3):
+        e._oo = None
+        e.step_market(S1)
+    assert [r["state"] for r in e.reserved_orders()] == ["uncertain"]
+    assert e.own_exposure_usd() == before

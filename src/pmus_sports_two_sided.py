@@ -1221,6 +1221,24 @@ AT_RISK_BUDGET_USD = _env_d("PMUS_TWO_SIDED_AT_RISK_BUDGET_USD", "0")
 # At most RANK_NEW_PER_ROUND candidates are priced per selection round and
 # a ranking number is reused for RANK_TTL_S (one public book read each).
 RN1_RANK_NET = os.getenv("PMUS_RN1_RANK_NET", "0").strip() == "1"
+# RANK BY OUR SHARE, NOT THE POOL (owner 2026-11-25: "Rank live markets by
+# estimated reward capture relative to capital committed, rather than
+# headline reward pool size"). Live 24-25 Nov: ranked by pool rate, every
+# slot went to ATP (pool $61 an hour, 1,400 contracts at the touch, our
+# modelled share 0.3 cents an hour for one contract) ahead of thin markets
+# where one contract's modelled share was 15 to 40 cents an hour.
+# With RN1_RANK_SHARE on, candidates carrying a paying programme are
+# ordered by the THEORETICAL reward of OUR quote (our size, one tick-depth
+# behind each touch, the venue's published scoring rule) per dollar that
+# quote commits. It needs one public book read per candidate: at most
+# RANK_SHARE_NEW_PER_ROUND new ones per selection round, taken in turn
+# across competitions, each kept RANK_SHARE_TTL_S. No signed request.
+# Ranking only: every bid still passes every gate and cap, and nothing
+# here is a payment. 0 = off (pool rate, as before).
+RN1_RANK_SHARE = os.getenv("PMUS_RN1_RANK_SHARE", "0").strip() == "1"
+RANK_SHARE_NEW_PER_ROUND = int(os.getenv(
+    "PMUS_RN1_RANK_SHARE_NEW_PER_ROUND", "3"))
+RANK_SHARE_TTL_S = float(os.getenv("PMUS_RN1_RANK_SHARE_TTL_S", "300"))
 # HYSTERESIS for a resting bid (see RN1.quotes): kept at its own price while
 # it misses the marginal test by no more than RN1_KEEP_TOL_USD, for at most
 # RN1_KEEP_MAX_S in a row; then it is pulled like any failing bid. 0 = off
@@ -1371,6 +1389,28 @@ ALLOW_TAKER = os.getenv("PMUS_TWO_SIDED_ALLOW_TAKER", "0").strip() == "1"
 # came toward us) is re-priced or pulled exactly as now, and so is a
 # completion. 0 = off (today).
 RN1_KEEP_DEEPER_TICKS = int(os.getenv("PMUS_RN1_KEEP_DEEPER_TICKS", "0"))
+# JOIN THE BEST BID WHEN IT IS JUSTIFIED (owner 2026-11-25: "Competitive
+# maker quoting that can join the best bid when economically justified").
+# PMUS_RN1_DEPTH_TICKS=1 rests every bid one tick behind the touch. The
+# venue's reward rule scores only the levels needed to reach the target
+# size, so behind a touch that already meets the target the bid scores
+# nothing, and it fills only after the touch is traded through.
+# With RN1_JOIN_TOUCH on, a market's bids rest AT the touch (still
+# post-only, never crossing) while ALL of these hold, and one tick back
+# otherwise:
+#   - the spread is at least RN1_JOIN_MIN_SPREAD_TICKS (at one tick a
+#     joined bid is within a tick of crossing: never joined);
+#   - the mid moved no more than RN1_JOIN_MAX_RANGE_USD in the last
+#     VOL_WINDOW_S;
+#   - no price jump in the last RN1_JOIN_CALM_S.
+# Pair cost, every cap, the thin-touch rule and the final gate apply to
+# the joined price exactly as to any other. 0 = off (as before).
+RN1_JOIN_TOUCH = os.getenv("PMUS_RN1_JOIN_TOUCH", "0").strip() == "1"
+RN1_JOIN_MIN_SPREAD_TICKS = int(os.getenv(
+    "PMUS_RN1_JOIN_MIN_SPREAD_TICKS", "2"))
+RN1_JOIN_MAX_RANGE_USD = float(os.getenv(
+    "PMUS_RN1_JOIN_MAX_RANGE_USD", "0.01"))
+RN1_JOIN_CALM_S = float(os.getenv("PMUS_RN1_JOIN_CALM_S", "60"))
 # DURABLE HALT ON A RECONCILIATION FAILURE, with no session involved
 # (owner 2026-11-23: "reconciliation failures must trigger a durable halt";
 # LIVE 2026-11-22 22:10Z a fill was recorded 89 s after the venue made it,
@@ -1781,6 +1821,29 @@ def _minute(v: Any) -> Optional[int]:
         return None
 
 
+# ESPORTS WITH NO PUBLISHED FORMAT. Checked on the venue 2026-11-25 (live
+# Valorant match, event list, event state, market record, market text):
+# the venue publishes a map score ("1-1") and a period ("Map 3") and
+# nowhere a best-of. So every esports match is refused, Dota 2 included.
+# With this setting on, a match of unknown format may open ONLY before any
+# map has been won (score 0-0, period not past the first map) -- the one
+# state the best-of-3 rule also allows. Everything later stays refused.
+# KNOWN GAP, the reason this is off by default and needs the owner's
+# approval: a best-of-1 is decided by its first map and a best-of-2 can
+# end level (the venue settles a tie at $0.50); neither can be told apart
+# from the first map of a best-of-3. 0 = refuse every unknown format.
+ESPORTS_UNKNOWN_FIRST_MAP = os.getenv(
+    "PMUS_TWO_SIDED_ESPORTS_UNKNOWN_FIRST_MAP", "0").strip() == "1"
+
+
+def _esports_first_map(state: Mapping[str, Any]) -> bool:
+    """True only for score 0-0 with a period that is not a later map."""
+    if str(state.get("score") or "").replace(" ", "") != "0-0":
+        return False
+    nums = re.findall(r"\d+", str(state.get("period") or ""))
+    return all(int(n) <= 1 for n in nums)
+
+
 def esports_late(state: Mapping[str, Any]) -> Optional[str]:
     """OWNER 2026-11-22 (CS2 was on the allowlist with NO late rule: it would
     have been quoted to the last round). Conservative and FAIL CLOSED: a new
@@ -1806,6 +1869,8 @@ def esports_late(state: Mapping[str, Any]) -> Optional[str]:
     try:
         bo = int(bo)
     except (TypeError, ValueError):
+        if ESPORTS_UNKNOWN_FIRST_MAP and _esports_first_map(state):
+            return None
         return "esports_format_unknown"
     if bo < 1 or bo > 7 or bo % 2 == 0:
         return "esports_format_unknown"
@@ -2560,9 +2625,12 @@ class Engine:
             return
         legs = {o["side"]: D(o["px"]) for o in mk["orders"].values()
                 if o.get("open")}
+        # a bid deliberately joined at the touch is not "too close" to it;
+        # the near-cross rule below still pulls it when the spread closes
+        joined = bool(getattr(self, "_rn1_joined", {}).get(slug))
         why = adverse_reasons(legs, {"bid": D(str(new["bid"])),
                                      "ask": D(str(new["ask"]))},
-                              tick, depth_ticks(tick))
+                              tick, 0 if joined else depth_ticks(tick))
         if why:
             self._pull(slug, ",".join(why), t0)
             self.step_market(slug)          # re-set both legs at the new touch
@@ -5365,6 +5433,9 @@ class Engine:
         if not new_block and self.rn1_market_slots_full(slug, mk):
             new_block = "max_markets"
         qcfg = dict(self.rn1_quote_cfg(slug, mk, tick))
+        join_why = self.rn1_join_touch(slug, mk, bbo, tick, rng, now)
+        if join_why is None:
+            qcfg["depth_ticks"] = 0
         pq = PH.qty_for(ph["phase"], pregame_qty=rn1_pregame_qty(),
                         live_qty_now=PH.live_qty(rn1_live_qty(),
                                                  spec["min_qty"], rng,
@@ -5968,6 +6039,132 @@ class Engine:
         return live + [t for t in self.v.pregame_sports()
                        if t["slug"] not in seen]
 
+    def _reward_share_score(self, slug: str,
+                            per: Mapping[str, Any]) -> Dict[str, Any]:
+        """THEORETICAL reward per dollar committed for our own quote in
+        this market: {"usd_per_hour", "capital_usd", "per_dollar_hour",
+        "share"} or {"why": ...}. One public book read."""
+        from src import pmus_sports_rewards as R
+        spec = self.v.spec(slug)
+        if not spec:
+            return {"why": "no_spec"}
+        tick = D(str(spec["tick"]))
+        book = (self._reward_get()(f"/v1/markets/{slug}/book") or {}
+                ).get("marketData") or {}
+        bids, asks = R.book_sides(book)
+        if not bids or not asks:
+            return {"why": "no_two_sided_book"}
+        bb, ba = D(str(bids[0][0])), D(str(asks[0][0]))
+        depth = max(0, int(RN1.DEPTH_TICKS))
+        yes_px = bb - depth * tick
+        no_px = (ONE - ba) - depth * tick
+        if not (D(0) < yes_px < ONE and D(0) < no_px < ONE):
+            return {"why": "no_room_for_a_bid"}
+        qty = rn1_max_clip()
+        est = R.quote_estimate(book, per, float(yes_px), float(no_px),
+                               float(qty), float(tick))
+        cap = qty * (yes_px + no_px)
+        rate = float(est.get("est_usd_per_hour") or 0.0)
+        return {"usd_per_hour": round(rate, 6),
+                "capital_usd": str(cap),
+                "per_dollar_hour": round(rate / float(cap), 6)
+                if cap > 0 else 0.0,
+                "share": est.get("share"),
+                "max_spread_ok": est.get("max_spread_ok")}
+
+    def rn1_join_touch(self, slug: str, mk: Dict[str, Any],
+                       bbo: Mapping[str, Any], tick: D, rng: Any,
+                       now: float) -> Optional[str]:
+        """None = this market's bids may rest at the touch this pass (see
+        RN1_JOIN_TOUCH); otherwise why not. Records the answer for the
+        reactive pull and logs each change once."""
+        joined = getattr(self, "_rn1_joined", None)
+        if joined is None:
+            joined = self._rn1_joined = {}
+        why: Optional[str] = None
+        if not RN1_JOIN_TOUCH:
+            why = "off"
+        else:
+            spread = D(str(bbo["ask"])) - D(str(bbo["bid"]))
+            last_jump = float(mk.get("jump_pause_until") or 0) - JUMP_PAUSE_S
+            if spread < max(2, RN1_JOIN_MIN_SPREAD_TICKS) * D(str(tick)):
+                why = "spread_too_tight"
+            elif rng is None or float(rng) > RN1_JOIN_MAX_RANGE_USD:
+                why = "price_moving"
+            elif mk.get("jump_pause_until") and \
+                    time.time() - last_jump < RN1_JOIN_CALM_S:
+                why = "recent_jump"
+        was = joined.get(slug)
+        joined[slug] = why is None
+        if RN1_JOIN_TOUCH and was is not None and was != (why is None):
+            log("RN1_JOIN_TOUCH", slug=slug, joined=why is None, why=why,
+                bid=str(bbo["bid"]), ask=str(bbo["ask"]),
+                label="bids rest at the best bid while the spread is wide "
+                      "and the price is calm; one tick back otherwise")
+        return why
+
+    def rank_by_reward_share(self, scored: list,
+                             rn1_rw: Mapping[str, Any]) -> list:
+        """See RN1_RANK_SHARE. Order: programme markets with a positive
+        estimate (best per dollar first), then programme markets not yet
+        estimated (pool rate, as before), then those estimated at zero or
+        unreadable, then markets with no paying programme. Never drops a
+        candidate."""
+        cache = getattr(self, "_share_cache", None)
+        if cache is None:
+            cache = self._share_cache = {}
+        nowm = time.monotonic()
+        have = [r for r in scored if r[2] in rn1_rw]
+        todo = [r[2] for r in have
+                if not (cache.get(r[2]) and
+                        nowm - cache[r[2]][0] <= RANK_SHARE_TTL_S)]
+        # take the new ones in turn across competitions, so one deep
+        # competition with many markets cannot use up every read
+        by_comp: Dict[str, list] = {}
+        for s_ in todo:
+            by_comp.setdefault(s_.split("-")[1] if "-" in s_ else "", []
+                               ).append(s_)
+        pick: list = []
+        while by_comp and len(pick) < max(0, RANK_SHARE_NEW_PER_ROUND):
+            for comp in sorted(by_comp):
+                if len(pick) >= max(0, RANK_SHARE_NEW_PER_ROUND):
+                    break
+                pick.append(by_comp[comp].pop(0))
+                if not by_comp[comp]:
+                    del by_comp[comp]
+        for s_ in pick:
+            try:
+                got = self._reward_share_score(s_, rn1_rw[s_])
+            except Exception as exc:                      # noqa: BLE001
+                got = {"why": "share_error:%s" % type(exc).__name__}
+            cache[s_] = (nowm, got)
+
+        def cls(r: tuple) -> tuple:
+            slug = r[2]
+            if slug not in rn1_rw:
+                return (3, 0.0)
+            hit = cache.get(slug)
+            if not hit or nowm - hit[0] > RANK_SHARE_TTL_S:
+                return (1, -float(rn1_rw[slug]["pool_rate_usd_s"]))
+            v = float(hit[1].get("per_dollar_hour") or 0.0)
+            return (0, -v) if v > 0 else (2, 0.0)
+        out = sorted(scored, key=lambda r: (cls(r), r))
+        top = [(r[2], (cache.get(r[2]) or (0, {}))[1]) for r in out[:4]]
+        key = json.dumps([(s_, o.get("per_dollar_hour")) for s_, o in top])
+        if key != getattr(self, "_share_rank_logged", None):
+            self._share_rank_logged = key
+            log("RN1_SHARE_RANK", candidates=len(scored),
+                with_paying_programme=len(have),
+                estimated=sum(1 for r in have if cache.get(r[2])),
+                first=[{"slug": s_,
+                        "per_dollar_hour": o.get("per_dollar_hour"),
+                        "usd_per_hour": o.get("usd_per_hour"),
+                        "capital_usd": o.get("capital_usd"),
+                        "why": o.get("why")} for s_, o in top],
+                label="THEORETICAL reward of our own quote per dollar "
+                      "committed; ranking only, not a payment")
+        return out
+
     def rank_net(self, scored: list) -> list:
         """Reorder selection candidates by src/pmus_sports_phase.opportunity:
         the marginal test's net for a first bid on the better side, plus the
@@ -6157,6 +6354,8 @@ class Engine:
                 0 if r[2] in rn1_rw else 1,
                 -rn1_rw[r[2]]["pool_rate_usd_s"] if r[2] in rn1_rw else 0,
                 r))
+            if RN1_RANK_SHARE:
+                scored = self.rank_by_reward_share(scored, rn1_rw)
             n_all = len(scored)
             if RN1_REWARD_ONLY:
                 scored = [r for r in scored if r[2] in rn1_rw]

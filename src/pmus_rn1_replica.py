@@ -78,6 +78,17 @@ RESIDUAL_CAP_USD = _d("PMUS_RN1_RESIDUAL_CAP_USD", "3")
 PER_MARKET_USD = _d("PMUS_RN1_PER_MARKET_USD", "8")
 EXTEND_MAX_UP = _d("PMUS_RN1_EXTEND_MAX_UP", "0.02")
 REFILL_COOLDOWN_S = _f("PMUS_RN1_REFILL_COOLDOWN_S", "60")
+# A BALANCED POSITION IS A FRESH ENTRY (owner 2026-11-25: "Separate
+# fresh-entry restrictions from genuine same-side inventory extensions").
+# Without this, a market holding 3 YES and 3 NO (every pair complete,
+# nothing unpaired) is treated as an extension: its next bid is capped at
+# the LIFETIME average price of that side + EXTEND_MAX_UP, so after the
+# market moves the bot cannot quote it again. With 1, equal YES and NO is
+# role "open" with no such ceiling; the ceiling applies only to the side
+# that is already heavier (a real same-side addition). Every cap, the
+# cooldown and the pair-cost limit are unchanged. 0 = as before.
+BALANCED_IS_OPEN = os.getenv("PMUS_RN1_BALANCED_IS_OPEN",
+                             "0").strip() == "1"
 REPRICE_TICKS = _i("PMUS_RN1_REPRICE_TICKS", "1")
 # CAMPAIGN-WIDE bounds across every RN1 market (owner 2026-11-22: they were
 # only implied by MAX_MARKETS x per-market caps, but lone-leg markets can
@@ -291,12 +302,14 @@ def quotes(*, yes_bid: Any, yes_ask: Any, tick: Any,
             # OPEN (flat) or EXTEND (heavier / equal side): accumulate,
             # bounded by unmatched cost; replenish after a cool-down
             qty = qty0
-            role = "open" if p[s] == 0 else "extend"
+            fresh = p[s] == 0 or (p[s] == p[o] and bool(
+                k.get("balanced_is_open", BALANCED_IS_OPEN)))
+            role = "open" if fresh else "extend"
             last = lf.get(s)
             if last is not None and now - float(last) < cool:
                 out["why_" + s] = "refill_cooldown"
                 continue
-            if p[s] > 0:
+            if p[s] > 0 and not fresh:
                 avg_s = cs[s] / p[s]
                 if px > avg_s + up:
                     px = _floor(avg_s + up, t)  # don't chase it up

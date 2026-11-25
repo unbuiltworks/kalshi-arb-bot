@@ -532,3 +532,23 @@ def test_an_accent_does_not_hide_a_team_name(monkeypatch):
         lambda p: [ev] if p == "/events?slug=mex-que-nec-2026-11-22" else [],
         "atc-lmx-que-nec-2026-11-22-draw", pmk)
     assert got == "D1"
+
+
+def test_unknown_esports_format_first_map_setting(monkeypatch):
+    """Off by default: every unknown format is refused. On: only a match
+    with no map won yet may open; anything later is still refused, and a
+    published format keeps its own rule."""
+    late = M.esports_late
+    assert late({"score": "0-0", "period": "Map 1"}) == \
+        "esports_format_unknown"
+    monkeypatch.setattr(M, "ESPORTS_UNKNOWN_FIRST_MAP", True)
+    assert late({"score": "0-0", "period": "Map 1"}) is None
+    assert late({"score": "0-0", "period": "Live"}) is None
+    for st in ({"score": "1-0", "period": "Map 2"},
+               {"score": "1-1", "period": "Map 3"},
+               {"score": "0-0", "period": "Map 2"},
+               {"score": "", "period": "Map 1"},
+               {"period": "Map 1"}):
+        assert late(st) == "esports_format_unknown"
+    assert late({"score": "0-0", "bestOf": 1}) == "esports_deciding_map"
+    assert late({"score": "1-0", "bestOf": 3}) == "esports_deciding_map"
