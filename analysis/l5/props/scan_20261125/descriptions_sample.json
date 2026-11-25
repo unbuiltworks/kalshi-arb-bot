@@ -1,0 +1,112 @@
+{
+ "basketball_team_full_game_total": {
+  "slug": "tsc-nba-bos-was-2026-11-24-229pt5",
+  "title": "Over 229.5 total points",
+  "description": "This market will settle to Yes if BOS Celtics and WAS Wizards combine for over 229.5 points in the BOS Celtics vs WAS Wizards professional basketball game scheduled for November 24, 2026 at 8:00PM ET (as of the listing of the event's first instrument). Overtime is included if played. If the game is delayed, postponed, suspended or otherwise rescheduled to a date and time not within 48 hours of the originally scheduled date and time, the market will settle to the last fair market price. Outcome sourced from the relevant governing body."
+ },
+ "basketball_team_total_points": {
+  "slug": "tsc-nba-bos-was-2026-11-24-tt-bos-fg-120pt5",
+  "title": "Boston Celtics over 120.5 total points",
+  "description": "This market will settle to Yes if BOS Celtics scores over 120.5 points in the BOS Celtics vs WAS Wizards professional basketball game scheduled for November 24, 2026 at 8:00PM ET (as of the listing of the event's first instrument). Overtime is included if played. If the game is delayed, postponed, suspended or otherwise rescheduled to a date and time not within 48 hours of the originally scheduled date and time, the market will settle to the last fair market price. Outcome sourced from the relevant governing body."
+ },
+ "basketball_team_full_game_winner": {
+  "slug": "aec-nba-bos-was-2026-11-24",
+  "title": "Boston Celtics vs Washington Wizards",
+  "description": "This market will settle to the winner of the BOS Celtics vs WAS Wizards professional basketball game scheduled for November 24, 2026 at 8:00PM ET (as of the listing of the event's first instrument). Overtime is included if played. If the game is delayed, postponed, suspended or otherwise rescheduled to a date and time not within two days of the originally scheduled date and time, the market will settle to the last fair market price. Outcome sourced from the relevant governing body."
+ },
+ "basketball_team_full_game_spread": {
+  "slug": "asc-nba-bos-was-2026-11-24-neg-1pt5",
+  "title": "Boston Celtics wins by over 1.5 points",
+  "description": "This market will settle to Yes if Boston Celtics covers a -1.5 point spread in the Boston Celtics vs Washington Wizards professional basketball game scheduled for November 24, 2026 at 8:00PM ET (as of the listing of the event's first instrument). Overtime is included if played. If the game is delayed, postponed, suspended or otherwise rescheduled to a date and time not within 48 hours of the originally scheduled date and time, the market will settle to the last fair market price. Outcome sourced from the relevant governing body."
+ },
+ "basketball_player_points": {
+  "slug": "astatc-nba-bos-was-2026-11-24-pts-trayou-gte10",
+  "title": "Trae Young 10+ points",
+  "description": "This market will settle to Yes if Trae Young records 10 or more points in the BOS Celtics vs WAS Wizards professional basketball game scheduled for November 24, 2026 at 8:00PM ET (as of the listing of the event's first instrument). Overtime is included if played. The listed player must participate in the game by taking the court for any amount of playing time; otherwise, the market will settle to the last fair market price. The market will settle based on the first official game book released after the conclusion of the game. For purposes of this market, stat corrections enforced after settlement will not count. If the game is delayed, postponed, suspended or otherwise rescheduled to a date and time not within 48 hours of the originally scheduled date and time, the market will settle to the last fair market price. Outcome sourced from the relevant governing body."
+ },
+ "basketball_player_double_double": {
+  "slug": "astatc-nba-bos-was-2026-11-24-dd-ajdyb",
+  "title": "AJ Dybantsa double-double",
+  "description": "This market will settle to Yes if AJ Dybantsa records a double-double (10 or more in at least two of the following statistical categories: points, rebounds, assists, steals, or blocks) in the BOS Celtics vs WAS Wizards professional basketball game scheduled for November 24, 2026 at 8:00PM ET (as of the listing of the event's first instrument). Overtime is included if played. The listed player must participate in the game by taking the court for any amount of playing time; otherwise, the market will settle to the last fair market price. The market will settle based on the first official game book released after the conclusion of the game. For purposes of this market, stat corrections enforced after settlement will not count. If the game is delayed, postponed, suspended or otherwise rescheduled to a date and time not within 48 hours of the originally scheduled date and time, the market will settle to the last fair market price. Outcome sourced from the relevant governing body."
+ },
+ "basketball_game_race_to_points": {
+  "slug": "atc-nba-bos-was-2026-11-24-race110-none",
+  "title": "Neither Team",
+  "description": "This market will settle to the team that records 110 points first in the BOS Celtics vs WAS Wizards professional basketball game scheduled for November 24, 2026 at 8:00PM ET (as of the listing of the event's first instrument). Overtime is included if played. If neither team records 110 points, the market will settle to Neither Team. If the game is delayed, postponed, suspended or otherwise rescheduled to a date and time not within 48 hours of the originally scheduled date and time, the market will settle to the last fair market price. Outcome sourced from the relevant governing body."
+ },
+ "basketball_team_first_half_spread": {
+  "slug": "asc-nba-bos-was-2026-11-24-fh-neg-11pt5",
+  "title": "Boston Celtics wins by over 11.5 points in 1st half",
+  "description": "This market will settle to Yes if Boston Celtics covers a -11.5 point spread in the first half of the Boston Celtics vs Washington Wizards professional basketball game scheduled for November 24, 2026 at 8:00PM ET (as of the listing of the event's first instrument). If the game is delayed, postponed, suspended or otherwise rescheduled to a date and time not within 48 hours of the originally scheduled date and time, the market will settle to the last fair market price. Outcome sourced from the relevant governing body."
+ },
+ "basketball_team_first_quarter_winner": {
+  "slug": "atc-nba-bos-was-2026-11-24-q1-bos",
+  "title": "Boston Celtics wins 1st quarter",
+  "description": "This market will settle to the winner of the first quarter in the BOS Celtics vs WAS Wizards professional basketball game scheduled for November 24, 2026 at 8:00PM ET (as of the listing of the event's first instrument). If both teams score the same number of points in the first quarter, the market will settle to Tie. If the game is delayed, postponed, suspended or otherwise rescheduled to a date and time not within 48 hours of the originally scheduled date and time, the market will settle to the last fair market price. Outcome sourced from the relevant governing body."
+ },
+ "football_player_receiving_yards": {
+  "slug": "astatc-nfl-gb-lar-2026-11-25-recyd-matgol-gte30",
+  "title": "Matthew Golden 30+ receiving yards",
+  "description": "This market will settle to Yes if Matthew Golden records 30 or more receiving yards in the Green Bay Packers vs Los Angeles Rams professional football game scheduled for November 25, 2026 at 8:00PM ET (as of the listing of the event's first instrument). Overtime is included if played. The listed player must participate in the game by taking at least one snap on offense, defense, or special teams, with a snap nullified by penalty counting; otherwise, the market will settle to the last fair market price. The market will settle based on the official box score at the conclusion of the game. For purposes of this market, stat corrections enforced after settlement will not count. If the game is delayed, postponed, suspended or otherwise rescheduled to a date and time not within 48 hours of the originally scheduled date and time, the market will settle to the last fair market price. Outcome sourced from the relevant governing body."
+ },
+ "football_player_first_touchdown": {
+  "slug": "astatc-nfl-gb-lar-2026-11-25-firsttd-kyrwil",
+  "title": "Kyren Williams scores the first touchdown",
+  "description": "This market will settle to the player who scores the first touchdown of the Green Bay Packers vs Los Angeles Rams professional football game scheduled for November 25, 2026 at 8:00PM ET (as of the listing of the event's first instrument). Overtime is included if played. The listed player must participate in the game by taking at least one snap on offense, defense, or special teams, with a snap nullified by penalty counting; otherwise, the market will settle to the last fair market price. If no touchdown is scored, the market will settle to None. The market will settle based on the official box score at the conclusion of the game. For purposes of this market, stat corrections enforced after settlement will not count. If the game is delayed, postponed, suspended or otherwise rescheduled to a date and time not within 48 hours of the originally scheduled date and time, the market will settle to the last fair market price. Outcome sourced from the relevant governing body."
+ },
+ "soccer_team_full_time_winner": {
+  "slug": "atc-ucl-sab1-fcb-2026-11-25-sab1",
+  "title": "Sabah FK (Reg. Time)",
+  "description": "This market will settle to the winner at the end of 90 minutes plus stoppage time in the Sabah FK vs FC Barcelona UEFA Champions League match scheduled for November 25, 2026 at 12:45PM ET (as of the listing of the event's first instrument). If the match is tied following 90 minutes plus stoppage time, the market will settle to Tie. If the match is delayed, postponed, suspended or otherwise rescheduled to a date and time not within two days of the originally scheduled date and time, the market will settle to the last fair market price. Outcome sourced from UEFA."
+ },
+ "soccer_team_full_game_spread": {
+  "slug": "asc-ucl-sab1-fcb-2026-11-25-neg-2pt5",
+  "title": "Sabah FK wins by over 2.5 goals",
+  "description": "This market will settle to Yes if Sabah FK covers a -2.5 goal spread at the end of 90 minutes plus stoppage time in the Sabah FK vs FC Barcelona UEFA Champions League match scheduled for November 25, 2026 at 12:45PM ET (as of the listing of the event's first instrument). If the match is delayed, postponed, suspended or otherwise rescheduled to a date and time not within two days of the originally scheduled date and time, the market will settle to the last fair market price. Outcome sourced from UEFA Champions League."
+ },
+ "hockey_team_full_game_spread": {
+  "slug": "asc-nhl-veg-edm-2026-11-24-pos-3pt5",
+  "title": "Oilers wins by over 3.5 goals",
+  "description": "This market will settle to Yes if Golden Knights covers a +3.5 goal spread in the Golden Knights vs Oilers NHL game scheduled for November 24, 2026 at 8:00PM ET (as of the listing of the event's first instrument). Overtime is included if played. If a shootout determines the winner, the shootout will count as one goal for the winning team. If the game is delayed, postponed, suspended or otherwise rescheduled to a date and time not within 48 hours of the originally scheduled date and time, the market will settle to the last fair market price. Outcome sourced from NHL."
+ },
+ "hockey_team_regulation_winner": {
+  "slug": "atc-nhl-veg-edm-2026-11-24-reg-draw",
+  "title": "Tie in regulation",
+  "description": "This market will settle to the winner at the end of regulation (60 minutes) in the VGK Golden Knights vs EDM Oilers NHL game scheduled for November 24, 2026 at 8:00PM ET (as of the listing of the event's first instrument). If the game is tied after regulation (60 minutes), the market will settle to Tie. Overtime and any shootout are not included if played. If the game is delayed, postponed, suspended or otherwise rescheduled to a date and time not within 48 hours of the originally scheduled date and time, the market will settle to the last fair market price. Outcome sourced from NHL."
+ },
+ "hockey_player_goals": {
+  "slug": "astatc-nhl-veg-edm-2026-11-24-goals-leodra-gte1",
+  "title": "Leon Draisaitl 1+ goals",
+  "description": "This market will settle to Yes if Leon Draisaitl records 1 or more goals in the VGK Golden Knights vs EDM Oilers NHL game scheduled for November 24, 2026 at 8:00PM ET (as of the listing of the event's first instrument). Overtime is included if played. Goals scored in a shootout do not count for purposes of this market. If the listed player does not record any time on ice, the market will settle to the last fair market price. For purposes of this market, stat corrections enforced after settlement will not count. If the game is delayed, postponed, suspended or otherwise rescheduled to a date and time not within 48 hours of the originally scheduled date and time, the market will settle to the last fair market price. Outcome sourced from NHL."
+ },
+ "tennis_match_winner": {
+  "slug": "aec-utr-meharj-stajer-2026-11-22",
+  "title": "Mehrotra, Arjun vs Staley, Jera",
+  "description": "This market will settle to the winner of the Arjun Mehrotra vs Jera Staley UTR match scheduled for November 22, 2026 at 6:00PM ET (as of the listing of the event's first instrument). If the match does not begin due to a walkover, withdrawal, or cancellation, the market will settle to the last fair market price. If a player retires or is disqualified during the match, the market will settle to the official winner of the match. If the match is delayed, postponed, suspended or otherwise rescheduled to a date and time not within two weeks of the originally scheduled date and time, the market will settle to the last fair market price. Outcome sourced from UTR."
+ },
+ "soccer_player_goals": {
+  "slug": "astatc-mls-sje-hou-2026-11-24-g-agures-gte1",
+  "title": "Agust\u00edn Resch 1+ goals",
+  "description": "This market will settle to Yes if Agust\u00edn Resch scores 1 or more goals in the San Jose Earthquakes vs Houston Dynamo MLS match scheduled for November 24, 2026 at 10:00PM ET (as of the listing of the event's first instrument). Extra time is included if played. Penalty shootouts are not included if played. Own goals do not count. If the listed player does not start the match, the market will settle to the last fair market price. For purposes of this market, stat corrections enforced after settlement will not count. If the match is delayed, postponed, suspended or otherwise rescheduled to a date and time not within 48 hours of the originally scheduled date and time, the market will settle to the last fair market price. Outcome sourced from MLS."
+ },
+ "esports_series_map_handicap": {
+  "slug": "asc-cs2-maybe-glt-2026-11-25-hcap-neg-1pt5",
+  "title": "maybe wins by over 1.5 maps",
+  "description": "This market will settle to Yes if maybe covers a -1.5 maps handicap in the maybe vs GLITCH CS2 match scheduled for November 25, 2026 at 4:00AM ET (as of the listing of the event's first instrument). If the match does not begin due to a forfeit or disqualification, the market will settle to the last fair market price. If a team forfeits, concedes, or is disqualified during the match, and the market can be unconditionally settled based on play already completed, the market will settle accordingly; otherwise the market will settle to the last fair market price. If the match is delayed, postponed, suspended or otherwise rescheduled to a date and time not within 48 hours of the originally scheduled date and time, the market will settle to the last fair market price. Outcome sourced from Valve."
+ },
+ "table_tennis_match_total_sets": {
+  "slug": "tsc-setkameua-melole-khaser-2026-11-25-st-4pt5",
+  "title": "Over 4.5 sets",
+  "description": "This market will settle to Yes if over 4.5 sets are played in the Melashenko Oleksandr vs Khandetskyi Serhii Setka Cup Ukraine Men match scheduled for November 24, 2026 at 9:25PM ET (as of the listing of the event's first instrument). If the match does not begin due to a walkover, withdrawal, or cancellation, the market will settle to $0.50. If a player retires during the match and the market can be unconditionally settled based on play already completed, the market will settle accordingly; otherwise the market will settle to $0.50. If the match is delayed, postponed, suspended or otherwise rescheduled to a date and time not within 48 hours of the originally scheduled date and time, the market will settle to $0.50. Outcome sourced from Setka Cup Ukraine Men."
+ },
+ "table_tennis_set_1_winner": {
+  "slug": "astatc-setkameua-melole-khaser-2026-11-25-sw1",
+  "title": "Set 1 Winner",
+  "description": "This market will settle to the winner of Set 1 in the Melashenko Oleksandr vs Khandetskyi Serhii Setka Cup Ukraine Men match scheduled for November 24, 2026 at 9:25PM ET (as of the listing of the event's first instrument). If the match does not begin due to a walkover, withdrawal, or cancellation, the market will settle to $0.50. If a player retires during the match and the market can be unconditionally settled based on play already completed, the market will settle accordingly; otherwise the market will settle to $0.50. If the match is delayed, postponed, suspended or otherwise rescheduled to a date and time not within 48 hours of the originally scheduled date and time, the market will settle to $0.50. Outcome sourced from Setka Cup Ukraine Men."
+ },
+ "esports_player_kills": {
+  "slug": "astatc-cs2-imp-fly-2026-11-25-k-alista-gte27",
+  "title": "aliStair 27+ kills",
+  "description": "This market will settle to Yes if aliStair records 27 or more kills across the first 2 games in the Imperial vs FlyQuest CS2 match scheduled for November 25, 2026 at 3:00AM ET (as of the listing of the event's first instrument). If aliStair does not play in any of the first 2 games of the match, the market will settle to the last fair market price. If the match does not begin due to a forfeit or disqualification, the market will settle to the last fair market price. If a team forfeits, concedes, or is disqualified during the match, and the market can be unconditionally settled based on play already completed, the market will settle accordingly; otherwise the market will settle to the last fair market price. If the match is delayed, postponed, suspended or otherwise rescheduled to a date and time not within 48 hours of the originally scheduled date and time, the market will settle to the last fair market price. Outcome sourced from Valve."
+ }
+}
