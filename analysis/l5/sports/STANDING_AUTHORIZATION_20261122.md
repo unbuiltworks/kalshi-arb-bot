@@ -1383,3 +1383,13 @@ Action, under the standing instruction to stop if a term is not held:
 completion bids may continue for the already-authorized 2-hour grace
 (to 19:11 UTC, inside the authorized 21:58). Not resumed without the
 owner's decision.
+
+Confirmed 17:13 UTC: lock state `window_completions_only` (new exposure
+locked, completions allowed to 19:11 UTC); watchdog open_orders 1 — the
+ATP Joagui–Lucamb completing NO bid 0.55 × 2; all opening orders gone.
+
+Fix prepared, not deployed: release `0abb52a385d639e3c779f66a4de57f23af1869f9`
+(branch `release/pmus-sports-rn1-0abb52a38`, code `24aff0435`) =
+`5425d94d3` + under the live slate a pre-game market gets no opening or
+extension bid (completions continue). Regression 5,651 passed, same 24
+unrelated failures; test added for the exact case.
