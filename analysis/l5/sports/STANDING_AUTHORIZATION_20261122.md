@@ -1214,3 +1214,28 @@ Carried out (section 47), 25 Nov:
   $5, unpaired $6 / $3, campaign spend $30.
 - Not yet seen at the time of writing: the sports bot's first hourly
   account audit on the new build.
+
+## 48. Owner's receipt for the manual NHL trade — 25 Nov, about 12:20 UTC
+
+Owner supplied the venue app's receipt: Golden Knights vs Oilers, bought
+$25 at 69%, sold at 89%, profit +$6.55, payout $31.55, dated 24 Nov (local
+date). It agrees with the production records (35.46 at 0.69, $24.9974
+with fee; sold at 0.89, $31.5594; +$6.56). The receipt shows no order id.
+Owner: "Use these details to locate the original order through
+authenticated venue execution or transaction history. Preserve the
+fail-closed accounting protections."
+
+Finding: the buy order id exists in the venue's account activity feed
+(each trade row carries our side's execution record with its order), which
+the sports bot reads every hour; no running build prints it. I have no
+signed access of my own, and forking the production environment to run a
+read would start second copies of the money-capable services, so that was
+not done.
+
+Prepared, not deployed: sports release
+`8ec438d52ed0e4e914aa8e3060d12bf4c5ccb616` (branch
+`release/pmus-sports-rn1-8ec438d52`, code `86c5bf455`) = the running
+`bc3a5b6b9` plus one read-only log line (`MANUAL_ORDER_IDS`) listing the
+order ids behind manual sports trades from that existing walk. No order
+path, no venue call of its own. Regression 5,643 passed, same 24
+unrelated failures. Needs deployment approval (locked).
