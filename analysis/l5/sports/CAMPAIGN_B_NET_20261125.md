@@ -211,3 +211,43 @@ unrelated failures (`regression/full_suite_net_rank.txt`). Rollback:
   figure falls by about $4.00 and the room rises to about $17.40. If it
   settles NO, nothing changes.
 - **If no market turns positive in the window, the bot quotes nothing.**
+
+## Refresh of every eligible sports market, 23:10 UTC — immediate campaign
+
+Scan of every live sports market and every market starting within 12 hours
+(`rewards/scan_20261125/net_all_2310.json`). Cricket and esports, including
+eBattles, are excluded. Of 1,638 markets, 574 have a reward programme
+paying now and 287 have a two-sided book; 30 model positive. Same model as
+the bot, with doubles charged 8c and 6c.
+
+- **In play: none usable.** The only positive market is UTR
+  `cekkuz-avdfil` at 0.79/0.83 (+$0.51/h at 5 contracts). It is outside
+  the 0.30–0.70 price band, so it is not selected. College basketball
+  carries no programme; NBA and WTA singles are negative.
+- **Before the match: positive now.** These markets have almost empty
+  books with a paying programme:
+
+  | Market | Book | Best | Reward /h | Fill cost /h | Net /h |
+  |---|---|---|---|---|---|
+  | `atpdb-delanedelane-falcksuarez` (starts 02:00) | 0.35/0.36 | 2 behind | 1.12 | 0.36 | +0.76 |
+  | `setkameua-usdan-slavad` | 0.44/0.45 | 1 behind | 0.74 | 0.11 | +0.63 |
+  | `setkameua-mosvas-kozden` | 0.51/0.52 | 2 behind | 0.56 | 0.21 | +0.35 |
+  | `setkameua-slomyk-fasiva`, `-kimdmy-elfiva`, `-novrus-stoole` | ~0.50 | 2 behind | ~0.54 | 0.21 | +0.33 |
+  | five more Setka | | 2 behind | ~0.43 | 0.21 | +0.22 |
+
+  Two markets at a time model at about +$1.0 to +$1.4 an hour net, about
+  $1.6 to $1.9 gross reward an hour. That clears the $1 a day payout
+  within the first hour, if the model is paid. Fill rates before the match
+  are not measured: the in-play rate is used, which is probably
+  pessimistic. The bot's existing kickoff pull (300 s) withdraws opening
+  bids before each start.
+- **Change needed:** `PMUS_TWO_SIDED_SLATE` live → `both`, so the bot
+  quotes before the match as well as in play. In-play doubles from 02:00
+  are then picked up automatically when they rank positive. The
+  competition list (setkameua, setkamemd, utr, atp, wta, atpdb, wtadb)
+  already covers every positive market outside esports and cricket. No
+  other setting changes.
+- **Capital:** two such markets rest about $5 to $7, including the
+  deeper level, within the $13.42 room.
+- **Window:** 23:30 to 01:30 UTC, the earliest after a locked deploy and
+  its checks (about 10 minutes).
