@@ -1291,3 +1291,25 @@ Strategic direction; not an authorization. The earlier rule "Do not
 increase unpaired inventory caps" (24 Nov) is in tension with it and is
 changed only if the owner approves specific new caps. Campaign of section
 49 continues unchanged until then.
+
+## 51. Mid-campaign configuration change authorized — 25 Nov, about 14:35 UTC
+
+Owner, typed: "Authorized for the remainder of this campaign: two
+contracts before the match and in play, four simultaneous markets, add ATP
+and WTA, depth filter 3. Keep mandatory external reference-price tests
+off. Preserve same-side accumulation across all approved competitions.
+Keep competitive quoting, intelligent cancellation, dynamic sizing,
+10-second replenishment and inventory management active. All existing
+capital limits, exposure caps, loss stops and watchdog protections remain
+unchanged. Measure inventory acquisition costs, same-side fills, exposure
+and settled net profitability. No further development."
+
+Differs from my request in one point: the margin test for same-side
+additions stays OFF (`PMUS_RN1_EXTEND_EV` unchanged at 0), so additions
+remain price-blind in every competition, bounded by average cost + 2c and
+the caps. Set: `PMUS_RN1_PREGAME_QTY=2`, `PMUS_RN1_LIVE_QTY=2`,
+`PMUS_TWO_SIDED_MAX_MARKETS=4`, `PMUS_TWO_SIDED_MAX_TRACKED=8`,
+`PMUS_TWO_SIDED_MIN_TOUCH_QTY=3`, competitions
+setkameua,setkamemd,utr,atp,wta. Window (to 19:58 UTC), $13 account
+limit, $3 / $6 unpaired caps, $8 a market, $60 spend, $4 loss stop, $5
+daily halt unchanged. Largest order is now 2 contracts.
