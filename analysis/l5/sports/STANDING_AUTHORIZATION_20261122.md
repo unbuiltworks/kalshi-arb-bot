@@ -1406,3 +1406,8 @@ Release `a46a41b6a244e8907592cb893f83de5cd499433b` (= `5b4584db4` + issue
 #252 opt-in, left OFF). Lock back to
 `window:2026-11-25T13:58:00Z/2026-11-25T19:58:00Z` (grace 2 h as before).
 `PMUS_RN1_EXTEND_MAX_UP` unchanged at 0.02. Rollback: `5425d94d3`.
+
+Carried out (section 55): lock set back to the 19:58 window (no restart),
+release `a46a41b6a` deployed (deployment `621db2a0`, live 18:17:21 UTC).
+Boot 18:17:27: new exposure and completions unlocked, window to 19:58 UTC,
+grace 7,200 s.
