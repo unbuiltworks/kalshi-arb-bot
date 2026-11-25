@@ -1259,3 +1259,17 @@ completions-only until 21:58 UTC. Terms as in
 `CONSOLIDATED_AUTHORIZATION_REQUEST_20261125.md`, "Final form". Gate
 before anything opens: the ledger must read about $2.53 after the anchor
 change; otherwise the bot stays locked and the owner is told.
+
+Carried out (section 49), 25 Nov:
+
+- 13:30 UTC ledger: anchor 333.0402, limit 13 (restart). Heartbeats 13:32
+  and 13:33: value 330.5058, figure **2.5344**, room 10.4656, no refusal —
+  exactly the reconciled expectation.
+- 13:35 UTC sports settings set (one restart, deployment `64a59ac8`):
+  8 markets / 16 tracked, spend 60, join-touch 1, share ranking 1,
+  balanced-is-open 1, batched fill detection 1, slots-count-inventory 0,
+  cooldown 10, completion grace 7200, competitions setkameua, setkamemd,
+  utr, lock `window:2026-11-25T13:58:00Z/2026-11-25T19:58:00Z`.
+- Boot 13:36:00: lock `window_not_started`, window and grace as set,
+  cooldown 10, spend 60, 8/16 markets, competitions as set, 1 contract.
+- Scheduled checks re-enabled at :05 and :35.
