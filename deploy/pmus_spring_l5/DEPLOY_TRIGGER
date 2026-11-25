@@ -288,3 +288,4 @@
 2026-11-22T16:20Z registry freshness follows the trading loop's own progress (a wedged loop goes STALE to the watchdog).
 2026-11-22T16:45Z RN1 reward-aware selection ranking; marginal-edge test for adding to an unpaired side.
 2026-11-22T17:05Z stalled loop reports manages_own_resting=false with a fresh stamp, so the watchdog both latches and can cancel the listed orders.
+2026-11-25T23:55Z as 7a0535450 plus: with net ranking on, no opening in any market whose fresh net is not positive.
