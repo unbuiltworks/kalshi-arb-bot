@@ -3711,3 +3711,6 @@ deploy: 2026-11-10 window-owner binding gate, halted and disarmed
 # two cost attestations (issue #251). OFF until L5_SPORTS_FILLS_URL and
 # L5_SPORTS_ATTEST_FLOOR_UTC_DAY are both set by the owner; deploying this
 # changes no number. No order path/limit/halt/arming change.
+# 2026-11-25 bot-only and total-account drawdown figures (candidate, not
+# approved). OFF unless L5_PORTFOLIO_TOTAL_MAX_DRAWDOWN_USD is set;
+# deploying this changes no number. No order path/limit/halt/arming change.
