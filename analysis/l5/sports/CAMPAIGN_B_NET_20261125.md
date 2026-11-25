@@ -187,3 +187,27 @@ unrelated failures (`regression/full_suite_net_rank.txt`). Rollback:
 > settings and limits in CAMPAIGN_B_NET_20261125.md (ledger account limit
 > $20; loss stop and daily halt $10; sports lane $20 unchanged); crypto
 > unchanged and disarmed.
+
+## Refresh, 22:55 UTC
+
+- **Now: no positive market.** All 12 in-scope paying books that are in
+  play have a negative expected net (`rewards/scan_20261125/net_2220.json`,
+  doubles losses charged at 8c and 6c). The doubles markets that modelled
+  positive at 21:13 have ended. The only doubles market in play is ATP
+  doubles at 0.93/0.94, which is close to decided and negative.
+- **Pre-match books score about zero.** The programmes pay in play and
+  the books thicken at the start, so a market can only be judged once it
+  is in play. That is what the bot does each selection round.
+- **Scheduled doubles matches with a paying in-play programme (pool $23 an
+  hour each, target 4,000):** 02:00, 03:10, 04:00, 04:20 ×3, 04:40,
+  05:10 · 09:10 ×2, 10:20 ×2, 11:00 ×2, 11:10 ×2, 11:30 ×2, 12:20 ×2 ·
+  15:40, 16:00 ×4, 16:50 · WTA doubles 20:00, 21:10 (26 Nov, UTC).
+- **Window: 11:00–13:00 UTC 26 Nov.** It overlaps ten ATP doubles
+  matches, more than any other two hours. The alternatives are
+  04:15–06:15 (six matches) and 16:00–18:00 (six).
+- **Capital:** the account figure is $6.58, which counts Garcar–Borvic's
+  $2.60 at zero. At the $20 limit the bot has $13.42 for resting bids plus
+  new inventory. If Garcar–Borvic settles YES before the window, the
+  figure falls by about $4.00 and the room rises to about $17.40. If it
+  settles NO, nothing changes.
+- **If no market turns positive in the window, the bot quotes nothing.**
