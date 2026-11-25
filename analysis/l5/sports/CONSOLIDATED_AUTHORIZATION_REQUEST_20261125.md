@@ -158,3 +158,40 @@ settles it (first ten minutes, above).
 
 Parts can be approved separately. A alone is safe to do now. B needs the
 buy order id. C needs A and B done and the reconciled figures reported.
+
+## Update 06:40 UTC — owner selected C2; buy order id; expansion work
+
+**C2 as prepared** (nothing set):
+
+| Service | Setting | Value |
+|---|---|---|
+| ledger | `L5_PORTFOLIO_MAX_DRAWDOWN_USD` | 13 |
+| ledger | `L5_PORTFOLIO_TOTAL_MAX_DRAWDOWN_USD` | 35 |
+| ledger | `L5_PORTFOLIO_ANCHOR_USD` | 326.4782 |
+| ledger | `L5_MANUAL_ATTESTED_ORDERS` | NHL sell id, NHL buy id |
+| sports | `PMUS_TWO_SIDED_MAX_MARKETS` / `MAX_TRACKED` | 8 / 16 |
+| sports | `PMUS_RN1_TOTAL_SPEND_USD` | 60 |
+| sports | `PMUS_RN1_RANK_SHARE`, `PMUS_RN1_JOIN_TOUCH`, `PMUS_RN1_BALANCED_IS_OPEN`, `PMUS_TWO_SIDED_FILL_LIST_POLL` | 1 |
+| sports | `PMUS_RN1_SLOTS_COUNT_INVENTORY` | 0 |
+| sports | `PMUS_RN1_REFILL_COOLDOWN_S` | 10 |
+| sports | `PMUS_TWO_SIDED_OPEN_GATE_ALLOW_SPORTS` | setkameua,setkamemd,utr |
+| sports | `PMUS_TWO_SIDED_SUBMISSION_LOCK` | `window:<start>/<end>` |
+
+Everything else as in Part C. Expected bot room at $13: about $10.47
+(eight markets rest about $7.9, leaving about $2.6 for inventory), to be
+confirmed from the ledger's own figures before the window.
+
+**NHL buy order id.** It can be recovered from authenticated venue
+history: the account activity feed the sports bot already reads every
+hour returns each trade with its execution record, and that record
+contains the order. No running build prints it (the manual-trade study
+logs totals and field names only), and I have no signed access of my own.
+Two ways to get it: the owner reads it from the venue's order history
+(minutes), or a one-line addition to that existing read logs manual order
+ids (a further sports build; not needed for Part A).
+
+**Market expansion** (NBA, NHL, NFL main-line spreads and totals;
+secondary-market discovery; per-event exposure accounting; shared-pool
+reward model): in development on the existing controller, every part off
+by default, separate from the releases in Part A. Not part of this
+request.
