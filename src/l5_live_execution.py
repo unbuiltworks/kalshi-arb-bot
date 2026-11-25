@@ -10252,7 +10252,8 @@ class FaithfulExecutor:
             return PDD.manual_commitment(
                 getattr(self, "portfolio_manual_measurement", None),
                 self.store.positions_by_market(),
-                dt.datetime.now(dt.timezone.utc).timestamp())
+                dt.datetime.now(dt.timezone.utc).timestamp(),
+                retired=self.store.state.get("retired_markets"))
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise

@@ -1662,7 +1662,8 @@ class Runner:
                    else positions)
             return PDD.manual_commitment(
                 getattr(self, "_manual_measurement", None), pos,
-                time.time() if now is None else float(now))
+                time.time() if now is None else float(now),
+                retired=self.store.state.get("retired_markets"))
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise

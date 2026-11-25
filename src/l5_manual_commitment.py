@@ -7,7 +7,7 @@ venue, and it only ever GETs one order by id (`transport.order`).
 WHAT IT PRODUCES. A `measurement` the runner stores on its tick:
 
     {"t": epoch, "orders": [{order_id_tail, market, side, filled, cost_usd,
-                             state}],
+                             state, terminal}],
      "rejected": [{order_id_tail, why}]}
 
 `l5_portfolio_drawdown.manual_commitment` turns that into dollars against
@@ -23,7 +23,10 @@ bot figure, which is the safe direction.
 
 PACE. A row is re-read at most every REREAD_S while it is not terminal and
 never again once it is terminal and accounted; at most READS_PER_STEP
-reads happen on one tick. A FULL ORDER ID IS NEVER LOGGED OR PUBLISHED from
+reads happen on one tick. The cache is in memory only: after a restart
+every attested id is read again by id, which the venue answers for a
+terminal order (`PmusTransport.order`), and the settlement side comes from
+the ledger's persisted `retired_markets`, so nothing new is stored on disk. A FULL ORDER ID IS NEVER LOGGED OR PUBLISHED from
 here: the last four characters only.
 """
 from __future__ import annotations
@@ -86,7 +89,10 @@ def parse_row(order_id: str, row: Any) -> Dict[str, Any]:
     return {"order": {"order_id_tail": PDD.order_tail(order_id),
                       "market": market, "side": side, "filled": str(cum),
                       "cost_usd": str(max(D(0), cost)),
-                      "state": prog.get("state")},
+                      "state": prog.get("state"),
+                      # a settled result is measured only from a reading
+                      # taken after the order could no longer fill
+                      "terminal": bool(prog.get("terminal"))},
             "terminal": bool(prog.get("terminal"))}
 
 

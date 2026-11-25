@@ -132,7 +132,10 @@ def test_worked_example():
     assert sp["state"] == "ON"
     # the venue states prices to four places, so the strings carry them
     num = {k: D(v) for k, v in sp.items() if k.endswith("_usd")}
-    assert num == {"total_drawdown_usd": D("22.00"),
+    assert num == {"manual_open_commitment_usd": D("19.80"),
+                   "manual_settled_net_usd": D("0"),
+                   "manual_adjustment_usd": D("19.80"),
+                   "total_drawdown_usd": D("22.00"),
                    "total_max_drawdown_usd": D("40"),
                    "total_room_usd": D("18.00"),
                    "bot_drawdown_usd": D("2.20"),
@@ -149,8 +152,9 @@ def test_worked_example():
     assert sp["manual_orders"] == [{
         "order_id_tail": "TZ73", "market": SPORT, "side": "UP",
         "filled": "66", "cost_usd": "19.8000", "counted_usd": "19.8000",
-        "state": "ORDER_STATE_FILLED"}]
-    assert sp["rejected"] == [] and "settles" in sp["labels"].lower()
+        "state": "ORDER_STATE_FILLED", "settled": False}]
+    assert sp["rejected"] == [] and sp["settled_unmeasured"] == []
+    assert "possible full win" in sp["labels"]
     assert OID not in repr(r)                    # the tail only, ever
     # without the split the same account refuses every bot
     assert P.refusal(D("298.00"), P.config(BASE), split={"state": P.OFF}) \
@@ -264,7 +268,7 @@ def test_manual_buy_is_measured_from_the_venue_row():
     assert got["order"] == {"order_id_tail": "TZ73", "market": SPORT,
                             "side": "UP", "filled": "66",
                             "cost_usd": "19.8000",
-                            "state": "ORDER_STATE_FILLED"}
+                            "state": "ORDER_STATE_FILLED", "terminal": True}
 
 
 def test_a_buy_no_order_costs_one_minus_the_wire_price():
@@ -344,10 +348,23 @@ def test_position_smaller_than_filled_counts_pro_rata():
     {SPORT: {"UP": D("0"), "DOWN": D("66")}},        # the other side only
     {"aec-other": {"UP": D("66"), "DOWN": D("0")}},
 ])
-def test_position_gone_counts_zero(pos):
+def test_position_gone_without_a_settlement_is_a_possible_full_win(pos):
+    """Not held and not retired: sold by hand, proceeds unknown. Nothing is
+    taken off the bot figure, and the most it could have won is put on."""
     got = commit(pos=pos)
     assert got["manual_commitment_usd"] == 0
     assert D(got["manual_orders"][0]["counted_usd"]) == 0
+    assert got["manual_settled_net_usd"] == D("19.80") - D("66")
+    assert got["settled_unmeasured"] == [{
+        "order_id_tail": "TZ73",
+        "why": "POSITION_NOT_HELD_AND_MARKET_NOT_RETIRED",
+        "counted_as_possible_win_usd": "-46.2000"}]
+
+
+def test_a_partly_sold_position_is_part_open_part_possible_win():
+    got = commit(pos={SPORT: {"UP": D("33"), "DOWN": D("0")}})
+    assert got["manual_commitment_usd"] == D("9.90")
+    assert got["manual_settled_net_usd"] == D("9.90") - D("33")
 
 
 def test_unreadable_positions_count_zero():
@@ -543,7 +560,11 @@ def test_runner_after_the_manual_position_settles(on, store):
     blk = r.equity_risk_lines(NOW)["portfolio_drawdown"]
     assert blk["split"]["manual_commitment_usd"] == "0"
     assert D(blk["split"]["manual_orders"][0]["counted_usd"]) == 0
-    assert blk["refusal"] == "PORTFOLIO_DRAWDOWN_LIMIT:22.00>=5"
+    # no retired row: unmeasured, so the possible win is ADDED (22 + 46.20)
+    assert D(blk["split"]["bot_drawdown_usd"]) == D("68.20")
+    assert blk["split"]["settled_unmeasured"][0]["why"] \
+        == "POSITION_NOT_HELD_AND_MARKET_NOT_RETIRED"
+    assert blk["refusal"].startswith("PORTFOLIO_DRAWDOWN_LIMIT:68.20")
 
 
 def test_runner_with_the_split_off_asks_the_venue_nothing(
@@ -641,3 +662,260 @@ def test_runner_hands_the_executor_the_measurement(on, store):
     r.executor = Ex(store)
     r.maybe_measure_manual_orders(NOW)
     assert r.executor.portfolio_manual_measurement is r._manual_measurement
+
+
+# ===================================================== after it settles
+#
+# Owner: "Manual trading must not be misclassified as bot trading losses"
+# and "Do not simply reset the anchor". The settled manual result stays
+# attributed to manual, SIGNED.
+
+RES = {"source": "VENUE_SETTLEMENT_PX", "market": SPORT}
+
+
+def settle(store, yes_value):
+    """The venue drops the position at expiry; the ledger retires it."""
+    store.reconcile_from_venue([], [])
+    out = store.retire_settled_market(SPORT, yes_value=D(yes_value),
+                                      resolution=RES)
+    assert out["retired"] is True, out
+    return store.state["retired_markets"]
+
+
+def retired_row(yes="0.0000", up="66", dn="0", origin="UNKNOWN"):
+    return {SPORT: {"origin": origin, "yes_value": yes, "up_qty": up,
+                    "dn_qty": dn, "settlement_pnl": "-66"}}
+
+
+def test_the_retired_row_of_an_adopted_sports_market_has_the_fields(store):
+    venue_holds(store)
+    row_ = settle(store, "0.0000")[SPORT]
+    assert row_["yes_value"] == "0.0000"
+    assert row_["up_qty"] == "66" and row_["dn_qty"] == "0"
+    assert row_["origin"] == "UNKNOWN"
+    assert SPORT not in store.positions_by_market()
+
+
+def test_worked_example_manual_loss_settled(store):
+    # anchor 320; manual 19.80 lost; bots lost 2.20 => value 298.00
+    venue_holds(store)
+    got = P.manual_commitment(measured(), store.positions_by_market(),
+                              NOW, settle(store, "0"))
+    assert got["manual_commitment_usd"] == 0
+    assert got["manual_settled_net_usd"] == D("19.80")
+    assert got["settled_unmeasured"] == []
+    o = got["manual_orders"][0]
+    assert o["settled"] is True and D(o["payout_usd"]) == 0
+    assert D(o["result_usd"]) == D("19.80")
+    c, s = cfgs()
+    r = P.report(D("298.00"), c, split=s, manual=got)
+    sp = r["split"]
+    assert D(sp["total_drawdown_usd"]) == D("22.00")
+    assert D(sp["bot_drawdown_usd"]) == D("2.20")
+    assert D(sp["manual_open_commitment_usd"]) == 0
+    assert D(sp["manual_settled_net_usd"]) == D("19.80")
+    assert D(sp["manual_adjustment_usd"]) == D("19.80")
+    assert r["refusal"] is None and reader_capacity(r) == D("2.80")
+
+
+def test_worked_example_manual_win_settled(store):
+    # 36 contracts for 19.80 (0.54 + 0.36 commission); it pays 36.00
+    w = row(quantity=36, cumQuantity=36, avgPx={"value": "0.5400"},
+            commissionNotionalTotalCollected={"value": "0.3600"})
+    m = measured({OID: w})
+    assert m["orders"][0]["cost_usd"] == "19.8000"
+    venue_holds(store, qty="36")
+    got = P.manual_commitment(m, store.positions_by_market(), NOW,
+                              settle(store, "1"))
+    o = got["manual_orders"][0]
+    assert D(o["payout_usd"]) == D("36.00")
+    assert D(o["result_usd"]) == D("-16.20")
+    assert got["manual_settled_net_usd"] == D("-16.20")
+    c, s = cfgs()
+    # value = 320 - 2.20 bot losses - 19.80 + 36.00 = 334.00
+    r = P.report(D("334.00"), c, split=s, manual=got)
+    sp = r["split"]
+    assert D(sp["total_drawdown_usd"]) == D("-14.00")
+    assert D(sp["manual_adjustment_usd"]) == D("-16.20")
+    assert D(sp["bot_drawdown_usd"]) == D("2.20")       # LARGER than total
+    assert sp["binding"] == "BOT" and r["refusal"] is None
+    assert reader_capacity(r) == D("2.80")
+    # the anchor was not moved and the total figure still shows the gain
+    assert r["anchor_usd"] == "320.00"
+
+
+def test_a_manual_win_cannot_hide_bot_losses(on, store):
+    w = row(quantity=36, cumQuantity=36, avgPx={"value": "0.5400"},
+            commissionNotionalTotalCollected={"value": "0.3600"})
+    venue_holds(store, qty="36")
+    got = P.manual_commitment(measured({OID: w}),
+                              store.positions_by_market(), NOW,
+                              settle(store, "1"))
+    c, s = cfgs()
+    # bots have lost 6.00: value = 320 - 6 + 16.20 = 330.20, ABOVE the anchor
+    r = P.report(D("330.20"), c, split=s, manual=got)
+    assert D(r["split"]["total_drawdown_usd"]) == D("-10.20")
+    assert D(r["split"]["bot_drawdown_usd"]) == D("6.00")
+    assert r["refusal"] == "PORTFOLIO_DRAWDOWN_LIMIT:6.0000>=5"
+    assert reader_capacity(r) == D("-1.00")
+    assert gate_with(D("330.20"), got) == r["refusal"]
+    # without the settled attribution the same account looks untouched
+    assert P.refusal(D("330.20"), c, split=s, manual=D(0)) is None
+
+
+def gate_with(value, manual):
+    return G.ValidationGates().refuse(
+        order_qty=D("1"), order_price=D("0.40"),
+        order_intent="ORDER_INTENT_BUY_LONG", portfolio_value_usd=value,
+        portfolio_manual=manual)
+
+
+def test_a_settled_no_position_pays_one_minus_yes_value():
+    m = measured({OID: row(
+        outcomeSide="OUTCOME_SIDE_NO", intent="ORDER_INTENT_BUY_SHORT",
+        cumQuantity=10, quantity=10, avgPx={"value": "0.7100"},
+        commissionNotionalTotalCollected={"value": "0.1000"})})
+    got = P.manual_commitment(m, {}, NOW, retired_row("0", "0", "10"))
+    assert got["manual_settled_net_usd"] == D("3.00") - D("10")     # won
+    got = P.manual_commitment(m, {}, NOW, retired_row("1", "0", "10"))
+    assert got["manual_settled_net_usd"] == D("3.00")               # lost
+
+
+@pytest.mark.parametrize("ret,why", [
+    (retired_row(up="70"), "SETTLED_QUANTITY_NOT_ONLY_MANUAL"),   # a bot too
+    (retired_row(up="60"), "SETTLED_QUANTITY_NOT_ONLY_MANUAL"),
+    (retired_row(up=None), "RETIRED_ROW_QUANTITY_UNREADABLE"),
+    (retired_row(yes=None), "RETIRED_ROW_HAS_NO_PAYOUT"),
+    (retired_row(yes="0.50"), "RETIRED_ROW_HAS_NO_PAYOUT"),
+    (retired_row(yes="x"), "RETIRED_ROW_HAS_NO_PAYOUT"),
+    (retired_row(origin="BTC15M"), "RETIRED_ROW_LABELLED_BTC15M"),
+    (retired_row(origin="SPORTS"), "RETIRED_ROW_LABELLED_SPORTS"),
+    ({SPORT: "junk"}, "RETIRED_ROW_UNREADABLE"),
+    # the flat-account closure writes a row with no settlement in it
+    ({SPORT: {"settlement_pnl": "0",
+              "closed_against": "AUTHORITATIVE_FLAT_ACCOUNT"}},
+     "RETIRED_ROW_HAS_NO_PAYOUT"),
+])
+def test_unmeasurable_settled_order_is_a_possible_full_win(ret, why):
+    got = P.manual_commitment(measured(), {}, NOW, ret)
+    # nothing comes OFF the bot figure; the largest possible win goes ON
+    assert got["manual_commitment_usd"] == 0
+    assert got["manual_settled_net_usd"] == D("19.80") - D("66")
+    assert got["settled_unmeasured"] == [{
+        "order_id_tail": "TZ73", "why": why,
+        "counted_as_possible_win_usd": "-46.2000"}]
+    assert got["manual_orders"][0]["not_counted_why"] == why
+    c, s = cfgs()
+    r = P.report(D("298.00"), c, split=s, manual=got)      # it really lost
+    assert D(r["split"]["bot_drawdown_usd"]) == D("68.20")
+    assert r["split"]["settled_unmeasured"] == got["settled_unmeasured"]
+    assert r["refusal"].startswith("PORTFOLIO_DRAWDOWN_LIMIT:68.20")
+    # and had it really won 66, the bot figure would be exact, not understated
+    r = P.report(D("320") - D("2.20") + D("46.20"), c, split=s, manual=got)
+    assert D(r["split"]["bot_drawdown_usd"]) == D("2.20")
+
+
+def test_an_order_never_read_terminal_is_unmeasured():
+    working = row(cumQuantity=66, leavesQuantity=10, quantity=76,
+                  state="ORDER_STATE_PARTIALLY_FILLED")
+    m = measured({OID: working})
+    assert m["orders"][0]["terminal"] is False
+    got = P.manual_commitment(m, {}, NOW, retired_row())
+    assert got["settled_unmeasured"][0]["why"] == "ORDER_NEVER_READ_TERMINAL"
+    assert got["manual_settled_net_usd"] == D("19.80") - D("66")
+
+
+def test_two_attested_orders_must_together_equal_the_settled_quantity():
+    o2 = "D1SA9RRSTZ99"
+    m = measured({OID: row(), o2: row(id=o2)}, ids=(OID, o2))
+    got = P.manual_commitment(m, {}, NOW, retired_row(up="132"))
+    assert got["manual_settled_net_usd"] == D("39.60")
+    assert got["settled_unmeasured"] == []
+    got = P.manual_commitment(m, {}, NOW, retired_row(up="66"))
+    assert len(got["settled_unmeasured"]) == 2
+    assert got["manual_settled_net_usd"] == 2 * (D("19.80") - D("66"))
+
+
+@pytest.mark.parametrize("dd,opn,settled,bot", [
+    ("22", "0", "19.80", "2.20"),       # measured loss comes off
+    ("-14", "0", "-16.20", "2.20"),     # measured win goes on, uncapped
+    ("10", "0", "19.80", "0"),          # a loss never takes bot below 0
+    ("-3", "0", "19.80", "-3"),         # above the anchor: nothing to take off
+    ("22", "30", "-5", "0"),            # open is capped at dd - settled (27)
+    ("22", "10", "-5", "17"),
+    ("22", "10", "5", "7"),
+    ("5", "10", "8", "0"),              # loss capped at 5, open at 0
+    ("22", "-4", "junk", "22"),
+])
+def test_signed_adjustment_arithmetic(dd, opn, settled, bot):
+    f = P.split_figures(D(dd), opn, D("5"), D("40"),
+                        settled_net_usd=settled)
+    assert f["bot_drawdown_usd"] == D(bot)
+    assert f["manual_open_commitment_usd"] >= 0
+    assert f["manual_adjustment_usd"] == \
+        f["manual_open_commitment_usd"] + f["manual_settled_net_usd"]
+    assert f["bot_drawdown_usd"] == D(dd) - f["manual_adjustment_usd"]
+    assert f["total_drawdown_usd"] == D(dd)
+    assert f["effective_drawdown_usd"] == D("5") - min(
+        f["bot_room_usd"], f["total_room_usd"])
+    if f["manual_settled_net_usd"] >= 0 and D(dd) >= 0:
+        assert f["bot_drawdown_usd"] >= 0
+
+
+def test_total_limit_still_binds_with_a_settled_manual_loss():
+    c, s = cfgs()
+    got = P.manual_commitment(measured(), {}, NOW, retired_row())
+    r = P.report(D("279.00"), c, split=s,
+                 manual=dict(got, manual_settled_net_usd=D("40")))
+    assert r["refusal"] == "PORTFOLIO_DRAWDOWN_LIMIT:TOTAL:41.00>=40"
+
+
+def test_stale_reading_keeps_a_win_and_drops_a_loss():
+    lost = P.manual_commitment(measured(), {}, NOW + 400, retired_row("0"))
+    assert lost["why"] == "MANUAL_MEASUREMENT_STALE"
+    assert lost["manual_settled_net_usd"] == 0
+    assert lost["manual_orders"][0]["not_counted_why"] \
+        == "MANUAL_MEASUREMENT_STALE"
+    won = P.manual_commitment(measured(), {}, NOW + 400, retired_row("1"))
+    assert won["manual_settled_net_usd"] == D("19.80") - D("66")
+    bad = P.manual_commitment(measured(), {}, NOW + 400, retired_row(up="1"))
+    assert bad["manual_settled_net_usd"] == D("19.80") - D("66")
+
+
+def test_restart_rereads_the_terminal_order_and_the_ledger_remembers(
+        on, tmp_path):
+    path = str(tmp_path / "inv.json")
+    s1 = LX.InventoryStore(path)
+    s1.save()
+    venue_holds(s1)
+    v = Venue({OID: row()})
+    r1 = Rn(s1, v, cash="298.00")
+    r1.maybe_measure_manual_orders(NOW)
+    settle(s1, "0")
+    before = r1.equity_risk_lines(NOW)["portfolio_drawdown"]
+    assert D(before["split"]["bot_drawdown_usd"]) == D("2.20")
+    # RESTART: a new process, a new reader, the ledger file from disk
+    s2 = LX.InventoryStore(path)
+    assert SPORT in s2.state["retired_markets"]
+    r2 = Rn(s2, v, cash="298.00")
+    first = r2.equity_risk_lines(NOW + 1)["portfolio_drawdown"]
+    assert D(first["split"]["bot_drawdown_usd"]) == D("22.00")   # not read yet
+    r2.maybe_measure_manual_orders(NOW + 2)
+    assert v.calls == [OID, OID]                  # read again, by id
+    after = r2.equity_risk_lines(NOW + 3)["portfolio_drawdown"]
+    assert after["split"]["manual_orders"] == before["split"]["manual_orders"]
+    assert D(after["split"]["bot_drawdown_usd"]) == D("2.20")
+    assert after["refusal"] is None
+
+
+def test_executor_gate_sees_the_settled_result(on, store):
+    import time as _t
+    w = row(quantity=36, cumQuantity=36, avgPx={"value": "0.5400"},
+            commissionNotionalTotalCollected={"value": "0.3600"})
+    venue_holds(store, qty="36")
+    settle(store, "1")
+    e = Ex(store)
+    e.portfolio_manual_measurement = measured({OID: w}, now=_t.time())
+    got = e.portfolio_manual_for_gates()
+    assert got["manual_settled_net_usd"] == D("-16.20")
+    assert gate_with(D("330.20"), got) == "PORTFOLIO_DRAWDOWN_LIMIT:6.0000>=5"
