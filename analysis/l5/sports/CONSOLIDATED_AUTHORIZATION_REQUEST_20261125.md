@@ -222,3 +222,56 @@ How the owner's execution list maps to the release, all by settings:
 | Inventory-aware quoting | already on (unpaired caps, extension limits, completion pricing) |
 | Reward-adjusted selection | `PMUS_RN1_RANK_SHARE=1` |
 | Residual inventory through settlement | completion grace above |
+
+## Final form, 12:50 UTC — no order id needed
+
+Both releases are deployed and locked (ledger `c70e244a2`, sports
+`bc3a5b6b9`). The ledger split stays OFF; `8ec438d52` is withdrawn.
+
+**Manual trade and bonus: reconciled anchor adjustment.** The anchor is
+raised by exactly the non-bot cash that entered the account, each amount
+taken from the venue's own balance readings:
+
+| Event (UTC, 25 Nov) | Venue balance before → after | Amount |
+|---|---|---|
+| Manual NHL buy, 02:18:46 | 318.8638 → 293.8664 | −24.9974 |
+| Referral bonus, 02:19:04 (venue activity feed) | 293.8664 → 298.8664 | +5.0000 |
+| Manual NHL sell, 03:10:20 | 299.8464 → 331.4058 | +31.5594 |
+| Net non-bot cash | | **+11.5620** |
+
+Owner's receipt agrees (bought at 69%, sold at 89%, payout $31.55, profit
+$6.55). Anchor 321.4782 → **333.0402**.
+
+Check that no bot loss is erased: the account figure was $2.6144 just
+before the manual buy. Since then the bot's own cash flows were +$0.98
+(two Traemm–Zylame completions, pairs paid out) and −$0.90 (Carjem–Caltes,
+lost): net +$0.08. Expected figure after the adjustment: 333.0402 −
+330.5058 = **$2.5344** = 2.6144 − 0.08. Every dollar the bot has lost
+since the anchor was set is still counted. If the ledger shows anything
+other than $2.53 after the change, the bot stays locked and I report.
+
+One limit then covers the whole account, manual activity included, as it
+always has. A future manual trade will again consume it while open.
+
+**Settings**
+
+| Service | Setting | Now | Campaign |
+|---|---|---|---|
+| ledger | `L5_PORTFOLIO_ANCHOR_USD` | 321.4782 | 333.0402 |
+| ledger | `L5_PORTFOLIO_MAX_DRAWDOWN_USD` | 5 | 13 |
+| sports | markets / tracked | 4 / 8 | 8 / 16 |
+| sports | campaign spend | 30 | 60 |
+| sports | `PMUS_RN1_JOIN_TOUCH`, `PMUS_RN1_RANK_SHARE`, `PMUS_RN1_BALANCED_IS_OPEN`, `PMUS_TWO_SIDED_FILL_LIST_POLL` | 0 | 1 |
+| sports | `PMUS_RN1_SLOTS_COUNT_INVENTORY` | 1 | 0 |
+| sports | `PMUS_RN1_REFILL_COOLDOWN_S` | 60 | 10 |
+| sports | `PMUS_TWO_SIDED_WINDOW_COMPLETE_GRACE_S` | 0 | 7200 |
+| sports | competitions | setkameua, setkamemd, utr, dota2 | setkameua, setkamemd, utr |
+| sports | lock | 1 | window, six hours |
+
+Unchanged: one contract; maker-only; unpaired caps $6 / $3; $8 a market;
+pair-cost limit 0.97; band 0.30–0.70; depth gate 10; campaign loss stop
+$4; daily loss halt $5; at-risk budget $16; lane cap $20; esports and
+cricket excluded; reconciliation, reservations, watchdog.
+
+Room at the start: 13 − 2.53 = about $10.47; eight markets rest about
+$7.9.
