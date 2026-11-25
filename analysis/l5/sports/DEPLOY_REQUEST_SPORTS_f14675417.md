@@ -131,3 +131,24 @@ esports refused unless the owner accepts that risk for named competitions.
 
 Nothing is deployed. To deploy: explicit approval naming the release SHA,
 locked. To switch on any setting in the table: separate approval.
+
+## Superseding candidate `bc3a5b6b9` (25 Nov, 03:40 UTC) — recommended
+
+| | |
+|---|---|
+| Release SHA | `bc3a5b6b95218d0b3b0c9c42a57c929fbdec97b9` |
+| Branch | `release/pmus-sports-rn1-bc3a5b6b9` |
+| Code commit | `658d0a929d54ae050df978b00ffafb16648a8078` |
+| Difference from `f14675417` | one commit: cricket exclusion. Five of six cricket competitions on the venue (`sheffield`, `wbbl`, `smat`, `csafc`, `pro50`) were not caught by the name rule. They are added, and any competition the venue itself labels cricket is excluded as the slate is read. Only ever adds exclusions. |
+| Regression | 5,642 passed, 24 failed — the same 24 test ids as the baseline |
+
+Under an explicit competition allow-list (as in both campaigns so far)
+cricket could not be opened on either build; the gap matters as soon as
+scope is widened. `f14675417` remains available unchanged.
+
+Batched fill detection, venue evidence (production watchdog logs): the
+open-order list rows carry `id`, `marketSlug`, `leavesQuantity`,
+`manualOrderIndicator` and a creation time. A filled-quantity field on
+list rows was not seen directly; the bot derives it from quantity minus
+leaves when both are present, and otherwise reads each order exactly, as
+today. Final proof is the `fill_list_row_keys` line on the first run.

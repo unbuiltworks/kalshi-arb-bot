@@ -7,7 +7,7 @@ owner's explicit authorization.
 
 | | |
 |---|---|
-| Release | `f146754177a04fe57b08fac9015c339ff7032a55`, branch `release/pmus-sports-rn1-f14675417` |
+| Release | `bc3a5b6b95218d0b3b0c9c42a57c929fbdec97b9`, branch `release/pmus-sports-rn1-bc3a5b6b9` (f14675417 plus the cricket exclusion fix) |
 | Service | `pmus-spring-l5-probe` only |
 | State | `PMUS_TWO_SIDED_SUBMISSION_LOCK=1` before and after; no setting below switched on |
 | Checks after deploy | build SHA in the startup line; lock reported; zero open bot orders; first account audit clean; watchdog reads the bot as healthy; heartbeat continues through the hourly audit |
@@ -64,7 +64,7 @@ days late.
 
 Authorization line (exact, with the blanks filled):
 
-> Authorized: $10 / eight-market campaign on release f14675417, account
+> Authorized: $10 / eight-market campaign on release bc3a5b6b9, account
 > limit $10, campaign spend $60, competitions ___, ___ UTC to ___ UTC
 > 25/26 Nov, on these terms.
 
