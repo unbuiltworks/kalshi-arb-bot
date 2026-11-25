@@ -1337,3 +1337,21 @@ restart: UTR Dolhey–Monmic YES 2 / NO 1 (last fill YES 0.30 at 14:32:43).
   100,000 contracts at each touch; our modelled reward is $0.00–0.01/hour
   even at 20 contracts and even with the live pool. Not a reward
   opportunity at our size; the earlier suggestion is withdrawn.
+
+## 53. Ladder release authorized — 25 Nov, about 16:30 UTC
+
+Owner, typed: "I explicitly authorize deployment of SHA
+5425d94d336d7ff13c7dafd55e55d64e7b369aa5 for the remainder of today's
+authorized campaign ending at 19:58 UTC. Enable three ladder levels, two
+ticks apart, with two contracts per level and in-play markets only. All
+other settings, capital limits, loss stops, maker-only restrictions and
+watchdog protections remain unchanged. ... Verify aggregate worst-case
+exposure across all ladder orders, including in-flight and uncertain
+orders. Do not extend the campaign or increase capital without separate
+authorization."
+
+To do: deploy `5425d94d3` (sports only; rollback `bc3a5b6b9`); set
+`PMUS_RN1_LADDER_LEVELS=3`, `PMUS_RN1_LADDER_STEP_TICKS=2`,
+`PMUS_TWO_SIDED_SLATE=live`. Size stays 2 (pre-game and in-play settings
+unchanged). Window unchanged (ends 19:58 UTC; completions-only grace to
+21:58 as already authorized in section 49).
