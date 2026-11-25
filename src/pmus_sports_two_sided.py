@@ -1458,6 +1458,62 @@ RN1_RELEASE_UNQUALIFIED_S = float(os.getenv(
     "PMUS_RN1_RELEASE_UNQUALIFIED_S", "0") or 0)
 RN1_PULL_THREATENED_ONLY = os.getenv(
     "PMUS_RN1_PULL_THREATENED_ONLY", "0").strip() == "1"
+# NET-PROFIT RANKING (owner 2026-11-25: "Rank markets by expected net
+# profit after inventory acquisition losses, not gross projected rewards";
+# "Compare joining the best bid against resting one tick deeper on a
+# market-by-market basis"; "Recalculate marginal economics after each fill
+# before replenishing"). With RN1_NET_RANK on (needs RN1_RANK_SHARE), each
+# candidate is priced at two placements, at the best bid and one tick
+# behind it, with our own clip on both sides:
+#   net per hour = THEORETICAL reward of that quote (venue rule)
+#                  - expected contracts filled per hour x loss per contract
+# expected contracts filled per hour = clip x FILL_RATE (contracts filled
+# per resting contract-hour, measured live, by placement and competition)
+# per side. The better placement is kept per market: the join rule may
+# join only where it is the better one. Markets are ranked by that net per
+# dollar committed; a market estimated at zero or below is not selected,
+# a flat one is released (RN1_RELEASE_UNQUALIFIED_S), and one holding
+# inventory stops replenishing (openings and extensions; completions
+# continue) until a fresh estimate is positive again. Every fill clears the
+# market's estimate, so the next pass re-prices it on the new book first.
+# Estimates only, not payments; every bid still passes every gate and cap.
+RN1_NET_RANK = os.getenv("PMUS_RN1_NET_RANK", "0").strip() == "1"
+
+
+def _comp_rates(name: str, default: str) -> Dict[str, float]:
+    """"0.2" or "0.2,utr:0.5,atpdb:0.1" -> {"": 0.2, "utr": 0.5, ...}."""
+    out: Dict[str, float] = {"": float(default)}
+    for part in (os.getenv(name) or "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        k, _, v = part.rpartition(":")
+        try:
+            out[k.strip().lower()] = float(v)
+        except ValueError:
+            continue
+    return out
+
+
+# Clip sizes the net ranking compares per market (each capped at the
+# configured clip): in a thin book our reward share stops growing with size
+# while the expected fill cost keeps growing, so the smallest size that
+# qualifies often nets the most. The chosen size caps that market's clip.
+RN1_NET_SIZES = tuple(sorted({D(x.strip()) for x in os.getenv(
+    "PMUS_RN1_NET_SIZES", "1,2,5,10").split(",") if x.strip()}))
+RN1_FILL_RATE = {0: _comp_rates("PMUS_RN1_FILL_RATE_TOUCH", "0.5"),
+                 1: _comp_rates("PMUS_RN1_FILL_RATE_BEHIND", "0.2")}
+RN1_FILL_LOSS = {0: _comp_rates("PMUS_RN1_FILL_LOSS_TOUCH", "0.05"),
+                 1: _comp_rates("PMUS_RN1_FILL_LOSS_BEHIND", "0.035")}
+
+
+def rn1_fill_param(table: Mapping[int, Mapping[str, float]], depth: int,
+                   slug: str) -> float:
+    t = table[min(1, max(0, int(depth)))]
+    comp = slug.split("-")[1].lower() if slug.count("-") >= 1 else ""
+    return float(t.get(comp, t[""]))
+
+
 # JOIN THE BEST BID WHEN IT IS JUSTIFIED (owner 2026-11-25: "Competitive
 # maker quoting that can join the best bid when economically justified").
 # PMUS_RN1_DEPTH_TICKS=1 rests every bid one tick behind the touch. The
@@ -3621,6 +3677,8 @@ class Engine:
             self._markout_open(slug, mk, side, oid, st["px"], new,
                                st.get("t"), o.get("stage"))
             mk.setdefault("last_fill_t", {})[side] = time.time()
+            if RN1_NET_RANK:
+                self.rn1_net_forget(slug)
             late = None
             try:
                 if st.get("t") is not None:
@@ -5105,9 +5163,12 @@ class Engine:
             if "why" in got and got.get("why") not in ("no_two_sided_book",
                                                        "no_room_for_a_bid"):
                 return True
-            ok = float(got.get("usd_per_hour") or 0.0) > 0
+            ok = float(got.get("net_usd_per_hour" if RN1_NET_RANK
+                               else "usd_per_hour") or 0.0) > 0
             mk["qualify_check"] = {"t": time.time(), "ok": ok,
-                                   "usd_per_hour": got.get("usd_per_hour")}
+                                   "usd_per_hour": got.get("usd_per_hour"),
+                                   "net_usd_per_hour":
+                                       got.get("net_usd_per_hour")}
             return ok
         except Exception:                                 # noqa: BLE001
             return True
@@ -5679,6 +5740,11 @@ class Engine:
             new_block = "vol_pause"
         if not new_block and self.rn1_market_slots_full(slug, mk):
             new_block = "max_markets"
+        if not new_block and RN1_NET_RANK and (y > 0 or n > 0) and \
+                not self.rn1_quote_qualifies(slug, mk):
+            # holding inventory: replenish only while the fresh estimate
+            # (re-priced after every fill) is positive; completions go on
+            new_block = "net_not_positive"
         qcfg = dict(self.rn1_quote_cfg(slug, mk, tick))
         join_why = self.rn1_join_touch(slug, mk, bbo, tick, rng, now)
         if join_why is None:
@@ -5687,6 +5753,9 @@ class Engine:
                         live_qty_now=PH.live_qty(rn1_live_qty(),
                                                  spec["min_qty"], rng,
                                                  VOL_SHRINK_USD))
+        nc_ = (getattr(self, "_net_choice", None) or {}).get(slug)
+        if RN1_NET_RANK and nc_ and nc_.get("qty") is not None:
+            pq = max(min(pq, D(str(nc_["qty"]))), D(str(spec["min_qty"])))
         if pq != D(str(RN1.QTY)):
             qcfg["qty"] = pq
         if RN1_KEEP_TOL_USD > 0 and not new_block:
@@ -5737,6 +5806,13 @@ class Engine:
         self.rn1_campaign_caps(slug, mk, want, q)
         ladder = self.rn1_ladder(slug, mk, want, tick,
                                  clip=qcfg.get("qty", RN1.QTY))
+        if new_block:
+            # A block stops every opening and extension. The levels behind
+            # a completing bid are openings (see rn1_ladder), so they stop
+            # too; only completions continue. LIVE 25 Nov 2026: with the
+            # campaign loss stop in force two such opening bids rested
+            # behind the completing bid.
+            ladder = [l_ for l_ in ladder if l_.get("role") == "complete"]
         key = json.dumps({s: (None if t is None else
                               [str(t["px"]), str(t["qty"]), t["role"]])
                           for s, t in want.items()} |
@@ -6358,6 +6434,8 @@ class Engine:
         if not (D(0) < yes_px < ONE and D(0) < no_px < ONE):
             return {"why": "no_room_for_a_bid"}
         qty = rn1_max_clip()
+        if RN1_NET_RANK:
+            return self._net_score(slug, book, per, bb, ba, tick, qty, R)
         est = R.quote_estimate(book, per, float(yes_px), float(no_px),
                                float(qty), float(tick))
         cap = qty * (yes_px + no_px)
@@ -6369,6 +6447,99 @@ class Engine:
                 "share": est.get("share"),
                 "max_spread_ok": est.get("max_spread_ok")}
 
+    def _net_score(self, slug: str, book: Mapping[str, Any],
+                   per: Mapping[str, Any], bb: D, ba: D, tick: D, qty: D,
+                   R: Any) -> Dict[str, Any]:
+        """See RN1_NET_RANK: the better of two placements (0 = at the best
+        bid, 1 = one tick behind) by THEORETICAL net per hour. Where both
+        bids at a placement would exceed the pair-cost limit, the dearer
+        one is lowered to fit, as the quoting rule does."""
+        cap_px = D(str(RN1.PAIR_CAP))
+        sizes = [x for x in RN1_NET_SIZES if 0 < x <= qty] or [qty]
+        best_q = None
+        for q_ in sizes:
+            got = self._net_rows(slug, book, per, bb, ba, tick, q_, R, cap_px)
+            if got is None:
+                continue
+            if best_q is None or got[1]["net_usd_per_hour"] > \
+                    best_q[2][1]["net_usd_per_hour"] + 1e-12:
+                best_q = (q_, got[0], got)
+        if best_q is None:
+            return {"why": "no_room_for_a_bid"}
+        qty, best, (_d, b, rows) = best_q[0], best_q[1], best_q[2]
+        out = {"usd_per_hour": b["reward_usd_per_hour"],
+               "net_usd_per_hour": b["net_usd_per_hour"],
+               "capital_usd": str(b["capital_usd"]),
+               "per_dollar_hour": round(b["net_usd_per_hour"]
+                                        / b["capital_usd"], 6)
+               if b["capital_usd"] > 0 else 0.0,
+               "depth": best, "qty": str(qty), "placements": rows,
+               "share": b["share"], "max_spread_ok": b["max_spread_ok"]}
+        choice = getattr(self, "_net_choice", None)
+        if choice is None:
+            choice = self._net_choice = {}
+        prev = choice.get(slug)
+        choice[slug] = {"t": time.time(), "depth": best, "qty": qty,
+                        "net_usd_per_hour": b["net_usd_per_hour"]}
+        if not prev or prev.get("depth") != best or \
+                prev.get("qty") != qty or \
+                (prev.get("net_usd_per_hour", 0) > 0) != \
+                (b["net_usd_per_hour"] > 0):
+            log("RN1_NET_PLACEMENT", slug=slug, placement=(
+                "best_bid" if best == 0 else "one_tick_behind"),
+                qty=str(qty), placements=rows,
+                label="THEORETICAL reward minus expected fill cost per "
+                      "hour; an estimate, not a payment")
+        return out
+
+    def _net_rows(self, slug: str, book: Mapping[str, Any],
+                  per: Mapping[str, Any], bb: D, ba: D, tick: D, qty: D,
+                  R: Any, cap_px: D) -> Optional[tuple]:
+        """(best depth, its row, {depth: row}) for one clip size."""
+        rows = {}
+        for d in (0, 1):
+            y = bb - d * tick
+            n = (ONE - ba) - d * tick
+            over = y + n - cap_px
+            if over > 0:
+                if y >= n:
+                    y -= over
+                else:
+                    n -= over
+            if not (D(0) < y < ONE and D(0) < n < ONE):
+                rows[d] = {"why": "no_room_for_a_bid"}
+                continue
+            est = R.quote_estimate(book, per, float(y), float(n),
+                                   float(qty), float(tick))
+            rew = float(est.get("est_usd_per_hour") or 0.0)
+            cost = 2 * float(qty) * rn1_fill_param(RN1_FILL_RATE, d, slug) \
+                * rn1_fill_param(RN1_FILL_LOSS, d, slug)
+            capital = float(qty * (y + n))
+            net = rew - cost
+            rows[d] = {"reward_usd_per_hour": round(rew, 6),
+                       "fill_cost_usd_per_hour": round(cost, 6),
+                       "net_usd_per_hour": round(net, 6),
+                       "capital_usd": round(capital, 4),
+                       "yes_px": str(y), "no_px": str(n),
+                       "share": est.get("share"),
+                       "max_spread_ok": est.get("max_spread_ok")}
+        ok = [d for d in (0, 1) if "net_usd_per_hour" in rows[d]]
+        if not ok:
+            return None
+        best = max(ok, key=lambda d: (rows[d]["net_usd_per_hour"], d))
+        return best, rows[best], rows
+
+    def rn1_net_forget(self, slug: str) -> None:
+        """A fill changes the book and our inventory: drop the market's net
+        estimate so the next pass prices it afresh (RN1_NET_RANK)."""
+        mk = self.b.m(slug) if slug in self.b.d.get("markets", {}) else None
+        if mk is not None:
+            mk.pop("qualify_check", None)
+        for name in ("_net_choice", "_share_cache"):
+            c = getattr(self, name, None)
+            if c:
+                c.pop(slug, None)
+
     def rn1_join_touch(self, slug: str, mk: Dict[str, Any],
                        bbo: Mapping[str, Any], tick: D, rng: Any,
                        now: float) -> Optional[str]:
@@ -6379,8 +6550,11 @@ class Engine:
         if joined is None:
             joined = self._rn1_joined = {}
         why: Optional[str] = None
+        nc = (getattr(self, "_net_choice", None) or {}).get(slug)
         if not RN1_JOIN_TOUCH:
             why = "off"
+        elif RN1_NET_RANK and nc and nc.get("depth") == 1:
+            why = "net_prefers_one_tick_behind"
         else:
             spread = D(str(bbo["ask"])) - D(str(bbo["bid"]))
             last_jump = float(mk.get("jump_pause_until") or 0) - JUMP_PAUSE_S
@@ -6448,6 +6622,9 @@ class Engine:
             v = float(hit[1].get("per_dollar_hour") or 0.0)
             return (0, -v) if v > 0 else (2, 0.0)
         out = sorted(scored, key=lambda r: (cls(r), r))
+        if RN1_NET_RANK:
+            # only markets with a fresh positive net estimate are selected
+            out = [r for r in out if cls(r)[0] == 0]
         top = [(r[2], (cache.get(r[2]) or (0, {}))[1]) for r in out[:4]]
         key = json.dumps([(s_, o.get("per_dollar_hour")) for s_, o in top])
         if key != getattr(self, "_share_rank_logged", None):
@@ -7500,6 +7677,12 @@ class Engine:
                         "at_risk_budget_usd": AT_RISK_BUDGET_USD,
                         "at_risk_usd": self.own_exposure_usd(),
                         "rank_net": RN1_RANK_NET,
+                        "net_rank": RN1_NET_RANK and {
+                            "sizes": [str(x) for x in RN1_NET_SIZES],
+                            "fill_rate": {str(k): v for k, v in
+                                          RN1_FILL_RATE.items()},
+                            "fill_loss": {str(k): v for k, v in
+                                          RN1_FILL_LOSS.items()}},
                         "pin": rn1_pin(),
                         "select": {"band_lo": BAND_LO, "band_hi": BAND_HI,
                                    "max_spread_ticks": MAX_SPREAD_TICKS,
