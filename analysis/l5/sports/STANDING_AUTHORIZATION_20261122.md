@@ -1313,3 +1313,10 @@ the caps. Set: `PMUS_RN1_PREGAME_QTY=2`, `PMUS_RN1_LIVE_QTY=2`,
 setkameua,setkamemd,utr,atp,wta. Window (to 19:58 UTC), $13 account
 limit, $3 / $6 unpaired caps, $8 a market, $60 spend, $4 loss stop, $5
 daily halt unchanged. Largest order is now 2 contracts.
+
+Carried out (section 51): settings set 14:32 UTC, one restart (deployment
+`1f816930`). Boot 14:33:40: window open (new exposure and completions
+unlocked), pre-game and in-play size 2, depth filter 3, 4 markets / 8
+tracked, competitions atp, setkamemd, setkameua, utr, wta, margin test
+off, cooldown 10, caps and limits as before. Carried inventory at the
+restart: UTR Dolhey–Monmic YES 2 / NO 1 (last fill YES 0.30 at 14:32:43).
