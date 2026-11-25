@@ -608,7 +608,8 @@ class ValidationGates:
                book_uncertain: Optional[str] = None,
                available_cash_usd: Optional[D] = None,
                inventory: Optional[Mapping[str, Any]] = None,
-               portfolio_value_usd: Optional[D] = None
+               portfolio_value_usd: Optional[D] = None,
+               portfolio_manual: Any = None
                ) -> Optional[str]:
         """None to allow, else the reason. Never raises on ordinary input."""
         q = _d(order_qty)
@@ -629,7 +630,11 @@ class ValidationGates:
         #     refuse. A worst-case portfolio value that cannot be computed
         #     refuses rather than reading as no drawdown.
         from src import l5_portfolio_drawdown as PDD
-        _pdd = PDD.refusal(portfolio_value_usd)
+        #     `portfolio_manual` is the MEASURED manual commitment; it is
+        #     read only when the bot/total split is ON, and absent counts 0
+        #     (the bot figure is then the whole drawdown). Both the bot
+        #     and the total limit bind here, as in the published block.
+        _pdd = PDD.refusal(portfolio_value_usd, manual=portfolio_manual)
         if _pdd:
             return _pdd
 

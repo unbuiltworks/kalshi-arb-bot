@@ -1636,12 +1636,75 @@ class Runner:
         try:
             pos = self.store.positions_by_market()
             val = PDD.worst_case_value(self.available_cash_usd, pos)
-            return PDD.report(val)
+            return PDD.report(
+                val, manual=Runner.portfolio_manual_lines(self, pos))
         except BaseException as exc:                           # noqa: BLE001
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 raise
             return {"state": "UNREADABLE",
                     "reason": "PORTFOLIO_REPORT_FAILED:%s" % type(exc).__name__}
+
+    def portfolio_manual_lines(self, positions: Any = None,
+                               now: Optional[float] = None) -> Any:
+        """The measured manual commitment for the drawdown block, or None.
+
+        None unless the bot/total split is ON (`l5_portfolio_drawdown`), so
+        with it off the block is built exactly as before. NO VENUE REQUEST:
+        it reads the measurement `maybe_measure_manual_orders` stored on the
+        tick and the ledger's positions. Any failure is None, which counts
+        0 -- the bot figure is then the whole drawdown.
+        """
+        try:
+            from src import l5_portfolio_drawdown as PDD
+            if PDD.split_config().get("state") != "ON":
+                return None
+            pos = (self.store.positions_by_market() if positions is None
+                   else positions)
+            return PDD.manual_commitment(
+                getattr(self, "_manual_measurement", None), pos,
+                time.time() if now is None else float(now))
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return None
+
+    def maybe_measure_manual_orders(self, now: float) -> None:
+        """Read the owner-attested manual orders from the venue, on the tick.
+
+        OFF unless the bot/total split is ON. Its only transport call is
+        the single-order GET, at most a few per tick and at most once a
+        minute per unfinished order (`l5_manual_commitment`). The result is
+        STORED here and handed to the executor; the published block and the
+        gate read only the stored copy. ANY failure is swallowed -- this
+        can never stop a tick -- and leaves the stored copy to go stale,
+        which counts the manual amount as 0.
+        """
+        try:
+            from src import l5_portfolio_drawdown as PDD
+            if PDD.split_config().get("state") != "ON":
+                return
+            from src import l5_manual_commitment as MC
+            job = getattr(self, "_manual_reader", None)
+            if job is None:
+                job = MC.Reader()
+                self._manual_reader = job
+            m = job.step(self.transport, float(now))
+            self._manual_measurement = m
+            ex = getattr(self, "executor", None)
+            if ex is not None:
+                ex.portfolio_manual_measurement = m
+            brief = {"orders": m["orders"], "rejected": m["rejected"]}
+            if brief != getattr(self, "_manual_emitted", None):
+                self._manual_emitted = brief
+                emit("L5_MANUAL_COMMITMENT", brief)
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            try:
+                self.stats["manual_commitment_error:%s"
+                           % type(exc).__name__] += 1
+            except BaseException:                              # noqa: BLE001
+                pass
 
     def account_exposure_lines(self) -> Dict[str, Any]:
         """Account-wide worst-case exposure and the capacity left under it.
@@ -2059,6 +2122,10 @@ class Runner:
         # binds on its configured ceiling alone and require_cash_evidence()
         # refuses to arm -- never that cash is unlimited.
         self.executor.available_cash_usd = None
+        # a rebuilt executor keeps the reading the tick already holds, so
+        # the manual amount does not read 0 for the first tick of a window
+        self.executor.portfolio_manual_measurement = getattr(
+            self, "_manual_measurement", None)
         emit("L5_LIVE_GATES", {
             "validation_gates": (
                 self.executor.validation_gates.as_dict(
@@ -3009,7 +3076,11 @@ class Runner:
             detail = {k: (str(v) if k == "net_usd" and v is not None else v)
                       for k, v in moved.items()}
             return {
-                "portfolio_drawdown": PDD.report(val),
+                #: `manual` is None unless the bot/total split is ON, and
+                #: is built from the tick's STORED reading: still no venue
+                #: request on this thread.
+                "portfolio_drawdown": PDD.report(
+                    val, manual=Runner.portfolio_manual_lines(self, now=t)),
                 "equity_baseline": dict(
                     EB.line(doc, val, net, transfers_detail=detail),
                     period=period),
@@ -11801,6 +11872,7 @@ class Runner:
         self.maybe_watch_equity_transfers(now)
         self.maybe_correct_venue_supersets(now)
         self.maybe_report_venue_basis(now)
+        self.maybe_measure_manual_orders(now)
         # a book that has gone uncertain gets another authoritative read,
         # rather than latching the session shut until a redeploy
         self.reconcile_if_needed(now)

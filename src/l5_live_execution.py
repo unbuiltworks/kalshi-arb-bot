@@ -7023,6 +7023,10 @@ class FaithfulExecutor:
         self.halt_gate: Optional[Any] = None
         self.validation_gates: Optional[Any] = None
         self.available_cash_usd: Optional[D] = None
+        #: the runner's stored reading of the owner-attested manual orders
+        #: (`l5_manual_commitment`). None counts 0. Read only when the
+        #: bot/total drawdown split is ON.
+        self.portfolio_manual_measurement: Optional[Dict[str, Any]] = None
         #: ORDER-ID-LINKED CALIBRATION CAPTURE, attached by the runner like
         #: the gates above. Declared here so the executor's surface states
         #: what may be attached to it: the graft guard checks every
@@ -10208,7 +10212,8 @@ class FaithfulExecutor:
                 cumulative_unrealized_loss=unreal,
                 available_cash_usd=self.available_cash_usd,
                 inventory=inv,
-                portfolio_value_usd=self.portfolio_value_for_gates())
+                portfolio_value_usd=self.portfolio_value_for_gates(),
+                portfolio_manual=self.portfolio_manual_for_gates())
             if reason:
                 return "PAIR_%s:%s" % (leg["side"], reason)
         return None
@@ -10229,6 +10234,29 @@ class FaithfulExecutor:
                 raise
             return None
         return PDD.worst_case_value(self.available_cash_usd, pos)
+
+    def portfolio_manual_for_gates(self) -> Optional[Dict[str, Any]]:
+        """The measured manual commitment for the drawdown gate, or None.
+
+        None whenever the bot/total split is not ON, so nothing is computed
+        and the gate is exactly what it was. ON, it is computed from the
+        measurement the runner stored on its tick (no venue request here)
+        against the same positions the value uses. Any failure is None,
+        which the gate counts as 0: the bot figure is then the whole
+        drawdown, the stricter reading.
+        """
+        from src import l5_portfolio_drawdown as PDD
+        try:
+            if PDD.split_config().get("state") != "ON":
+                return None
+            return PDD.manual_commitment(
+                getattr(self, "portfolio_manual_measurement", None),
+                self.store.positions_by_market(),
+                dt.datetime.now(dt.timezone.utc).timestamp())
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return None
 
     def inventory_for_gates(self, market: str) -> Dict[str, Any]:
         """Confirmed per-side quantity and ACTUAL acquisition cost.
@@ -11907,7 +11935,8 @@ class FaithfulExecutor:
                         self.unrealized_loss_for_gates()),
                     available_cash_usd=self.available_cash_usd,
                     inventory=self.inventory_for_gates(market),
-                    portfolio_value_usd=self.portfolio_value_for_gates())
+                    portfolio_value_usd=self.portfolio_value_for_gates(),
+                    portfolio_manual=self.portfolio_manual_for_gates())
             except Exception as exc:                       # noqa: BLE001
                 # a gate that cannot evaluate refuses. Failing open here
                 # would silently remove the protection it exists to be.
