@@ -1496,6 +1496,11 @@ def pregame_targets(events: Iterable[Mapping[str, Any]], now: float
             slug = str(m.get("slug") or "")
             if not slug.startswith(SPORTS_PREFIXES) or slug in seen:
                 continue
+            if learn_cricket(slug, m.get("sportsMarketType"),
+                             (ev.get("eventState") or {}).get("type")
+                             if isinstance(ev.get("eventState"), Mapping)
+                             else None):
+                continue
             g = parse_start(m.get("gameStartTime") or ev.get("startTime"))
             if g is None:
                 continue
@@ -1771,14 +1776,42 @@ EXCLUDE_TAGS = tuple(t.strip() for t in os.getenv(
 # setting. Cricket is never selected, and any cricket market already in the
 # book is abandoned (orders cancelled, nothing re-placed, completions too).
 CRICKET_LEAGUES = ("ipl", "bbl", "psl", "cpl", "wpl", "sa20", "t20", "odi",
-                   "t20i", "ilt20", "hundred", "cricket")
+                   "t20i", "ilt20", "hundred", "cricket",
+                   # FOUND 2026-11-25: live on the venue, labelled cricket by
+                   # the venue, and NOT caught by the names above
+                   "sheffield", "wbbl", "smat", "csafc", "pro50", "county",
+                   "ranji", "bpl", "lpl", "mlc", "wbbl", "plunket",
+                   "supersmash", "vitality", "marsh")
+#: league codes the VENUE ITSELF labelled cricket (event state type, or a
+#: market type starting "cricket"), learned as the slate is read. A name
+#: list goes stale every time the venue lists a new competition; the
+#: venue's own label does not. Only ever added to.
+_CRICKET_BY_VENUE: set = set()
+
+
+def _league_of(slug: Any) -> str:
+    parts = str(slug).split("-")
+    return parts[1] if len(parts) > 1 else ""
+
+
+def learn_cricket(slug: Any, *labels: Any) -> bool:
+    """Record this market's competition as cricket when any venue label
+    says so. Returns True when it is (now) known as cricket."""
+    if any("cricket" in str(x or "").lower() for x in labels):
+        lg = _league_of(slug)
+        if lg and lg not in _CRICKET_BY_VENUE:
+            _CRICKET_BY_VENUE.add(lg)
+            log("CRICKET_LEARNED", league=lg, example=str(slug),
+                label="the venue labels this competition cricket: never "
+                      "selected, never quoted")
+        return True
+    return False
 
 
 def is_cricket(slug: str) -> bool:
-    parts = str(slug).split("-")
-    league = parts[1] if len(parts) > 1 else ""
+    league = _league_of(slug)
     return league.endswith("cr") or league in CRICKET_LEAGUES or \
-        "cricket" in str(slug)
+        league in _CRICKET_BY_VENUE or "cricket" in str(slug)
 
 
 def excluded(slug: str) -> bool:
@@ -2220,6 +2253,9 @@ class Venue:
             for m in (ev.get("markets") or []) if isinstance(ev, Mapping) else []:
                 if isinstance(m, Mapping) and m.get("slug"):
                     st[str(m["slug"])] = es or {}
+                    learn_cricket(m["slug"], (es or {}).get("type")
+                                  if isinstance(es, Mapping) else None,
+                                  m.get("sportsMarketType"))
         if st:
             keep = {k: v for k, v in self.states.items()
                     if (v or {}).get("type") == "crypto-1d"}

@@ -1416,6 +1416,41 @@ def test_no_cricket_ever(monkeypatch):
         assert not M.is_cricket(s) and not M.abandoned(s), s
 
 
+def test_cricket_competitions_found_live_on_25_nov_are_excluded():
+    """Five of six cricket competitions listed on the venue were not caught
+    by the name rule (found by the market-type scan, 2026-11-25)."""
+    for lg in ("sheffield", "wbbl", "smat", "csafc", "pro50", "testcr"):
+        s = "aec-%s-aaa-bbb-2026-11-25" % lg
+        assert M.is_cricket(s) and M.excluded(s) and M.abandoned(s), s
+
+
+def test_cricket_is_learned_from_the_venues_own_label(monkeypatch):
+    """A competition nobody listed: the venue's event type or market type
+    says cricket, so it is excluded from then on, and pre-game discovery
+    never returns it."""
+    monkeypatch.setattr(M, "_CRICKET_BY_VENUE", set())
+    s = "aec-newcomp-aaa-bbb-2026-11-25"
+    assert not M.is_cricket(s)
+    assert M.learn_cricket(s, None, "cricket_match_winner") is True
+    assert M.is_cricket(s) and M.excluded(s) and M.abandoned(s)
+    assert M.is_cricket("aec-newcomp-ccc-ddd-2026-11-26")   # the competition
+    assert M.learn_cricket("aec-atp-a-b-2026-11-25", "tennis",
+                           "tennis_match_winner") is False
+    assert not M.is_cricket("aec-atp-a-b-2026-11-25")
+    import time as _t
+    now = _t.time()
+    iso = _t.strftime("%Y-%m-%dT%H:%M:%SZ", _t.gmtime(now + 3600))
+    evs = [{"live": False, "eventState": {"type": "cricket"},
+            "markets": [{"slug": "aec-othercomp-x-y-2026-11-25",
+                         "gameStartTime": iso}]},
+           {"live": False, "eventState": {"type": "tennis"},
+            "markets": [{"slug": "aec-atp-x-y-2026-11-25",
+                         "gameStartTime": iso}]}]
+    got = [t["slug"] for t in M.pregame_targets(evs, now)]
+    assert got == ["aec-atp-x-y-2026-11-25"]
+    assert M.is_cricket("aec-othercomp-q-r-2026-11-27")
+
+
 def test_daily_loss_stop_blocks_new_openings_only(eng, monkeypatch, capsys):
     e, v = eng
     monkeypatch.setattr(M, "DAILY_LOSS_USD", D("0.10"))
