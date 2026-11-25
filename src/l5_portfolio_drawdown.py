@@ -483,6 +483,40 @@ SPLIT_LABELS = (
     "figure; gains and worst cases still count.")
 
 
+#: an attested id the venue says is not manual is simply not manual money
+REJECTED_HARMLESS = ("NOT_MANUAL_PER_VENUE",)
+
+
+def manual_unaccounted(manual: Any,
+                       env: Optional[Mapping[str, str]] = None
+                       ) -> Optional[str]:
+    """A refusal when the owner attested manual orders and one of them has
+    NOT been accounted for, else None.
+
+    WHY THIS REFUSES INSTEAD OF COUNTING 0. An attested order that was
+    never read (first moments after a restart, a venue read that fails, an
+    id the venue does not find) may be a manual GAIN. Leaving it out would
+    make the bot figure SMALLER than the truth and so loosen the bot
+    limit. Nothing can be assumed about its size, so new exposure is
+    refused until every attested id is either measured or stated by the
+    venue itself not to be manual. The reason does not start with the
+    limit prefix, so every reader treats it as the publisher refusing.
+    With no attested ids there is nothing to account for."""
+    if not attested_order_ids(env):
+        return None
+    if manual is None:
+        return "PORTFOLIO_MANUAL_ORDERS_NOT_MEASURED"
+    if not isinstance(manual, Mapping):
+        return None            # a caller's own figure: it accounts for it
+    if manual.get("why") == "MANUAL_NOT_MEASURED":
+        return "PORTFOLIO_MANUAL_ORDERS_NOT_MEASURED"
+    for r in (manual.get("rejected") or ()):
+        why = str((r or {}).get("why") if isinstance(r, Mapping) else r)
+        if why not in REJECTED_HARMLESS:
+            return "PORTFOLIO_MANUAL_ORDER_UNREADABLE:%s" % why[:40]
+    return None
+
+
 def refusal(value: Optional[D], cfg: Optional[Dict[str, Any]] = None, *,
             split: Optional[Mapping[str, Any]] = None,
             manual: Any = None) -> Optional[str]:
@@ -501,6 +535,9 @@ def refusal(value: Optional[D], cfg: Optional[Dict[str, Any]] = None, *,
         return "PORTFOLIO_VALUE_UNAVAILABLE"
     dd = c["anchor_usd"] - D(str(value))
     if s.get("state") == "ON":
+        gap = manual_unaccounted(manual)
+        if gap is not None:
+            return gap
         f = _figures(dd, manual, c, s)
         if f["bot_tripped"]:
             return ("%s:%s>=%s" % (LIMIT_PREFIX, f["effective_drawdown_usd"],

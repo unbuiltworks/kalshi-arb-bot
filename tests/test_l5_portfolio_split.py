@@ -590,10 +590,11 @@ def test_runner_measures_on_the_tick_and_publishes_from_the_stored_copy(
     venue_holds(store)
     v = Venue({OID: row()})
     r = Rn(store, v)
-    # before any tick: nothing measured, so the bot figure is everything
+    # before any tick: an attested order has not been read, and it might
+    # be a manual GAIN -- so this refuses outright instead of counting 0
     blk = r.equity_risk_lines(NOW)["portfolio_drawdown"]
     assert blk["split"]["manual_commitment_usd"] == "0"
-    assert blk["refusal"] == "PORTFOLIO_DRAWDOWN_LIMIT:22.00>=5"
+    assert blk["refusal"] == "PORTFOLIO_MANUAL_ORDERS_NOT_MEASURED"
     assert v.calls == []                    # publishing never asks the venue
     r.maybe_measure_manual_orders(NOW)
     assert v.calls == [OID]
@@ -685,10 +686,12 @@ def gate(value, manual=None):
 
 def test_own_gate_is_bound_by_both_limits(on):
     m = commit()
-    clear = gate(D("320"))
+    clear = gate(D("320"), m)
     assert not (clear or "").startswith("PORTFOLIO_")
     assert gate(D("298.00"), m) == clear               # manual, not a bot loss
-    assert gate(D("298.00")) == "PORTFOLIO_DRAWDOWN_LIMIT:22.00>=5"
+    # attested but never measured: refused, whatever the value
+    assert gate(D("298.00")) == "PORTFOLIO_MANUAL_ORDERS_NOT_MEASURED"
+    assert gate(D("320")) == "PORTFOLIO_MANUAL_ORDERS_NOT_MEASURED"
     assert gate(D("295.00"), m) == "PORTFOLIO_DRAWDOWN_LIMIT:5.2000>=5"
     big = dict(m, manual_commitment_usd=D("40"))
     assert gate(D("279.00"), big) \
@@ -710,7 +713,7 @@ def test_executor_hands_the_gate_the_stored_measurement(on, store):
     e.portfolio_manual_measurement = measured(now=_t.time())
     got = e.portfolio_manual_for_gates()
     assert got["manual_commitment_usd"] == D("19.80")
-    assert gate(D("298.00"), got) == gate(D("320"))
+    assert gate(D("298.00"), got) == gate(D("320"), got)
     e.portfolio_manual_measurement = measured(now=_t.time() - 181)
     assert e.portfolio_manual_for_gates()["manual_commitment_usd"] == 0
 
@@ -1213,3 +1216,47 @@ def test_runner_end_to_end_bought_and_sold(on, store, monkeypatch):
     assert D(blk["split"]["bot_drawdown_usd"]) == D("5")
     assert blk["refusal"].startswith("PORTFOLIO_DRAWDOWN_LIMIT:5.000")
     assert BUY_ID not in repr(blk) and SELL_ID not in repr(blk)
+
+
+# ------------------------------------ an attested order nobody has read
+def test_an_unread_attested_order_refuses_instead_of_counting_zero():
+    """Found in review, 2026-11-25. An attested id that was never read
+    (first moments after a restart, a failing venue read, an id the venue
+    does not find) may be a manual GAIN. Counting it 0 would make the bot
+    figure smaller than the truth and loosen the bot limit, so it refuses.
+    Example: the account is 9.03 ABOVE its anchor because of a manual
+    gain; with the gain unread the bot figure would read -9.03."""
+    e = dict(ENV, **{P.MANUAL_ORDERS_ENV: OID})
+    assert P.manual_unaccounted(None, e) \
+        == "PORTFOLIO_MANUAL_ORDERS_NOT_MEASURED"
+    assert P.manual_unaccounted({"why": "MANUAL_NOT_MEASURED"}, e) \
+        == "PORTFOLIO_MANUAL_ORDERS_NOT_MEASURED"
+    for why in ("ORDER_NOT_FOUND", "NOT_READ_YET", "ORDER_ID_MALFORMED",
+                "ORDER_UNREADABLE:TimeoutError", "TOO_MANY_ATTESTED_ORDERS"):
+        got = P.manual_unaccounted(
+            {"why": None, "rejected": [{"order_id_tail": "TZ73",
+                                        "why": why}]}, e)
+        assert got and got.startswith("PORTFOLIO_MANUAL_ORDER_UNREADABLE")
+        assert not got.startswith(P.LIMIT_PREFIX)   # readers: publisher refuses
+    # the venue itself says the order was not manual: nothing to account
+    assert P.manual_unaccounted(
+        {"why": None, "rejected": [{"order_id_tail": "TZ73",
+                                    "why": "NOT_MANUAL_PER_VENUE"}]}, e) is None
+    # every attested order measured: nothing unaccounted
+    assert P.manual_unaccounted({"why": None, "rejected": []}, e) is None
+    # a stale reading is handled by the arithmetic (losses 0, gains kept)
+    assert P.manual_unaccounted({"why": "MANUAL_MEASUREMENT_STALE",
+                                 "rejected": []}, e) is None
+    # no attested ids at all: the split works with nothing to account for
+    assert P.manual_unaccounted(None, ENV) is None
+
+
+def test_unread_attested_order_refusal_reaches_the_published_block(
+        monkeypatch):
+    for k, v in ENV.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv(P.MANUAL_ORDERS_ENV, OID)
+    blk = P.report(D("329.03"), manual=None)       # above the anchor
+    assert blk["refusal"] == "PORTFOLIO_MANUAL_ORDERS_NOT_MEASURED"
+    monkeypatch.delenv(P.MANUAL_ORDERS_ENV)
+    assert P.report(D("329.03"), manual=None)["refusal"] is None
