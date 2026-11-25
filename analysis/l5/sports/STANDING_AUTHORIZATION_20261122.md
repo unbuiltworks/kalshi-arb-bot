@@ -1160,3 +1160,25 @@ total-account figures).
 Reward rows for this window: not posted yet.
 Left as they are pending the owner's decision: venue-native profile
 settings (locked), account limit $5.
+
+## 46. Venue-native validation — final settled result (read 11:50 UTC 25 Nov)
+
+UTR Carjem–Caltes settled against the 2 NO held at 0.45: −$0.90. Nothing
+is open. Venue-reconciled result for the 00:30–03:30 UTC window (the
+bot's own P&L line, fills reconciled against the venue): 14 fills, 13
+contracts, $6.15 spent; 5 pairs +$0.38; 3 unpaired contracts lost −$1.53;
+fees 0; **realized net −$1.15**. Rewards for the window: none credited yet
+(venue total credited still $24.09 at 05:48 UTC).
+
+Bounded campaigns since 21 Nov, bot trading only: −$2.10, −$0.42
+(validation hour), −$1.15 = −$3.67 realized; rewards credited +$1.30;
+net −$2.37.
+
+Owner direction 25 Nov (later messages, recorded for scope): C2 selected
+for preparation ($13 bot limit, $35 total-account limit, eight markets,
+$60 spend); feature development frozen; market-expansion branch kept
+separate from the production release; priority is the two locked
+deployments, manual-order accounting, emergency-stop verification and the
+$13 / eight-market campaign. None of these messages contained a
+deployment, settings or live-trading authorization line; nothing has been
+deployed or set.
