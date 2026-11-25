@@ -1320,3 +1320,20 @@ unlocked), pre-game and in-play size 2, depth filter 3, 4 markets / 8
 tracked, competitions atp, setkamemd, setkameua, utr, wta, margin test
 off, cooldown 10, caps and limits as before. Carried inventory at the
 restart: UTR Dolhey–Monmic YES 2 / NO 1 (last fill YES 0.30 at 14:32:43).
+
+## 52. Mid-campaign review — 25 Nov, 15:20 UTC (no change made)
+
+- Settled P&L reconciled: bot realized −$0.86 (3 markets settled, all
+  losses from unpaired legs); ledger cash 330.5058 (13:58) → 329.6459
+  (15:17) = −$0.86; unexplained $0.00. Rewards: $0 modelled above payout.
+- ATP/WTA not selected because no selection ran after the 14:33 restart:
+  all four slots were held by pre-game UTR markets with resting bids. Only
+  one ATP market (pausan-thicig) would have been eligible.
+- 278 jump/volatility pauses: real moves (e.g. Dolhey 0.18→0.01, Viebru
+  0.43→0.14; 24 of 139 jumps were spread-only); opening time lost ≈ 0
+  because the slots were full anyway. Protections not weakened.
+- Champions League today (scan `rewards/scan_20261125/ucl_1515.json`):
+  pools $160 day-of / $1,280 live per match, target 10,000, but 5,000 to
+  100,000 contracts at each touch; our modelled reward is $0.00–0.01/hour
+  even at 20 contracts and even with the live pool. Not a reward
+  opportunity at our size; the earlier suggestion is withdrawn.
