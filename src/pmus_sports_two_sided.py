@@ -5512,6 +5512,14 @@ class Engine:
         if not new_block and self.ws is not None and \
                 now < float(mk.get("jump_pause_until") or 0):
             new_block = "jump_pause"
+        if not new_block and slate() == "live" and \
+                ph["phase"] == "pregame":
+            # LIVE 2026-11-25 17:08Z: with the slate switched to in-play
+            # only, a market already tracked from before still placed five
+            # pre-game opening bids. The slate decides selection; this
+            # holds the same rule for markets already on the list. Only
+            # openings and extensions stop; completions continue.
+            new_block = "slate_live_pregame"
         if not new_block and ph["expired"]:
             new_block = "kickoff_unconfirmed"
         pin = rn1_pin()

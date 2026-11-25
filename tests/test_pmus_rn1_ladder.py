@@ -114,3 +114,24 @@ def test_every_ladder_order_passes_the_final_gate(lad, monkeypatch):
     e.step_market(SLUG)
     total = sum(D(px) * D(q) for _s, px, q in resting(v))
     assert total <= D("8")
+
+
+def test_in_play_only_also_holds_for_a_market_already_tracked(
+        eng, monkeypatch):
+    """LIVE 2026-11-25: slate switched to live while a pre-game market was
+    already tracked; it kept opening. Now no opening or extension rests in
+    a pre-game market under the live slate; a completion still does."""
+    e, v = eng
+    mk = e.b.m(SLUG)
+    mk["game_start"] = time.time() + 3600            # not started
+    monkeypatch.setattr(M, "SLATE", "live")
+    e.step_market(SLUG)
+    assert resting(v) == []
+    mk["pos"]["YES"], mk["cost"]["YES"] = D("4"), D("1.80")
+    mk.setdefault("last_fill_t", {})["YES"] = time.time() - 3600
+    e.step_market(SLUG)
+    assert [r[0] for r in resting(v)] == ["NO"]       # the completion only
+    monkeypatch.setattr(M, "SLATE", "both")           # before: it opened
+    mk["pos"]["YES"], mk["cost"]["YES"] = D("0"), D("0")
+    e.step_market(SLUG)
+    assert sorted(r[0] for r in resting(v)) == ["NO", "YES"]
