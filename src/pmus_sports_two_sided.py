@@ -1389,6 +1389,27 @@ ALLOW_TAKER = os.getenv("PMUS_TWO_SIDED_ALLOW_TAKER", "0").strip() == "1"
 # came toward us) is re-priced or pulled exactly as now, and so is a
 # completion. 0 = off (today).
 RN1_KEEP_DEEPER_TICKS = int(os.getenv("PMUS_RN1_KEEP_DEEPER_TICKS", "0"))
+# INVENTORY AT SEVERAL PRICE LEVELS (owner 2026-11-25: "Build inventory at
+# different price levels", "Maintain multiple resting orders", "We want
+# sustained inventory accumulation, not isolated two-contract transactions
+# followed by inactivity"). Until now each side of a market held ONE
+# resting bid, so a side could buy at most one clip per price move and
+# then waited for the next re-quote. With RN1_LADDER_LEVELS = N > 1, behind
+# every opening or same-side extension bid the controller also rests up to
+# N-1 further bids of the same size, each RN1_LADDER_STEP_TICKS deeper.
+# A falling price then fills them in turn: the side accumulates at
+# progressively lower prices instead of one clip at a time.
+# Bounded by everything that bounds one bid: each level is added only
+# while the market's worst case WITH every level filled stays inside the
+# per-market spend and unpaired caps and the campaign caps, the price
+# floor applies, the final gate re-checks every order against all resting
+# orders, and the account limit counts each order as it rests. Completion
+# bids are never laddered. When the price moves, a resting bid that now
+# sits at another level's price is kept, not cancelled and re-placed.
+# 1 = one bid per side, exactly as before.
+RN1_LADDER_LEVELS = max(1, int(os.getenv("PMUS_RN1_LADDER_LEVELS", "1")))
+RN1_LADDER_STEP_TICKS = max(1, int(os.getenv(
+    "PMUS_RN1_LADDER_STEP_TICKS", "2")))
 # JOIN THE BEST BID WHEN IT IS JUSTIFIED (owner 2026-11-25: "Competitive
 # maker quoting that can join the best bid when economically justified").
 # PMUS_RN1_DEPTH_TICKS=1 rests every bid one tick behind the touch. The
@@ -2659,8 +2680,12 @@ class Engine:
             # a >= REWARD_REPRICE_TICKS move or a target-walk exit. The jump
             # pause above still pulls at once.
             return
-        legs = {o["side"]: D(o["px"]) for o in mk["orders"].values()
-                if o.get("open")}
+        legs: Dict[str, D] = {}
+        for o in mk["orders"].values():
+            if o.get("open"):
+                # with several levels on a side, the highest is the one the
+                # move threatens first
+                legs[o["side"]] = max(legs.get(o["side"], D(0)), D(o["px"]))
         # a bid deliberately joined at the touch is not "too close" to it;
         # the near-cross rule below still pulls it when the spread closes
         joined = bool(getattr(self, "_rn1_joined", {}).get(slug))
@@ -4982,6 +5007,44 @@ class Engine:
         return any(o.get("open") and not is_completion_stage(o.get("stage"))
                    for o in (mk.get("orders") or {}).values())
 
+    def rn1_ladder(self, slug: str, mk: Dict[str, Any],
+                   want: Mapping[str, Any], tick: Any) -> list:
+        """Deeper bids behind each opening/extension target (see
+        RN1_LADDER_LEVELS): [{"side","px","qty","role","level"}]. A level
+        is added only while this market's worst case with EVERY planned
+        bid filled stays inside the per-market and campaign caps; the first
+        level that would not fit ends that side's ladder."""
+        if RN1_LADDER_LEVELS <= 1:
+            return []
+        t = D(str(tick))
+        out: list = []
+        planned = [(sd, tg["px"], tg["qty"], tg["role"] == "complete")
+                   for sd, tg in want.items() if tg is not None]
+        other = self.rn1_campaign_exposure(exclude=slug)
+        tol = D("0.000001")
+        for side in ("YES", "NO"):
+            tg = want.get(side)
+            if tg is None or tg["role"] == "complete" or tg.get("kept"):
+                continue
+            for k in range(1, RN1_LADDER_LEVELS):
+                px = D(str(tg["px"])) - k * RN1_LADDER_STEP_TICKS * t
+                if px < D(str(RN1.PX_MIN)) or px <= 0:
+                    break
+                trial = planned + [(l_["side"], l_["px"], l_["qty"], False)
+                                   for l_ in out] + \
+                    [(side, px, tg["qty"], False)]
+                c = RN1.committed(mk["pos"], mk["cost"], trial)
+                if c["spend"] > D(str(RN1.PER_MARKET_USD)) + tol or \
+                        c["unmatched"] > D(str(RN1.RESIDUAL_CAP_USD)) + tol \
+                        or other["spend"] + c["spend"] > \
+                        D(str(RN1.TOTAL_SPEND_USD)) + tol or \
+                        other["unmatched"] + c["unmatched"] > \
+                        D(str(RN1.TOTAL_UNMATCHED_USD)) + tol:
+                    break
+                out.append({"side": side, "px": px, "qty": tg["qty"],
+                            "role": tg["role"], "level": k})
+        return out
+
     def rn1_campaign_caps(self, slug: str, mk: Dict[str, Any],
                           want: Dict[str, Any], q: Dict[str, Any]) -> None:
         """Owner 2026-11-22: $16 total spend and $6 unmatched across the
@@ -5524,9 +5587,12 @@ class Engine:
             want[side] = tg
         self._gap_hold(slug, mk, q, want, bbo, new_block, now)
         self.rn1_campaign_caps(slug, mk, want, q)
+        ladder = self.rn1_ladder(slug, mk, want, tick)
         key = json.dumps({s: (None if t is None else
                               [str(t["px"]), str(t["qty"]), t["role"]])
                           for s, t in want.items()} |
+                         {"ladder": [[l_["side"], str(l_["px"])]
+                                     for l_ in ladder]} |
                          {"block": new_block, "phase": ph["phase"],
                           "why": {s: q.get("why_" + s) for s in ("YES", "NO")}},
                          sort_keys=True)
@@ -5539,6 +5605,9 @@ class Engine:
                           {"px": str(t["px"]), "qty": str(t["qty"]),
                            "role": t["role"]}) for s, t in want.items()},
                 why={s: q.get("why_" + s) for s in ("YES", "NO")},
+                ladder=[{"side": l_["side"], "px": str(l_["px"]),
+                         "qty": str(l_["qty"]), "level": l_["level"]}
+                        for l_ in ladder] or None,
                 extend_ev=q.get("extend_ev"),
                 edge=q.get("edge"),
                 fair=(getattr(self, "_rn1_fair", {}) or {}).get(slug),
@@ -5548,27 +5617,37 @@ class Engine:
                       "and the submission lock allow")
         # reconcile: keep a resting bid within REPRICE_TICKS of target with
         # no more than the target size left; cancel everything else first
+        # every bid this market should have: one per side (level 0) plus
+        # any deeper levels (RN1_LADDER_LEVELS). Each resting order is kept
+        # for the first target it matches; nothing is kept twice.
+        targets = [(sd, tg, 0) for sd, tg in want.items() if tg is not None]
+        targets += [(l_["side"], l_, l_["level"]) for l_ in ladder]
         stale = []
-        keep = {}
+        matched: set = set()
         for oid, o in mk["orders"].items():
             if not o.get("open"):
                 continue
-            tg = want.get(o["side"])
             left = D(o["qty"]) - D(o.get("filled") or "0")
-            gap = None if tg is None else tg["px"] - D(o["px"])
-            near = gap is not None and abs(gap) < RN1.REPRICE_TICKS * tick
-            deeper = gap is not None and RN1_KEEP_DEEPER_TICKS > 0 and \
-                tg["role"] != "complete" and \
-                not is_completion_stage(o.get("stage")) and \
-                D(0) < gap <= RN1_KEEP_DEEPER_TICKS * tick
-            if tg is not None and o["side"] not in keep and \
-                    (near or deeper) and left <= tg["qty"]:
-                keep[o["side"]] = oid
-                if deeper and not near:
-                    self._kept_deeper = int(getattr(
-                        self, "_kept_deeper", 0)) + 1
-            else:
+            hit = None
+            for i, (sd, tg, lv) in enumerate(targets):
+                if i in matched or sd != o["side"]:
+                    continue
+                gap = tg["px"] - D(o["px"])
+                near = abs(gap) < RN1.REPRICE_TICKS * tick
+                deeper = lv == 0 and RN1_KEEP_DEEPER_TICKS > 0 and \
+                    tg["role"] != "complete" and \
+                    not is_completion_stage(o.get("stage")) and \
+                    D(0) < gap <= RN1_KEEP_DEEPER_TICKS * tick
+                if (near or deeper) and left <= tg["qty"]:
+                    hit = i
+                    if deeper and not near:
+                        self._kept_deeper = int(getattr(
+                            self, "_kept_deeper", 0)) + 1
+                    break
+            if hit is None:
                 stale.append((oid, o))
+            else:
+                matched.add(hit)
         if stale:
             before = (str(mk["pos"]["YES"]), str(mk["pos"]["NO"]))
             self._cancel_legs(slug, stale)
@@ -5598,9 +5677,8 @@ class Engine:
                     reselectable=RN1_RESELECT)
             return
         mk.pop("idle_since", None)
-        for side in ("YES", "NO"):
-            tg = want.get(side)
-            if tg is None or side in keep:
+        for i, (side, tg, _lv) in enumerate(targets):
+            if i in matched:
                 continue
             stage = {"complete": "two_sided_complete",
                      "extend": "rn1_extend"}.get(tg["role"], "rn1_open")
