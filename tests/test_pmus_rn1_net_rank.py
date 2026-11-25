@@ -197,3 +197,19 @@ def test_the_chosen_size_caps_the_quoted_clip(live, monkeypatch):
                             "net_usd_per_hour": 0.1}}
     e.step_market(SLUG)
     assert resting(v) and all(q == "1" for _s, _p, q in resting(v))
+
+
+def test_a_flat_market_with_no_positive_net_gets_no_openings(
+        live, monkeypatch):
+    """LIVE 25 Nov 23:45: a carried-over flat market at a negative estimate
+    quoted until its release. Now it rests nothing and is released."""
+    e, v = live
+    monkeypatch.setattr(M, "RN1_NET_RANK", True)
+    monkeypatch.setattr(M, "RN1_RELEASE_UNQUALIFIED_S", 30.0)
+    monkeypatch.setattr(e, "rn1_quote_qualifies", lambda s, m: False)
+    e.step_market(SLUG)
+    assert resting(v) == []
+    mk = e.b.m(SLUG)
+    mk["unqualified_since"] = time.time() - 31
+    e.step_market(SLUG)
+    assert mk.get("done") is True

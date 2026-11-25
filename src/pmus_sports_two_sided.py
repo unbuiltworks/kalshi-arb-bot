@@ -5740,10 +5740,13 @@ class Engine:
             new_block = "vol_pause"
         if not new_block and self.rn1_market_slots_full(slug, mk):
             new_block = "max_markets"
-        if not new_block and RN1_NET_RANK and (y > 0 or n > 0) and \
+        if not new_block and RN1_NET_RANK and \
                 not self.rn1_quote_qualifies(slug, mk):
-            # holding inventory: replenish only while the fresh estimate
-            # (re-priced after every fill) is positive; completions go on
+            # no opening or extension while the fresh estimate (re-priced
+            # after every fill) is not positive, flat or not; completions
+            # go on. LIVE 25 Nov 23:45: markets carried over from before
+            # the window quoted for up to RELEASE_UNQUALIFIED_S at a
+            # negative estimate, and one filled.
             new_block = "net_not_positive"
         qcfg = dict(self.rn1_quote_cfg(slug, mk, tick))
         join_why = self.rn1_join_touch(slug, mk, bbo, tick, rng, now)
@@ -5893,7 +5896,8 @@ class Engine:
                     any(o.get("open") for _oid, o in stale):
                 return       # a fill raced the cancel, or still pending
         flat = y == 0 and n == 0
-        if flat and RN1_RELEASE_UNQUALIFIED_S > 0 and not new_block:
+        if flat and RN1_RELEASE_UNQUALIFIED_S > 0 and \
+                new_block in (None, "net_not_positive"):
             if self.rn1_quote_qualifies(slug, mk):
                 mk.pop("unqualified_since", None)
             else:
