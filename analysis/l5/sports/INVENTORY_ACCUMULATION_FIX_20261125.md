@@ -74,3 +74,43 @@ levels 2 ticks apart, $3 / $8 / $6 caps):
 | Both sides accumulate independently | after a YES fill, NO rests its completion plus two cheaper opening bids; after pairs form both sides ladder again |
 | Pauses still pull everything | a volatility pause removes the whole ladder, cooldown or not |
 | Caps hold through any fill sequence | filling every YES bid pass after pass never takes unpaired above $3 |
+
+## Update 18:55 UTC — restrictions measured live, corrections on the dev branch
+
+Live window 18:17–18:49 UTC on `a46a41b6a` (time-weighted over 9,279
+tracked market-seconds, 11 markets; `quotes_1817.jsonl`):
+
+| What stopped bids | share of side-time |
+|---|---|
+| Campaign loss stop counting open inventory (`pilot_loss_at_risk_book`: realized −1.67 + open worst case ≥ $4) | 17.0% |
+| Jump pause (2+ tick move, 15 s) | 17.1% |
+| Price outside 0.20–0.92 (cheap side of a lopsided match) | 16.1% |
+| Start-up wait for the first audit | 9.8% |
+| Volatility pause | 9.4% |
+| $3 per-market unpaired cap | 7.5% |
+| Thin touch (< 3 contracts) | 2.4% |
+| International price check / cooldown / campaign cap | < 1% each |
+
+At least one side was wanted 19.7% of the time. Ladder depth when wanted:
+3 levels 25%, 2 levels 43%, 1 level 32% — the $3 cap set the depth almost
+every time. Of 48 bids cancelled by reactive pulls, 24 were 2+ ticks from
+the touch. Projected reward was $0.00 on 231 of 236 quote lines
+(maximum $0.07), against the $1 payout minimum.
+
+Why projected reward is zero: our 2 contracts against targets of 500
+(UTR), 4,800 (table tennis) and 19,000 (ATP/WTA); bids pulled most of the
+time (no resting legs = no score); one-sided quoting, which on UTR fails
+the programme's 6c two-sided spread rule; and the estimate counted one
+arbitrary bid per side (fixed below).
+
+Corrections, development branch `dev/pmus-inventory-ladder`, code
+`c077c7398`, settings off by default (not deployed):
+
+- `PMUS_RN1_FIT_QTY=1`: a bid or ladder level that would breach a
+  per-market cap at 2 contracts is bid at 1 if 1 fits.
+- `PMUS_RN1_PULL_THREATENED_ONLY=1`: a reactive pull cancels only the bids
+  the move reached; jump pauses, locks, halts, caps and account blocks
+  still cancel everything.
+- Reward measurement uses the best bid per side with its full size.
+
+Regression 5,673 passed, the same 24 unrelated failures.
