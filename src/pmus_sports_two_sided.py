@@ -5008,12 +5008,20 @@ class Engine:
                    for o in (mk.get("orders") or {}).values())
 
     def rn1_ladder(self, slug: str, mk: Dict[str, Any],
-                   want: Mapping[str, Any], tick: Any) -> list:
-        """Deeper bids behind each opening/extension target (see
-        RN1_LADDER_LEVELS): [{"side","px","qty","role","level"}]. A level
-        is added only while this market's worst case with EVERY planned
-        bid filled stays inside the per-market and campaign caps; the first
-        level that would not fit ends that side's ladder."""
+                   want: Mapping[str, Any], tick: Any,
+                   clip: Any = None) -> list:
+        """Deeper bids behind each side's target (see RN1_LADDER_LEVELS):
+        [{"side","px","qty","role","level"}]. A level is added only while
+        this market's worst case with EVERY planned bid filled stays inside
+        the per-market and campaign caps; the first level that would not
+        fit ends that side's ladder.
+
+        Behind a COMPLETION bid the deeper levels are ordinary opening bids
+        of the normal clip on that side (LIVE-TESTED 2026-11-25 in replay:
+        after one fill the lighter side otherwise fell back to a single
+        completing bid, so neither side could keep accumulating). They are
+        cheaper than the completion, so each still pairs inside the
+        pair-cost limit with what the other side holds."""
         if RN1_LADDER_LEVELS <= 1:
             return []
         t = D(str(tick))
@@ -5024,15 +5032,19 @@ class Engine:
         tol = D("0.000001")
         for side in ("YES", "NO"):
             tg = want.get(side)
-            if tg is None or tg["role"] == "complete" or tg.get("kept"):
+            if tg is None or tg.get("kept"):
                 continue
+            behind_completion = tg["role"] == "complete"
+            qty = D(str(clip)) if (behind_completion and clip is not None) \
+                else D(str(tg["qty"]))
+            role = "open" if behind_completion else tg["role"]
             for k in range(1, RN1_LADDER_LEVELS):
                 px = D(str(tg["px"])) - k * RN1_LADDER_STEP_TICKS * t
                 if px < D(str(RN1.PX_MIN)) or px <= 0:
                     break
                 trial = planned + [(l_["side"], l_["px"], l_["qty"], False)
                                    for l_ in out] + \
-                    [(side, px, tg["qty"], False)]
+                    [(side, px, qty, False)]
                 c = RN1.committed(mk["pos"], mk["cost"], trial)
                 if c["spend"] > D(str(RN1.PER_MARKET_USD)) + tol or \
                         c["unmatched"] > D(str(RN1.RESIDUAL_CAP_USD)) + tol \
@@ -5041,8 +5053,8 @@ class Engine:
                         other["unmatched"] + c["unmatched"] > \
                         D(str(RN1.TOTAL_UNMATCHED_USD)) + tol:
                     break
-                out.append({"side": side, "px": px, "qty": tg["qty"],
-                            "role": tg["role"], "level": k})
+                out.append({"side": side, "px": px, "qty": qty,
+                            "role": role, "level": k})
         return out
 
     def rn1_campaign_caps(self, slug: str, mk: Dict[str, Any],
@@ -5595,7 +5607,8 @@ class Engine:
             want[side] = tg
         self._gap_hold(slug, mk, q, want, bbo, new_block, now)
         self.rn1_campaign_caps(slug, mk, want, q)
-        ladder = self.rn1_ladder(slug, mk, want, tick)
+        ladder = self.rn1_ladder(slug, mk, want, tick,
+                                 clip=qcfg.get("qty", RN1.QTY))
         key = json.dumps({s: (None if t is None else
                               [str(t["px"]), str(t["qty"]), t["role"]])
                           for s, t in want.items()} |
@@ -5632,10 +5645,22 @@ class Engine:
         targets += [(l_["side"], l_, l_["level"]) for l_ in ladder]
         stale = []
         matched: set = set()
+        # A side waiting out its refill cooldown keeps the deeper bids it
+        # already has resting (LIVE-TESTED 2026-11-25 in replay: one fill
+        # otherwise cancelled the rest of that side's ladder, so inventory
+        # could not build through successive fills). Nothing new is placed
+        # on that side until the cooldown ends, and only when no market
+        # block (pause, late, cap, lock) applies.
+        cooling = set() if new_block or RN1_LADDER_LEVELS <= 1 else {
+            sd for sd in ("YES", "NO") if want.get(sd) is None and
+            q.get("why_" + sd) == "refill_cooldown"}
         for oid, o in mk["orders"].items():
             if not o.get("open"):
                 continue
             left = D(o["qty"]) - D(o.get("filled") or "0")
+            if o["side"] in cooling and \
+                    not is_completion_stage(o.get("stage")):
+                continue                         # kept through the cooldown
             hit = None
             for i, (sd, tg, lv) in enumerate(targets):
                 if i in matched or sd != o["side"]:
