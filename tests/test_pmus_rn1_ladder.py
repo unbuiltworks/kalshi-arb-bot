@@ -372,3 +372,54 @@ def test_reward_estimate_uses_the_bid_nearest_the_touch(live, monkeypatch):
     e._rn1_reward_estimate(SLUG, mk, {"pool_rate_usd_s": 0.01},
                            D("0.01"))
     assert seen == {"yes": 0.47, "no": 0.49, "qty": 2.0}
+
+
+# ------------------------------ loss stop counts resting bids
+def _pilot_ok(e):
+    import time as _t
+    e._pilot = {"realized_net_usd": "0", "open_residual_worst_usd": "0",
+                "unconfirmed": []}
+    e._pilot_at = _t.monotonic()
+
+
+def test_resting_ladder_cannot_carry_the_worst_case_past_the_loss_stop(
+        live, monkeypatch):
+    """LIVE 2026-11-25 18:40:57: two ladder levels filled together and the
+    campaign worst case went past the $4 stop. With a $2.50 stop, the bids
+    the bot rests are now limited so that ALL of them filling and losing
+    stays inside it; without the rule every level rests."""
+    e, v = live
+    monkeypatch.setattr(M, "PILOT_LOSS_USD", D("2.50"))
+    _pilot_ok(e)
+    monkeypatch.setattr(M, "RN1_LOSS_STOP_COUNTS_RESTING", False)
+    e.step_market(SLUG)
+    assert len(resting(v)) == 6 and e.own_resting_worst() > D("2.50")
+    for o in v.orders.values():
+        o["open"] = False
+    e.b.m(SLUG)["orders"] = {}
+    monkeypatch.setattr(M, "RN1_LOSS_STOP_COUNTS_RESTING", True)
+    e.step_market(SLUG)
+    assert 0 < len(resting(v)) < 6
+    assert e.own_resting_worst() < D("2.50")
+
+
+def test_completions_are_never_refused_by_the_resting_loss_rule(
+        live, monkeypatch):
+    """2 YES held at 0.60 ($1.20 worst case) against a $1.50 stop: another
+    2-contract YES bid would take the worst case to -$2.10 and is refused;
+    the NO completion is not."""
+    import time as _t
+    e, v = live
+    monkeypatch.setattr(M, "PILOT_LOSS_USD", D("1.50"))
+    monkeypatch.setattr(M, "RN1_LOSS_STOP_COUNTS_RESTING", True)
+    _pilot_ok(e)
+    mk = e.b.m(SLUG)
+    mk["pos"]["YES"], mk["cost"]["YES"] = D("2"), D("1.20")
+    mk["orders"]["old"] = {"side": "YES", "px": "0.60", "qty": "2",
+                           "filled": "2", "open": False,
+                           "stage": "rn1_open", "placed_at": _t.time()}
+    why_open = e.final_gate(SLUG, "YES", D("0.45"), D("2"), "rn1_extend")
+    why_done = e.final_gate(SLUG, "NO", D("0.35"), D("2"),
+                            "two_sided_complete")
+    assert why_open and why_open.startswith("campaign_loss_stop_with_resting")
+    assert why_done is None

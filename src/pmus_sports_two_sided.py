@@ -1420,6 +1420,18 @@ RN1_LADDER_STEP_TICKS = max(1, int(os.getenv(
 # cancelled; the rest keep their place and the next pass re-prices as
 # usual. The jump pause (a move of 2+ ticks) still cancels everything, and
 # so do every lock, halt, cap and account block. 0 = as before.
+# THE CAMPAIGN LOSS STOP COUNTS RESTING BIDS (found 2026-11-25 19:40 UTC).
+# The stop refuses new openings once realized results plus every held
+# unpaired contract settling worthless reach -PILOT_LOSS_USD. Resting bids
+# were not counted, so several ladder levels could fill at once and carry
+# the worst case past the stop: live 18:40:57, two YES levels filled
+# together (worst case -1.67 - 1.78 - 2.60 = -6.05 against a $4 stop).
+# On (default), the final gate also refuses an opening or extension when
+# the worst case of the book PLUS every resting and reserved bid PLUS this
+# order (each filling and losing, the same arithmetic as the account
+# limit) would reach the stop. Completions are never refused by it.
+RN1_LOSS_STOP_COUNTS_RESTING = os.getenv(
+    "PMUS_RN1_LOSS_STOP_COUNTS_RESTING", "1").strip() == "1"
 RN1_PULL_THREATENED_ONLY = os.getenv(
     "PMUS_RN1_PULL_THREATENED_ONLY", "0").strip() == "1"
 # JOIN THE BEST BID WHEN IT IS JUSTIFIED (owner 2026-11-25: "Competitive
@@ -4947,6 +4959,14 @@ class Engine:
                 # it reduces risk and its cost is already reserved; the
                 # pair-cost ceiling above is its limit
                 return None
+            if RN1_LOSS_STOP_COUNTS_RESTING and PILOT_LOSS_USD > 0:
+                from src import pmus_pilot_pnl as PP
+                worst = PP.book_worst_case(self.b.d.get("markets") or {},
+                                           self.since) - \
+                    self.own_resting_worst(extra=(slug, sd, p, q))
+                if worst <= -D(str(PILOT_LOSS_USD)):
+                    return "campaign_loss_stop_with_resting:%s<=-%s" % (
+                        worst.quantize(D("0.01")), PILOT_LOSS_USD)
             # ---- ceilings: everything recorded plus this order
             every = [(rs, rp, rl, False) for rs, rp, rl in rest] + \
                 [(sd, p, q, False)]
