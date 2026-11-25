@@ -309,7 +309,11 @@ def quotes(*, yes_bid: Any, yes_ask: Any, tick: Any,
             if last is not None and now - float(last) < cool:
                 out["why_" + s] = "refill_cooldown"
                 continue
-            if p[s] > 0 and not fresh:
+            # Opt-in: let the independent marginal edge gate price additions.
+            # Without that gate, retain the legacy average-cost ceiling.
+            independent = bool(k.get("edge_gate")) and bool(k.get(
+                "independent_adds", os.getenv("PMUS_RN1_INDEPENDENT_ADDS", "0") == "1"))
+            if p[s] > 0 and not fresh and not independent:
                 avg_s = cs[s] / p[s]
                 if px > avg_s + up:
                     px = _floor(avg_s + up, t)  # don't chase it up
