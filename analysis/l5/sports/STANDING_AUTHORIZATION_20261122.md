@@ -1239,3 +1239,23 @@ Prepared, not deployed: sports release
 order ids behind manual sports trades from that existing walk. No order
 path, no venue call of its own. Regression 5,643 passed, same 24
 unrelated failures. Needs deployment approval (locked).
+
+## 49. $13 / eight-market campaign authorized — 25 Nov, 13:28 UTC
+
+My request (12:50 UTC) ended with one line: "Authorized: set the anchor to
+333.0402 and the account limit to $13. Then run the eight-market campaign
+on the deployed build for six hours starting 30 minutes after this
+message: one contract, $60 campaign spend, Setka and UTR,
+join-the-best-bid, 10-second replenishment, share ranking,
+balanced-as-fresh-entry, batched fill detection, separated inventory
+slots, two-hour completions-only grace after the window. Emergency stop
+unverified; paid-reward gate waived for this campaign."
+
+Owner's reply, typed, in full: "Authorized". Received 13:28 UTC.
+
+Read as approval of exactly that line. Window: 13:58:00–19:58:00 UTC
+25 Nov (30 minutes after the reply, six hours), relocks itself;
+completions-only until 21:58 UTC. Terms as in
+`CONSOLIDATED_AUTHORIZATION_REQUEST_20261125.md`, "Final form". Gate
+before anything opens: the ledger must read about $2.53 after the anchor
+change; otherwise the bot stays locked and the owner is told.
