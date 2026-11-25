@@ -22,7 +22,7 @@ production was not touched.
 The 24 failures are the same 24 test ids in both runs (compared by name;
 all in files unrelated to the sports bot, e.g. `test_spread_scanner`,
 `test_orderbook`, `test_deploy_fallthrough_guard`). 18 tests added by the
-last commit, 108 since the running build; none removed or skipped.
+last commit; none removed or skipped.
 
 ## What changes with no setting touched (deploying the build alone)
 
@@ -43,7 +43,7 @@ last commit, 108 since the running build; none removed or skipped.
 
 | Setting | Effect when on | Default |
 |---|---|---|
-| `PMUS_TWO_SIDED_FILL_LIST_POLL=1` | Fills detected from one open-order list read per pass; an order's own status is read whenever the list leaves any doubt, at least once a minute, and on every cancel. Cuts signed requests from about 0.84 to about 0.3 a second at 4 markets. | 0 |
+| `PMUS_TWO_SIDED_FILL_LIST_POLL=1` | Fills detected from one open-order list read per pass; an order's own status is read whenever the list leaves any doubt, at least once a minute, and on every cancel. Modelled signed requests at 8 markets: 0.38 a second against 1.6 without it. | 0 |
 | `PMUS_RN1_SLOTS_COUNT_INVENTORY=0` | A market holding only carried inventory no longer occupies a quoting slot. Its exposure still counts against every cap. | 1 |
 | `PMUS_RN1_RANK_SHARE=1` | Markets ranked by the modelled reward of our own quote per dollar committed, not by pool size. Ranking only. | 0 |
 | `PMUS_RN1_JOIN_TOUCH=1` | Bids rest at the best bid while the spread is at least two ticks, the mid moved at most 1c in 30 s and there was no jump in 60 s; one tick back otherwise. Post-only, never crossing; pair-cost limit and all caps apply. | 0 |
