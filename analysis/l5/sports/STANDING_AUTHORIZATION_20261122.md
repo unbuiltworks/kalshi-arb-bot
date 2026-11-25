@@ -1195,3 +1195,22 @@ Scope: the two deployments only. No setting is changed: the ledger split
 stays off (no total limit set), the bot limit stays $5, the sports lock
 stays `1`, none of the new sports settings is switched on. Rollbacks:
 ledger `f5a5434d6`, sports `766a965ba`.
+
+Carried out (section 47), 25 Nov:
+
+- Ledger `l5-pmus-live`: deployment `24ba89e8`, commit `c70e244a2`,
+  SUCCESS 12:04 UTC. Heartbeats 12:05 and 12:06: value 330.5058, anchor
+  321.4782, limit 5, figure −9.0276, room 14.0276, no refusal, no `split`
+  block — identical to before the deploy.
+- Sports `pmus-spring-l5-probe`: deployment `10cf4c50`, commit
+  `bc3a5b6b9`, SUCCESS 12:14 UTC. Boot: lock `locked` (new exposure and
+  completions), refill cooldown 60, depth 1, 4 markets, 1 contract — the
+  earlier settings, none of the new ones on. New code confirmed running
+  (`CRICKET_LEARNED` for `sheffield` and `testcr` at start). No order
+  line.
+- Watchdog sweeps 12:14–12:15: all three registries OK, sports lane OK,
+  0 open orders, no halt, no read error.
+- Limits unchanged: bot limit $5, lane cap $20, at-risk $16, daily loss
+  $5, unpaired $6 / $3, campaign spend $30.
+- Not yet seen at the time of writing: the sports bot's first hourly
+  account audit on the new build.
