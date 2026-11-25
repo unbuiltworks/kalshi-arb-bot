@@ -423,3 +423,77 @@ def test_completions_are_never_refused_by_the_resting_loss_rule(
                             "two_sided_complete")
     assert why_open and why_open.startswith("campaign_loss_stop_with_resting")
     assert why_done is None
+
+
+# ------------------------------------------- reward-qualified quoting
+def test_join_on_a_one_tick_book_puts_one_side_at_the_best_bid(
+        live, monkeypatch):
+    e, v = live
+    v.bid, v.ask = D("0.48"), D("0.49")
+    monkeypatch.setattr(M, "RN1_JOIN_TOUCH", True)
+    e.step_market(SLUG)
+    off = [r for r in resting(v) if r[0] == "YES"]
+    assert max(D(px) for _s, px, _q in off) == D("0.47")     # never joined
+    for o in v.orders.values():
+        o["open"] = False
+    e.b.m(SLUG)["orders"] = {}
+    monkeypatch.setattr(M, "RN1_JOIN_ONE_TICK", True)
+    e.step_market(SLUG)
+    yes = max(D(px) for s_, px, _q in resting(v) if s_ == "YES")
+    no = max(D(px) for s_, px, _q in resting(v) if s_ == "NO")
+    assert yes == D("0.48")                                    # best bid
+    assert yes + no <= R.PAIR_CAP                              # pair limit
+
+
+def test_a_joined_one_tick_bid_is_not_pulled_for_sitting_next_to_the_offer(
+        live, monkeypatch):
+    e, v = live
+    v.bid, v.ask = D("0.48"), D("0.49")
+    monkeypatch.setattr(M, "RN1_JOIN_TOUCH", True)
+    monkeypatch.setattr(M, "RN1_JOIN_ONE_TICK", True)
+    monkeypatch.setattr(M, "depth_ticks", lambda t: 1)
+    e.step_market(SLUG)
+    n0 = len(resting(v))
+    monkeypatch.setattr(e, "step_market", lambda s: None)
+    import time as _t
+    e.react(SLUG, [({"bid": D("0.48"), "ask": D("0.50")},
+                    {"bid": D("0.48"), "ask": D("0.49")}, _t.monotonic())])
+    assert len(resting(v)) == n0
+
+
+def test_ladder_levels_can_be_smaller_than_the_best_bid_clip(
+        live, monkeypatch):
+    e, v = live
+    monkeypatch.setattr(M, "RN1_LADDER_QTY", D("1"))
+    e.step_market(SLUG)
+    yes = sorted((px, q) for s_, px, q in resting(v) if s_ == "YES")
+    assert yes == [("0.43", "1"), ("0.45", "1"), ("0.47", "2")]
+
+
+def test_a_market_that_stops_qualifying_is_released(live, monkeypatch):
+    import time as _t
+    e, v = live
+    monkeypatch.setattr(M, "RN1_RELEASE_UNQUALIFIED_S", 30.0)
+    monkeypatch.setattr(e, "rn1_quote_qualifies", lambda s, mk: False)
+    e.step_market(SLUG)                         # starts the clock
+    mk = e.b.m(SLUG)
+    assert not mk.get("done")
+    mk["unqualified_since"] = _t.time() - 31
+    e.step_market(SLUG)                         # cancels its bids
+    assert resting(v) == []
+    e.step_market(SLUG)                         # then releases it
+    assert mk.get("done") is True
+
+
+def test_a_market_holding_inventory_is_never_released_for_rewards(
+        live, monkeypatch):
+    import time as _t
+    e, v = live
+    monkeypatch.setattr(M, "RN1_RELEASE_UNQUALIFIED_S", 30.0)
+    monkeypatch.setattr(e, "rn1_quote_qualifies", lambda s, mk: False)
+    mk = e.b.m(SLUG)
+    mk["pos"]["YES"], mk["cost"]["YES"] = D("2"), D("0.94")
+    mk["unqualified_since"] = _t.time() - 300
+    e.step_market(SLUG)
+    assert not mk.get("done")
+    assert any(s_ == "NO" for s_, _p, _q in resting(v))      # completion

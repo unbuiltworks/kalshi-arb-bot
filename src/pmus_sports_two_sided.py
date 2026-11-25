@@ -1432,6 +1432,30 @@ RN1_LADDER_STEP_TICKS = max(1, int(os.getenv(
 # limit) would reach the stop. Completions are never refused by it.
 RN1_LOSS_STOP_COUNTS_RESTING = os.getenv(
     "PMUS_RN1_LOSS_STOP_COUNTS_RESTING", "1").strip() == "1"
+# REWARD-QUALIFIED QUOTING (owner 2026-11-25: "Determine whether we can
+# maintain reward-qualifying size at the best bid while accumulating at
+# deeper levels"; "Prioritize markets that currently satisfy reward
+# qualification requirements. Continuously replace markets that cease
+# qualifying"). Measured on live books 20:23 UTC: a 10-contract bid scores
+# about 3x more AT the best bid than one tick behind, and most books are
+# one tick wide, where the bot never joined.
+#   RN1_JOIN_ONE_TICK=1     the join rule (RN1_JOIN_TOUCH) may join on a
+#                           one-tick spread when calm; a joined bid is no
+#                           longer pulled for sitting one tick from the
+#                           offer (it is post-only: it cannot take). The
+#                           pair-cost limit still allows only one side at
+#                           the best bid on a one-tick spread.
+#   RN1_LADDER_QTY          size of every deeper ladder level (level 0
+#                           keeps the full clip); empty = same as level 0.
+#   RN1_RELEASE_UNQUALIFIED_S  a market holding no inventory whose quote
+#                           would earn no reward under the venue's rule
+#                           for this long is released, so selection can
+#                           replace it. 0 = off.
+RN1_JOIN_ONE_TICK = os.getenv("PMUS_RN1_JOIN_ONE_TICK", "0").strip() == "1"
+_lq = os.getenv("PMUS_RN1_LADDER_QTY", "").strip()
+RN1_LADDER_QTY = D(_lq) if _lq else None
+RN1_RELEASE_UNQUALIFIED_S = float(os.getenv(
+    "PMUS_RN1_RELEASE_UNQUALIFIED_S", "0") or 0)
 RN1_PULL_THREATENED_ONLY = os.getenv(
     "PMUS_RN1_PULL_THREATENED_ONLY", "0").strip() == "1"
 # JOIN THE BEST BID WHEN IT IS JUSTIFIED (owner 2026-11-25: "Competitive
@@ -2716,6 +2740,14 @@ class Engine:
         why = adverse_reasons(legs, {"bid": D(str(new["bid"])),
                                      "ask": D(str(new["ask"]))},
                               tick, 0 if joined else depth_ticks(tick))
+        if joined and RN1_JOIN_ONE_TICK:
+            # a post-only bid at the best bid of a one-tick book is one tick
+            # from the offer by design; it is pulled only if it would cross
+            nb_ = {"bid": D(str(new["bid"])), "ask": D(str(new["ask"]))}
+            why = [w for w in why if not w.endswith("_near_cross")] + [
+                "%s_crossed" % sd.lower() for sd, px_ in legs.items()
+                if px_ >= (nb_["ask"] if sd == "YES"
+                           else ONE - nb_["bid"])]
         if why and RN1.ON and RN1_PULL_THREATENED_ONLY:
             nb = {"bid": D(str(new["bid"])), "ask": D(str(new["ask"]))}
             dep = 0 if joined else depth_ticks(tick)
@@ -5056,6 +5088,30 @@ class Engine:
         return any(o.get("open") and not is_completion_stage(o.get("stage"))
                    for o in (mk.get("orders") or {}).values())
 
+    def rn1_quote_qualifies(self, slug: str, mk: Dict[str, Any]) -> bool:
+        """True when our standard quote in this market would earn a reward
+        under the venue's rule right now (see RN1_RELEASE_UNQUALIFIED_S):
+        a paying programme and a positive modelled reward. One public book
+        read at most every 60 s per market; any doubt is True (never
+        releases a market on a failed read)."""
+        try:
+            per = self.rn1_reward(slug)
+            if not per:
+                return False
+            hit = mk.get("qualify_check")
+            if hit and time.time() - float(hit.get("t") or 0) < 60:
+                return bool(hit.get("ok"))
+            got = self._reward_share_score(slug, per)
+            if "why" in got and got.get("why") not in ("no_two_sided_book",
+                                                       "no_room_for_a_bid"):
+                return True
+            ok = float(got.get("usd_per_hour") or 0.0) > 0
+            mk["qualify_check"] = {"t": time.time(), "ok": ok,
+                                   "usd_per_hour": got.get("usd_per_hour")}
+            return ok
+        except Exception:                                 # noqa: BLE001
+            return True
+
     def rn1_ladder(self, slug: str, mk: Dict[str, Any],
                    want: Mapping[str, Any], tick: Any,
                    clip: Any = None) -> list:
@@ -5086,6 +5142,8 @@ class Engine:
             behind_completion = tg["role"] == "complete"
             qty = D(str(clip)) if (behind_completion and clip is not None) \
                 else D(str(tg["qty"]))
+            if RN1_LADDER_QTY is not None and RN1_LADDER_QTY > 0:
+                qty = min(qty, RN1_LADDER_QTY)
             role = "open" if behind_completion else tg["role"]
             for k in range(1, RN1_LADDER_LEVELS):
                 px = D(str(tg["px"])) - k * RN1_LADDER_STEP_TICKS * t
@@ -5759,6 +5817,28 @@ class Engine:
                     any(o.get("open") for _oid, o in stale):
                 return       # a fill raced the cancel, or still pending
         flat = y == 0 and n == 0
+        if flat and RN1_RELEASE_UNQUALIFIED_S > 0 and not new_block:
+            if self.rn1_quote_qualifies(slug, mk):
+                mk.pop("unqualified_since", None)
+            else:
+                since_u = float(mk.setdefault("unqualified_since", now))
+                if now - since_u > RN1_RELEASE_UNQUALIFIED_S and \
+                        not any(o.get("open") for o in mk["orders"].values()):
+                    mk["done"] = True
+                    mk["released_flat"] = now
+                    self.b.save()
+                    log("released_unqualified_market", slug=slug,
+                        unqualified_s=round(now - since_u, 1),
+                        label="our quote here would earn no reward under "
+                              "the venue's rule; slot freed for a market "
+                              "that qualifies")
+                    return
+                if now - since_u > RN1_RELEASE_UNQUALIFIED_S:
+                    self._cancel_legs(slug, [(oid, o) for oid, o in
+                                             mk["orders"].items()
+                                             if o.get("open")])
+                    self.b.save()
+                    return
         if flat and not any(want.values()) and not account_block:
             idle = mk.setdefault("idle_since", now)
             # only paused: the price is moving, or the international price
@@ -6304,7 +6384,9 @@ class Engine:
         else:
             spread = D(str(bbo["ask"])) - D(str(bbo["bid"]))
             last_jump = float(mk.get("jump_pause_until") or 0) - JUMP_PAUSE_S
-            if spread < max(2, RN1_JOIN_MIN_SPREAD_TICKS) * D(str(tick)):
+            min_t = 1 if RN1_JOIN_ONE_TICK else \
+                max(2, RN1_JOIN_MIN_SPREAD_TICKS)
+            if spread < min_t * D(str(tick)):
                 why = "spread_too_tight"
             elif rng is None or float(rng) > RN1_JOIN_MAX_RANGE_USD:
                 why = "price_moving"
