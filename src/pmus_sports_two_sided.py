@@ -6824,6 +6824,13 @@ class Engine:
             from src import pmus_sports_manual_study as MS
             log("MANUAL_FILL_STUDY", **MS.summarize(walk.get("rows") or [],
                                                     ours))
+            _mo = MS.manual_orders(walk.get("rows") or [], ours)
+            if _mo and _mo != getattr(self, "_manual_orders_logged", None):
+                self._manual_orders_logged = _mo
+                log("MANUAL_ORDER_IDS", orders=_mo,
+                    label="venue order ids behind the owner's manual sports "
+                          "trades, from the account activity feed; for the "
+                          "ledger's manual-order attestation. Read-only.")
         except Exception as exc:                          # noqa: BLE001
             log("MANUAL_FILL_STUDY", ok=False,
                 err=f"{type(exc).__name__}:{str(exc)[:160]}")

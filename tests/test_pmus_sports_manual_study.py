@@ -52,3 +52,49 @@ def test_summary_per_market_and_only_settled_is_realized():
 def test_bad_rows_never_raise():
     s = MS.summarize([None, {}, {"trade": "x"}, {"trade": {}}], ours=())
     assert s["markets"] in (0, 1)
+
+
+def _trade(slug, oid, aggressor, px, qty, when, indicator, intent):
+    ex = {"order": {"id": oid, "manualOrderIndicator": indicator,
+                    "intent": intent, "cumQuantity": qty,
+                    "avgPx": {"currency": "USD", "value": px},
+                    "createTime": when}}
+    other = {"order": {"id": "SOMEONE-ELSE", "manualOrderIndicator": "x"}}
+    return {"trade": {"marketSlug": slug, "isAggressor": aggressor,
+                      "price": px, "qty": str(qty), "createTime": when,
+                      "aggressorExecution": ex if aggressor else other,
+                      "passiveExecution": other if aggressor else ex}}
+
+
+def test_manual_orders_lists_our_side_order_ids_newest_first():
+    """The 25 Nov case: a hand buy that took liquidity, then a resting hand
+    sell that was filled. Each order once, from OUR side of the trade."""
+    nhl = "aec-nhl-veg-edm-2026-11-24"
+    rows = [
+        _trade(nhl, "BUY1", True, "0.6900", 35.46, "2026-11-25T02:18:46Z",
+               "MANUAL_ORDER_INDICATOR_MANUAL", "ORDER_INTENT_BUY_LONG"),
+        _trade(nhl, "SELL1", False, "0.8900", 20.0, "2026-11-25T03:10:20Z",
+               "MANUAL_ORDER_INDICATOR_MANUAL", "ORDER_INTENT_SELL_LONG"),
+        _trade(nhl, "SELL1", False, "0.8900", 15.46, "2026-11-25T03:10:21Z",
+               "MANUAL_ORDER_INDICATOR_MANUAL", "ORDER_INTENT_SELL_LONG"),
+        # a market the bot traded: never attributed to the owner
+        _trade("aec-utr-a-b-2026-11-25", "BOT1", False, "0.45", 1,
+               "2026-11-25T01:00:00Z", "MANUAL_ORDER_INDICATOR_UNDEFINED",
+               "ORDER_INTENT_BUY_LONG"),
+        # not a trade, and a trade with no order record: skipped quietly
+        {"positionResolution": {"marketSlug": nhl}},
+        {"trade": {"marketSlug": nhl, "isAggressor": True,
+                   "aggressorExecution": {}}},
+    ]
+    got = MS.manual_orders(rows, ours={"aec-utr-a-b-2026-11-25"})
+    assert [o["order_id"] for o in got] == ["SELL1", "BUY1"]
+    sell, buy = got
+    assert sell["trades"] == 2 and sell["aggressor"] is False
+    assert sell["intent"] == "ORDER_INTENT_SELL_LONG"
+    assert buy["avg_px"] == "0.6900" and buy["filled"] == "35.46"
+    assert buy["manual_indicator"] == "MANUAL_ORDER_INDICATOR_MANUAL"
+    assert buy["market"] == nhl
+    assert "SOMEONE-ELSE" not in str(got) and "BOT1" not in str(got)
+    assert MS.manual_orders(rows, ours=set(), max_orders=1)[0]["order_id"] \
+        == "SELL1"
+    assert MS.manual_orders([], ours=set()) == []
