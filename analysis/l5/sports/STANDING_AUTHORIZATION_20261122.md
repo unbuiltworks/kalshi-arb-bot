@@ -1393,3 +1393,16 @@ Fix prepared, not deployed: release `0abb52a385d639e3c779f66a4de57f23af1869f9`
 `5425d94d3` + under the live slate a pre-game market gets no opening or
 extension bid (completions continue). Regression 5,651 passed, same 24
 unrelated failures; test added for the exact case.
+
+## 55. Resume authorized on release a46a41b6a — 25 Nov, about 18:15 UTC
+
+Owner, typed: "Authorized: deploy a46a41b6a and resume the campaign until
+19:58 UTC on the same terms: in-play only, ladder 3 levels 2 ticks apart,
+2 contracts per level, maker-only, all existing limits unchanged. Keep the
+average-cost allowance at 0.02 for this campaign. ... Do not optimize for
+pair count. No further strategy changes during this campaign."
+
+Release `a46a41b6a244e8907592cb893f83de5cd499433b` (= `5b4584db4` + issue
+#252 opt-in, left OFF). Lock back to
+`window:2026-11-25T13:58:00Z/2026-11-25T19:58:00Z` (grace 2 h as before).
+`PMUS_RN1_EXTEND_MAX_UP` unchanged at 0.02. Rollback: `5425d94d3`.
