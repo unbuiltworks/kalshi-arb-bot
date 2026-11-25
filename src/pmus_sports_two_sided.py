@@ -2286,10 +2286,13 @@ class Venue:
     def place(self, slug: str, side: str, px: D, qty: D, stage: str,
               post_only: bool = True) -> str:
         gt = order_good_till()
+        # records whether the order itself was handed to the venue, so a
+        # failure BEFORE that point is known to have left nothing behind
+        t = self.last_order_post = OrderPostWatch(self.t)
         if gt is None:
-            return self.micro.place_limit_buy(self.t, slug, side, px, qty,
+            return self.micro.place_limit_buy(t, slug, side, px, qty,
                                               stage, post_only=post_only)
-        return self.micro.place_limit_buy(self.t, slug, side, px, qty, stage,
+        return self.micro.place_limit_buy(t, slug, side, px, qty, stage,
                                           post_only=post_only, good_till=gt)
 
     def cancel(self, oid: str) -> bool:
@@ -2313,6 +2316,45 @@ class Venue:
                 return st          # terminal: this read IS the final state
             time.sleep(0.1)
         return last                # still open after ~1.2s: caller sees open
+
+
+class OrderPostWatch:
+    """Pass-through for the signed transport that notes when the ORDER
+    itself (POST /v1/orders) is handed on. Everything before that -- the
+    venue's preview, the local post-only check -- sends no order."""
+
+    def __init__(self, inner: Any):
+        self._inner = inner
+        self.attempted = False
+
+    def request(self, method: str, path: str, *a: Any, **kw: Any) -> Any:
+        if str(method).upper() == "POST" and \
+                str(path).split("?", 1)[0].rstrip("/") == "/v1/orders":
+            self.attempted = True
+        return self._inner.request(method, path, *a, **kw)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+
+def send_never_left(venue: Any, exc: BaseException) -> Optional[str]:
+    """Why a failed placement is KNOWN to have sent no order, else None
+    (owner 2026-11-25: "Release capital reservations immediately when a
+    send is definitively deferred locally and never transmitted. Preserve
+    reservations for every uncertain submission").
+      * the shared request budget refused the request: it raises before
+        anything is written to the wire (pmus_request_budget.acquire);
+      * the failure came before the order POST was attempted (the venue's
+        preview refused, or the local post-only check refused).
+    A failure at or after the order POST -- a timeout, a dropped
+    connection, an answer without an order id -- is NOT known, and is not
+    released here."""
+    if type(exc).__name__ == "BudgetDeferred":
+        return "deferred_by_request_budget"
+    w = getattr(venue, "last_order_post", None)
+    if isinstance(w, OrderPostWatch) and not w.attempted:
+        return "failed_before_the_order_was_sent"
+    return None
 
 
 # ------------------------------------------------------------- engine
@@ -4514,13 +4556,21 @@ class Engine:
                       "was sent")
             return
         rid = self.reserve_order(slug, side, px, qty, stage)
+        if hasattr(self.v, "last_order_post"):
+            self.v.last_order_post = None        # never judge by an old send
         try:
             oid = (self.v.place(slug, side, px, qty, stage) if post_only
                    else self.v.place(slug, side, px, qty, stage,
                                      post_only=False))
         except BaseException as exc:
+            why = send_never_left(self.v, exc)
             if type(exc).__name__ == "RejectedNoFill":
                 self.release_reservation(rid)    # the venue said no
+            elif why:
+                self.release_reservation(rid)    # nothing was transmitted
+                log("ORDER_NOT_SENT", slug=slug, side=side, px=px, qty=qty,
+                    stage=stage, why=why, err=type(exc).__name__,
+                    label="no order left the bot; nothing is reserved")
             else:
                 self.reservation_uncertain(rid, exc)
             raise

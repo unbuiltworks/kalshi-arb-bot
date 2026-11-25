@@ -610,3 +610,143 @@ def test_with_the_account_limit_off_nothing_changes(a, monkeypatch):
     for s_ in (S1, S2, S3, S4):
         e.place(s_, "YES", D("0.55"), D("1"), "rn1_open")
     assert len(sent(v)) == 4 and e.reserved_orders() == []
+
+
+# ------------------------------------- a send that never left the bot
+# LIVE 2026-11-25 02:01-02:06Z: eight reservations for sends the bot's own
+# request budget had refused (nothing transmitted) stacked up while the
+# hourly audit delayed reconciliation: $3.76 reserved for orders that did
+# not exist, 24 bids refused for lack of room. Owner: "Release capital
+# reservations immediately when a send is definitively deferred locally
+# and never transmitted. Preserve reservations for every uncertain
+# submission."
+from src.pmus_request_budget import BudgetDeferred
+
+
+class _Wire:
+    """Stands in for the signed transport under OrderPostWatch."""
+
+    def __init__(self, fail_on=None, exc=None):
+        self.fail_on, self.exc, self.seen = fail_on, exc, []
+
+    def request(self, method, path, *a, **k):
+        self.seen.append((method, path))
+        if path == self.fail_on:
+            raise self.exc
+        return {"order": {"marketSlug": "x"}, "id": "OID1"}
+
+
+def _real_shape(v, wire):
+    """Place the way the real Venue does: preview, then the order POST,
+    both through an OrderPostWatch."""
+    real = v.place
+
+    def place(slug, side, px, qty, stage, post_only=True):
+        w = v.last_order_post = M.OrderPostWatch(wire)
+        w.request("POST", "/v1/order/preview", {})
+        w.request("POST", "/v1/orders", {})
+        return real(slug, side, px, qty, stage, post_only)
+    v.place = place
+
+
+def test_a_send_refused_by_the_request_budget_reserves_nothing(a, capsys):
+    e, v, box = a
+    real = v.place
+    v.place = lambda *a_, **k: (_ for _ in ()).throw(
+        BudgetDeferred("normal request deferred"))
+    with pytest.raises(BudgetDeferred):
+        e.place(S1, "YES", D("0.55"), D("1"), "rn1_open")
+    assert e.reserved_orders() == []
+    assert e.own_resting_worst() == D("0") and e.own_exposure_usd() == D("0")
+    assert kinds(capsys, "ORDER_NOT_SENT")[0]["why"] == \
+        "deferred_by_request_budget"
+    v.place = real
+    e.place(S2, "YES", D("0.52"), D("1"), "rn1_open")     # the room is free
+    assert sent(v) == [(S2, "YES", "0.52")]
+
+
+def test_eight_deferred_sends_do_not_stack_reservations(a):
+    """The 02:01-02:06 episode: nothing accumulates, however many are
+    deferred, and no reconciliation is needed to free the room."""
+    e, v, box = a
+    real = v.place
+    v.place = lambda *a_, **k: (_ for _ in ()).throw(BudgetDeferred("x"))
+    for i in range(8):
+        with pytest.raises(BudgetDeferred):
+            e.place(S1 if i % 2 else S2, "YES" if i % 2 else "NO",
+                    D("0.47"), D("1"), "rn1_open")
+    assert e.reserved_orders() == []
+    v.place = real
+    e.place(S3, "YES", D("0.55"), D("1"), "rn1_open")
+    assert len(sent(v)) == 1
+
+
+def test_the_budget_refusing_the_order_post_itself_reserves_nothing(a):
+    """Preview went out, then the budget refused the order POST: the watch
+    saw the POST attempted, but a budget refusal raises before the wire."""
+    e, v, box = a
+    _real_shape(v, _Wire("/v1/orders", BudgetDeferred("normal deferred")))
+    with pytest.raises(BudgetDeferred):
+        e.place(S1, "YES", D("0.55"), D("1"), "rn1_open")
+    assert v.last_order_post.attempted is True
+    assert e.reserved_orders() == []
+
+
+def test_a_failure_before_the_order_post_reserves_nothing(a, capsys):
+    """The venue's preview refused: no order was sent."""
+    e, v, box = a
+    _real_shape(v, _Wire("/v1/order/preview", RuntimeError("PREVIEW_REJECTED")))
+    with pytest.raises(RuntimeError):
+        e.place(S1, "YES", D("0.55"), D("1"), "rn1_open")
+    assert v.last_order_post.attempted is False
+    assert e.reserved_orders() == []
+    assert kinds(capsys, "ORDER_NOT_SENT")[0]["why"] == \
+        "failed_before_the_order_was_sent"
+
+
+@pytest.mark.parametrize("exc", [TimeoutError("no answer"),
+                                 ConnectionError("reset"),
+                                 RuntimeError("NO_ORDER_ID"),
+                                 OSError("503")])
+def test_a_failure_at_the_order_post_is_still_held(a, exc, capsys):
+    """Anything that goes wrong once the order was handed to the venue is
+    uncertain, whatever the error says."""
+    e, v, box = a
+    _real_shape(v, _Wire("/v1/orders", exc))
+    with pytest.raises(type(exc)):
+        e.place(S1, "YES", D("0.55"), D("1"), "rn1_open")
+    assert [r["state"] for r in e.reserved_orders()] == ["uncertain"]
+    assert e.own_resting_worst() == D("0.55")
+    assert kinds(capsys, "ORDER_NOT_SENT") == []
+    e.place(S2, "YES", D("0.52"), D("1"), "rn1_open")
+    assert [x for x in sent(v) if x[0] == S2] == []
+
+
+def test_an_earlier_send_never_vouches_for_a_later_one(a):
+    """The watch left by a previous placement (order never attempted)
+    must not excuse a later, unanswered send."""
+    e, v, box = a
+    v.last_order_post = M.OrderPostWatch(_Wire())        # stale, untouched
+    v.place = lambda *a_, **k: (_ for _ in ()).throw(TimeoutError("lost"))
+    with pytest.raises(TimeoutError):
+        e.place(S1, "YES", D("0.55"), D("1"), "rn1_open")
+    assert [r["state"] for r in e.reserved_orders()] == ["uncertain"]
+
+
+def test_without_a_watch_only_the_budget_refusal_is_certain(a):
+    e, v, box = a
+    assert M.send_never_left(v, TimeoutError()) is None
+    assert M.send_never_left(v, BudgetDeferred("x")) == \
+        "deferred_by_request_budget"
+
+
+def test_the_watch_passes_everything_through():
+    wire = _Wire()
+    wire.budget = "B"
+    w = M.OrderPostWatch(wire)
+    assert w.request("GET", "/v1/orders/open") and w.attempted is False
+    assert w.request("POST", "/v1/order/preview", {}) and w.attempted is False
+    assert w.request("POST", "/v1/order/X1/cancel", {}) and \
+        w.attempted is False
+    w.request("POST", "/v1/orders?x=1", {})
+    assert w.attempted is True and w.budget == "B"
