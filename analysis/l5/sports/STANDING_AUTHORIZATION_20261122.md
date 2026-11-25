@@ -1424,3 +1424,37 @@ deploy `6755062ad` (rollback `a46a41b6a`); verify locked, zero open
 orders, watchdog healthy, limits unchanged. Settings stay as they are;
 `PMUS_RN1_FIT_QTY` and `PMUS_RN1_PULL_THREATENED_ONLY` stay off;
 `PMUS_RN1_LOSS_STOP_COUNTS_RESTING` is on by default in the build.
+
+## 57. Close-out of the $13 campaign and locked deployment of 6755062ad — 25 Nov, 22:13 UTC
+
+Done as authorized in section 56. Nothing armed; no limit changed.
+
+- 21:58:40 the window lock moved to `window_ended`; the completing bid
+  (Garcar–Borvic NO 0.29 × 2) was withdrawn. Watchdog 22:05: 0 open orders.
+- 22:06 `PMUS_TWO_SIDED_SUBMISSION_LOCK=1` (no redeploy).
+- 22:10 deployed `6755062ad1e4ccdd9299982205f223e2a686ff37` (branch
+  `release/pmus-sports-rn1-6755062ad`); deployment `71075263`, SUCCESS
+  22:12. Boot: `SUBMISSION_LOCK_STATE` new exposure and completions locked;
+  limits unchanged (per-market unpaired 3, per-market 8, campaign unpaired 6,
+  spend 60, daily loss 5, at-risk 16, lane 20, account limit 13). Watchdog
+  22:12–22:13: 0 open orders, lane healthy. Rollback `a46a41b6a` not needed.
+
+Campaign 13:58–19:58 UTC (completions to 21:58), latest PILOT_PNL 21:21:
+
+| | |
+|---|---|
+| Fills | 15 (18.97 contracts): 10 open (14), 1 extend (1), 4 complete (3.97); one deeper-ladder fill (Garcar YES 2 @ 0.64, same second as 2 @ 0.66) |
+| Spent | $10.0199 |
+| Pairs | 3.97 at average 0.9675, locked edge +$0.1291 |
+| Settled residual (unpaired) | −$1.5790 |
+| Realized (bot) | **−$1.4499** |
+| Open | Garcar–Borvic YES 4 @ 0.65 ($2.60), venue-reconciled |
+| Fees / rebates | 0 / 0 |
+| Cash | 326.4559 vs baseline 330.5058: −4.0499, all explained by the campaign; unexplained 0.000000 |
+| Rewards | REWARD_CHECK 21:19: 187 rows, $24.09 credited (122 PAID), $4.00 skipped (65); unchanged since 15:35; no rows yet for 23–25 Nov |
+| Account figure | $6.58 of the $13 limit (22:12) |
+
+Defect found in review (fixed in `7a0535450`, not deployed): while a block
+was in force, ladder levels behind a completing bid (openings) were still
+placed — NO 0.27 / 0.25 rested behind the completion during the loss stop.
+`6755062ad` refuses them at the loss stop through the final gate.

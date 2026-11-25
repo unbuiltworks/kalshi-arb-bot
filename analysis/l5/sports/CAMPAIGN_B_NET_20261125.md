@@ -139,7 +139,7 @@ without net losses.
 | `PMUS_TWO_SIDED_DAILY_LOSS_USD` | 5 | 10 | |
 | `PMUS_TWO_SIDED_AT_RISK_BUDGET_USD` | 16 | 20 | |
 | Sports lane cap (`L5_ACCOUNT_MAX_EXPOSURE_USD` / `L5_ACCOUNT_LANES`, sports service only) | $20 | 20 / 1 (unchanged $20) | |
-| Ledger `L5_PORTFOLIO_MAX_DRAWDOWN_USD` | 13 | 20 | the bot's room = limit − account figure − resting; with today's figure about $4 (−$1.45 settled, $2.60 open valued at zero) that is ~$16 for ~$13 resting plus inventory, sized down to fit beyond that. Read at close-out; if the figure is above $6 the campaign quotes less, it is not raised |
+| Ledger `L5_PORTFOLIO_MAX_DRAWDOWN_USD` | 13 | 20 | the bot's room = limit − account figure − resting. The figure read at 22:12 is **$6.58** (higher than the $4 I first estimated), so $20 leaves ~$13.4: about one market fully quoted with its ladder, or two at the reward size with the ladder sized down by the fit rule until Garcar–Borvic settles. $25 would let two markets quote fully; that is your choice, and I propose $20 |
 | `PMUS_TWO_SIDED_WINDOW_COMPLETE_GRACE_S` | 7200 | 7200 | |
 | `PMUS_TWO_SIDED_SUBMISSION_LOCK` | locked | `window:<start>/<start+2h>` | relocks itself |
 
