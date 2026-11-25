@@ -70,3 +70,50 @@ for a campaign: the $25 loss stop.
 
 Every row in the B column changes a production limit and needs separate
 explicit authorization.
+
+## Update 20:25 UTC — verification
+
+**Regression evidence** (pushed: `analysis/l5/sports/regression/`): release
+`6755062ad` code `1508af00e` — 5,675 passed, 24 failed; the failing ids are
+identical to the 24-id baseline (`baseline_failures_24.txt`), none in
+sports code. 13 further tests (`tests/test_pmus_rn1_worst_case.py`, dev
+commit after `1508af00e`) prove that no combination of fills — none,
+partial, any subset filling together — exceeds the worst case every cap
+and the loss stop use (`RN1.committed`), that a completion fill never
+raises unpaired cost, and that a quoted completion is never larger than
+what is unpaired. Levels resting behind a completion are opening bids and
+are counted as new exposure.
+
+**Reward qualification of a 10-contract quote on live books, 20:23 UTC**
+(`rewards/scan_20261125/reward_q10_2015.json`), theoretical, own-pool reading:
+
+| Market | Target | Book passes max-spread test? | 10 at the best bid | 10 one tick behind |
+|---|---|---|---|---|
+| UTR Feragu–Tistom | 500 | yes | $0.60/h | $0.19/h |
+| UTR Measof–Markat (0.84, outside band) | 500 | yes | $0.40/h | $0.08/h |
+| ATP doubles Arias–Nijboer | 4,000 | no max spread | $0.37/h | $0.11/h |
+| ATP Johnson–Peddia | 19,000 | no max spread | $0.32/h | $0.10/h |
+| other ATP/WTA | 19,000 | no max spread | $0.01–0.03/h | ~$0 (outside the walk) |
+| other UTR (5 markets) | 500 | **no — nobody paid** | $0 | $0 |
+| Setka | 4,800 | no max spread | $0.01–0.02/h | ~$0 |
+
+- Best four in band, 10 a side at the best bid: about **$1.3/h** if each
+  market has its own pool; less if pools are shared. One tick behind:
+  about **$0.4/h**. Rewards at this size therefore depend on resting AT
+  the best bid, which the controller does only when the spread is 2+
+  ticks and calm (`PMUS_RN1_JOIN_TOUCH`).
+- Five of seven live UTR books fail the max-spread test right now: no one
+  is paid in them, whatever we quote.
+
+## Authorization lines (each separate)
+
+A — next inventory campaign on existing limits:
+> Authorized: campaign A on 6755062ad — size down to fit and selective
+> cancellation on, ladder 3 levels 2 ticks apart, 2 contracts, 4 in-play
+> markets, UTR, Setka, ATP, WTA, all limits unchanged, ____ to ____ UTC.
+
+B — reward-qualified test (changes limits):
+> Authorized: campaign B on 6755062ad — 10 contracts a side, 1 level, 4
+> in-play markets; per-market unpaired $8, per-market spend $20, campaign
+> unpaired $20, loss stop $25, daily halt $25, account limit $70, at-risk
+> $60, lane cap $70 (crypto stays disarmed), spend $200; ____ to ____ UTC.

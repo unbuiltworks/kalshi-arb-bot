@@ -1,0 +1,461 @@
+[
+ {
+  "slug": "aec-atp-blabic-thedea-2026-11-25",
+  "programme": true,
+  "paying": true,
+  "bid": 0.8,
+  "ask": 0.81,
+  "bq": 36578,
+  "aq": 50572,
+  "pool_h": 61.33,
+  "target": 19000.0,
+  "ms": null,
+  "df": 0.3,
+  "touch": {
+   "usd_h": 0.014,
+   "share": 0.00024,
+   "bid_inside": true,
+   "ask_inside": true,
+   "max_spread_ok": null
+  },
+  "behind": {
+   "usd_h": 0.0,
+   "share": 0.0,
+   "bid_inside": false,
+   "ask_inside": false,
+   "max_spread_ok": null
+  }
+ },
+ {
+  "slug": "aec-atp-johnik-peddia-2026-11-22",
+  "programme": true,
+  "paying": true,
+  "bid": 0.42,
+  "ask": 0.43,
+  "bq": 3810,
+  "aq": 111,
+  "pool_h": 61.33,
+  "target": 19000.0,
+  "ms": null,
+  "df": 0.3,
+  "touch": {
+   "usd_h": 0.322,
+   "share": 0.00526,
+   "bid_inside": true,
+   "ask_inside": true,
+   "max_spread_ok": null
+  },
+  "behind": {
+   "usd_h": 0.097,
+   "share": 0.00158,
+   "bid_inside": true,
+   "ask_inside": true,
+   "max_spread_ok": null
+  }
+ },
+ {
+  "slug": "aec-atp-nickic-elmmoe-2026-11-22",
+  "programme": true,
+  "paying": true,
+  "bid": 0.26,
+  "ask": 0.27,
+  "bq": 88783,
+  "aq": 16978,
+  "pool_h": 61.33,
+  "target": 19000.0,
+  "ms": null,
+  "df": 0.3,
+  "touch": {
+   "usd_h": 0.013,
+   "share": 0.00021,
+   "bid_inside": true,
+   "ask_inside": true,
+   "max_spread_ok": null
+  },
+  "behind": {
+   "usd_h": 0.003,
+   "share": 5e-05,
+   "bid_inside": false,
+   "ask_inside": true,
+   "max_spread_ok": null
+  }
+ },
+ {
+  "slug": "aec-atpdb-ariascarou-nijboeratti-2026-11-23",
+  "programme": true,
+  "paying": true,
+  "bid": 0.37,
+  "ask": 0.39,
+  "bq": 98,
+  "aq": 400,
+  "pool_h": 23.33,
+  "target": 4000.0,
+  "ms": null,
+  "df": 0.3,
+  "touch": {
+   "usd_h": 0.372,
+   "share": 0.01595,
+   "bid_inside": true,
+   "ask_inside": true,
+   "max_spread_ok": null
+  },
+  "behind": {
+   "usd_h": 0.113,
+   "share": 0.00485,
+   "bid_inside": true,
+   "ask_inside": true,
+   "max_spread_ok": null
+  }
+ },
+ {
+  "slug": "aec-setkameua-binole-romiva-2026-11-25",
+  "programme": true,
+  "paying": true,
+  "bid": 0.15,
+  "ask": 0.42,
+  "bq": 3040,
+  "aq": 1200,
+  "pool_h": 5.67,
+  "target": 4800.0,
+  "ms": null,
+  "df": 0.5,
+  "touch": {
+   "usd_h": 0.016,
+   "share": 0.00284,
+   "bid_inside": true,
+   "ask_inside": true,
+   "max_spread_ok": null
+  },
+  "behind": {
+   "usd_h": 0.008,
+   "share": 0.00142,
+   "bid_inside": true,
+   "ask_inside": true,
+   "max_spread_ok": null
+  }
+ },
+ {
+  "slug": "aec-setkameua-melore-fokill-2026-11-25",
+  "programme": true,
+  "paying": true,
+  "bid": 0.83,
+  "ask": 0.84,
+  "bq": 13815,
+  "aq": 2732,
+  "pool_h": 5.67,
+  "target": 4800.0,
+  "ms": null,
+  "df": 0.5,
+  "touch": {
+   "usd_h": 0.006,
+   "share": 0.00107,
+   "bid_inside": true,
+   "ask_inside": true,
+   "max_spread_ok": null
+  },
+  "behind": {
+   "usd_h": 0.002,
+   "share": 0.00035,
+   "bid_inside": false,
+   "ask_inside": true,
+   "max_spread_ok": null
+  }
+ },
+ {
+  "slug": "aec-setkameua-serrus-sydand-2026-11-25",
+  "programme": true,
+  "paying": true,
+  "bid": 0.54,
+  "ask": 0.55,
+  "bq": 14684,
+  "aq": 45,
+  "pool_h": 5.67,
+  "target": 4800.0,
+  "ms": null,
+  "df": 0.5,
+  "touch": {
+   "usd_h": 0.009,
+   "share": 0.00157,
+   "bid_inside": true,
+   "ask_inside": true,
+   "max_spread_ok": null
+  },
+  "behind": {
+   "usd_h": 0.003,
+   "share": 0.00061,
+   "bid_inside": false,
+   "ask_inside": true,
+   "max_spread_ok": null
+  }
+ },
+ {
+  "slug": "aec-setkameua-tymole-popedu-2026-11-25",
+  "programme": true,
+  "paying": true,
+  "bid": 0.38,
+  "ask": 0.39,
+  "bq": 3382,
+  "aq": 8557,
+  "pool_h": 5.67,
+  "target": 4800.0,
+  "ms": null,
+  "df": 0.5,
+  "touch": {
+   "usd_h": 0.007,
+   "share": 0.00132,
+   "bid_inside": true,
+   "ask_inside": true,
+   "max_spread_ok": null
+  },
+  "behind": {
+   "usd_h": 0.002,
+   "share": 0.00037,
+   "bid_inside": true,
+   "ask_inside": false,
+   "max_spread_ok": null
+  }
+ },
+ {
+  "slug": "aec-utr-boymel-gobvic-2026-11-24",
+  "programme": true,
+  "paying": true,
+  "bid": 0.1,
+  "ask": 0.2,
+  "bq": 25,
+  "aq": 25,
+  "pool_h": 16.67,
+  "target": 500.0,
+  "ms": 0.06,
+  "df": 0.3,
+  "touch": {
+   "usd_h": 0.0,
+   "share": 0.0,
+   "bid_inside": true,
+   "ask_inside": true,
+   "max_spread_ok": false
+  },
+  "behind": {
+   "usd_h": 0.0,
+   "share": 0.0,
+   "bid_inside": true,
+   "ask_inside": true,
+   "max_spread_ok": false
+  }
+ },
+ {
+  "slug": "aec-utr-cekkuz-avdfil-2026-11-23",
+  "programme": true,
+  "paying": true,
+  "bid": 0.87,
+  "ask": 0.92,
+  "bq": 11,
+  "aq": 226,
+  "pool_h": 16.67,
+  "target": 500.0,
+  "ms": 0.06,
+  "df": 0.3,
+  "touch": {
+   "usd_h": 0.0,
+   "share": 0.0,
+   "bid_inside": true,
+   "ask_inside": true,
+   "max_spread_ok": false
+  },
+  "behind": {
+   "usd_h": 0.0,
+   "share": 0.0,
+   "bid_inside": true,
+   "ask_inside": true,
+   "max_spread_ok": false
+  }
+ },
+ {
+  "slug": "aec-utr-feragu-tistom-2026-11-24",
+  "programme": true,
+  "paying": true,
+  "bid": 0.3,
+  "ask": 0.31,
+  "bq": 200,
+  "aq": 198,
+  "pool_h": 16.67,
+  "target": 500.0,
+  "ms": 0.06,
+  "df": 0.3,
+  "touch": {
+   "usd_h": 0.602,
+   "share": 0.03612,
+   "bid_inside": true,
+   "ask_inside": true,
+   "max_spread_ok": true
+  },
+  "behind": {
+   "usd_h": 0.185,
+   "share": 0.01112,
+   "bid_inside": true,
+   "ask_inside": true,
+   "max_spread_ok": true
+  }
+ },
+ {
+  "slug": "aec-utr-fonori-danjul-2026-11-23",
+  "programme": true,
+  "paying": true,
+  "bid": 0.06,
+  "ask": 0.2,
+  "bq": 33,
+  "aq": 6,
+  "pool_h": 16.67,
+  "target": 500.0,
+  "ms": 0.06,
+  "df": 0.3,
+  "touch": {
+   "usd_h": 0.0,
+   "share": 0.0,
+   "bid_inside": true,
+   "ask_inside": true,
+   "max_spread_ok": false
+  },
+  "behind": {
+   "usd_h": 0.0,
+   "share": 0.0,
+   "bid_inside": true,
+   "ask_inside": true,
+   "max_spread_ok": false
+  }
+ },
+ {
+  "slug": "aec-utr-garcar-borvic-2026-11-23",
+  "programme": true,
+  "paying": true,
+  "bid": 0.4,
+  "ask": 0.5,
+  "bq": 1373,
+  "aq": 153,
+  "pool_h": 16.67,
+  "target": 500.0,
+  "ms": 0.06,
+  "df": 0.3,
+  "touch": {
+   "usd_h": 0.0,
+   "share": 0.0,
+   "bid_inside": true,
+   "ask_inside": true,
+   "max_spread_ok": false
+  },
+  "behind": {
+   "usd_h": 0.0,
+   "share": 0.0,
+   "bid_inside": false,
+   "ask_inside": true,
+   "max_spread_ok": false
+  }
+ },
+ {
+  "slug": "aec-utr-measof-markat-2026-11-24",
+  "programme": true,
+  "paying": true,
+  "bid": 0.84,
+  "ask": 0.87,
+  "bq": 521,
+  "aq": 214,
+  "pool_h": 16.67,
+  "target": 500.0,
+  "ms": 0.06,
+  "df": 0.3,
+  "touch": {
+   "usd_h": 0.401,
+   "share": 0.02404,
+   "bid_inside": true,
+   "ask_inside": true,
+   "max_spread_ok": true
+  },
+  "behind": {
+   "usd_h": 0.075,
+   "share": 0.00448,
+   "bid_inside": false,
+   "ask_inside": true,
+   "max_spread_ok": true
+  }
+ },
+ {
+  "slug": "aec-utr-mitmik-desfra-2026-11-24",
+  "programme": true,
+  "paying": true,
+  "bid": 0.04,
+  "ask": 0.14,
+  "bq": 5,
+  "aq": 188,
+  "pool_h": 16.67,
+  "target": 500.0,
+  "ms": 0.06,
+  "df": 0.3,
+  "touch": {
+   "usd_h": 0.0,
+   "share": 0.0,
+   "bid_inside": true,
+   "ask_inside": true,
+   "max_spread_ok": false
+  },
+  "behind": {
+   "usd_h": 0.0,
+   "share": 0.0,
+   "bid_inside": true,
+   "ask_inside": true,
+   "max_spread_ok": false
+  }
+ },
+ {
+  "slug": "aec-wta-alilin-arigee-2026-11-25",
+  "programme": true,
+  "paying": true,
+  "bid": 0.65,
+  "ask": 0.66,
+  "bq": 32708,
+  "aq": 34050,
+  "pool_h": 61.33,
+  "target": 19000.0,
+  "ms": null,
+  "df": 0.3,
+  "touch": {
+   "usd_h": 0.018,
+   "share": 0.0003,
+   "bid_inside": true,
+   "ask_inside": true,
+   "max_spread_ok": null
+  },
+  "behind": {
+   "usd_h": 0.0,
+   "share": 0.0,
+   "bid_inside": false,
+   "ask_inside": false,
+   "max_spread_ok": null
+  }
+ },
+ {
+  "slug": "aec-wta-ipeoz-julrie-2026-11-25",
+  "programme": true,
+  "paying": true,
+  "bid": 0.48,
+  "ask": 0.49,
+  "bq": 23443,
+  "aq": 22771,
+  "pool_h": 61.33,
+  "target": 19000.0,
+  "ms": null,
+  "df": 0.3,
+  "touch": {
+   "usd_h": 0.027,
+   "share": 0.00043,
+   "bid_inside": true,
+   "ask_inside": true,
+   "max_spread_ok": null
+  },
+  "behind": {
+   "usd_h": 0.0,
+   "share": 0.0,
+   "bid_inside": false,
+   "ask_inside": false,
+   "max_spread_ok": null
+  }
+ }
+]
