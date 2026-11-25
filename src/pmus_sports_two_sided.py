@@ -1281,6 +1281,11 @@ RN1_KEEP_MAX_S = float(os.getenv("PMUS_RN1_KEEP_MAX_S", "60"))
 #     block, pause, lock or halt pulls it, as now).
 # It never places a new bid and never moves one. 0 = off (today).
 RN1_GAP_HOLD_S = float(os.getenv("PMUS_RN1_GAP_HOLD_S", "0"))
+#: 1 (default) = a market with an unpaired leg holds a quoting slot, as
+#: since 2026-11-22. 0 = only a market with a resting opening/extension bid
+#: does (see Engine._rn1_slot_holder).
+RN1_SLOTS_COUNT_INVENTORY = os.getenv(
+    "PMUS_RN1_SLOTS_COUNT_INVENTORY", "1").strip() != "0"
 # A PAUSE IS NOT A REASON TO ABANDON A MARKET. LIVE 2026-11-24 01:20Z: a
 # flat market with nothing to quote for 120 s gives up its slot, a
 # price-move pause counted as "nothing to quote", and a released market was
@@ -4694,8 +4699,30 @@ class Engine:
         only complete until they drain. Completions are never blocked."""
         others = sum(1 for s_, m_ in (self.b.d.get("markets") or {}).items()
                      if s_ != slug and not m_.get("done") and
-                     self._rn1_exposed(m_))
+                     self._rn1_slot_holder(m_))
         return others >= MAX_MARKETS
+
+    def _rn1_slot_holder(self, mk: Mapping[str, Any]) -> bool:
+        """Does this market hold one of the MAX_MARKETS quoting slots?
+        Default (as since 2026-11-22): any market with an unpaired leg or
+        a resting opening/extension bid. LIVE 2026-11-25: a carried
+        unpaired leg in a competition no longer permitted held a slot for
+        68 minutes, so three markets were quoted where four were
+        authorized (24 `max_markets` blocks), and the fourth selection was
+        released and re-selected in a loop. Owner: "Separate passive
+        inventory tracking from active quoting slots, while retaining full
+        exposure accounting and position management."
+        With RN1_SLOTS_COUNT_INVENTORY off a slot is held only by a market
+        with a RESTING opening or extension bid -- the thing a slot is for.
+        A market that merely carries inventory keeps its completion bid,
+        its place in the book, the registry and the audit, and every dollar
+        of it still counts in the per-market, campaign, at-risk and account
+        limits; the number of tracked markets stays bounded by
+        MAX_TRACKED."""
+        if RN1_SLOTS_COUNT_INVENTORY:
+            return self._rn1_exposed(mk)
+        return any(o.get("open") and not is_completion_stage(o.get("stage"))
+                   for o in (mk.get("orders") or {}).values())
 
     def rn1_campaign_caps(self, slug: str, mk: Dict[str, Any],
                           want: Dict[str, Any], q: Dict[str, Any]) -> None:

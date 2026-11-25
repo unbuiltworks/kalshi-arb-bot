@@ -221,3 +221,85 @@ def test_new_exposure_in_at_most_max_markets(eng, monkeypatch):
     e.step_market("aec-c")
     c = [o for o in v.orders.values() if o["open"] and o["slug"] == "aec-c"]
     assert c and all(o["side"] == "NO" for o in c)
+
+
+# ---- carried inventory and quoting slots (owner 2026-11-25)
+def _carry(e, slug, side="YES", cost="0.51"):
+    mk = e.b.m(slug)
+    mk["pos"][side], mk["cost"][side] = "1", cost
+    return mk
+
+
+def test_by_default_a_carried_leg_still_holds_a_quoting_slot(eng,
+                                                             monkeypatch):
+    """Unchanged since 2026-11-22 unless the owner switches it."""
+    e, v = eng
+    assert M.RN1_SLOTS_COUNT_INVENTORY is True
+    monkeypatch.setattr(M, "MAX_MARKETS", 2)
+    _carry(e, "aec-old")
+    for s in ("aec-a", "aec-b"):
+        e.b.m(s)
+        e.step_market(s)
+    assert {o["slug"] for o in v.orders.values() if o["open"]} == {"aec-a"}
+
+
+def test_a_carried_leg_need_not_take_a_quoting_slot(eng, monkeypatch):
+    """LIVE 2026-11-25: a carried unpaired leg held one of four slots for
+    68 minutes. With the setting off, only a market with a resting opening
+    or extension bid holds a slot."""
+    e, v = eng
+    monkeypatch.setattr(M, "MAX_MARKETS", 2)
+    monkeypatch.setattr(M, "RN1_SLOTS_COUNT_INVENTORY", False)
+    old = _carry(e, "aec-old")
+    assert e._rn1_slot_holder(old) is False and e._rn1_exposed(old) is True
+    for s in ("aec-a", "aec-b", "aec-c"):
+        e.b.m(s)
+        e.step_market(s)
+    bidding = {o["slug"] for o in v.orders.values() if o["open"]}
+    assert bidding == {"aec-a", "aec-b"}          # two slots, both used
+    assert e.rn1_market_slots_full("aec-c", e.b.m("aec-c")) is True
+
+
+def test_carried_inventory_is_still_counted_in_every_dollar_limit(
+        eng, monkeypatch):
+    e, v = eng
+    monkeypatch.setattr(M, "MAX_MARKETS", 2)
+    monkeypatch.setattr(M, "RN1_SLOTS_COUNT_INVENTORY", False)
+    _hold(e, "aec-old", 1, "0.51")                     # this campaign's leg
+    assert e._rn1_slot_holder(e.b.m("aec-old")) is False
+    assert D(e.b.total_unmatched()) == D("0.51")       # unpaired total
+    assert e.own_exposure_usd() == D("0.51")           # at-risk and lane
+    assert e.own_resting_worst() == D("0")             # no bid resting
+    # the final gate's campaign unpaired ceiling counts it against a new
+    # bid elsewhere (0.51 held + 0.47 asked > 0.60)
+    monkeypatch.setattr(R, "TOTAL_UNMATCHED_USD", D("0.60"))
+    e.since = None
+    why = e.final_gate("aec-a", "YES", D("0.47"), D("1"), "rn1_open")
+    assert why and why.startswith("campaign_unpaired")
+
+
+def test_a_carried_leg_keeps_its_completion_bid_and_can_add_when_free(
+        eng, monkeypatch):
+    e, v = eng
+    monkeypatch.setattr(M, "MAX_MARKETS", 1)
+    monkeypatch.setattr(M, "RN1_SLOTS_COUNT_INVENTORY", False)
+    _carry(e, "aec-old")
+    e.b.m("aec-a")
+    e.step_market("aec-a")                        # takes the one slot
+    e.step_market("aec-old")
+    mine = [o for o in v.orders.values() if o["open"]
+            and o["slug"] == "aec-old"]
+    assert mine and all(o["side"] == "NO" for o in mine)   # completion only
+    assert e._rn1_slot_holder(e.b.m("aec-old")) is False
+
+
+def test_tracked_markets_stay_bounded(eng, monkeypatch):
+    """Passive inventory cannot grow the book without limit: MAX_TRACKED
+    still stops new selections."""
+    e, v = eng
+    monkeypatch.setattr(M, "MAX_MARKETS", 2)
+    monkeypatch.setattr(M, "MAX_TRACKED", 3)
+    monkeypatch.setattr(M, "RN1_SLOTS_COUNT_INVENTORY", False)
+    for s in ("aec-o1", "aec-o2", "aec-o3"):
+        _carry(e, s)
+    assert e.full() is True
