@@ -1364,3 +1364,22 @@ slate live, window open to 19:58 UTC with 2 h completion grace, size 2,
 (`ladder` field in RN1_QUOTE). Carried in at the restart: ATP
 Joagui–Lucamb YES 2 at 0.42 (unpaired $0.84, completion NO bid 0.55);
 ATP Matalm–Carzar paired 1/1.
+
+## 54. New exposure stopped — term breach (25 Nov, 17:11 UTC)
+
+At 17:07:59–17:08:07 UTC the bot placed five opening orders (YES 0.56,
+0.54; NO 0.41, 0.39, 0.37; 2 contracts each) on
+`aec-wta-martre-vererj-2026-11-25`, logged `phase: pregame`. The owner's
+terms (section 53) were in-play markets only. Cause (inferred): the market
+was already being tracked from before the restart; `PMUS_TWO_SIDED_SLATE=
+live` governs which markets are newly selected, not whether an already
+tracked pre-game market keeps quoting. No fills; every cap held (worst
+case: market unpaired $2.34, campaign $3.18, account 4.20 + 5.09 resting
+= 9.29 of 13).
+
+Action, under the standing instruction to stop if a term is not held:
+`PMUS_TWO_SIDED_SUBMISSION_LOCK=window:2026-11-25T13:58:00Z/2026-11-25T17:11:00Z`
+— new exposure ends now; opening orders are cancelled by id; maker
+completion bids may continue for the already-authorized 2-hour grace
+(to 19:11 UTC, inside the authorized 21:58). Not resumed without the
+owner's decision.
