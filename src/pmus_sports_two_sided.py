@@ -5000,6 +5000,16 @@ class Engine:
         adverse-selection allowance is RN1.ADVERSE_TICKS, plus the event
         type's jump allowance for a bid that adds to an unpaired side."""
         if not RN1.EDGE_GATE:
+            # MEASUREMENT ONLY (owner 2026-11-25: "Restore reward
+            # qualification measurement independently of international
+            # pricing"). Live 25 Nov: with this test off the reward
+            # estimate was never computed, so three hours of resting bids
+            # showed no qualifying time and `incentive: null`. The estimate
+            # and its projection are refreshed here in every mode; the
+            # result is recorded and returned to nobody, so no bid changes.
+            self._rn1_inc = getattr(self, "_rn1_inc", {})
+            self._rn1_inc[slug] = dict(self.rn1_incentive(slug, mk, tick),
+                                       measured_only=True)
             return self.rn1_extend_cfg(slug)
         typ = str(((getattr(self.v, "states", {}) or {}).get(slug) or {}
                    ).get("type") or "").lower()

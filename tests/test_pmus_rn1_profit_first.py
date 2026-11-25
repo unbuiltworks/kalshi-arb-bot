@@ -396,6 +396,63 @@ def test_an_old_estimate_or_a_failed_read_is_no_credit(eng, monkeypatch):
     assert got["ticks"] == 0 and "reward_estimate_error" in got["why"]
 
 
+def test_the_reward_estimate_is_measured_with_the_marginal_test_off(
+        eng, monkeypatch):
+    """LIVE 2026-11-25 00:30-03:30Z: quoting with the marginal test off
+    showed no qualifying time and `incentive: null` for three hours,
+    because the estimate was only refreshed inside the test. It is now
+    refreshed in every mode, and changes nothing that is bid."""
+    e, v = eng
+    assert R.EDGE_GATE is False                    # this suite's default
+    monkeypatch.setattr(e, "rn1_reward", lambda s: dict(PERIOD))
+    calls = []
+    monkeypatch.setattr(e, "_rn1_reward_estimate",
+                        lambda slug, mk, per, tick: calls.append(
+                            (slug, per["programId"], tick)))
+    mk = e.b.m("aec-x")
+    before = e.rn1_extend_cfg("aec-x")
+    assert e.rn1_quote_cfg("aec-x", mk, T) == before    # the same inputs
+    assert "incentive_ticks" not in e.rn1_quote_cfg("aec-x", mk, T)
+    assert calls and calls[0] == ("aec-x", "P", D(str(T)))
+    got = e._rn1_inc["aec-x"]
+    assert got["measured_only"] is True and "why" in got
+
+
+def test_a_failed_reward_read_never_stops_quoting_with_the_test_off(
+        eng, monkeypatch):
+    e, v = eng
+    monkeypatch.setattr(e, "rn1_reward", lambda s: dict(PERIOD))
+
+    def boom(*a, **k):
+        raise OSError("gateway down")
+    monkeypatch.setattr(e, "_rn1_reward_estimate", boom)
+    mk = e.b.m("aec-x")
+    assert e.rn1_quote_cfg("aec-x", mk, T) == e.rn1_extend_cfg("aec-x")
+    assert "reward_estimate_error" in e._rn1_inc["aec-x"]["why"]
+
+
+def test_qualifying_time_accrues_with_the_marginal_test_off(eng,
+                                                           monkeypatch):
+    """End to end: a share from the estimate turns resting time into
+    qualifying time whatever the pricing mode."""
+    e, v = eng
+    monkeypatch.setattr(e, "rn1_reward", lambda s: dict(PERIOD))
+
+    def est(slug, mk, per, tick):
+        mk["rn1_reward_est"] = {"t": time.time(), "legs": {}, "share": 0.02,
+                                "est_usd_per_hour": 0.4}
+    monkeypatch.setattr(e, "_rn1_reward_estimate", est)
+    mk = e.b.m("aec-x")
+    mk["orders"]["o1"] = {"side": "YES", "px": "0.47", "qty": "1",
+                          "filled": "0", "open": True, "stage": "rn1_open"}
+    e.rn1_quote_cfg("aec-x", mk, T)
+    now = time.time()
+    mk["phase_t"] = now - 5
+    e._phase_resting(mk, "live", now)
+    st = mk["phase_stats"]["live"]
+    assert D(st["qualifying_contract_s"]) == D(st["resting_contract_s"]) > 0
+
+
 @pytest.mark.rn1_edge_gate
 def test_reward_eligibility_disappearing_withdraws_what_it_paid_for(
         eng, monkeypatch):
