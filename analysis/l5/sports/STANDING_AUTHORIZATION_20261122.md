@@ -1182,3 +1182,16 @@ deployments, manual-order accounting, emergency-stop verification and the
 $13 / eight-market campaign. None of these messages contained a
 deployment, settings or live-trading authorization line; nothing has been
 deployed or set.
+
+## 47. Coordinated locked deployment authorized — 25 Nov, about 12:10 UTC
+
+Owner, typed: "I authorize deployment of ledger
+c70e244a21bd0034c04b7ac610e6b19357cf2da1 with the split off, then sports
+bc3a5b6b95218d0b3b0c9c42a57c929fbdec97b9 locked. Verify both deployments,
+watchdog health, unchanged risk limits and zero open orders. Do not arm or
+increase capital yet. Freeze additional feature development."
+
+Scope: the two deployments only. No setting is changed: the ledger split
+stays off (no total limit set), the bot limit stays $5, the sports lock
+stays `1`, none of the new sports settings is switched on. Rollbacks:
+ledger `f5a5434d6`, sports `766a965ba`.
