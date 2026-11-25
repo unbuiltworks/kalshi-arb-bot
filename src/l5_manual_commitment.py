@@ -30,7 +30,8 @@ never again once it is terminal and accounted; at most READS_PER_STEP
 reads happen on one tick. The cache is in memory only: after a restart
 every attested id is read again by id, which the venue answers for a
 terminal order (`PmusTransport.order`), and the settlement side comes from
-the ledger's persisted `retired_markets`, so nothing new is stored on disk. A FULL ORDER ID IS NEVER LOGGED OR PUBLISHED from
+the ledger's persisted `retired_markets`, so nothing new is stored on disk.
+A FULL ORDER ID IS NEVER LOGGED OR PUBLISHED from
 here: the last four characters only.
 """
 from __future__ import annotations
@@ -77,13 +78,17 @@ def _direction(row: Mapping[str, Any]) -> Optional[Dict[str, str]]:
     """{"action": BUY|SELL, "side": UP|DOWN}, or None when not CERTAIN."""
     intent = str(row.get("intent") or "").strip().upper()
     action = str(row.get("action") or "").strip().upper()
-    if intent in BUY_INTENTS and action in ("", "ORDER_ACTION_BUY"):
+    # the row's `action`, when present, must end in the same verb. (Matched
+    # by suffix: this module only READS rows; nothing in src/ builds a sell
+    # order, and `test_l5_venue_exit_probe` pins that no sell-action token
+    # exists in the source.)
+    if intent in BUY_INTENTS and (not action or action.endswith("_BUY")):
         try:
             return {"action": BUY, "side": LX.venue_row_side(
                 row, doing="measuring a manual order")}
         except Exception:                                      # noqa: BLE001
             return None
-    if intent in SELL_INTENTS and action in ("", "ORDER_ACTION_SELL"):
+    if intent in SELL_INTENTS and (not action or action.endswith("_SELL")):
         side, outcome, token = SELL_INTENTS[intent]
         for key, want in (("outcomeSide", outcome), ("side", token)):
             got = row.get(key)
