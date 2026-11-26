@@ -4236,52 +4236,94 @@ class InventoryStore:
         except (KeyError, TypeError, ValueError):
             return None
 
-    def repair_round_trips_inside_cash_anchor(self) -> List[Dict[str, Any]]:
-        """ONE-TIME repair of round-trip corrections applied before the
-        verb knew about the cash re-anchor.
+    def repair_round_trips_inside_cash_anchor(
+            self, reader: Optional[int] = None) -> List[Dict[str, Any]]:
+        """ONE-TIME reversal of round-trip corrections of rows that settled
+        before the last cash re-anchor. Such a row is outside this form's
+        scope (the other forms refuse it: SETTLED_BEFORE_THE_LAST_REBASE),
+        because the flat-account cash read already contains its result.
 
-        LIVE 2026-11-26 (release 8cfb39d37): `aec-cfb-duke-mia-2026-11-14`,
-        settled 14 Nov, was restated -5.00 -> +0.10 and the lifetime figure
-        moved +5.10, although the 16 Nov flat-account cash re-anchor already
-        contained the real result: counted twice, `lifetime_basis.reconciled`
-        False. For each such record not yet marked, the re-anchor residual
-        (`realized_unattributed`) and the legacy scalar move by -delta, so
-        the lifetime figure returns to what the cash read says; the row and
-        the attributed line keep the venue's restated result. The record is
-        marked, so this runs once, durably. Never raises.
+        LIVE 2026-11-26:
+          * release 8cfb39d37 restated `aec-cfb-duke-mia-2026-11-14`
+            (settled 14 Nov) -5.00 -> +0.10 and moved lifetime +5.10:
+            counted twice, `lifetime_basis.reconciled` False;
+          * release cdfa68f4d then offset that in `realized_unattributed`
+            (-5.10). Lifetime was right, but a nonzero undated residual
+            makes the DAY figure unknown (fail closed), so the account-risk
+            record refused.
+
+        For each such record not yet reversed, the state is put back exactly
+        as it was before the correction: the row from `cost_superseded`, the
+        attributed line and the legacy scalar by -delta, any residual offset
+        written by cdfa68f4d removed, the unknown-basis keys and the risk
+        floor restored, the venue-attest cursor closed for the round-trip
+        form. The correction record is KEPT (marked reversed, with the time)
+        as audit evidence of the venue's result. Durable; runs once. Never
+        raises.
         """
         done: List[Dict[str, Any]] = []
         try:
             changed = False
+            rows = self.state.get("retired_markets") or {}
             for rec in (self.state.get("cost_basis_corrections") or []):
-                if not isinstance(rec, Mapping):
+                if not isinstance(rec, dict):
                     continue
                 if rec.get("kind") != "VENUE_ATTESTED_ROUND_TRIP":
                     continue
-                if "inside_cash_anchor" in rec:
+                if rec.get("reversed_inside_cash_anchor"):
                     continue
                 inside = self._inside_cash_anchor(rec.get("settled_at"))
-                if inside is None:
+                if inside is not True:
                     continue
                 delta = finite_decimal(rec.get("delta"))
-                if delta is None:
+                market = str(rec.get("market") or "")
+                row = rows.get(market)
+                if delta is None or not isinstance(row, dict) \
+                        or not isinstance(row.get("cost_superseded"), Mapping) \
+                        or row.get("cost_correction_id") != rec.get("id"):
                     continue
-                changed = True
-                if not inside:
-                    rec["inside_cash_anchor"] = False
-                    rec["lifetime_delta"] = str(delta)
-                    continue
-                self.state["realized_unattributed"] = str(
-                    D(str(self.state.get("realized_unattributed") or 0))
+                if rec.get("inside_cash_anchor") is True:
+                    # cdfa68f4d's residual offset: undo it first
+                    self.state["realized_unattributed"] = str(
+                        D(str(self.state.get("realized_unattributed") or 0))
+                        + delta)
+                    self.state["realized_today"] = str(
+                        D(str(self.state.get("realized_today") or 0))
+                        + delta)
+                self.state["realized_attributed"] = str(
+                    D(str(self.state.get("realized_attributed") or 0))
                     - delta)
                 self.state["realized_today"] = str(
                     D(str(self.state.get("realized_today") or 0)) - delta)
+                rows[market] = dict(row["cost_superseded"])
+                keys = [str(k) for k in
+                        (rec.get("unknown_basis_keys_cleared") or [])]
+                cur = list(self.state.get("leg_cost_basis_unknown") or [])
+                for k in keys:
+                    if k not in cur:
+                        cur.append(k)
+                if keys:
+                    self.state["leg_cost_basis_unknown"] = cur
+                book = self.state.setdefault(self.VENUE_ATTEST_STATE_KEY, {})
+                m = book.setdefault("markets", {})
+                prev = dict(m.get(market) or {})
+                prev.update({"status": "UPPER_BOUND_KEPT",
+                             "last_reason":
+                                 "ROUND_TRIP:SETTLED_BEFORE_THE_LAST_REBASE",
+                             "round_trip_final": True})
+                if reader is not None:
+                    prev["round_trip_reader"] = int(reader)
+                m[market] = prev
+                rec["reversed_inside_cash_anchor"] = dt.datetime.now(
+                    dt.timezone.utc).isoformat()
                 rec["inside_cash_anchor"] = True
                 rec["lifetime_delta"] = "0"
-                rec["inside_cash_anchor_repaired_at"] = dt.datetime.now(
-                    dt.timezone.utc).isoformat()
-                done.append({"market": rec.get("market"),
-                             "lifetime_moved_usd": str(-delta)})
+                rec["labels_reversal"] = (
+                    "settled before the last cash re-anchor, whose cash read "
+                    "already contains this result; the restatement was "
+                    "reversed. Venue evidence kept here for audit.")
+                changed = True
+                done.append({"market": market, "reversed_delta": str(delta)})
             if changed:
                 self.save()
         except BaseException as exc:                           # noqa: BLE001
@@ -4356,6 +4398,13 @@ class InventoryStore:
             return no("NO_UNKNOWN_BASIS_KEYS")
         if not isinstance(walk, Mapping) or walk.get("sufficient") is not True:
             return no("VENUE_WALK_NOT_SUFFICIENT")
+        inside = self._inside_cash_anchor(row.get("t"))
+        if inside is None:
+            return no("REBASE_RECORD_UNREADABLE")
+        if inside:
+            # the last cash re-anchor's flat-account read already contains
+            # this market's result (the other forms refuse it the same way)
+            return no("SETTLED_BEFORE_THE_LAST_REBASE")
         v = finite_decimal(row.get("yes_value"))
         if v is None or v not in (D(0), D(1)):
             return no("SETTLEMENT_UNREADABLE")
@@ -4422,22 +4471,10 @@ class InventoryStore:
         row["venue_cost_attested"] = {"trade_ids": list(ids),
                                       "venue_order_ids": list(order_ids),
                                       "form": self.ROUND_TRIP_FORM}
-        inside = self._inside_cash_anchor(row.get("t"))
-        if inside is None:
-            return no("REBASE_RECORD_UNREADABLE")
         self.state["realized_attributed"] = str(
             D(str(self.state.get("realized_attributed") or 0)) + delta)
-        if inside:
-            # settled before the last cash re-anchor: that flat-account cash
-            # read already contains the market's real result. The row and
-            # the attributed line are restated; the re-anchor's residual
-            # absorbs the same amount, so the lifetime figure does not move
-            # (it would otherwise count the result twice).
-            self.state["realized_unattributed"] = str(
-                D(str(self.state.get("realized_unattributed") or 0)) - delta)
-        else:
-            self.state["realized_today"] = str(
-                D(str(self.state.get("realized_today") or 0)) + delta)
+        self.state["realized_today"] = str(
+            D(str(self.state.get("realized_today") or 0)) + delta)
         removed = [k for k in (self.state.get("leg_cost_basis_unknown") or [])
                    if str(k).rsplit("|", 1)[0] == market]
         if removed:
@@ -4464,8 +4501,8 @@ class InventoryStore:
             "fills": [dict(f) for f in fills],
             "trade_ids": list(ids), "venue_order_ids": list(order_ids),
             "unknown_basis_keys_cleared": removed,
-            "inside_cash_anchor": bool(inside),
-            "lifetime_delta": "0" if inside else str(delta),
+            "inside_cash_anchor": False,
+            "lifetime_delta": str(delta),
             "origin_set": ORIGIN.MANUAL if rt.get("all_manual") else None,
             "activity_walk": {k: walk.get(k) for k in
                               ("pages", "ended", "sufficient", "by",

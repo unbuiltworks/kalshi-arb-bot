@@ -48,56 +48,105 @@ def anchored(tmp_path):
     return s
 
 
-def test_the_row_is_restated_and_the_lifetime_figure_does_not_move(anchored):
-    run_until_idle(anchored, Feed([duke_rows()]))
-    row = anchored.state["retired_markets"][DUKE]
-    assert D(row["settlement_pnl"]) == D("0.10")
-    assert anchored.realized_today() == D("-50")
-    assert anchored.lifetime_basis()["reconciled"] is True
-    rec = [r for r in anchored.state["cost_basis_corrections"]
-           if r["market"] == DUKE][0]
-    assert rec["inside_cash_anchor"] is True
-    assert rec["lifetime_delta"] == "0"
-    assert D(anchored.state["realized_attributed"]) == D("-40") + D("5.10")
-    assert D(anchored.state["realized_unattributed"]) == D("-10") - D("5.10")
+NOW = __import__("datetime").datetime(
+    2026, 11, 26, 18, 0, tzinfo=__import__("datetime").timezone.utc
+).timestamp()
 
 
-def test_a_correction_applied_by_the_old_verb_is_repaired_once(anchored,
-                                                               tmp_path):
-    # what release 8cfb39d37 wrote: lifetime moved by the delta, no marker
-    run_until_idle(anchored, Feed([duke_rows()]))
-    rec = [r for r in anchored.state["cost_basis_corrections"]
+def _apply_as_8cfb39d37(s):
+    """Write exactly what release 8cfb39d37 wrote: the row restated, the
+    attributed line and the legacy scalar moved by the delta."""
+    row = s.state["retired_markets"][DUKE]
+    keys = list(row.get("unverified_cost_basis_keys") or [])
+    rt = VCA.round_trip_from_rows(duke_rows(), DUKE)
+    s.state["accounting_rebase_log"] = []       # the old verb's view
+    out = s.attest_retired_round_trip(DUKE, round_trip=rt,
+                                      walk={"sufficient": True},
+                                      correction_id="venue-round-trip|" + DUKE)
+    s.state["accounting_rebase_log"] = [dict(REBASE)]
+    assert out["attested"] is True
+    rec = [r for r in s.state["cost_basis_corrections"]
            if r["market"] == DUKE][0]
     for k in ("inside_cash_anchor", "lifetime_delta"):
-        rec.pop(k)
-    anchored.state["realized_unattributed"] = "-10"
-    anchored.state["realized_today"] = str(D("-50") + D("5.10"))
-    anchored.save()
-    assert anchored.realized_today() == D("-44.90")
-    assert anchored.lifetime_basis()["reconciled"] is False
+        rec.pop(k, None)
+    s.save()
+    return keys
 
-    out = anchored.repair_round_trips_inside_cash_anchor()
-    assert out == [{"market": DUKE, "lifetime_moved_usd": "-5.10000000"}] \
-        or (len(out) == 1 and D(out[0]["lifetime_moved_usd"]) == D("-5.10"))
+
+def test_a_row_settled_before_the_reanchor_is_not_restated(anchored):
+    before = json.dumps(anchored.state["retired_markets"][DUKE],
+                        sort_keys=True)
+    run_until_idle(anchored, Feed([duke_rows()]))
+    assert json.dumps(anchored.state["retired_markets"][DUKE],
+                      sort_keys=True) == before
     assert anchored.realized_today() == D("-50")
     assert anchored.lifetime_basis()["reconciled"] is True
-    assert D(anchored.state["retired_markets"][DUKE]["settlement_pnl"]) \
-        == D("0.10")
-    # once, and durably across a restart
+    assert not [r for r in anchored.state.get("cost_basis_corrections") or []
+                if r.get("market") == DUKE]
+    rt = VCA.round_trip_from_rows(duke_rows(), DUKE)
+    out = anchored.attest_retired_round_trip(
+        DUKE, round_trip=rt, walk={"sufficient": True}, correction_id="x")
+    assert out["reason"] == "SETTLED_BEFORE_THE_LAST_REBASE"
+
+
+def test_the_8cfb39d37_correction_is_reversed_once(anchored):
+    original = json.dumps(anchored.state["retired_markets"][DUKE],
+                          sort_keys=True)
+    _apply_as_8cfb39d37(anchored)
+    assert anchored.realized_today() == D("-44.90")
+    assert anchored.lifetime_basis()["reconciled"] is False
+    out = anchored.repair_round_trips_inside_cash_anchor(
+        reader=VCA.ROUND_TRIP_READER)
+    assert len(out) == 1 and D(out[0]["reversed_delta"]) == D("5.10")
+    assert anchored.realized_today() == D("-50")
+    assert D(anchored.state["realized_unattributed"]) == D("-10")
+    assert anchored.lifetime_basis()["reconciled"] is True
+    assert json.dumps(anchored.state["retired_markets"][DUKE],
+                      sort_keys=True) == original
+    rec = [r for r in anchored.state["cost_basis_corrections"]
+           if r["market"] == DUKE][0]
+    assert rec["reversed_inside_cash_anchor"]
     assert anchored.repair_round_trips_inside_cash_anchor() == []
     again = LX.InventoryStore(anchored.path)
     assert again.repair_round_trips_inside_cash_anchor() == []
     assert again.realized_today() == D("-50")
+    assert VCA.candidates(again) == []
+
+
+def test_the_cdfa68f4d_residual_offset_is_undone_and_the_day_is_readable(
+        tmp_path):
+    """The production state after cdfa68f4d: residual -5.10, so the day
+    figure was UNKNOWN. After the repair: residual 0, day readable."""
+    s = LX.InventoryStore(str(tmp_path / "inv.json"))
+    retire(s, DUKE, up="5", yes="0", t="2026-11-14T23:00:00+00:00")
+    s.state["accounting_rebase_log"] = [dict(REBASE, unattributed="0")]
+    s.state["cash_anchor"] = {"at_read_utc": "2026-11-16T00:11:52Z"}
+    s.state["realized_attributed"] = "-50"
+    s.state["realized_unattributed"] = "0"
+    s.state["realized_today"] = "-50"
+    original = json.dumps(s.state["retired_markets"][DUKE], sort_keys=True)
+    _apply_as_8cfb39d37(s)
+    rec = [r for r in s.state["cost_basis_corrections"]
+           if r["market"] == DUKE][0]
+    # cdfa68f4d's repair
+    s.state["realized_unattributed"] = "-5.10"
+    s.state["realized_today"] = str(D(s.state["realized_today"]) - D("5.10"))
+    rec["inside_cash_anchor"] = True
+    rec["lifetime_delta"] = "0"
+    assert s.realized_current_utc_day(now=NOW) is None
+    assert s.realized_today() == D("-50")
+    s.repair_round_trips_inside_cash_anchor()
+    assert D(s.state["realized_unattributed"]) == D("0")
+    assert s.realized_today() == D("-50")
+    assert D(s.state["realized_attributed"]) == D("-50")
+    assert s.realized_current_utc_day(now=NOW) == D("0")
+    assert s.lifetime_basis()["reconciled"] is True
+    assert json.dumps(s.state["retired_markets"][DUKE],
+                      sort_keys=True) == original
 
 
 def test_the_attestor_step_runs_the_repair_without_a_transport(anchored):
-    run_until_idle(anchored, Feed([duke_rows()]))
-    rec = [r for r in anchored.state["cost_basis_corrections"]
-           if r["market"] == DUKE][0]
-    for k in ("inside_cash_anchor", "lifetime_delta"):
-        rec.pop(k)
-    anchored.state["realized_unattributed"] = "-10"
-    anchored.state["realized_today"] = str(D("-44.90"))
+    _apply_as_8cfb39d37(anchored)
     VCA.Attestor().step(anchored, None, 0.0)
     assert anchored.realized_today() == D("-50")
 
@@ -125,3 +174,4 @@ def test_a_round_trip_after_the_reanchor_still_moves_the_lifetime(tmp_path):
     assert rec["inside_cash_anchor"] is False
     assert s.repair_round_trips_inside_cash_anchor() == []
     assert s.realized_today() == D("-55") + D("5.10")
+    assert D(s.state["realized_unattributed"]) == D("-10")
