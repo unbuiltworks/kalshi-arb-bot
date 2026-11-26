@@ -5139,6 +5139,14 @@ class Engine:
                 # it reduces risk and its cost is already reserved; the
                 # pair-cost ceiling above is its limit
                 return None
+            # backstop for the loss stops step_market enforces (the same
+            # evaluation, no new limit): no opening/extension while the
+            # campaign loss stop or the daily loss stop is in force, by
+            # whatever path the order came; completions continue (above)
+            if self.pilot_loss_stopped():
+                return "pilot_loss_stop"
+            if self.daily_stopped():
+                return "daily_loss_stop"
             if RN1_LOSS_STOP_COUNTS_RESTING and PILOT_LOSS_USD > 0:
                 from src import pmus_pilot_pnl as PP
                 worst = PP.book_worst_case(self.b.d.get("markets") or {},
@@ -5446,9 +5454,18 @@ class Engine:
 
     def rn1_reward(self, slug: str) -> Optional[Dict[str, Any]]:
         """The paying liquidity period for this market from the cached
-        programme read (no request here), or None."""
-        prog = (self._prog.get(slug) or (0, None))[1]
+        programme read (no request here), or None. A cache entry older
+        than 2 x REWARD_REFRESH_S (two missed refreshes) is no programme:
+        a programme withdrawn at the venue must not keep being credited
+        just because nothing re-read it (fail closed until refreshed)."""
+        ent = self._prog.get(slug) or (0, None)
+        prog = ent[1]
         if not prog:
+            return None
+        try:
+            if time.monotonic() - float(ent[0]) > 2 * REWARD_REFRESH_S:
+                return None
+        except Exception:                                 # noqa: BLE001
             return None
         try:
             from src import pmus_sports_rewards as R
@@ -5663,6 +5680,23 @@ class Engine:
         inc = (getattr(self, "_rn1_inc", {}) or {}).get(slug) or {}
         per = self.rn1_reward(slug) if inc.get("why") == "qualifies" \
             else None
+        # STANDING START (no fair value only). The day's projection counts
+        # only what already rests, so before the first bid it is $0 and no
+        # no-fair market could ever get one. When a programme IS paying
+        # and nothing at all is counted yet (projected $0), the projection
+        # is instead that of the ladder that would rest: every planned bid
+        # (completions, kept bids, each candidate and the levels above and
+        # beside it) except a candidate that is itself refused, under the
+        # existing formula (ladder_quote_estimate x RN1_REWARD_PROJECT_H;
+        # see _rn1_boot_projection). Only if that self-supporting set
+        # reaches RN1_REWARD_MIN_DAY_USD is any of it credited, and each
+        # credit is still the haircut incremental reward of the bid alone.
+        boot = False
+        if no_fair and per is None and \
+                inc.get("why") == "below_minimum_payout" and \
+                float(inc.get("projected_usd") or 0.0) <= 0.0:
+            per = self.rn1_reward(slug)
+            boot = bool(per)
         book, own_y, own_n = None, [], []
         rw_err = None
         if per:
@@ -5683,6 +5717,60 @@ class Engine:
                     book, self._rn1_mature_own(mk, time.time()), t)
             except Exception as exc:                  # noqa: BLE001
                 book, rw_err = None, "book_error:%s" % type(exc).__name__
+        if boot and book is not None:
+            # fixed point: a refused candidate never carries the others'
+            # projection; repeat until the credited set is self-supporting
+            alive = {id(c) for c in cands}
+            while True:
+                proj = self._rn1_boot_projection(book, per, planned, cands,
+                                                 alive, t, own_y, own_n)
+                out = self._rn1_judge(slug, mk, cands, planned, no_fair,
+                                      pos, clip, touch, adv_cfg, qcfg, t,
+                                      per, book, own_y, own_n, rw_err,
+                                      {i: proj for i in alive})
+                ok = {id(c) for c, r in zip(cands, out) if r.get("ok")} \
+                    & alive
+                if ok == alive:
+                    return out
+                alive = ok
+        return self._rn1_judge(slug, mk, cands, planned, no_fair, pos, clip,
+                               touch, adv_cfg, qcfg, t,
+                               None if boot else per, book, own_y, own_n,
+                               rw_err, None)
+
+    def _rn1_boot_projection(self, book, per, planned, cands, alive, t,
+                             own_y, own_n) -> float:
+        """THEORETICAL projected USD over RN1_REWARD_PROJECT_H of the
+        ladder that would rest: every planned bid except a candidate not
+        in `alive` (refused). The existing projection's formula
+        (rn1_incentive: ladder_quote_estimate of the resting set x
+        RN1_REWARD_PROJECT_H), applied to the planned set in place of the
+        resting one. Never raises (doubt = 0)."""
+        try:
+            from src import pmus_sports_rewards as RW
+            ids = {id(x) for x in cands}
+            ys, ns = [], []
+            for x in planned:
+                if id(x) in ids and id(x) not in alive:
+                    continue
+                (ys if x["side"] == "YES" else ns).append(
+                    (float(x["px"]), float(x["qty"])))
+            if not (ys or ns):
+                return 0.0
+            est = RW.ladder_quote_estimate(book, per, ys, ns, float(t),
+                                           own_y, own_n)
+            return max(0.0, float(est.get("est_usd_per_hour") or 0.0)) * \
+                RN1_REWARD_PROJECT_H
+        except Exception:                                 # noqa: BLE001
+            return 0.0
+
+    def _rn1_judge(self, slug, mk, cands, planned, no_fair, pos, clip,
+                   touch, adv_cfg, qcfg, t, per, book, own_y, own_n, rw_err,
+                   qual) -> list:
+        """One RN1.marginal_ev(_no_fair) result per candidate (see
+        rn1_marginal_ev). `qual`: None, or {id(candidate): standing-start
+        projected USD}; then only a candidate whose projection reaches
+        RN1_REWARD_MIN_DAY_USD is credited any reward."""
         from src import pmus_sports_rewards as RW
         out = []
         ahead = {"YES": D(0), "NO": D(0)}
@@ -5722,7 +5810,12 @@ class Engine:
             loss = D(str(rn1_fill_param(RN1_FILL_LOSS, depth, slug)))
             rew, why_r = 0.0, rw_err or ("no_qualifying_reward"
                                           if not per else None)
-            if per and book is not None:
+            boot_usd = None if qual is None else qual.get(id(c), 0.0)
+            if boot_usd is not None and not rw_err and \
+                    boot_usd + 1e-9 < RN1_REWARD_MIN_DAY_USD:
+                why_r = "below_minimum_payout"
+            if per and book is not None and (
+                    boot_usd is None or why_r is None):
                 try:
                     rest = [x for x in planned if x is not c]
                     m = RW.marginal_ladder_reward(
@@ -5754,6 +5847,12 @@ class Engine:
                     reward_usd_per_hour=rew, rebate=D(0))
             r.update(side=side, depth=depth, level=c.get("level", 0),
                      reward_why=why_r)
+            if boot_usd is not None:
+                r["reward_projection"] = {
+                    "basis": "standing_start_planned_ladder",
+                    "projected_usd": round(boot_usd, 4),
+                    "min_payout_usd": RN1_REWARD_MIN_DAY_USD,
+                    "label": "THEORETICAL reward projection; not a payment"}
             out.append(r)
             ahead[side] += qty
         return out

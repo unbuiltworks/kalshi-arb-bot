@@ -695,6 +695,79 @@ def test_the_final_gate_refuses_an_opening_past_the_unpaired_ceiling(en):
                         "two_sided_complete") is None
 
 
+def _sent(capsys):
+    pre = "PMUS_TWO_SIDED "
+    return [json.loads(l[len(pre):])
+            for l in capsys.readouterr().out.splitlines()
+            if l.startswith(pre)]
+
+
+def test_the_final_gate_refuses_openings_under_the_campaign_loss_stop(
+        en, monkeypatch, capsys):
+    """Backstop for step_market's campaign loss stop: a direct place() of
+    an opening/extension is refused once pilot_loss_stop is latched; a
+    completion is still allowed."""
+    e, v, _ = en
+    monkeypatch.setattr(M, "PILOT_LOSS_USD", D("4.00"))
+    monkeypatch.setattr(M, "RN1_LOSS_STOP_COUNTS_RESTING", False)
+    _pilot_ok(e)
+    assert e.final_gate(SLUG, "YES", D("0.47"), D("2"), "rn1_open") is None
+    e.b.d["pilot_loss_stop"] = {"t": "x", "net": "-4.10"}
+    for stage in ("rn1_open", "rn1_extend"):
+        assert e.final_gate(SLUG, "YES", D("0.47"), D("2"), stage) == \
+            "pilot_loss_stop"
+    capsys.readouterr()
+    n = len(v.orders)
+    e.place(SLUG, "YES", D("0.47"), D("2"), "rn1_open")
+    assert len(v.orders) == n
+    assert any(r.get("kind") == "place_refused_final_gate" and
+               r.get("reason") == "pilot_loss_stop" for r in _sent(capsys))
+    mk = e.b.m(SLUG)
+    mk["pos"]["YES"], mk["cost"]["YES"] = D("2"), D("0.94")
+    assert e.final_gate(SLUG, "NO", D("0.47"), D("2"),
+                        "two_sided_complete") is None
+    e.place(SLUG, "NO", D("0.47"), D("2"), "two_sided_complete")
+    assert len(v.orders) == n + 1
+
+
+def test_the_final_gate_refuses_openings_under_the_daily_loss_stop(
+        en, monkeypatch, capsys):
+    """Backstop for step_market's daily loss stop: a direct place() of an
+    opening/extension is refused while the day is stopped; a completion is
+    still allowed."""
+    e, v, _ = en
+    monkeypatch.setattr(M, "DAILY_LOSS_USD", D("0.10"))
+    assert e.final_gate(SLUG, "YES", D("0.47"), D("2"), "rn1_open") is None
+    e.b.d["day"] = {"date": e._today(), "stopped": True}
+    assert e.daily_stopped()
+    for stage in ("rn1_open", "rn1_extend"):
+        assert e.final_gate(SLUG, "YES", D("0.47"), D("2"), stage) == \
+            "daily_loss_stop"
+    capsys.readouterr()
+    n = len(v.orders)
+    e.place(SLUG, "YES", D("0.47"), D("2"), "rn1_open")
+    assert len(v.orders) == n
+    assert any(r.get("kind") == "place_refused_final_gate" and
+               r.get("reason") == "daily_loss_stop" for r in _sent(capsys))
+    mk = e.b.m(SLUG)
+    mk["pos"]["YES"], mk["cost"]["YES"] = D("2"), D("0.94")
+    assert e.final_gate(SLUG, "NO", D("0.47"), D("2"),
+                        "two_sided_complete") is None
+    e.place(SLUG, "NO", D("0.47"), D("2"), "two_sided_complete")
+    assert len(v.orders) == n + 1
+
+
+def test_with_no_stop_in_force_the_final_gate_is_unchanged(en, monkeypatch):
+    """Normal operation: neither stop in force, an in-cap opening passes
+    the final gate and the reward-carried ladder rests as before."""
+    e, v, _ = en
+    monkeypatch.setattr(M, "PILOT_LOSS_USD", D("4.00"))
+    _pilot_ok(e)
+    assert not e.pilot_loss_stopped() and not e.daily_stopped()
+    assert e.final_gate(SLUG, "YES", D("0.47"), D("2"), "rn1_open") is None
+    full_ladder(e, v)
+
+
 # ------------------------------------------- 7. reward feed loss / expiry
 def _withdrawn(e, v):
     e.step_market(SLUG)
@@ -767,35 +840,116 @@ def test_a_completion_survives_the_reward_feed_going_away(en):
     assert only_completion(e)
 
 
-def test_the_engines_own_projection_credits_nothing_from_a_standing_start(
-        en, monkeypatch, capsys):
-    """With the engine's REAL rn1_incentive (no projection supplied): the
-    projection is the theoretical reward of what the bot already rests
-    across its markets, which is nothing yet, so it is below the minimum
-    payout and no reward is credited -- fail closed. (Consequence reported:
-    a campaign whose only markets have no fair value never starts quoting
-    in this mode unless another market's resting bids carry the
-    projection.)"""
-    e, v, _ = en
+def _real_projection(e, monkeypatch):
+    """Use the engine's REAL Engine.rn1_incentive (no projection supplied
+    by the feed)."""
     monkeypatch.setattr(e, "rn1_incentive",
                         M.Engine.rn1_incentive.__get__(e))
+
+
+def _mature(e, slug=SLUG):
+    """Every resting order old enough (RN1_NET_OWN_LAG_S) to be counted by
+    the day's projection."""
+    for o in e.b.m(slug)["orders"].values():
+        if o.get("open"):
+            o["placed_at"] = float(o["placed_at"]) - \
+                2 * M.RN1_NET_OWN_LAG_S - 1
+
+
+def test_the_engines_own_projection_starts_a_qualifying_ladder(
+        en, monkeypatch, capsys):
+    """STANDING START with the engine's REAL rn1_incentive: nothing rests
+    yet, so the measured projection is $0. The ladder that would rest (all
+    six planned bids) projects, under the existing formula over
+    RN1_REWARD_PROJECT_H, to at least the minimum payout, so it rests --
+    each bid still carried only by its own haircut incremental reward.
+    Once the bids are counted, the measured projection itself qualifies and
+    the ladder stays."""
+    e, v, feed = en
+    _real_projection(e, monkeypatch)
+    est = RW.ladder_quote_estimate(
+        feed.book(SLUG), e.rn1_reward(SLUG),
+        [(0.47, 2.0), (0.46, 2.0), (0.45, 2.0)],
+        [(0.49, 2.0), (0.48, 2.0), (0.47, 2.0)], 0.01, [], [])
+    assert est["est_usd_per_hour"] * M.RN1_REWARD_PROJECT_H >= \
+        M.RN1_REWARD_MIN_DAY_USD
+    full_ladder(e, v)
+    q = quotes(capsys)[-1]
+    assert q["incentive"]["why"] == "below_minimum_payout"
+    assert q["incentive"]["projected_usd"] == 0
+    assert len(q["marginal_ev"]) == 6
+    assert all(r["ok"] and r["reward_usd_per_hour"] > 0
+               for r in q["marginal_ev"])
+    # each credit is the haircut incremental reward of that bid, so the
+    # credits together never exceed the haircut reward of the ladder
+    assert sum(r["reward_usd_per_hour"] for r in q["marginal_ev"]) <= \
+        M.RANK_REWARD_HAIRCUT * est["est_usd_per_hour"] + 1e-6
+    _mature(e)
+    e.step_market(SLUG)
+    assert e._rn1_inc[SLUG]["why"] == "qualifies"
+    assert resting(v) == [("NO", "0.47", "2"), ("NO", "0.48", "2"),
+                          ("NO", "0.49", "2"), ("YES", "0.45", "2"),
+                          ("YES", "0.46", "2"), ("YES", "0.47", "2")]
+
+
+def test_a_standing_start_projects_only_what_would_rest(en, monkeypatch,
+                                                        capsys):
+    """One level a side (no deeper levels planned): that ladder alone
+    projects below the minimum payout, so from a standing start nothing is
+    credited and nothing rests -- the projection never counts a bid that
+    is not planned."""
+    e, v, feed = en
+    monkeypatch.setattr(M, "RN1_LADDER_LEVELS", 1)
+    _real_projection(e, monkeypatch)
+    est = RW.ladder_quote_estimate(feed.book(SLUG), e.rn1_reward(SLUG),
+                                   [(0.47, 2.0)], [(0.49, 2.0)], 0.01,
+                                   [], [])
+    assert est["est_usd_per_hour"] * M.RN1_REWARD_PROJECT_H < \
+        M.RN1_REWARD_MIN_DAY_USD
+    for _ in range(3):
+        e.step_market(SLUG)
+    assert resting(v) == []
+    mev = quotes(capsys)[-1]["marginal_ev"]
+    assert mev and all(r["reward_usd_per_hour"] == 0 for r in mev)
+
+
+def test_a_thin_programme_from_a_standing_start_credits_nothing(
+        en, monkeypatch, capsys):
+    """Thin market with the engine's REAL projection: even the whole
+    planned ladder projects below the minimum payout, so nothing is
+    credited and nothing rests."""
+    e, v, _ = en
+    RewardFeed(e, "thin").install(monkeypatch)
+    _real_projection(e, monkeypatch)
     for _ in range(3):
         e.step_market(SLUG)
     assert resting(v) == []
     q = quotes(capsys)[-1]
     assert q["incentive"]["why"] == "below_minimum_payout"
-    assert q["incentive"]["projected_usd"] == 0
+    assert q["marginal_ev"] and all(r["reward_usd_per_hour"] == 0
+                                    for r in q["marginal_ev"])
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "SAFETY DEFECT (reported, not fixed): in RN1 mode the programme cache "
-    "Engine._prog of a market already being traded is refreshed only by "
-    "refresh_active_rewards (PMUS_TWO_SIDED_REWARDS on) -- select() skips "
-    "tracked markets -- and Engine.rn1_reward never checks the cache's "
-    "age. A programme withdrawn at the venue therefore keeps crediting "
-    "reward, and keeps no-fair bids resting on it, indefinitely."))
+def test_a_standing_start_never_credits_a_programme_not_paying(
+        en, monkeypatch):
+    """The programme is gone (re-read from the venue): the standing-start
+    projection credits nothing and nothing rests."""
+    e, v, feed = en
+    _real_projection(e, monkeypatch)
+    feed.present = False
+    feed.refresh()
+    for _ in range(3):
+        e.step_market(SLUG)
+    assert resting(v) == []
+
+
 def test_a_programme_withdrawn_at_the_venue_is_noticed_without_refresh(
         en, monkeypatch):
+    """In RN1 mode the programme cache of a market already being traded is
+    refreshed only by refresh_active_rewards (PMUS_TWO_SIDED_REWARDS on);
+    select() skips tracked markets. Engine.rn1_reward treats an entry older
+    than 2 x REWARD_REFRESH_S as no programme, so a programme withdrawn at
+    the venue stops being credited and the bids it carried come off."""
     e, v, feed = en
     full_ladder(e, v)
     feed.present = False                           # gone at the venue
@@ -804,6 +958,22 @@ def test_a_programme_withdrawn_at_the_venue_is_noticed_without_refresh(
         e._prog[s] = (t - 10 * M.REWARD_REFRESH_S, prog)
     e.select(v.account())                          # the loop's 20 s pass
     assert _withdrawn(e, v)
+
+
+def test_a_fresh_programme_cache_is_credited_as_before(en):
+    """Within 2 x REWARD_REFRESH_S the cached programme is used exactly as
+    before; past it there is no programme until the cache is re-read."""
+    e, v, feed = en
+    full_ladder(e, v)
+    t, prog = e._prog[SLUG]
+    e._prog[SLUG] = (t - 1.5 * M.REWARD_REFRESH_S, prog)
+    assert e.rn1_reward(SLUG) == feed.rn1_reward(SLUG) is not None
+    e._prog[SLUG] = (t - 2 * M.REWARD_REFRESH_S - 1, prog)
+    assert e.rn1_reward(SLUG) is None
+    feed.refresh()
+    assert e.rn1_reward(SLUG) is not None
+    e.step_market(SLUG)
+    assert len(resting(v)) == 6
 
 
 # ------------------------------------------- 8. restart and reconciliation
