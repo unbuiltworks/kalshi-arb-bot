@@ -245,3 +245,34 @@ def test_net_qualification_expired_positive_cache_cannot_authorize_on_error(
 
     monkeypatch.setattr(e, "_reward_share_score", failed_read)
     assert e.rn1_quote_qualifies(SLUG, mk) is False
+
+
+def test_net_rank_deducts_owned_remaining_at_candidate_price(eng, monkeypatch):
+    e, _v = eng
+    mk = e.b.m(SLUG)
+    mk["orders"] = {
+        "ours": {"side": "YES", "px": "0.40", "qty": "3",
+                 "filled": "1", "open": True},
+        "foreign": {"side": "YES", "px": "0.40", "qty": "8",
+                    "filled": "0", "open": True},
+        "closed": {"side": "YES", "px": "0.40", "qty": "9",
+                   "filled": "0", "open": False},
+    }
+    e.b.d["own_order_ids"] = ["ours", "closed"]
+
+    class Capture:
+        calls = []
+
+        def book_sides(self, book):
+            return [(0.40, 10)], [(0.45, 10)]
+
+        def quote_estimate(self, book, per, y, n, q, tick, **kwargs):
+            self.calls.append(kwargs)
+            return {"est_usd_per_hour": 1.0}
+
+    fake = Capture()
+    _set_rates(monkeypatch, 0, 0, 0, 0)
+    e._net_score(SLUG, {}, {}, D("0.40"), D("0.45"), D("0.01"),
+                 D("10"), fake)
+    assert fake.calls[0] == {"own_yes": 2.0, "own_no": 0.0}
+    assert fake.calls[1] == {}
