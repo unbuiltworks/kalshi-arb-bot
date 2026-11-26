@@ -1991,3 +1991,17 @@ YES = 1 at 21:50.
 - **Window:** the window to 23:15 stays open, but the pin allows only the
   settled market, so nothing more can open. No extension or repin without
   the owner's authorization.
+
+## 70. Pin cleared with lock 1, to rank events — 26 Nov 2026, about 22:30 UTC
+
+Owner, typed: "Authorized: clear PMUS_RN1_PIN on pmus-spring-l5-probe with the
+submission lock set to 1. Immediately identify and rank the next five
+reward-eligible events ... Prepare the best event for immediate live
+authorization. ... prepare a continuous campaign mechanism that
+automatically rotates from settled events into the next economically
+eligible market within explicitly authorized campaign limits. Reuse the
+existing market-ranking and inventory controller. ... Do not arm or deploy
+additional changes without authorization."
+
+Set `PMUS_RN1_PIN` to empty and `PMUS_TWO_SIDED_SUBMISSION_LOCK=1` (this
+ends the 21:15–23:15 window early; no trading). Everything else unchanged.
