@@ -1744,3 +1744,21 @@ unrelated development."
 
 Ledger source set to `e69e20ac7`. Sports remains locked until the checks
 pass.
+
+### 65a. Verification failed — Campaign D not started (15:05 UTC)
+
+Ledger `e69e20ac7` deployed SUCCESS 14:50:30. At 15:01 the published
+record still lists four unresolved bound rows: UConn (−469), NHL veg-edm
+(0), UTR gaskan-hanbra (0) and test-cricket afg-zim (−1). Day −471.52;
+lifetime −516.36; `would_halt` true.
+
+Cause: release `086380d88`'s reader had already spent all three
+round-trip attempts on these markets (`TRADE_REALIZED_PNL_UNREADABLE`) and
+stored them as final. The corrected reader in `e69e20ac7` therefore never
+re-read them. Venue: cash 312.2135; drawdown 0.1967 against the anchor
+312.4102; no orders.
+
+Fix: code `b5f96107b` counts attempts per reader version. Release
+candidate `8cfb39d37666577c30bee01507cb0f6cf308b285`, branch
+`release/l5-pmus-live-reader-8cfb39d37`. **Not deployed; needs the
+owner's authorization.** Sports stays `PMUS_TWO_SIDED_SUBMISSION_LOCK=1`.
