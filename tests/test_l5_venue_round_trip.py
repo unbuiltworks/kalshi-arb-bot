@@ -222,3 +222,45 @@ class TestOtherFormsUnchanged:
         assert rec["round_trip_final"] is True
         assert D(s.state["retired_markets"][m]["settlement_pnl"]) == D("-5")
         assert VCA.candidates(s) == []
+
+
+class TestManualCashflowCandidate:
+    @staticmethod
+    def rows():
+        rows = uconn_rows()
+        for row, px, fee, cost in zip(rows, ("0.99", "0.95"),
+                                      ("0.32", "1.55"), ("4.37", "25.00")):
+            b = row["trade"]
+            del b["realizedPnl"]
+            b["cost"]["value"] = cost
+            e = b["aggressorExecution"]
+            e["lastPx"]["value"] = px
+            e["commissionNotionalCollected"]["value"] = fee
+        return rows
+
+    def test_closed_manual_cashflow_without_realized_field(self):
+        out = VCA.closed_manual_cashflow_candidate(
+            self.rows(), UCONN, complete_history=True)
+        assert out["ok"] is True
+        assert D(out["candidate_realized"]) == D("-20.63")
+
+    @pytest.mark.parametrize("defect", ["fee", "cost", "ownership", "duplicate",
+                                       "partial", "history"])
+    def test_refuses_unverified_cashflow(self, defect):
+        rows = self.rows()
+        b = rows[0]["trade"]
+        e = b["aggressorExecution"]
+        if defect == "fee":
+            del e["commissionNotionalCollected"]
+        elif defect == "cost":
+            b["cost"]["value"] = "469"
+        elif defect == "ownership":
+            e["order"]["manualOrderIndicator"] = "MANUAL_ORDER_INDICATOR_AUTOMATIC"
+        elif defect == "duplicate":
+            rows.append(rows[0])
+        elif defect == "partial":
+            e["lastShares"] = "468"
+            b["cost"]["value"] = "4.36"
+        out = VCA.closed_manual_cashflow_candidate(
+            rows, UCONN, complete_history=defect != "history")
+        assert out["ok"] is False
