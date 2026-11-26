@@ -351,17 +351,29 @@ def side_score(levels: list, our_px: Optional[float], our_qty: float,
     ``levels`` best-first [(px, qty)] as the public book shows them.
     ``own_resting`` is the size of our order already in that public book at
     ``our_px``; it is removed first so our order is counted exactly once."""
+    return ladder_side_score(levels, [] if our_px is None else
+                             [(our_px, our_qty)], tick, df, target, is_bid,
+                             [] if our_px is None else [(our_px, own_resting)])
+
+
+def ladder_side_score(levels: list, proposed: list, tick: float, df: float,
+                      target: float, is_bid: bool, own_resting: list) -> dict:
+    """Score a complete proposed side, replacing known visible own levels."""
     if tick <= 0:
         raise ValueError("tick must be > 0")
     lv: dict = {}
+    ours_by_level: dict = {}
     for px, q in levels:
         k = int(round(px / tick))
         lv[k] = lv.get(k, 0.0) + float(q)
-    ok = None if our_px is None else int(round(our_px / tick))
-    if ok is not None and own_resting > 0:
-        lv[ok] = max(0.0, lv.get(ok, 0.0) - float(own_resting))
-    if ok is not None and our_qty > 0:
-        lv[ok] = lv.get(ok, 0.0) + float(our_qty)
+    for px, q in own_resting:
+        k = int(round(px / tick))
+        lv[k] = max(0.0, lv.get(k, 0.0) - max(0.0, float(q)))
+    for px, q in proposed:
+        k = int(round(px / tick))
+        q = max(0.0, float(q))
+        ours_by_level[k] = ours_by_level.get(k, 0.0) + q
+        lv[k] = lv.get(k, 0.0) + q
     keys = sorted((k for k, q in lv.items() if q > EPS), reverse=is_bid)
     out = {"inside": False, "qualifies": False, "share": 0.0,
            "our_score": 0.0, "total_score": 0.0, "ticks_from_best": None,
@@ -381,10 +393,11 @@ def side_score(levels: list, our_px: Optional[float], our_qty: float,
         notional += k * tick * q
         cum += q
         used += 1
-        if ok is not None and k == ok and our_qty > 0:
+        if ours_by_level.get(k, 0.0) > 0:
             out["inside"] = True
-            out["ticks_from_best"] = t
-            ours = (df ** t) * our_qty
+            if out["ticks_from_best"] is None:
+                out["ticks_from_best"] = t
+            ours += (df ** t) * ours_by_level[k]
     qual = cum >= target - EPS
     out.update(qualifies=qual, our_score=ours, total_score=total,
                share=(ours / total) if (qual and total > 0) else 0.0,
