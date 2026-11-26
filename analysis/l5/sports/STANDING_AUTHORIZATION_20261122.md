@@ -1604,3 +1604,29 @@ Manual trade:
   unchanged. The manual position is excluded from bot P&L by order id.
   Until the correction, the bot stays refused (no interference with
   safety, but no campaign quoting).
+
+### Campaign B results, 00:10–02:10 UTC 26 Nov
+
+| | Old build (00:10–00:50) | New build `b8693dcf4` (00:50–02:10) |
+|---|---|---|
+| Median order lifetime | 17.7 s | 79.8 s |
+| Markets released while quoting | 3 | 0 |
+| Resting $ / room | 1.95 / 12.18 (16%) | 2.90 / 9.07 (32%) |
+| Qualifying / resting contract-s, pregame | 7,903 / 9,216 | 24,884 / 25,237 |
+| Qualifying / resting contract-s, live | 0 / 2,329 | 306 / 8,270 |
+| Fills | 2 (`slomyk` YES 3.18 @ 0.50) | 4 (`jaskub` YES 2 @ 0.43 and 2 @ 0.41, in play; `jaskub` NO 1 @ 0.55, completion; `delanedelane` NO 0.34 @ 0.54) |
+
+After 02:10, the `slomyk` NO 1 @ 0.47 completion filled (pair 0.97).
+
+PILOT_PNL 01:55: realized +0.03 (1 pair at 0.97); 6 fills; 8.52 contracts;
+spent $4.00; outstanding $3.03; unexplained 0. `jaskub` has since settled:
+4 YES lost, 1 NO won, about −$1.23 on the market; the settled figure comes
+from the next PILOT_PNL.
+
+REWARD_CHECK 01:52: unchanged ($24.09 credited, $4.00 skipped); no rows yet
+for 25–26 Nov.
+
+The read-out counted 5 openings or extensions placed while the latest net
+estimate was not positive. These were not checked one by one. The two
+flagged at the 01:30 check were ordering artifacts: the estimate was
+recomputed positive just before each order.
