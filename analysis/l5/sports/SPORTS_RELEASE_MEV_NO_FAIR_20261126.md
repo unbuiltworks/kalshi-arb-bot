@@ -59,3 +59,38 @@ maker-only, the lock and the watchdog.
 In a market with no fair value it can only remove bids: those whose reward
 does not beat the expected fill cost. A market with no paying programme gets
 no bid at all.
+
+## Enabled-mode safety layer (26 Nov, about 22:45 UTC)
+
+- Commit `1eaab153e`, branch `dev/pmus-mev-enabled-safety-tests`: tests
+  only, on `e72cf329e`. It adds a realistic reward-programme fixture that
+  runs through the engine's own programme code.
+- **New tests:** 48 pass, plus 1 strict xfail. They cover:
+  - loss stops;
+  - simultaneous multi-level fills;
+  - every cap (including lane and at-risk);
+  - replenishment;
+  - window and locks;
+  - latch, operator halt and watchdog;
+  - reward-feed loss;
+  - restart and fill reconciliation.
+- **Enabled mode, existing suites:** 145 failed and 7 errors before; now
+  28 failed and 0 errors. All 28 are classified, none is a safety failure:
+  - 13 pin a flag-off behaviour;
+  - 10 are deep levels correctly refused by marginal EV;
+  - 5 are fixture contradictions.
+- **Full suite, flags off:** identical failing names.
+
+**Findings, being fixed on `dev/pmus-mev-no-fair-fixes`:**
+1. **Liveness:** the day projection counts only bids already resting, so a
+   market with no fair value never gets its first bid. The mode is inert
+   until this is fixed.
+2. **Defence in depth:** the final gate does not re-check the campaign or
+   daily loss stop. Only `step_market` enforces them. This also applies to
+   the running release.
+3. **Latent:** a tracked market's programme cache is refreshed only when
+   the rewards refresh is on. Production logs show `reward_discovery`
+   every ~5 minutes for the active market, so it is on in production.
+
+**Status:** `e72cf329e` is not proposed for authorization until these are
+fixed and re-tested.
