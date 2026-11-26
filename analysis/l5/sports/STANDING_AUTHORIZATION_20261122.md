@@ -1853,3 +1853,31 @@ limits unchanged. Maker-only. Esports off. Crypto unchanged and disarmed.
 Confirm the effective configuration and explicitly test the enabled-feature
 regression cases before arming. ... If no suitable ATP/WTA event is
 available, report immediately rather than waiting indefinitely."
+
+### 68a. Ledger c111abd67 verified; sports 5cbca4d3c deployed locked (20:33–20:42 UTC)
+
+- **Ledger** `c111abd67` (deployment `607f7e14`, SUCCESS 20:34:43), HB
+  20:36:
+  - unresolved 0;
+  - day −23.1524, readable, halt $50 not tripped;
+  - lifetime −60.6438, `reconciled` true;
+  - unattributed 0;
+  - cash 312.2135; drawdown 0.1967 (room 19.80); live orders 0.
+- **Enabled-feature regression** on `5cbca4d3c`, targeted RN1/sports
+  suites:
+  - edge gate on alone: 1,168 passed;
+  - fit-all-levels on: 2 failures, both the "off" halves of tests;
+  - marginal EV on: 39 failures. All occur at setup: no bid passes the
+    stricter per-bid test, so the hold, pull and reprice safety steps are
+    never reached.
+  - Re-run with test-only fill-loss settings of 0 so that bids pass: 36 of
+    the 39 pass, including every gap-hold safety test. The other 3 are bids
+    with zero edge, or bids carried only by a non-qualifying reward, which
+    are not placed: stricter, not looser.
+  - No safety rule weakened.
+- **Liveness risk:** production fill-loss estimates are 5c (touch) and
+  3.5c (behind), so few bids may pass. Checked while still locked, before
+  the window.
+- **Sports:** variables set with `PMUS_RN1_MARGINAL_EV=1`,
+  `PMUS_RN1_FIT_ALL_LEVELS=1`, `PMUS_RN1_EDGE_GATE=1`, `PMUS_RN1_PIN`
+  cleared, lock `1`; then source `5cbca4d3c`.
