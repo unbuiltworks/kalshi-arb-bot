@@ -396,7 +396,9 @@ def side_score(levels: list, our_px: Optional[float], our_qty: float,
 def quote_estimate(book_md: Mapping[str, Any], period: Mapping[str, Any],
                    yes_px: Optional[float], no_px: Optional[float],
                    qty: float, tick: float, own_yes: float = 0.0,
-                   own_no: float = 0.0) -> dict:
+                   own_no: float = 0.0, *,
+                   yes_qty: Optional[float] = None,
+                   no_qty: Optional[float] = None) -> dict:
     """THEORETICAL share / reward rate for our YES bid at ``yes_px`` and our
     NO bid at ``no_px`` (= a YES offer at ``1 - no_px``), ``qty`` each; a
     leg passed as None is not quoted. ``own_*`` = our size already in the
@@ -407,12 +409,14 @@ def quote_estimate(book_md: Mapping[str, Any], period: Mapping[str, Any],
     with maxSpread BOTH sides must qualify and have their size-adjusted
     price within maxSpread of the mid, or neither side scores.
     rate_usd_s = pool_rate_usd_s * share; est_usd_per_day = rate * 86400."""
+    yq = qty if yes_qty is None else yes_qty
+    nq = qty if no_qty is None else no_qty
     bids, asks = book_sides(book_md or {})
     df, target = float(period["df"]), float(period["targetSize"])
-    b = side_score(bids, yes_px, qty if yes_px is not None else 0.0, tick,
+    b = side_score(bids, yes_px, yq if yes_px is not None else 0.0, tick,
                    df, target, True, own_yes)
     a = side_score(asks, None if no_px is None else 1.0 - no_px,
-                   qty if no_px is not None else 0.0, tick, df, target,
+                   nq if no_px is not None else 0.0, tick, df, target,
                    False, own_no)
     mid = ((b["best"] + a["best"]) / 2.0) if (b["best"] is not None and
                                               a["best"] is not None) else None
