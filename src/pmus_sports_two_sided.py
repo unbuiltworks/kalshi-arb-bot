@@ -5150,8 +5150,8 @@ class Engine:
         """True when our standard quote in this market would earn a reward
         under the venue's rule right now (see RN1_RELEASE_UNQUALIFIED_S):
         a paying programme and a positive modelled reward. One public book
-        read at most every 60 s per market; any doubt is True (never
-        releases a market on a failed read)."""
+        read at most every 60 s per market; legacy reward-only mode retains a slot on read failure;
+        net ranking must not authorize openings on a failed read."""
         try:
             per = self.rn1_reward(slug)
             if not per:
@@ -5162,7 +5162,7 @@ class Engine:
             got = self._reward_share_score(slug, per)
             if "why" in got and got.get("why") not in ("no_two_sided_book",
                                                        "no_room_for_a_bid"):
-                return True
+                return not RN1_NET_RANK
             ok = float(got.get("net_usd_per_hour" if RN1_NET_RANK
                                else "usd_per_hour") or 0.0) > 0
             mk["qualify_check"] = {"t": time.time(), "ok": ok,
@@ -5171,7 +5171,7 @@ class Engine:
                                        got.get("net_usd_per_hour")}
             return ok
         except Exception:                                 # noqa: BLE001
-            return True
+            return not RN1_NET_RANK
 
     def rn1_ladder(self, slug: str, mk: Dict[str, Any],
                    want: Mapping[str, Any], tick: Any,
