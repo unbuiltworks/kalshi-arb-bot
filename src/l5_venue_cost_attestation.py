@@ -637,7 +637,7 @@ class Attestor:
     def step(self, store: Any, transport: Any, now: float) -> Dict[str, Any]:
         fix = getattr(store, "repair_round_trips_inside_cash_anchor", None)
         if callable(fix):
-            repaired = fix()
+            repaired = fix(reader=ROUND_TRIP_READER)
             if repaired:
                 self.last_result = [dict(r, repaired=True) for r in repaired]
         if transport is None:
