@@ -5476,40 +5476,53 @@ class Engine:
         under the venue's published scoring rule, kept in `rn1_reward_est`
         (one public book read per REWARD_WALK_CHECK_S, or when the legs
         change). Its own key: the reward-first path's state is untouched."""
-        # the bid nearest the touch on each side, with every contract resting
-        # at that price (with a ladder, `_open_legs` kept whichever order of
-        # a side it met last, often a deeper level that does not score)
-        legs: Dict[str, tuple] = {}
-        for o in (mk.get("orders") or {}).values():
-            if not o.get("open"):
+        # Count all mature owned resting levels, not only the nearest bid.
+        # Young orders are omitted until the next measurement; the public
+        # book may not yet contain them.
+        now = time.time()
+        owned = set(self.b.d.get("own_order_ids", []))
+        levels = {"YES": {}, "NO": {}}
+        for oid, o in (mk.get("orders") or {}).items():
+            side = o.get("side")
+            if (oid not in owned or not o.get("open") or side not in levels
+                    or o.get("stage") == "orphan"
+                    or not o.get("placed_at")
+                    or now - float(o["placed_at"]) < 5):
                 continue
-            px_ = D(o["px"])
-            left_ = D(o["qty"]) - D(o.get("filled", "0"))
-            cur = legs.get(o["side"])
-            if cur is None or px_ > cur[0]:
-                legs[o["side"]] = (px_, left_)
-            elif px_ == cur[0]:
-                legs[o["side"]] = (px_, cur[1] + left_)
-        key = {s: [str(p), str(q)] for s, (p, q) in sorted(legs.items())}
+            px = D(o["px"])
+            left = D(o["qty"]) - D(o.get("filled", "0"))
+            if left > 0:
+                levels[side][px] = levels[side].get(px, D(0)) + left
+        key = {side: [[str(p), str(q)] for p, q in sorted(lv.items())]
+               for side, lv in levels.items() if lv}
         est = mk.get("rn1_reward_est")
-        if est and est.get("legs") == key and \
-                time.time() - float(est.get("t") or 0) < REWARD_WALK_CHECK_S:
+        if est and est.get("legs") == key and now - float(
+                est.get("t") or 0) < REWARD_WALK_CHECK_S:
             return
-        if not legs:
-            mk["rn1_reward_est"] = {"t": time.time(), "legs": key,
+        if not key:
+            mk["rn1_reward_est"] = {"t": now, "legs": key,
                                     "est_usd_per_hour": 0.0}
             return
         from src import pmus_sports_rewards as R
         book = (self._reward_get()(f"/v1/markets/{slug}/book") or {}
                 ).get("marketData") or {}
-        y, n = legs.get("YES"), legs.get("NO")
-        q = float(max(q for _p, q in legs.values()))
-        r = R.quote_estimate(book, per, float(y[0]) if y else None,
-                             float(n[0]) if n else None, q, float(tick),
-                             own_yes=float(y[1]) if y else 0.0,
-                             own_no=float(n[1]) if n else 0.0,
-                             yes_qty=float(y[1]) if y else 0.0,
-                             no_qty=float(n[1]) if n else 0.0)
+        bids, asks = R.book_sides(book)
+        def visible_levels(side, public):
+            visible = {}
+            for p, q in public:
+                k = round(float(p) / float(tick))
+                visible[k] = visible.get(k, 0.0) + float(q)
+            result = []
+            for p, q in levels[side].items():
+                price = float(p) if side == "YES" else 1.0 - float(p)
+                amount = min(float(q), visible.get(
+                    round(price / float(tick)), 0.0))
+                if amount > 0:
+                    result.append((float(p), amount))
+            return result
+        y = visible_levels("YES", bids)
+        n = visible_levels("NO", asks)
+        r = R.ladder_quote_estimate(book, per, y, n, float(tick), y, n)
         mk["rn1_reward_est"] = {"t": time.time(), "legs": key,
                                 "share": r.get("share"),
                                 "est_usd_per_hour": r.get("est_usd_per_hour"),
