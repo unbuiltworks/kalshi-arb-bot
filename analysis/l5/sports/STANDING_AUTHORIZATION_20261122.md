@@ -1649,3 +1649,36 @@ followed).
 
 Thin margins: several slomyk orders went out at +$0.0005 to +$0.0015 an
 hour. They pass on sign but are break-even within model error.
+
+## 63. Manual-trade accounting correction and replacement Campaign C window — 26 Nov, about 03:15 UTC
+
+Owner, typed: "I authorize the exact manual-trade accounting correction:
+change L5_PORTFOLIO_ANCHOR_USD from 333.0402 to 312.4102, excluding the
+venue-confirmed $20.63 manual UConn loss from bot-specific risk accounting.
+Preserve the manual loss in total account P&L. ... I also authorize
+replacing Campaign C with the 03:30–05:30 UTC November 26 window on release
+1b496656c, with unchanged capital limits, loss stops, maker-only execution
+and a two-hour completions-only grace period. Focus on one reward-eligible
+event ... Select an event expected to finish within the authorized window.
+Do not automatically extend the campaign. Esports off. Crypto unchanged and
+disarmed. No capital increases."
+
+Venue figures (account activity, audit 02:25):
+- `DYSS79F015P6`, 02:07:50: buy NO 469 @ 0.05 (YES 0.95), −$25.00
+  including fee.
+- `DYSW1R1G15P6`, 02:14:01: sell NO 469 @ 0.01 (YES 0.99), +$4.37 net.
+- `realized_usd` −20.63. The position is closed (venue reconcile 02:48 /
+  02:53 lists no `duke-uconn`).
+
+Done:
+- 03:16 ledger `L5_PORTFOLIO_ANCHOR_USD` 333.0402 → 312.4102 (deployment
+  `0cd0cd0d`, SUCCESS 03:17). The manual loss stays in total account P&L
+  (cash and the account audit are unchanged); it is excluded only from the
+  bot's drawdown figure.
+- 03:18 sports: lock
+  `window:2026-11-26T03:30:00Z/2026-11-26T05:30:00Z` (grace 7,200 s
+  unchanged) and `PMUS_RN1_PIN=aec-setkameua-slomyk-fasiva-2026-11-26`.
+  This is the single event. It is a Setka table-tennis match starting
+  03:45, typically 30–45 minutes, so it finishes inside the window. It has
+  a reward programme, and the bot already holds 2.18 YES there. Pinning
+  only restricts selection; nothing else changes.
