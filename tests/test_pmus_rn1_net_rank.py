@@ -276,3 +276,49 @@ def test_net_rank_deducts_owned_remaining_at_candidate_price(eng, monkeypatch):
                  D("10"), fake)
     assert fake.calls[0] == {"own_yes": 2.0, "own_no": 0.0}
     assert fake.calls[1] == {}
+
+
+class _Capture:
+    def __init__(self, bids, asks):
+        self.bids, self.asks, self.calls = bids, asks, []
+
+    def book_sides(self, book):
+        return self.bids, self.asks
+
+    def quote_estimate(self, book, per, y, n, q, tick, **kwargs):
+        self.calls.append(kwargs)
+        return {"est_usd_per_hour": 1.0}
+
+
+def test_own_order_younger_than_book_lag_is_not_deducted(eng, monkeypatch):
+    """Just acknowledged: the public snapshot may not show it yet, so the
+    visible 10 at 0.40 may all be competitors. Nothing is deducted."""
+    e, _v = eng
+    mk = e.b.m(SLUG)
+    mk["orders"] = {"new": {"side": "YES", "px": "0.40", "qty": "2",
+                            "filled": "0", "open": True,
+                            "placed_at": time.time() - 1}}
+    e.b.d["own_order_ids"] = ["new"]
+    monkeypatch.setattr(M, "RN1_NET_OWN_LAG_S", 5.0)
+    fake = _Capture([(0.40, 10)], [(0.45, 10)])
+    _set_rates(monkeypatch, 0, 0, 0, 0)
+    e._net_score(SLUG, {}, {}, D("0.40"), D("0.45"), D("0.01"), D("2"), fake)
+    assert fake.calls[0] == {}
+    mk["orders"]["new"]["placed_at"] = time.time() - 6
+    fake.calls.clear()
+    e._net_score(SLUG, {}, {}, D("0.40"), D("0.45"), D("0.01"), D("2"), fake)
+    assert fake.calls[0] == {"own_yes": 2.0, "own_no": 0.0}
+
+
+def test_own_deduction_never_exceeds_the_visible_level(eng, monkeypatch):
+    """A cancel or fill the public book already shows: our local record says
+    2 resting, the book shows 0.5 at that price. At most 0.5 is deducted."""
+    e, _v = eng
+    mk = e.b.m(SLUG)
+    mk["orders"] = {"o": {"side": "NO", "px": "0.55", "qty": "2",
+                          "filled": "0", "open": True, "placed_at": 0}}
+    e.b.d["own_order_ids"] = ["o"]
+    fake = _Capture([(0.40, 10)], [(0.45, 0.5)])
+    _set_rates(monkeypatch, 0, 0, 0, 0)
+    e._net_score(SLUG, {}, {}, D("0.40"), D("0.45"), D("0.01"), D("2"), fake)
+    assert fake.calls[0] == {"own_yes": 0.0, "own_no": 0.5}

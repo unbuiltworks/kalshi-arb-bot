@@ -1478,6 +1478,10 @@ RN1_PULL_THREATENED_ONLY = os.getenv(
 # market's estimate, so the next pass re-prices it on the new book first.
 # Estimates only, not payments; every bid still passes every gate and cap.
 RN1_NET_RANK = os.getenv("PMUS_RN1_NET_RANK", "0").strip() == "1"
+# Own resting orders are deducted from the public book's competition only
+# once they are at least this old (the public snapshot can lag our order's
+# acknowledgement; until then the order is left in the denominator).
+RN1_NET_OWN_LAG_S = float(os.getenv("PMUS_RN1_NET_OWN_LAG_S", "5") or 5)
 
 
 def _comp_rates(name: str, default: str) -> Dict[str, float]:
@@ -6527,6 +6531,12 @@ class Engine:
                 side = order.get("side")
                 if (oid not in owned or not order.get("open") or
                         side not in own or order.get("stage") == "orphan"):
+                    continue
+                # an order younger than the public book's lag may not be in
+                # the snapshot yet: deducting it would remove a competitor's
+                # size instead of ours (optimistic), so it is not deducted
+                if time.time() - float(order.get("placed_at") or 0) < \
+                        RN1_NET_OWN_LAG_S:
                     continue
                 if D(str(order["px"])) == (y if side == "YES" else n):
                     own[side] += max(D(0), D(str(order["qty"])) -

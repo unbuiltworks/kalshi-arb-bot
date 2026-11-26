@@ -361,8 +361,9 @@ def test_reward_estimate_uses_the_bid_nearest_the_touch(live, monkeypatch):
     seen = {}
     from src import pmus_sports_rewards as RW
 
-    def est(book, per, yes_px, no_px, qty, tick, own_yes=0.0, own_no=0.0):
-        seen.update(yes=yes_px, no=no_px, qty=qty)
+    def est(book, per, yes_px, no_px, qty, tick, own_yes=0.0, own_no=0.0,
+            yes_qty=None, no_qty=None):
+        seen.update(yes=yes_px, no=no_px, yes_qty=yes_qty, no_qty=no_qty)
         return {"share": 0.1, "est_usd_per_hour": 0.1,
                 "max_spread_ok": None}
     monkeypatch.setattr(RW, "quote_estimate", est)
@@ -371,7 +372,8 @@ def test_reward_estimate_uses_the_bid_nearest_the_touch(live, monkeypatch):
     mk.pop("rn1_reward_est", None)
     e._rn1_reward_estimate(SLUG, mk, {"pool_rate_usd_s": 0.01},
                            D("0.01"))
-    assert seen == {"yes": 0.47, "no": 0.49, "qty": 2.0}
+    # each side scored at its own remaining size at its best level
+    assert seen == {"yes": 0.47, "no": 0.49, "yes_qty": 2.0, "no_qty": 2.0}
 
 
 # ------------------------------ loss stop counts resting bids
