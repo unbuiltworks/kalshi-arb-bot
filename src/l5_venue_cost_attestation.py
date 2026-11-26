@@ -296,7 +296,7 @@ def candidates(store: Any, *, now: Optional[dt.datetime] = None
         if rec.get("status") == "CORRECTED":
             continue
         if rec.get("status") == "UPPER_BOUND_KEPT" and not sibling_retry(
-                m, rec, settled_t=t):
+                m, rec, settled_t=t) and not round_trip_retry(rec):
             continue
         rt = parse_time(t)
         if rt is not None and (now - rt).total_seconds() < SETTLE_AGE_S:
@@ -461,6 +461,109 @@ def legs_from_rows(rows: List[Mapping[str, Any]], market: str
     return {"ok": True, "legs": legs}
 
 
+#: THE ROUND-TRIP FORM (owner 2026-11-26: "Fix the underlying accounting
+#: mechanism"). LIVE 2026-11-26: the owner bought 469 NO in
+#: `aec-cbb-duke-uconn-2026-11-25` at 02:07 and sold all 469 at 02:14. The
+#: ledger adopted the venue's 469 at the $1/share bound at 02:12, never saw
+#: the position close, and at settlement (02:26) booked -469.00. The venue's
+#: own result was -20.63. The exact forms above could never correct it:
+#: `establish_basis` reads every fill as a purchase, so the SALE failed the
+#: per-fill cross-check (COST_CROSSCHECK_FAILED) and the bound stayed.
+#:
+#: A market whose venue fills buy and SELL the same outcome is evaluated
+#: here instead: every trade row's own direction (the order intent:
+#: BUY_LONG / SELL_LONG / BUY_SHORT / SELL_SHORT) and our executed shares
+#: are read, and the form applies ONLY when the venue's net position on
+#: every side is exactly zero -- the position was closed before settlement,
+#: so settlement redeemed nothing and the market's whole result is the sum
+#: of the venue's own per-trade `realizedPnl` (fee-inclusive). Anything
+#: unreadable, or a position still open at settlement, refuses: the bound
+#: stays. Its attempts are counted separately and bounded.
+ROUND_TRIP_FORM = "VENUE_ROUND_TRIP_CLOSED_BEFORE_SETTLEMENT"
+MAX_ROUND_TRIP_ATTEMPTS = 3
+_INTENTS = {"ORDER_INTENT_BUY_LONG": ("UP", 1),
+            "ORDER_INTENT_SELL_LONG": ("UP", -1),
+            "ORDER_INTENT_BUY_SHORT": ("DOWN", 1),
+            "ORDER_INTENT_SELL_SHORT": ("DOWN", -1)}
+
+
+def round_trip_from_rows(rows: List[Mapping[str, Any]], market: str
+                         ) -> Dict[str, Any]:
+    """{"sells": bool, "ok": bool, ...}: the market's venue trades read as
+    signed per-side quantities with the venue's own realized result.
+
+    `sells` False: no sale was found and the round-trip form does not apply
+    (the exact forms decide). `ok` True only when every trade row is
+    readable (intent, executed shares, realizedPnl, trade id), no trade id
+    repeats, and the net position on both sides is exactly zero."""
+    mine = [r for r in rows if CBA._row_market(r) == market
+            and str(r.get("kind") or r.get("type") or "").strip().lower()
+            in CBA.FILL_KINDS]
+    fills: List[Dict[str, Any]] = []
+    net = {"UP": D(0), "DOWN": D(0)}
+    realized = D(0)
+    sells = False
+    problem: Optional[str] = None
+    seen: set = set()
+    for r in mine:
+        b = CBA._payload(r)
+        ours = CBA._exec_objects(b) if isinstance(b, Mapping) else []
+        order = (ours[0].get("order") if ours and isinstance(
+            ours[0].get("order"), Mapping) else None)
+        intent = str((order or {}).get("intent") or "").strip().upper()
+        side_dir = _INTENTS.get(intent)
+        if side_dir and side_dir[1] < 0:
+            sells = True
+        qty = CBA._d(CBA._first_present(ours, CBA.EXEC_QTY_KEYS)) \
+            if ours else None
+        rp = CBA._d(b.get("realizedPnl")) if isinstance(b, Mapping) else None
+        tid = str((b or {}).get("id") or (b or {}).get("tradeId") or "")
+        if problem is None:
+            if side_dir is None:
+                problem = "TRADE_INTENT_UNREADABLE"
+            elif qty is None or qty <= 0:
+                problem = "TRADE_QTY_UNREADABLE"
+            elif rp is None:
+                problem = "TRADE_REALIZED_PNL_UNREADABLE"
+            elif not tid:
+                problem = "TRADE_ID_MISSING"
+            elif tid in seen:
+                problem = "TRADE_ID_REPEATED"
+        if problem is not None:
+            continue
+        seen.add(tid)
+        side, sign = side_dir
+        net[side] += sign * qty
+        realized += rp
+        fills.append({
+            "trade_id": tid,
+            "venue_order_id": str((order or {}).get("id") or "") or None,
+            "intent": intent, "side": side, "qty": str(qty),
+            "realized_pnl": str(rp),
+            "manual_indicator": (order or {}).get("manualOrderIndicator")})
+    if not sells:
+        return {"sells": False, "ok": False, "reason": "NO_SALE_FOUND"}
+    if problem is not None:
+        return {"sells": True, "ok": False, "reason": problem}
+    if net["UP"] != 0 or net["DOWN"] != 0:
+        return {"sells": True, "ok": False,
+                "reason": "POSITION_OPEN_AT_SETTLEMENT",
+                "venue_net": {k: str(v) for k, v in net.items()}}
+    return {"sells": True, "ok": True, "realized": str(realized),
+            "fills": fills, "venue_net": {k: "0" for k in net},
+            "all_manual": bool(fills) and all(
+                f["manual_indicator"] == "MANUAL_ORDER_INDICATOR_MANUAL"
+                for f in fills)}
+
+
+def round_trip_retry(rec: Mapping[str, Any]) -> bool:
+    """An exhausted market is read again for the round-trip form until that
+    form has had its own bounded attempts or has ruled itself out."""
+    return (not rec.get("round_trip_final")
+            and int(rec.get("round_trip_attempts") or 0)
+            < MAX_ROUND_TRIP_ATTEMPTS)
+
+
 class Attestor:
     """The paced pass. Holds only the in-flight walk in memory; everything
     that must survive a restart is in the store's durable record."""
@@ -545,6 +648,20 @@ class Attestor:
                 # retired after the walk began: its fills may be newer than
                 # the first page. Not an attempt; the next walk covers it.
                 return {"market": market, "skipped": "RETIRED_AFTER_WALK"}
+            rt = round_trip_from_rows(w.rows, market)
+            if rt.get("sells"):
+                return self._evaluate_round_trip(store, w, market, rt)
+            rec0 = (((getattr(store, "state", {}) or {}).get(STATE_KEY) or {})
+                    .get("markets") or {}).get(market) or {}
+            if rec0.get("status") == "UPPER_BOUND_KEPT" and \
+                    not sibling_retry(market, rec0, settled_t=row.get("t")):
+                # re-read only for the round-trip form, which does not
+                # apply: rule it out for good, spend nothing else
+                store.note_venue_cost_attempt(
+                    market, reason=None, final=True,
+                    count_attempt=False, round_trip_final=True)
+                return {"market": market, "attested": False,
+                        "reason": "ROUND_TRIP:NO_SALE_FOUND", "final": True}
             got = legs_from_rows(w.rows, market)
             if not got.get("ok"):
                 return self._refuse(store, market, str(got.get("reason")))
@@ -570,6 +687,33 @@ class Attestor:
             except BaseException:                              # noqa: BLE001
                 return {"market": market, "attested": False,
                         "reason": "EXCEPTION:%s" % type(exc).__name__}
+
+    def _evaluate_round_trip(self, store: Any, w: Walk, market: str,
+                             rt: Mapping[str, Any]) -> Dict[str, Any]:
+        """See ROUND_TRIP_FORM. Every outcome but a correction spends one
+        ROUND-TRIP attempt and leaves the bound exactly where it was."""
+        out: Mapping[str, Any] = {}
+        if rt.get("ok"):
+            out = store.attest_retired_round_trip(
+                market, round_trip=rt, walk=w.proof(),
+                correction_id="venue-round-trip|%s" % market)
+            if out.get("attested"):
+                return {"market": market, "attested": True,
+                        "form": ROUND_TRIP_FORM,
+                        "old_pnl": out.get("old_pnl"),
+                        "new_pnl": out.get("new_pnl"),
+                        "delta": out.get("delta")}
+        reason = "ROUND_TRIP:%s" % (out.get("reason") or rt.get("reason"))
+        rec = (((getattr(store, "state", {}) or {}).get(STATE_KEY) or {})
+               .get("markets") or {}).get(market) or {}
+        n = int(rec.get("round_trip_attempts") or 0) + 1
+        final = n >= MAX_ROUND_TRIP_ATTEMPTS
+        store.note_venue_cost_attempt(market, reason=reason, final=True,
+                                      count_attempt=False,
+                                      round_trip_attempts=n,
+                                      round_trip_final=final)
+        return {"market": market, "attested": False, "reason": reason,
+                "round_trip_attempts": n, "final": final}
 
     def _evaluate_sibling(self, store: Any, w: Walk, market: str,
                           got: Mapping[str, Any]) -> Dict[str, Any]:

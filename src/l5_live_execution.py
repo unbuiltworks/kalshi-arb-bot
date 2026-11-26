@@ -3793,9 +3793,11 @@ class InventoryStore:
     #: the durable per-market record of the attestation pass (its cursor).
     VENUE_ATTEST_STATE_KEY = "venue_cost_attestation"
 
-    def note_venue_cost_attempt(self, market: str, *, reason: str,
+    def note_venue_cost_attempt(self, market: str, *, reason: Optional[str],
                                 final: bool, count_attempt: bool = True,
-                                sibling_attempts: Optional[int] = None
+                                sibling_attempts: Optional[int] = None,
+                                round_trip_attempts: Optional[int] = None,
+                                round_trip_final: Optional[bool] = None
                                 ) -> Dict[str, Any]:
         """Record ONE refused attestation attempt. Writes no money field.
 
@@ -3807,10 +3809,24 @@ class InventoryStore:
         book = self.state.setdefault(self.VENUE_ATTEST_STATE_KEY, {})
         rows = book.setdefault("markets", {})
         rec = dict(rows.get(market) or {})
+        if reason is None:
+            # the round-trip form ruling itself out: its own fields only, the
+            # exact forms' status and reason stay exactly as they were
+            if round_trip_attempts is not None:
+                rec["round_trip_attempts"] = int(round_trip_attempts)
+            if round_trip_final is not None:
+                rec["round_trip_final"] = bool(round_trip_final)
+            rows[market] = rec
+            self.save()
+            return dict(rec)
         if count_attempt:
             rec["attempts"] = int(rec.get("attempts") or 0) + 1
         if sibling_attempts is not None:
             rec["sibling_attempts"] = int(sibling_attempts)
+        if round_trip_attempts is not None:
+            rec["round_trip_attempts"] = int(round_trip_attempts)
+        if round_trip_final is not None:
+            rec["round_trip_final"] = bool(round_trip_final)
         rec["status"] = "UPPER_BOUND_KEPT" if final else "PENDING"
         rec["last_reason"] = str(reason)[:200]
         rec["t"] = dt.datetime.now(dt.timezone.utc).isoformat()
@@ -4136,6 +4152,195 @@ class InventoryStore:
                 "realized_after": self.realized_lines()}
 
     SIBLING_LEDGER_FORM = "VENUE_FILLS_EQUAL_SIBLING_LEDGER"
+    ROUND_TRIP_FORM = "VENUE_ROUND_TRIP_CLOSED_BEFORE_SETTLEMENT"
+
+    def attest_retired_round_trip(self, market: str, *,
+                                  round_trip: Mapping[str, Any],
+                                  walk: Mapping[str, Any],
+                                  correction_id: str) -> Dict[str, Any]:
+        """Replace a RETIRED market's $1/share bound with the VENUE's own
+        realized result, for a position that was CLOSED BEFORE SETTLEMENT.
+
+        THE DEFECT (live 2026-11-26, `aec-cbb-duke-uconn-2026-11-25`). The
+        ledger adopted the venue's 469 NO at $1 a share, the position was
+        sold at the venue seven minutes later, the ledger's copy went stale,
+        and settlement redeemed the stale 469 against the $469 bound:
+        -469.00 booked, -20.63 real. That one row tripped the account-wide
+        daily halt and the cumulative ceiling on a loss that never happened.
+
+        WHAT THIS CHECKS, every one required:
+          * the row is retired AT THE BOUND, never corrected, its unknown
+            basis keys listed, its settlement readable;
+          * `walk.sufficient` is True;
+          * `round_trip` is the attestor's reading of EVERY venue trade of
+            the market: each trade's direction, shares, realizedPnl and id
+            readable, and the venue's net position exactly zero on both
+            sides (so settlement redeemed nothing);
+          * this ledger holds no verified fill of its own in the market
+            (the market was never ours to cost);
+          * no trade id was consumed by an earlier correction.
+
+        WHAT IT WRITES. The row's result becomes the sum of the venue's own
+        per-trade `realizedPnl` (fee-inclusive), kept on the UTC day the
+        market settled; the original row is preserved in `cost_superseded`;
+        a correction record is appended to `cost_basis_corrections` (the
+        double-spend guard reads it); `realized_attributed` and the legacy
+        scalar move by the delta; the market's unknown-basis keys and risk
+        floor are cleared. Where every fill carries the venue's MANUAL
+        indicator the row's origin label becomes MANUAL (a label: it moves
+        no account-wide figure). Idempotent by `correction_id`, and durable,
+        so a restart can neither repeat nor undo it.
+
+        Any refusal leaves EVERYTHING as it was: the bound stays.
+        """
+        def no(reason: str, **kw: Any) -> Dict[str, Any]:
+            return dict(kw, attested=False, market=market, reason=reason)
+
+        try:
+            market = canonical_market(market, doing="attesting a round trip")
+        except UnknownMarket:
+            return no("MARKET_UNREADABLE")
+        done = {r.get("id") for r in
+                (self.state.get("cost_basis_corrections") or [])
+                if isinstance(r, Mapping)}
+        if correction_id in done:
+            return no("CORRECTION_ALREADY_APPLIED",
+                      correction_id=correction_id)
+        row = (self.state.get("retired_markets") or {}).get(market)
+        if not isinstance(row, Mapping):
+            return no("MARKET_NOT_RETIRED")
+        if row.get("pnl_provenance") != "UNKNOWN_COST_UPPER_BOUND":
+            return no("NOT_AT_THE_UPPER_BOUND",
+                      provenance=row.get("pnl_provenance"))
+        if row.get("cost_superseded") or row.get("venue_cost_attested"):
+            return no("COST_ALREADY_CORRECTED")
+        unknown_keys = [str(k) for k in
+                        (row.get("unverified_cost_basis_keys") or [])]
+        if not unknown_keys:
+            return no("NO_UNKNOWN_BASIS_KEYS")
+        if not isinstance(walk, Mapping) or walk.get("sufficient") is not True:
+            return no("VENUE_WALK_NOT_SUFFICIENT")
+        v = finite_decimal(row.get("yes_value"))
+        if v is None or v not in (D(0), D(1)):
+            return no("SETTLEMENT_UNREADABLE")
+        old_pnl = finite_decimal(row.get("settlement_pnl"))
+        if old_pnl is None:
+            return no("LEDGER_COST_UNREADABLE")
+        rt = round_trip if isinstance(round_trip, Mapping) else {}
+        if rt.get("ok") is not True:
+            return no("ROUND_TRIP_NOT_ESTABLISHED", detail=rt.get("reason"))
+        net = rt.get("venue_net") or {}
+        if any(finite_decimal(net.get(sd)) != D(0) for sd in (UP, DOWN)):
+            return no("POSITION_OPEN_AT_SETTLEMENT")
+        fills = [f for f in (rt.get("fills") or ()) if isinstance(f, Mapping)]
+        if not fills:
+            return no("NO_VENUE_FILLS")
+        ids, order_ids, total = [], [], D(0)
+        for f in fills:
+            tid = str(f.get("trade_id") or "").strip()
+            rp = finite_decimal(f.get("realized_pnl"))
+            q = finite_decimal(f.get("qty"))
+            if not tid or rp is None or q is None or q <= 0:
+                return no("FILL_UNREADABLE", trade_id=tid)
+            if tid in ids:
+                return no("TRADE_ID_REPEATED", trade_id=tid)
+            ids.append(tid)
+            total += rp
+            vid = str(f.get("venue_order_id") or "").strip()
+            if vid and vid not in order_ids:
+                order_ids.append(vid)
+        if finite_decimal(rt.get("realized")) != total:
+            return no("REALIZED_NOT_RECONCILED")
+        proof = (self.state.get("fill_provenance") or {}).get(market) or {}
+        if proof.get("entries"):
+            return no("LEDGER_HOLDS_OWN_FILLS",
+                      labels="a market this ledger traded is costed from "
+                             "its own fills, never replaced wholesale")
+        spent = set()
+        for rec in (self.state.get("cost_basis_corrections") or []):
+            if isinstance(rec, Mapping):
+                spent.update(str(t) for t in (rec.get("trade_ids") or ()))
+        clash = sorted(set(ids) & spent)
+        if clash:
+            return no("TRADE_ID_ALREADY_CONSUMED", trade_ids=clash)
+        new_pnl = total
+        delta = new_pnl - old_pnl
+        now_iso = dt.datetime.now(dt.timezone.utc).isoformat()
+        before = self.realized_lines()
+        row["cost_superseded"] = {k: x for k, x in dict(row).items()
+                                  if k != "cost_superseded"}
+        row["settlement_pnl"] = str(new_pnl)
+        row["redemption_total"] = "0"
+        row["redemption_basis"] = "VENUE_NET_ZERO_AT_SETTLEMENT"
+        row["venue_up_qty"] = "0"
+        row["venue_dn_qty"] = "0"
+        row["venue_qty_form"] = self.ROUND_TRIP_FORM
+        row["pnl_provenance"] = self.VENUE_ATTESTED_COST
+        row["cost_provenance"] = self.VENUE_ATTESTED_COST
+        row["origin_cost_basis"] = ORIGIN.BASIS_AUTHENTICATED
+        if rt.get("all_manual") is True:
+            row["origin"] = ORIGIN.MANUAL
+            row["origin_evidence"] = "VENUE_MANUAL_ORDER_INDICATOR_ON_EVERY_FILL"
+        row["cost_corrected_at"] = now_iso
+        row["cost_correction_id"] = correction_id
+        row["venue_cost_attested"] = {"trade_ids": list(ids),
+                                      "venue_order_ids": list(order_ids),
+                                      "form": self.ROUND_TRIP_FORM}
+        self.state["realized_attributed"] = str(
+            D(str(self.state.get("realized_attributed") or 0)) + delta)
+        self.state["realized_today"] = str(
+            D(str(self.state.get("realized_today") or 0)) + delta)
+        removed = [k for k in (self.state.get("leg_cost_basis_unknown") or [])
+                   if str(k).rsplit("|", 1)[0] == market]
+        if removed:
+            self.state["leg_cost_basis_unknown"] = [
+                k for k in (self.state.get("leg_cost_basis_unknown") or [])
+                if str(k).rsplit("|", 1)[0] != market]
+        (self.state.get("risk_floor_usd") or {}).pop(market, None)
+        rec = {
+            "id": correction_id,
+            "kind": "VENUE_ATTESTED_ROUND_TRIP",
+            "key": "%s|MARKET" % market, "market": market, "side": "BOTH",
+            "t": now_iso,
+            "settled_at": str(row.get("t") or ""),
+            "settlement_utc_day": str(row.get("t") or "")[:10],
+            "yes_value": str(v),
+            "qty_form": self.ROUND_TRIP_FORM,
+            "ledger_qty": {UP: str(row.get("up_qty")),
+                           DOWN: str(row.get("dn_qty"))},
+            "venue_qty": {UP: "0", DOWN: "0"},
+            "old_pnl": str(old_pnl), "new_pnl": str(new_pnl),
+            "delta": str(delta),
+            "old_provenance": "UNKNOWN_COST_UPPER_BOUND",
+            "cost_provenance": self.VENUE_ATTESTED_COST,
+            "fills": [dict(f) for f in fills],
+            "trade_ids": list(ids), "venue_order_ids": list(order_ids),
+            "unknown_basis_keys_cleared": removed,
+            "origin_set": ORIGIN.MANUAL if rt.get("all_manual") else None,
+            "activity_walk": {k: walk.get(k) for k in
+                              ("pages", "ended", "sufficient", "by",
+                               "started_at", "floor")},
+            "labels": ("account-wide realized replaced by the venue's own "
+                       "per-trade realizedPnl (fee-inclusive) for a position "
+                       "closed before settlement. NOT verified L5."),
+        }
+        self.state.setdefault("cost_basis_corrections", []).append(rec)
+        book = self.state.setdefault(self.VENUE_ATTEST_STATE_KEY, {})
+        prev = (book.get("markets") or {}).get(market) or {}
+        book.setdefault("markets", {})[market] = {
+            "status": "CORRECTED", "t": now_iso,
+            "attempts": int(prev.get("attempts") or 0),
+            "round_trip_attempts": int(prev.get("round_trip_attempts") or 0)
+            + 1,
+            "correction_id": correction_id, "delta": str(delta)}
+        self.save()
+        return {"attested": True, "market": market,
+                "correction_id": correction_id, "form": self.ROUND_TRIP_FORM,
+                "old_pnl": str(old_pnl), "new_pnl": str(new_pnl),
+                "delta": str(delta), "trade_ids": ids,
+                "venue_order_ids": order_ids,
+                "realized_before": before,
+                "realized_after": self.realized_lines()}
 
     def _sibling_refusal(self, sibling: Any, *, row: Mapping[str, Any],
                          held: Mapping[str, D], venue: Mapping[str, D],
