@@ -1881,3 +1881,29 @@ available, report immediately rather than waiting indefinitely."
 - **Sports:** variables set with `PMUS_RN1_MARGINAL_EV=1`,
   `PMUS_RN1_FIT_ALL_LEVELS=1`, `PMUS_RN1_EDGE_GATE=1`, `PMUS_RN1_PIN`
   cleared, lock `1`; then source `5cbca4d3c`.
+
+### 68b. No suitable ATP/WTA event with fair value — window not opened (21:05 UTC)
+
+Sports `5cbca4d3c` deployed (deployment `77448372`, SUCCESS 21:00:31).
+
+**Boot:** `edge_gate` true, pin null; every cap and limit unchanged; lock
+`locked`.
+
+**Account risk (21:00:42):** ok.
+- day −24.27, including −1.12 of own losses not yet in the ledger;
+- lifetime −61.77 against the $75 ceiling, leaving $13.23 of loss room;
+- drawdown 0.1967 against $20.
+
+**Event search (bot's own ranking):**
+- Only `aec-atpdb-alvvalflores-alvesperez-2026-11-26` has a positive net
+  estimate: ATP doubles, live, theoretical reward about 9.4/h, fill cost
+  0.96/h. It is SELECTED but gets `no_fair` on both sides. The
+  international fair value matches ATP/WTA singles names only, so with
+  the edge gate on a doubles match gets no bid.
+- ATP singles on the slate are negative:
+  - `chrlan-matdel` −0.30/h;
+  - `rionog-haymat` −0.30/h.
+- Market selection still requires a positive market-level estimate.
+
+**Result:** no ATP/WTA event with a fresh fair value qualifies. Reported
+to the owner; trading stays locked.
