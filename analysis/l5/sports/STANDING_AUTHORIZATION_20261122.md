@@ -1630,3 +1630,22 @@ The read-out counted 5 openings or extensions placed while the latest net
 estimate was not positive. These were not checked one by one. The two
 flagged at the 01:30 check were ordering artifacts: the estimate was
 recomputed positive just before each order.
+
+### Flagged negative-net openings, checked one by one (owner request, 26 Nov)
+
+Method: both deployments (6042cb94, 6420b7e2), complete per-slug pulls,
+every event joined on its own JSON time "t". The in-force estimate is the
+latest RN1_NET_PLACEMENT for the slug before the order, which is logged on
+every sign change.
+
+Result: 131 openings and extensions 00:10–02:10 (91 open, 40 extend). In-force
+net > 0: **131**. ≤ 0: **0**. None without a prior estimate. The preceding
+quote had no block on all 131.
+
+The earlier flags (2 at the 01:30 check, 5 in the full-window read) were
+ordering artifacts: log emission time lagged the event time. The gate fired
+as designed at slomyk 00:48:30 (−0.0113 → `net_not_positive`, no order
+followed).
+
+Thin margins: several slomyk orders went out at +$0.0005 to +$0.0015 an
+hour. They pass on sign but are break-even within model error.
