@@ -635,6 +635,11 @@ class Attestor:
         self.last_result: List[Dict[str, Any]] = []
 
     def step(self, store: Any, transport: Any, now: float) -> Dict[str, Any]:
+        fix = getattr(store, "repair_round_trips_inside_cash_anchor", None)
+        if callable(fix):
+            repaired = fix()
+            if repaired:
+                self.last_result = [dict(r, repaired=True) for r in repaired]
         if transport is None:
             return {"idle": "NO_TRANSPORT"}
         if now < self.next_allowed or now - self.last_step < STEP_INTERVAL_S:
