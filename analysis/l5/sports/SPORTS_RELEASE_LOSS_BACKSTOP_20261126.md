@@ -92,3 +92,16 @@ They are two different limits, and both apply.
     account-risk record.
   - Today: −$24.81, of which −$20.63 is the owner's manual UConn trade.
 - The campaign's own $10 loss stop sits beside them.
+
+## Full suite (22:38 UTC)
+
+Run sequentially from clean worktrees.
+
+| Commit | Failed | Passed |
+|---|---|---|
+| `5cbca4d3c` | 24 | 5,745 |
+| `31ddf1b06` | 24 | 5,755 |
+
+- The failing names are **identical**; the +10 are the new tests.
+- Files: `regression/sports_full_5cbca4d3c.txt`,
+  `regression/sports_full_31ddf1b06.txt`.
