@@ -1545,3 +1545,19 @@ Maker-only. Esports off. Crypto unchanged and disarmed."
 
 Release = afd8a611d + dev/chatgpt-rn1-net-read-guard (16aecb0fb) + own-order
 book-lag guard (code 2618113e7). Variables unchanged.
+
+Done (section 61):
+- 00:48 deployed `b8693dcf4` (deployment `6420b7e2`, SUCCESS 00:49:58).
+- Boot 00:50:04 matches FINAL TERMS: qty 2, sizes 1/2, net rank on,
+  minimum touch 0, slate both, band 0.20–0.80, 2 markets / 4 tracked,
+  unpaired $5 per market / $10 campaign, $12 per market, spend $60, at-risk
+  $20, daily $10, lane $20, competitions as listed, esports fail-closed.
+- Lock: window 00:10–02:10, grace 7,200 s, open.
+- Account: ledger figure 8.0343 of 20, capacity 11.9657. Latch null; no
+  429s.
+- Watchdog 00:51: 2 open orders, both ours; nothing overdue or foreign.
+- Last venue reconcile 00:07 clean (the next is hourly).
+- Fills since 00:37 (on `6042cb94`, before the restart): Setka
+  `slomyk-fasiva` YES 1.68 @ 0.50 (open) and 1.5 @ 0.50 (extend), pre-match,
+  markouts +0.5 to +1.5c at 5–300 s; $1.59 unpaired.
+- Issue #251 integration comment posted.
