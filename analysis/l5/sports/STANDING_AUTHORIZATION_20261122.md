@@ -1805,3 +1805,16 @@ no figure.
   (`release/l5-pmus-live-anchor-cdfa68f4d`). The row stays restated, the
   re-anchor residual absorbs the delta, and the existing record is repaired
   once. Not deployed. Sports remains locked.
+
+## 67. Ledger cdfa68f4d authorized; Campaign D to proceed — 26 Nov 2026
+
+Owner, typed: "Authorized: deploy ledger release
+cdfa68f4d260e21f4e0623fe5913c73296133a2b to l5-pmus-live once full-suite
+regression parity is confirmed. Once venue reconciliation passes, proceed
+with Campaign D as previously authorized. All existing safety and trading
+limits remain unchanged. Prepare commit 9b28e6bfe from
+dev/pmus-rn1-marginal-ev for the next sports release, including the
+effective configuration needed to enable PMUS_RN1_MARGINAL_EV and
+PMUS_RN1_FIT_ALL_LEVELS. Do not deploy or activate those changes yet.
+Campaign D must establish actual two-sided inventory accumulation,
+replenishment and capital utilization throughout the event."
