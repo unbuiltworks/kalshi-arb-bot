@@ -1,0 +1,544 @@
+........................................................................ [  1%]
+........................................................................ [  2%]
+........................................................................ [  3%]
+........................................................................ [  4%]
+........................................................................ [  6%]
+........................................................................ [  7%]
+...FF.................................x................................. [  8%]
+........................................................................ [  9%]
+........................................................................ [ 11%]
+........................................................................ [ 12%]
+........................................................................ [ 13%]
+........................................................................ [ 14%]
+........................................................................ [ 16%]
+................................................sss..................... [ 17%]
+........................................................................ [ 18%]
+s......ssssss..............sss..ss............ssssss.................... [ 19%]
+...................................s.................................... [ 21%]
+........................................................................ [ 22%]
+........................................................................ [ 23%]
+........................................................................ [ 24%]
+........................................................................ [ 26%]
+........................................................................ [ 27%]
+........................................................................ [ 28%]
+........................................................................ [ 29%]
+........................................................................ [ 31%]
+........................................................................ [ 32%]
+...............................................s........................ [ 33%]
+........................................................................ [ 34%]
+........................................................................ [ 36%]
+........................................................................ [ 37%]
+........................................................................ [ 38%]
+........................................................................ [ 39%]
+...........ssss......................................................... [ 41%]
+........................................................................ [ 42%]
+........................................................................ [ 43%]
+........................................................................ [ 44%]
+........................................................................ [ 46%]
+.....................................FFFFF.............................. [ 47%]
+........................................................................ [ 48%]
+........................................................................ [ 49%]
+........................................................................ [ 51%]
+........................................................................ [ 52%]
+........................................................................ [ 53%]
+........................................................................ [ 54%]
+........................................................................ [ 56%]
+........................................................................ [ 57%]
+........................................................................ [ 58%]
+........................................................................ [ 59%]
+........................................................................ [ 61%]
+........................................................................ [ 62%]
+........................................................................ [ 63%]
+........................................................................ [ 64%]
+........................................................................ [ 66%]
+........................................................................ [ 67%]
+........................................................................ [ 68%]
+........................................................................ [ 69%]
+........................................................................ [ 71%]
+........................................................................ [ 72%]
+........................................................................ [ 73%]
+........................................................................ [ 74%]
+........................................................................ [ 76%]
+........................................................................ [ 77%]
+........................................................................ [ 78%]
+........................................................................ [ 79%]
+......................................................................s. [ 81%]
+........................................................................ [ 82%]
+........................................................................ [ 83%]
+........................................................................ [ 84%]
+........................................................................ [ 86%]
+.........................................................FF.FFFF........ [ 87%]
+........................................................................ [ 88%]
+........................................................................ [ 89%]
+........................................................................ [ 91%]
+........................................................................ [ 92%]
+........................................................................ [ 93%]
+........................................................................ [ 94%]
+..................................................................F...F. [ 96%]
+........................................................................ [ 97%]
+..................................FFFFFFFFF............................. [ 98%]
+........................................................................ [ 99%]
+............                                                             [100%]
+=================================== FAILURES ===================================
+______________ test_src_main_also_refuses_under_a_managed_runtime ______________
+
+    def test_src_main_also_refuses_under_a_managed_runtime():
+        """LIVE 2026-09-14T13:42Z: a Railway service created with no config was
+        auto-built and ran src/main.py directly -- run_bot() -> KalshiClient() ->
+        FileNotFoundError: private_key.pem. It did not trade only because no key
+        was present, and a missing key is not a safety control. The refusal that
+        guarded `python -m src` must guard this entrypoint too."""
+        import os
+        import subprocess
+        import sys
+        env = dict(os.environ)
+        env["RAILWAY_SERVICE_NAME"] = "x"
+        env.pop("KALSHI_ARB_BOT_SERVICE", None)
+        out = subprocess.run([sys.executable, "-c",
+                              "import src.main as m; m.main()"],
+                             cwd=ROOT, env=env, capture_output=True, text=True,
+                             timeout=60)
+>       assert out.returncode == 0, out.stderr[-2000:]
+E       AssertionError: Traceback (most recent call last):
+E           File "<string>", line 1, in <module>
+E             import src.main as m; m.main()
+E             ^^^^^^^^^^^^^^^^^^^^
+E           File "/tmp/claude-0/-home-user-kalshi-arb-bot/dfd6c478-98b1-5b09-ba6a-de4e42bef2ef/scratchpad/dev/src/main.py", line 17, in <module>
+E             from config.markets import discover_markets
+E           File "/tmp/claude-0/-home-user-kalshi-arb-bot/dfd6c478-98b1-5b09-ba6a-de4e42bef2ef/scratchpad/dev/config/markets.py", line 12, in <module>
+E             from src.auth import KalshiClient
+E           File "/tmp/claude-0/-home-user-kalshi-arb-bot/dfd6c478-98b1-5b09-ba6a-de4e42bef2ef/scratchpad/dev/src/auth.py", line 19, in <module>
+E             import httpx
+E         ModuleNotFoundError: No module named 'httpx'
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/usr/local/bin/python3', '-c', 'import src.main as m; m.main()'], returncode=1, stdout='', std...scratchpad/dev/src/auth.py", line 19, in <module>\n    import httpx\nModuleNotFoundError: No module named \'httpx\'\n').returncode
+
+tests/test_deploy_fallthrough_guard.py:85: AssertionError
+______________ test_src_main_still_runs_when_explicitly_opted_in _______________
+
+    def test_src_main_still_runs_when_explicitly_opted_in():
+        """The refusal must be escapable exactly the way __main__'s is, or a
+        legitimate bot service could no longer start."""
+        import inspect
+>       from src import main as m
+
+tests/test_deploy_fallthrough_guard.py:94: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/main.py:17: in <module>
+    from config.markets import discover_markets
+config/markets.py:12: in <module>
+    from src.auth import KalshiClient
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    """
+    Kalshi API authentication and async REST client.
+    
+    Handles RSA-PSS signature generation and provides an authenticated httpx client
+    for hitting the Kalshi REST API.
+    
+    Signature format: RSA-PSS(SHA-256) over "{timestamp_ms}{METHOD}{path}"
+    Headers required on every request:
+        KALSHI-ACCESS-KEY: <api_key_id>
+        KALSHI-ACCESS-SIGNATURE: <base64(signature)>
+        KALSHI-ACCESS-TIMESTAMP: <unix_ms>
+    """
+    
+    import base64
+    import os
+    import time
+    from pathlib import Path
+    
+>   import httpx
+E   ModuleNotFoundError: No module named 'httpx'
+
+src/auth.py:19: ModuleNotFoundError
+_____________ TestOrderBookManager.test_handle_snapshot_fp_format ______________
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+___________ TestOrderBookManager.test_handle_snapshot_legacy_format ____________
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+____________________ TestOrderBookManager.test_handle_delta ____________________
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+___________ TestOrderBookManager.test_delta_before_snapshot_ignored ____________
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+________________ TestOrderBookManager.test_book_update_callback ________________
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+________ test_two_layer_bar_default_floor_is_now_advisory_not_a_blocker ________
+
+    def test_two_layer_bar_default_floor_is_now_advisory_not_a_blocker():
+        """OWNER 5551236878: a two-completion row against a floor of 3 is
+        still MEASURED and reported -- it just no longer withholds an OPEN,
+        because completion history is not an entry condition."""
+        row = _row(matched=2, floor=3, status="INSUFFICIENT_EVIDENCE")
+        rep = ready.readiness_report(_status(row), SLUG, now=time.time())
+        gate = {g["gate"]: g for g in rep["gates"]}["strict_completion_evidence"]
+        assert gate["ok"] is False
+        assert gate["advisory"] is True
+        assert gate["blocker"].startswith("probe_evidence_not_ready")
+        # the OPEN path itself is unobstructed by it
+        composed = {g["gate"]: g for g in rep["gates"]}["strict_evidence_composed"]
+>       assert composed["ok"] is True
+E       assert False is True
+
+tests/test_pmus_spring_probe_readiness.py:74: AssertionError
+___________ test_completion_floor_still_clamps_to_two_when_measured ____________
+
+    def test_completion_floor_still_clamps_to_two_when_measured():
+        """The max(2, floor) clamp survives -- a misconfigured floor of 1
+        cannot make one completion read as sufficient EVIDENCE. It is simply
+        no longer an admission bar."""
+        row = _row(matched=1, floor=1, status="READY_FOR_REVIEW",
+                   cat_completions=1, cat_markets=2,
+                   spring_category_bar_met=True)
+        ev = entry.evidence_from_status(_status(row), SLUG)
+        assert entry.completion_evidence_reason(ev) == \
+            "spring_category_completions_lt_required:1<2"
+        # and it does not block the OPEN
+>       assert entry.strict_evidence_reason(
+            SLUG, ev, now=time.time(), require_provenance=False) is None
+E       AssertionError: assert 'strict_evidence_too_close_to_settlement:-6107641.5s' is None
+E        +  where 'strict_evidence_too_close_to_settlement:-6107641.5s' = <function strict_evidence_reason at 0x7f4919bc2ac0>('atc-lal-rso-cel-2026-09-03-rso', {'slug': 'atc-lal-rso-cel-2026-09-03-rso', 'evidence_t': '2026-11-26T02:04:01.531851+00:00', 'bid': '0.50', 'trades_1h': 120, ...}, now=1795658641.531885, require_provenance=False)
+E        +    where <function strict_evidence_reason at 0x7f4919bc2ac0> = entry.strict_evidence_reason
+E        +    and   1795658641.531885 = <built-in function time>()
+E        +      where <built-in function time> = time.time
+
+tests/test_pmus_spring_probe_readiness.py:88: AssertionError
+______ test_floor_two_with_two_category_completions_passes_evidence_layer ______
+
+    def test_floor_two_with_two_category_completions_passes_evidence_layer():
+        row = _row(matched=2, floor=2, status="READY_FOR_REVIEW",
+                   cat_completions=2, cat_markets=2)
+        reason = entry.strict_evidence_reason(
+            SLUG, entry.evidence_from_status(_status(row), SLUG),
+            now=time.time(), require_provenance=False)
+>       assert reason is None
+E       AssertionError: assert 'strict_evidence_too_close_to_settlement:-6107641.5s' is None
+
+tests/test_pmus_spring_probe_readiness.py:113: AssertionError
+______________ test_report_names_every_remaining_gate_and_blocker ______________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f4917120f30>
+
+    def test_report_names_every_remaining_gate_and_blocker(monkeypatch):
+        for env in (session.SPRING_GATE_ENV, session.SPRING_STRICT_ENV,
+                    entry.STRICT_EVIDENCE_ENV, session.SPRING_LIVE_ENV):
+            monkeypatch.delenv(env, raising=False)
+        monkeypatch.setattr(entry, "durable_state_reason",
+                            lambda *a, **k: "spring_state_dir_not_persistent_"
+                                            "mount:/state/pmus-spring")
+        rep = ready.readiness_report(_status(_row()), SLUG, now=time.time())
+        by = {g["gate"]: g for g in rep["gates"]}
+>       assert by["strict_evidence_composed"]["ok"] is True
+E       assert False is True
+
+tests/test_pmus_spring_probe_readiness.py:125: AssertionError
+________________ test_fully_asserted_environment_reports_ready _________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f4917123310>
+
+    def test_fully_asserted_environment_reports_ready(monkeypatch):
+        import json as _json
+        row = _row(matched=3, floor=3)
+        status = _status(row)
+        monkeypatch.setenv(session.SPRING_GATE_ENV, SLUG)
+        monkeypatch.setenv(session.SPRING_STRICT_ENV, SLUG)
+        ev = dict(entry.evidence_from_status(status, SLUG))
+        ev["evidence_provenance"] = entry.PROVENANCE_AUTHENTICATED
+        monkeypatch.setenv(entry.STRICT_EVIDENCE_ENV, _json.dumps(ev))
+        monkeypatch.setenv(session.SPRING_LIVE_ENV, "YES")
+        monkeypatch.setenv(session.SPRING_SID_ENV, "s1")
+        monkeypatch.setenv(session.SPRING_ARM_ENV, "s1")
+        monkeypatch.setattr(entry, "durable_state_reason", lambda *a, **k: None)
+        rep = ready.readiness_report(status, SLUG, now=time.time())
+>       assert rep["ready"] is True
+E       assert False is True
+
+tests/test_pmus_spring_probe_readiness.py:157: AssertionError
+__________ test_replication_without_executable_economics_is_separated __________
+
+    def test_replication_without_executable_economics_is_separated():
+        """Directive 5533650823 item 5: REPLICATION_EVIDENCE can be green
+        while EXECUTABLE_ECONOMICS is red — evidence at observation
+        economics (<=0.98) with no completion clearing the live
+        >=1c-after-known-fees bound never reads as executable."""
+        row = _row(matched=3, floor=3, fee_safe=0)
+        rep = ready.readiness_report(_status(row), SLUG, now=time.time())
+        by = {g["gate"]: g for g in rep["gates"]}
+>       assert by["strict_evidence_composed"]["ok"] is True
+E       assert False is True
+
+tests/test_pmus_spring_probe_readiness.py:170: AssertionError
+________________ test_one_stuck_market_cannot_block_the_others _________________
+
+state = PosixPath('/tmp/pytest-of-root/pytest-854/test_one_stuck_market_cannot_b0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f490c2f0210>
+
+    def test_one_stuck_market_cannot_block_the_others(state, monkeypatch):
+        _ledger(state, [f"m{i}" for i in range(38)])
+        monkeypatch.setattr(cont.base.q1, "has_credentials", lambda: True)
+    
+        calls = []
+    
+        def fake_settle(t, slug, **kw):
+            calls.append(slug)
+            if slug == "m0":
+                raise TimeoutError("venue hung on this one")
+            return {"status": "PENDING_SETTLEMENT", "settled": False}
+    
+        monkeypatch.setattr(cont, "settle_held", fake_settle)
+        out = cont.shutdown_settle_pass(t=object())
+>       assert len(calls) == cont.SETTLE_AUDIT_BATCH, "the cycle stayed bounded"
+E       AssertionError: the cycle stayed bounded
+E       assert 24 == 5
+E        +  where 24 = len(['m0', 'm1', 'm2', 'm3', 'm4', 'm5', ...])
+E        +  and   5 = cont.SETTLE_AUDIT_BATCH
+
+tests/test_shutdown_settlement_liveness.py:111: AssertionError
+______________ test_the_budget_prices_the_whole_set_not_the_batch ______________
+
+state = PosixPath('/tmp/pytest-of-root/pytest-854/test_the_budget_prices_the_who0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f4917533b60>
+
+    def test_the_budget_prices_the_whole_set_not_the_batch(state, monkeypatch):
+        """Pricing only the audited five would understate every open obligation --
+        the same class of error as the bug being fixed."""
+        _ledger(state, [f"m{i}" for i in range(38)])
+        monkeypatch.setattr(cont.base.q1, "has_credentials", lambda: True)
+        monkeypatch.setattr(cont, "settle_held",
+                            lambda t, s, **k: {"status": "PENDING_SETTLEMENT",
+                                               "settled": False})
+        out = cont.shutdown_settle_pass(t=object())
+        assert out["pending_total"] == 38
+        assert out["pending_after"] == 38
+>       assert len(out["batch"]) == cont.SETTLE_AUDIT_BATCH
+E       AssertionError: assert 24 == 5
+E        +  where 24 = len(['m0', 'm1', 'm2', 'm3', 'm4', 'm5', ...])
+E        +  and   5 = cont.SETTLE_AUDIT_BATCH
+
+tests/test_shutdown_settlement_liveness.py:166: AssertionError
+________________ TestSpreadScanner.test_no_signal_normal_spread ________________
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+_____________________ TestSpreadScanner.test_signal_on_arb _____________________
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+_______________ TestSpreadScanner.test_skips_insufficient_depth ________________
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+_________________ TestSpreadScanner.test_edge_below_threshold __________________
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+_____________ TestSpreadScanner.test_quantity_capped_by_order_size _____________
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+_______________ TestSpreadScanner.test_quantity_capped_by_depth ________________
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+________________ TestSpreadScanner.test_picks_better_maker_side ________________
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+__________________ TestSpreadScanner.test_empty_book_no_crash __________________
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+________________ TestSpreadScanner.test_one_side_empty_no_crash ________________
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+=============================== warnings summary ===============================
+tests/test_orderbook.py:106
+  /tmp/claude-0/-home-user-kalshi-arb-bot/dfd6c478-98b1-5b09-ba6a-de4e42bef2ef/scratchpad/dev/tests/test_orderbook.py:106: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_orderbook.py:125
+  /tmp/claude-0/-home-user-kalshi-arb-bot/dfd6c478-98b1-5b09-ba6a-de4e42bef2ef/scratchpad/dev/tests/test_orderbook.py:125: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_orderbook.py:142
+  /tmp/claude-0/-home-user-kalshi-arb-bot/dfd6c478-98b1-5b09-ba6a-de4e42bef2ef/scratchpad/dev/tests/test_orderbook.py:142: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_orderbook.py:165
+  /tmp/claude-0/-home-user-kalshi-arb-bot/dfd6c478-98b1-5b09-ba6a-de4e42bef2ef/scratchpad/dev/tests/test_orderbook.py:165: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_orderbook.py:177
+  /tmp/claude-0/-home-user-kalshi-arb-bot/dfd6c478-98b1-5b09-ba6a-de4e42bef2ef/scratchpad/dev/tests/test_orderbook.py:177: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_spread_scanner.py:16
+  /tmp/claude-0/-home-user-kalshi-arb-bot/dfd6c478-98b1-5b09-ba6a-de4e42bef2ef/scratchpad/dev/tests/test_spread_scanner.py:16: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_spread_scanner.py:29
+  /tmp/claude-0/-home-user-kalshi-arb-bot/dfd6c478-98b1-5b09-ba6a-de4e42bef2ef/scratchpad/dev/tests/test_spread_scanner.py:29: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_spread_scanner.py:51
+  /tmp/claude-0/-home-user-kalshi-arb-bot/dfd6c478-98b1-5b09-ba6a-de4e42bef2ef/scratchpad/dev/tests/test_spread_scanner.py:51: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_spread_scanner.py:64
+  /tmp/claude-0/-home-user-kalshi-arb-bot/dfd6c478-98b1-5b09-ba6a-de4e42bef2ef/scratchpad/dev/tests/test_spread_scanner.py:64: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_spread_scanner.py:76
+  /tmp/claude-0/-home-user-kalshi-arb-bot/dfd6c478-98b1-5b09-ba6a-de4e42bef2ef/scratchpad/dev/tests/test_spread_scanner.py:76: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_spread_scanner.py:89
+  /tmp/claude-0/-home-user-kalshi-arb-bot/dfd6c478-98b1-5b09-ba6a-de4e42bef2ef/scratchpad/dev/tests/test_spread_scanner.py:89: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_spread_scanner.py:102
+  /tmp/claude-0/-home-user-kalshi-arb-bot/dfd6c478-98b1-5b09-ba6a-de4e42bef2ef/scratchpad/dev/tests/test_spread_scanner.py:102: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_spread_scanner.py:117
+  /tmp/claude-0/-home-user-kalshi-arb-bot/dfd6c478-98b1-5b09-ba6a-de4e42bef2ef/scratchpad/dev/tests/test_spread_scanner.py:117: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_spread_scanner.py:123
+  /tmp/claude-0/-home-user-kalshi-arb-bot/dfd6c478-98b1-5b09-ba6a-de4e42bef2ef/scratchpad/dev/tests/test_spread_scanner.py:123: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests/test_l5_concurrency_study.py::test_coverage_reports_gaps_as_missing_data_not_as_silence
+tests/test_l5_concurrency_study.py::test_coverage_reports_gaps_as_missing_data_not_as_silence
+  /tmp/claude-0/-home-user-kalshi-arb-bot/dfd6c478-98b1-5b09-ba6a-de4e42bef2ef/scratchpad/dev/src/l5_concurrency_study.py:337: DeprecationWarning: datetime.datetime.utcfromtimestamp() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.fromtimestamp(timestamp, datetime.UTC).
+    days = sorted({_dt.datetime.utcfromtimestamp(e["t_first"]).strftime("%Y-%m-%d")
+
+tests/test_l5_economic_scoreboard.py::test_venue_realized_market_row_keeps_every_term_separate
+tests/test_l5_economic_scoreboard.py::test_venue_realized_market_row_keeps_every_term_separate
+tests/test_l5_economic_scoreboard.py::test_flat_account_market_uses_the_derived_contribution_and_labels_it
+tests/test_l5_economic_scoreboard.py::test_flat_account_market_uses_the_derived_contribution_and_labels_it
+tests/test_l5_economic_scoreboard.py::test_venue_only_rows_carry_the_venue_number_and_no_invented_turnover
+tests/test_l5_economic_scoreboard.py::test_venue_only_rows_carry_the_venue_number_and_no_invented_turnover
+tests/test_l5_economic_scoreboard.py::test_aggregates_sum_the_terms_and_the_all_block_covers_every_market
+tests/test_l5_economic_scoreboard.py::test_aggregates_sum_the_terms_and_the_all_block_covers_every_market
+  /tmp/claude-0/-home-user-kalshi-arb-bot/dfd6c478-98b1-5b09-ba6a-de4e42bef2ef/scratchpad/dev/src/l5_economic_scoreboard.py:247: DeprecationWarning: datetime.datetime.utcfromtimestamp() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.fromtimestamp(timestamp, datetime.UTC).
+    "resolution_utc": (datetime.utcfromtimestamp(t_res).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+tests/test_l5_live_book_feed.py: 1031 warnings
+  /tmp/claude-0/-home-user-kalshi-arb-bot/dfd6c478-98b1-5b09-ba6a-de4e42bef2ef/scratchpad/dev/tests/test_l5_live_book_feed.py:78: DeprecationWarning: ast.Str is deprecated and will be removed in Python 3.14; use ast.Constant instead
+    if isinstance(n, ast.Str if hasattr(ast, "Str") else ast.Constant):
+
+tests/test_l5_live_book_feed.py: 36 warnings
+  /tmp/claude-0/-home-user-kalshi-arb-bot/dfd6c478-98b1-5b09-ba6a-de4e42bef2ef/scratchpad/dev/tests/test_l5_live_book_feed.py:79: DeprecationWarning: Attribute s is deprecated and will be removed in Python 3.14; use value instead
+    v = getattr(n, "s", getattr(n, "value", None))
+
+tests/test_l5_r4_parallel_research.py: 2216 warnings
+  /tmp/claude-0/-home-user-kalshi-arb-bot/dfd6c478-98b1-5b09-ba6a-de4e42bef2ef/scratchpad/dev/src/l5_residual_risk.py:230: DeprecationWarning: datetime.datetime.utcfromtimestamp() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.fromtimestamp(timestamp, datetime.UTC).
+    return _dt.datetime.utcfromtimestamp(w["settlement_ts"]).strftime("%Y-%m")
+
+tests/test_l5_r4_parallel_research.py::test_idle_gaps_report_waiting_and_pre_settlement_entry_separately
+tests/test_l5_r4_parallel_research.py::test_idle_gaps_report_waiting_and_pre_settlement_entry_separately
+tests/test_l5_r4_parallel_research.py::test_idle_gaps_report_waiting_and_pre_settlement_entry_separately
+tests/test_l5_r4_parallel_research.py::test_idle_gaps_report_waiting_and_pre_settlement_entry_separately
+tests/test_l5_r4_parallel_research.py::test_idle_gaps_report_waiting_and_pre_settlement_entry_separately
+tests/test_l5_r4_parallel_research.py::test_idle_gaps_report_waiting_and_pre_settlement_entry_separately
+tests/test_l5_r4_parallel_research.py::test_idle_gaps_report_waiting_and_pre_settlement_entry_separately
+tests/test_l5_r4_parallel_research.py::test_idle_gaps_report_waiting_and_pre_settlement_entry_separately
+  /tmp/claude-0/-home-user-kalshi-arb-bot/dfd6c478-98b1-5b09-ba6a-de4e42bef2ef/scratchpad/dev/src/l5_concurrency_study.py:417: DeprecationWarning: datetime.datetime.utcfromtimestamp() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.fromtimestamp(timestamp, datetime.UTC).
+    days = {_dt.datetime.utcfromtimestamp(e["t_first"]).date() for e in es}
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_deploy_fallthrough_guard.py::test_src_main_also_refuses_under_a_managed_runtime
+FAILED tests/test_deploy_fallthrough_guard.py::test_src_main_still_runs_when_explicitly_opted_in
+FAILED tests/test_orderbook.py::TestOrderBookManager::test_handle_snapshot_fp_format
+FAILED tests/test_orderbook.py::TestOrderBookManager::test_handle_snapshot_legacy_format
+FAILED tests/test_orderbook.py::TestOrderBookManager::test_handle_delta - Fai...
+FAILED tests/test_orderbook.py::TestOrderBookManager::test_delta_before_snapshot_ignored
+FAILED tests/test_orderbook.py::TestOrderBookManager::test_book_update_callback
+FAILED tests/test_pmus_spring_probe_readiness.py::test_two_layer_bar_default_floor_is_now_advisory_not_a_blocker
+FAILED tests/test_pmus_spring_probe_readiness.py::test_completion_floor_still_clamps_to_two_when_measured
+FAILED tests/test_pmus_spring_probe_readiness.py::test_floor_two_with_two_category_completions_passes_evidence_layer
+FAILED tests/test_pmus_spring_probe_readiness.py::test_report_names_every_remaining_gate_and_blocker
+FAILED tests/test_pmus_spring_probe_readiness.py::test_fully_asserted_environment_reports_ready
+FAILED tests/test_pmus_spring_probe_readiness.py::test_replication_without_executable_economics_is_separated
+FAILED tests/test_shutdown_settlement_liveness.py::test_one_stuck_market_cannot_block_the_others
+FAILED tests/test_shutdown_settlement_liveness.py::test_the_budget_prices_the_whole_set_not_the_batch
+FAILED tests/test_spread_scanner.py::TestSpreadScanner::test_no_signal_normal_spread
+FAILED tests/test_spread_scanner.py::TestSpreadScanner::test_signal_on_arb - ...
+FAILED tests/test_spread_scanner.py::TestSpreadScanner::test_skips_insufficient_depth
+FAILED tests/test_spread_scanner.py::TestSpreadScanner::test_edge_below_threshold
+FAILED tests/test_spread_scanner.py::TestSpreadScanner::test_quantity_capped_by_order_size
+FAILED tests/test_spread_scanner.py::TestSpreadScanner::test_quantity_capped_by_depth
+FAILED tests/test_spread_scanner.py::TestSpreadScanner::test_picks_better_maker_side
+FAILED tests/test_spread_scanner.py::TestSpreadScanner::test_empty_book_no_crash
+FAILED tests/test_spread_scanner.py::TestSpreadScanner::test_one_side_empty_no_crash
+24 failed, 5719 passed, 28 skipped, 1 xfailed, 3315 warnings in 162.72s (0:02:42)
+done
