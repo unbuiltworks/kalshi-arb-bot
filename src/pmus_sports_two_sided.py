@@ -1482,6 +1482,18 @@ RN1_NET_RANK = os.getenv("PMUS_RN1_NET_RANK", "0").strip() == "1"
 # once they are at least this old (the public snapshot can lag our order's
 # acknowledgement; until then the order is left in the denominator).
 RN1_NET_OWN_LAG_S = float(os.getenv("PMUS_RN1_NET_OWN_LAG_S", "5") or 5)
+# HOLD THROUGH A DIP (owner 2026-11-26: "Do not rotate away merely because
+# one side fills or a temporary estimate fluctuates"; "Preserve productive
+# resting orders and queue priority"). Live 26 Nov: estimates near zero
+# flipped sign every minute or two, and every flip cancelled the ladder.
+# With RN1_NET_HOLD_S > 0, once the fresh net estimate turns not positive
+# nothing NEW is placed (no opening, extension or replenishment), but bids
+# already resting are kept for up to RN1_NET_HOLD_S, as long as each still
+# sits at or behind its own side's best bid (it never becomes the price-
+# setting bid by staying). After that, or on any other block (pause, late,
+# cap, lock), they are cancelled as before. Completions are unaffected.
+# 0 = off (cancel at once, as before).
+RN1_NET_HOLD_S = float(os.getenv("PMUS_RN1_NET_HOLD_S", "0") or 0)
 
 
 def _comp_rates(name: str, default: str) -> Dict[str, float]:
@@ -5487,7 +5499,7 @@ class Engine:
             if (oid not in owned or not o.get("open") or side not in levels
                     or o.get("stage") == "orphan"
                     or not o.get("placed_at")
-                    or now - float(o["placed_at"]) < 5):
+                    or now - float(o["placed_at"]) < RN1_NET_OWN_LAG_S):
                 continue
             px = D(o["px"])
             left = D(o["qty"]) - D(o.get("filled", "0"))
@@ -5882,12 +5894,27 @@ class Engine:
         cooling = set() if new_block or RN1_LADDER_LEVELS <= 1 else {
             sd for sd in ("YES", "NO") if want.get(sd) is None and
             q.get("why_" + sd) == "refill_cooldown"}
+        if new_block == "net_not_positive" and RN1_NET_HOLD_S > 0:
+            neg0 = float(mk.setdefault("net_neg_since", now))
+            if now - neg0 < RN1_NET_HOLD_S:
+                touch = {"YES": D(str(bbo["bid"])),
+                         "NO": ONE - D(str(bbo["ask"]))}
+                for oid_, o_ in list(mk["orders"].items()):
+                    if o_.get("open") and \
+                            not is_completion_stage(o_.get("stage")) and \
+                            D(str(o_["px"])) > touch.get(o_["side"], ONE):
+                        # it would now set the price: not kept
+                        o_["_hold_drop"] = True
+                cooling = {"YES", "NO"}
+        else:
+            mk.pop("net_neg_since", None)
         for oid, o in mk["orders"].items():
             if not o.get("open"):
                 continue
             left = D(o["qty"]) - D(o.get("filled") or "0")
             if o["side"] in cooling and \
-                    not is_completion_stage(o.get("stage")):
+                    not is_completion_stage(o.get("stage")) and \
+                    not o.pop("_hold_drop", False):
                 continue                         # kept through the cooldown
             hit = None
             for i, (sd, tg, lv) in enumerate(targets):

@@ -355,25 +355,37 @@ def test_a_jump_still_pulls_everything_with_threatened_only(
 
 
 # ------------------------------- reward measurement: the best level
-def test_reward_estimate_uses_the_bid_nearest_the_touch(live, monkeypatch):
+def test_reward_estimate_counts_every_mature_visible_level(live, monkeypatch):
+    """Full ladder (dev/chatgpt-rn1-ladder-score): every owned resting level
+    older than the book lag is scored, each capped at what the public book
+    shows at that price; a young order is left out."""
+    import time as _t
     e, v = live
     e.step_market(SLUG)
+    mk = e.b.m(SLUG)
+    for o in mk["orders"].values():
+        o["placed_at"] = _t.time() - 60
     seen = {}
     from src import pmus_sports_rewards as RW
 
-    def est(book, per, yes_px, no_px, qty, tick, own_yes=0.0, own_no=0.0,
-            yes_qty=None, no_qty=None):
-        seen.update(yes=yes_px, no=no_px, yes_qty=yes_qty, no_qty=no_qty)
+    def est(book, per, yes_levels, no_levels, tick, own_yes, own_no):
+        seen.update(yes=sorted(yes_levels), no=sorted(no_levels))
         return {"share": 0.1, "est_usd_per_hour": 0.1,
                 "max_spread_ok": None}
-    monkeypatch.setattr(RW, "quote_estimate", est)
-    monkeypatch.setattr(e, "_reward_get", lambda: (lambda p: {}))
-    mk = e.b.m(SLUG)
+    monkeypatch.setattr(RW, "ladder_quote_estimate", est)
+    # public book: YES bids at our 0.47/0.45 (0.43 not shown), YES asks at
+    # 0.51 (our NO 0.49, 2 contracts) and 0.53 (only 1 visible of our 2)
+    book = {"marketData": {
+        "bids": [{"px": {"value": "0.47"}, "qty": "5"},
+                 {"px": {"value": "0.45"}, "qty": "2"}],
+        "offers": [{"px": {"value": "0.51"}, "qty": "9"},
+                   {"px": {"value": "0.53"}, "qty": "1"}]}}
+    monkeypatch.setattr(e, "_reward_get", lambda: (lambda p: book))
     mk.pop("rn1_reward_est", None)
-    e._rn1_reward_estimate(SLUG, mk, {"pool_rate_usd_s": 0.01},
-                           D("0.01"))
-    # each side scored at its own remaining size at its best level
-    assert seen == {"yes": 0.47, "no": 0.49, "yes_qty": 2.0, "no_qty": 2.0}
+    e._rn1_reward_estimate(SLUG, mk, {"pool_rate_usd_s": 0.01, "df": 0.5,
+                                      "targetSize": 10}, D("0.01"))
+    assert seen["yes"] == [(0.45, 2.0), (0.47, 2.0)]
+    assert seen["no"] == [(0.47, 1.0), (0.49, 2.0)]
 
 
 # ------------------------------ loss stop counts resting bids
