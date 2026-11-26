@@ -481,6 +481,14 @@ def legs_from_rows(rows: List[Mapping[str, Any]], market: str
 #: stays. Its attempts are counted separately and bounded.
 ROUND_TRIP_FORM = "VENUE_ROUND_TRIP_CLOSED_BEFORE_SETTLEMENT"
 MAX_ROUND_TRIP_ATTEMPTS = 3
+#: The round-trip READER's version. Attempts are counted per reader: a
+#: market refused by an older reader is read again by a corrected one, with
+#: its own bounded attempts. LIVE 2026-11-26: release 086380d88's reader
+#: (every trade must carry `realizedPnl`) spent all three attempts on
+#: UConn, NHL and two others; e69e20ac7's time-order replay never ran on
+#: them because those attempts were stored as final. Bump this only when
+#: the reader itself changes.
+ROUND_TRIP_READER = 2
 _INTENTS = {"ORDER_INTENT_BUY_LONG": ("UP", 1),
             "ORDER_INTENT_SELL_LONG": ("UP", -1),
             "ORDER_INTENT_BUY_SHORT": ("DOWN", 1),
@@ -593,12 +601,25 @@ def round_trip_from_rows(rows: List[Mapping[str, Any]], market: str
                 for f in fills)}
 
 
+def round_trip_state(rec: Mapping[str, Any]) -> Tuple[int, bool]:
+    """(attempts, final) spent by THIS reader. Anything an older reader
+    recorded (or a record without a reader version) counts as nothing."""
+    try:
+        reader = int(rec.get("round_trip_reader") or 0)
+    except (TypeError, ValueError):
+        reader = 0
+    if reader != ROUND_TRIP_READER:
+        return 0, False
+    return (int(rec.get("round_trip_attempts") or 0),
+            bool(rec.get("round_trip_final")))
+
+
 def round_trip_retry(rec: Mapping[str, Any]) -> bool:
     """An exhausted market is read again for the round-trip form until that
-    form has had its own bounded attempts or has ruled itself out."""
-    return (not rec.get("round_trip_final")
-            and int(rec.get("round_trip_attempts") or 0)
-            < MAX_ROUND_TRIP_ATTEMPTS)
+    form (this reader) has had its own bounded attempts or has ruled itself
+    out."""
+    n, final = round_trip_state(rec)
+    return not final and n < MAX_ROUND_TRIP_ATTEMPTS
 
 
 class Attestor:
@@ -696,7 +717,8 @@ class Attestor:
                 # apply: rule it out for good, spend nothing else
                 store.note_venue_cost_attempt(
                     market, reason=None, final=True,
-                    count_attempt=False, round_trip_final=True)
+                    count_attempt=False, round_trip_final=True,
+                    round_trip_reader=ROUND_TRIP_READER)
                 return {"market": market, "attested": False,
                         "reason": "ROUND_TRIP:NO_SALE_FOUND", "final": True}
             got = legs_from_rows(w.rows, market)
@@ -743,12 +765,13 @@ class Attestor:
         reason = "ROUND_TRIP:%s" % (out.get("reason") or rt.get("reason"))
         rec = (((getattr(store, "state", {}) or {}).get(STATE_KEY) or {})
                .get("markets") or {}).get(market) or {}
-        n = int(rec.get("round_trip_attempts") or 0) + 1
+        n = round_trip_state(rec)[0] + 1
         final = n >= MAX_ROUND_TRIP_ATTEMPTS
         store.note_venue_cost_attempt(market, reason=reason, final=True,
                                       count_attempt=False,
                                       round_trip_attempts=n,
-                                      round_trip_final=final)
+                                      round_trip_final=final,
+                                      round_trip_reader=ROUND_TRIP_READER)
         return {"market": market, "attested": False, "reason": reason,
                 "round_trip_attempts": n, "final": final}
 
