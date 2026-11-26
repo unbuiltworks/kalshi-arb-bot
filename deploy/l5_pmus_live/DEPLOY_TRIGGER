@@ -3715,3 +3715,4 @@ deploy: 2026-11-10 window-owner binding gate, halted and disarmed
 # approved). OFF unless L5_PORTFOLIO_TOTAL_MAX_DRAWDOWN_USD is set;
 # deploying this changes no number. No order path/limit/halt/arming change.
 2026-11-26T04:20Z round-trip venue attestation: a position closed before settlement is restated from the venue's own realized result (0c134202a).
+2026-11-26T14:20Z round trip read from the venue's real rows; bound-priced rows published as UNRESOLVED and the account-risk record refuses while any remain (4115ea9b5).
