@@ -1762,3 +1762,25 @@ Fix: code `b5f96107b` counts attempts per reader version. Release
 candidate `8cfb39d37666577c30bee01507cb0f6cf308b285`, branch
 `release/l5-pmus-live-reader-8cfb39d37`. **Not deployed; needs the
 owner's authorization.** Sports stays `PMUS_TWO_SIDED_SUBMISSION_LOCK=1`.
+
+## 66. Ledger 8cfb39d37 and bound-row acceptance authorized — 26 Nov 2026
+
+Owner, typed: "Authorized: deploy ledger release
+8cfb39d376777c30bee01507cb0f6cf308b285 to l5-pmus-live, then proceed with
+Campaign D as previously authorized once verified. Accept bound rows
+aec-utr-gaskan-hanbra-2026-11-17 and aec-testcr-afg-zim-2026-11-13 as
+booked ($0 and −$1 respectively), provided both are confirmed closed and
+no additional exposure remains. Preserve their audit records and existing
+loss accounting. Verify the corrected UConn loss against venue data,
+reconcile account equity, and confirm all safety protections before
+arming. ... All existing trading limits remain unchanged."
+
+The typed sha is 38 characters and differs after the ninth from the
+proposed release. Its first nine characters `8cfb39d37` resolve uniquely
+to `8cfb39d37666577c30bee01507cb0f6cf308b285`
+(`release/l5-pmus-live-reader-8cfb39d37`), the only release proposed;
+that is what is deployed.
+
+Acceptance applies through `L5_ACCEPT_BOUND_MARKETS` only after both
+markets are confirmed closed with no open position or order. It changes
+no figure.
