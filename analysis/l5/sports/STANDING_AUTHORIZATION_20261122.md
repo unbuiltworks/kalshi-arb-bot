@@ -1714,3 +1714,16 @@ Verified 03:20–03:23:
   published while the daily halt is in force.
 
 Nothing in the ledger was changed beyond the authorized anchor.
+
+## 64. Ledger release 086380d88 authorized — 26 Nov 2026
+
+Owner, typed: "Authorized: deploy ledger release
+086380d88687b52ce81dcdf03e17284aed7c8c6d to l5-pmus-live with trading
+locked. No limit changes. Crypto unchanged and disarmed." The owner then
+asked for a full reconciliation of account equity against the venue, with
+bot, manual and combined P&L, and an inventory of the risk gates that rely
+on reconstructed P&L. "Do not increase limits or reset genuine losses."
+
+12:49 UTC: source of `l5-pmus-live` set to `086380d88` (the session worker
+was restarted between authorization and deployment). Sports remains
+`PMUS_TWO_SIDED_SUBMISSION_LOCK=1`.
