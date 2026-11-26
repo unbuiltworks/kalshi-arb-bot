@@ -1682,3 +1682,35 @@ Done:
   03:45, typically 30–45 minutes, so it finishes inside the window. It has
   a reward programme, and the bot already holds 2.18 YES there. Pinning
   only restricts selection; nothing else changes.
+
+### 63a. Stopped before the window: ledger realized-loss figure corrupted by the manual trade (03:18–03:20 UTC)
+
+After the 03:17 ledger restart, the sports bot's account check reads
+`utc_day_realized_usd −471.0552`, `lifetime_realized_usd −515.8966`,
+reason `ACCOUNT_DAILY_LOSS_HALT` (daily 50, ceiling 75). At 02:13 the same
+fields read −3.98 and −48.82.
+
+This is a ledger accounting fault, not a trading loss:
+- The ledger's own reconcile already showed `realized_today −514.93` at
+  02:48, before the anchor change.
+- Its 02:12 reconcile had adopted the manual `duke-uconn` 469 NO "over our
+  book" with the basis unknown, priced at the $1 upper bound (`risk_floor_usd`
+  `aec-cbb-duke-uconn-2026-11-25: 469.0000`, still present at 02:53).
+- Booking the 02:14 sale against a $1 basis gives about
+  469 × (0.01 − 1.00) ≈ −464. Together with the real figures that matches
+  the new total.
+- The venue's own record of the trade is −$20.63.
+
+Action: 03:19 `PMUS_TWO_SIDED_SUBMISSION_LOCK=1` (owner rule: stop and relock
+when reconciliation fails); the replacement window was not opened. The 04:35
+and 06:35 campaign tasks are disabled.
+
+Verified 03:20–03:23:
+- Release `1b496656c` running; lock `locked`.
+- Watchdog: 0 open orders, nothing foreign.
+- Bot open inventory $3.69 (Garcar–Borvic 4 YES at $2.60, plus the
+  remainder of `slomyk`), venue-reconciled.
+- The ledger anchor is 312.4102 as authorized. The drawdown figure is not
+  published while the daily halt is in force.
+
+Nothing in the ledger was changed beyond the authorized anchor.
