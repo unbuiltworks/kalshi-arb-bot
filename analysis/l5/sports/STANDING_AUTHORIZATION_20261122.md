@@ -1533,3 +1533,15 @@ arming."
   not positive.
 - 00:02 lock set to `window:2026-11-26T00:10:00Z/2026-11-26T02:10:00Z`
   (grace 7,200 s unchanged); all other FINAL TERMS values unchanged.
+
+## 61. Deploy b8693dcf4 into the running Campaign B window — 26 Nov, about 00:45 UTC
+
+Owner, typed: "I explicitly authorize deployment of
+b8693dcf4bc269f2d4c8576f99e123377e6fabbf into the existing Campaign B
+window, ending at 02:10 UTC on November 26, with the existing
+completions-only grace period unchanged. Preserve exactly the FINAL TERMS
+settings, capital limits, loss stops and independent watchdog protections.
+Maker-only. Esports off. Crypto unchanged and disarmed."
+
+Release = afd8a611d + dev/chatgpt-rn1-net-read-guard (16aecb0fb) + own-order
+book-lag guard (code 2618113e7). Variables unchanged.
