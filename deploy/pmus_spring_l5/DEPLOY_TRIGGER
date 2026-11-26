@@ -291,3 +291,4 @@
 2026-11-25T23:55Z as 7a0535450 plus: with net ranking on, no opening in any market whose fresh net is not positive.
 2026-11-26T00:45Z as afd8a611d plus reward-scoring corrections (dev/chatgpt-rn1-net-read-guard 16aecb0fb) and own-order book-lag guard.
 2026-11-26T01:55Z as b8693dcf4 plus full-ladder reward scoring (dev/chatgpt-rn1-ladder-score 8137a82eb) and hold-through-a-dip (off by default).
+release candidate for 9b28e6bfe (RN1 marginal EV and fit-every-level, both off by default)
