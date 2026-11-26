@@ -431,6 +431,26 @@ def quote_estimate(book_md: Mapping[str, Any], period: Mapping[str, Any],
     a = side_score(asks, None if no_px is None else 1.0 - no_px,
                    nq if no_px is not None else 0.0, tick, df, target,
                    False, own_no)
+    return _combine_side_scores(b, a, period, yes_px is not None,
+                                no_px is not None)
+
+
+def ladder_quote_estimate(book_md: Mapping[str, Any], period: Mapping[str, Any],
+                          yes_levels: list, no_levels: list, tick: float,
+                          own_yes: list, own_no: list) -> dict:
+    """Estimate complete replacement ladders. NO prices are contract prices.
+    Own levels must be confirmed visible by the caller."""
+    bids, asks = book_sides(book_md or {})
+    df, target = float(period["df"]), float(period["targetSize"])
+    b = ladder_side_score(bids, yes_levels, tick, df, target, True, own_yes)
+    a = ladder_side_score(asks, [(1.0-p, q) for p, q in no_levels],
+                          tick, df, target, False,
+                          [(1.0-p, q) for p, q in own_no])
+    return _combine_side_scores(b, a, period, bool(yes_levels), bool(no_levels))
+
+
+def _combine_side_scores(b: dict, a: dict, period: Mapping[str, Any],
+                         has_yes: bool, has_no: bool) -> dict:
     mid = ((b["best"] + a["best"]) / 2.0) if (b["best"] is not None and
                                               a["best"] is not None) else None
     ms = period.get("maxSpread")
@@ -445,7 +465,7 @@ def quote_estimate(book_md: Mapping[str, Any], period: Mapping[str, Any],
     sa = a["share"] if ms_ok in (None, True) else 0.0
     share = 0.5 * (sb + sa)
     rate = float(period.get("pool_rate_usd_s") or 0.0) * share
-    legs = [x for x, px in ((b, yes_px), (a, no_px)) if px is not None]
+    legs = [x for x, present in ((b, has_yes), (a, has_no)) if present]
     return {"share": round(share, 9), "bid_share": round(sb, 9),
             "ask_share": round(sa, 9),
             "inside_walk": bool(legs) and all(x["inside"] for x in legs),
