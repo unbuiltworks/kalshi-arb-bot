@@ -3719,3 +3719,4 @@ deploy: 2026-11-10 window-owner binding gate, halted and disarmed
 release candidate for b5f96107b (round-trip reader version)
 release candidate for 7b60b56b1 (round trip inside the cash re-anchor)
 release candidate for a4bb80f87 (pre-anchor round trips refused and reversed)
+release candidate for 2d409ed40 (bot-versus-total split, off by default)
