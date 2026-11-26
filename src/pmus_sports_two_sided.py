@@ -6517,8 +6517,33 @@ class Engine:
             if not (D(0) < y < ONE and D(0) < n < ONE):
                 rows[d] = {"why": "no_room_for_a_bid"}
                 continue
+            # Only acknowledged, locally owned open orders at the candidate
+            # price are replacements. Other ladder levels remain in the
+            # denominator (conservative until multi-level scoring exists).
+            mk = self.b.d.get("markets", {}).get(slug, {})
+            owned = set(self.b.d.get("own_order_ids", []))
+            own = {"YES": D(0), "NO": D(0)}
+            for oid, order in (mk.get("orders") or {}).items():
+                side = order.get("side")
+                if (oid not in owned or not order.get("open") or
+                        side not in own or order.get("stage") == "orphan"):
+                    continue
+                if D(str(order["px"])) == (y if side == "YES" else n):
+                    own[side] += max(D(0), D(str(order["qty"])) -
+                                     D(str(order.get("filled", "0"))))
+            kwargs = {}
+            if own["YES"] or own["NO"]:
+                # Do not subtract more than the visible level. A public
+                # snapshot can lag private acknowledgements/fills.
+                bids, asks = R.book_sides(book)
+                visible_y = sum(q for p, q in bids
+                                if D(str(p)) == y)
+                visible_n = sum(q for p, q in asks
+                                if D(str(p)) == ONE - n)
+                kwargs = {"own_yes": min(float(own["YES"]), float(visible_y)),
+                          "own_no": min(float(own["NO"]), float(visible_n))}
             est = R.quote_estimate(book, per, float(y), float(n),
-                                   float(qty), float(tick))
+                                   float(qty), float(tick), **kwargs)
             rew = float(est.get("est_usd_per_hour") or 0.0)
             cost = 2 * float(qty) * rn1_fill_param(RN1_FILL_RATE, d, slug) \
                 * rn1_fill_param(RN1_FILL_LOSS, d, slug)
