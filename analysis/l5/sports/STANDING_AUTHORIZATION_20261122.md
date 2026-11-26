@@ -1936,3 +1936,20 @@ and was SELECTED.
 `PMUS_RN1_MARGINAL_EV=1` and `PMUS_RN1_FIT_ALL_LEVELS=1` stay set; marginal
 EV has no fair value with the gate off, so it is inactive. Every other
 setting and limit is unchanged.
+
+### 69a. Campaign D live (21:15 UTC)
+
+- **Boot 21:06** (deployment `980eed60`):
+  - `edge_gate` false;
+  - pin `aec-atpdb-alvvalflores-alvesperez-2026-11-26`;
+  - window 21:15–23:15, grace 7,200 s;
+  - account risk ok, loss room 13.23; drawdown 0.1967.
+- **21:15:05** lock opened.
+- **21:16:03–21:16:11** full ladder posted, all post-only:
+  - YES 0.67 / 0.65 / 0.63 × 2;
+  - NO 0.30 / 0.28 / 0.26 × 2.
+- **21:17:45** all three NO levels filled in one 7-tick move:
+  - NO 6 at 0.30 / 0.28 / 0.26, cost 1.68;
+  - `reactive_pull` then cancelled the YES legs, as designed.
+  - Unpaired 1.68 against the $5 per-market cap.
+- Checks scheduled at 22:15, 23:16 and 01:16.
