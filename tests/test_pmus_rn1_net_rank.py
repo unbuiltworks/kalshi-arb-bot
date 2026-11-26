@@ -213,3 +213,35 @@ def test_a_flat_market_with_no_positive_net_gets_no_openings(
     mk["unqualified_since"] = time.time() - 31
     e.step_market(SLUG)
     assert mk.get("done") is True
+
+
+def test_net_qualification_read_errors_fail_closed(eng, monkeypatch):
+    e, _v = eng
+    mk = e.b.m(SLUG)
+    monkeypatch.setattr(M, "RN1_NET_RANK", True)
+    monkeypatch.setattr(e, "rn1_reward", lambda s: {"pool_rate_usd_s": 1})
+    monkeypatch.setattr(e, "_reward_share_score", lambda s, p: {"why": "no_spec"})
+    assert e.rn1_quote_qualifies(SLUG, mk) is False
+
+    def failed_read(*args):
+        raise RuntimeError("book unavailable")
+
+    monkeypatch.setattr(e, "_reward_share_score", failed_read)
+    assert e.rn1_quote_qualifies(SLUG, mk) is False
+    monkeypatch.setattr(M, "RN1_NET_RANK", False)
+    assert e.rn1_quote_qualifies(SLUG, mk) is True
+
+
+def test_net_qualification_expired_positive_cache_cannot_authorize_on_error(
+        eng, monkeypatch):
+    e, _v = eng
+    mk = e.b.m(SLUG)
+    mk["qualify_check"] = {"t": time.time() - 61, "ok": True}
+    monkeypatch.setattr(M, "RN1_NET_RANK", True)
+    monkeypatch.setattr(e, "rn1_reward", lambda s: {"pool_rate_usd_s": 1})
+
+    def failed_read(*args):
+        raise RuntimeError("book unavailable")
+
+    monkeypatch.setattr(e, "_reward_share_score", failed_read)
+    assert e.rn1_quote_qualifies(SLUG, mk) is False
