@@ -2047,3 +2047,28 @@ Confirm the exact effective window before arming. Two-hour
 completions-only grace. All existing capital, exposure and loss limits
 unchanged. Maker-only. Esports off. Crypto unchanged and disarmed. ...
 Report hourly ..."
+
+### 71a. Stage 1 armed: effective window 23:45–05:45 UTC (grace to 07:45)
+
+- **23:13** set lock `1`, `PMUS_TWO_SIDED_MAX_MARKETS=2`, pin empty; source
+  `31ddf1b06`. Deployment `94381184` SUCCESS 23:14:19.
+  - **Boot:** `max_markets` 2, pin null, `edge_gate` false, every cap and
+    loss limit unchanged, `locked`.
+  - **Account risk:** ok; loss room 12.69; drawdown capacity 19.45.
+- **Verification** completed 23:25:
+  - venue reconcile 23:18 ok: no positions, no orders, no foreign orders;
+  - watchdog 23:24–23:25 healthy: cancel on, 0 open / foreign / overdue,
+    3 registries OK.
+- **Window, set late.** A worker restart delayed my action until 23:36, so I
+  first set `window:23:30/05:30`, which was then already open. I corrected
+  it at 23:37 to the next quarter hour, `window:23:45/05:45`, per the
+  owner's rule.
+  - The 23:30 setting was live from 23:37:20 to 23:40:30 (deployment
+    `40adc916`). **No order was sent:** every quote was blocked by
+    `pilot_meter_unavailable` and a stale audit.
+  - Deployment `7bc972bf`, SUCCESS 23:40:28, has lock state
+    `window_not_started`, start 23:45:00Z, end 05:45:00Z, grace 7,200 s.
+- **Active at arming:**
+  - `aec-atp-lucsil-diedur-2026-11-25` (ATP singles, live);
+  - `aec-setkameua-hnorom-abaspa-2026-11-27` (Setka, pregame; $5 day-of
+    pool).
