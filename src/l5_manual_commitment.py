@@ -2,7 +2,11 @@
 
 Owner decision 2026-11-25; the arithmetic and the reasons are in
 `l5_portfolio_drawdown`. This module is the only part that talks to the
-venue, and it only ever GETs one order by id (`transport.order`).
+venue, and it only ever GETs: one order by id (`transport.order`), and --
+only with the OFF-by-default venue-indicator mode -- pages of the
+account's activity feed (`l5_cost_basis_audit.walk_activities`), to FIND
+manual order ids (`Discovery`). A found id is then read and verified by
+id exactly as an attested one.
 
 WHAT IT PRODUCES. A `measurement` the runner stores on its tick:
 
@@ -164,27 +168,246 @@ def parse_row(order_id: str, row: Any) -> Dict[str, Any]:
     return {"order": order, "terminal": terminal}
 
 
+# ------------------------------------------- found by the venue's indicator
+
+#: pages of the activity feed read per step, the minimum interval between
+#: steps while a walk is under way, and the hard page bound of one walk --
+#: the same pacing as `l5_venue_cost_attestation`
+PAGES_PER_STEP = 2
+STEP_INTERVAL_S = 5.0
+MAX_WALK_PAGES = 400
+#: a new walk starts no sooner than this after the last one completed; a
+#: later walk reads back only to the previous walk's start less OVERLAP_S
+REWALK_S = 60.0
+OVERLAP_S = 900.0
+ERROR_BACKOFF_S = 60.0
+#: with no walk completed within this, discovery is STALE -- a refusal
+DISCOVERY_MAX_AGE_S = 600.0
+#: manual rows that could not be costed, kept for the published block
+MAX_UNCLASSIFIED = 50
+
+
+def manual_rows(rows: List[Mapping[str, Any]], since_epoch: float
+                ) -> Dict[str, Any]:
+    """Manual order ids on activity-feed trade rows. PURE.
+
+    {"ids": [order id, ...], "unclassified": [{...}]}.
+
+    Only the account's OWN execution is read (`CBA._exec_objects`: the one
+    `isAggressor` selects, or the only one); its order must say
+    `manualOrderIndicator` == MANUAL. A row whose own execution cannot be
+    chosen, or whose indicator is absent or anything else, is NOT manual:
+    it stays on the bot figure. A row that says MANUAL and is older than
+    `since_epoch` is not counted. One that says MANUAL but has no time or
+    no order id cannot be costed: it is UNCLASSIFIED (a possible full win
+    in its market)."""
+    from src import l5_cost_basis_audit as CBA
+    from src import l5_venue_cost_attestation as VCA
+    ids: List[str] = []
+    unc: List[Dict[str, Any]] = []
+    for r in rows:
+        if not isinstance(r, Mapping):
+            continue
+        kind = str(r.get("kind") or r.get("type") or "").strip().lower()
+        if kind not in CBA.FILL_KINDS:
+            continue
+        body = CBA._payload(r)
+        ours = CBA._exec_objects(body) if isinstance(body, Mapping) else []
+        order = ours[0].get("order") if ours else None
+        if not isinstance(order, Mapping) or str(
+                order.get("manualOrderIndicator") or "") != MANUAL_INDICATOR:
+            continue
+        t = VCA.row_time(r)
+        oid = CBA._exec_order_id(ours[0])
+        if t is not None and t.timestamp() < since_epoch:
+            continue
+        why = ("MANUAL_ROW_UNDATED" if t is None
+               else "MANUAL_ROW_WITHOUT_ORDER_ID" if not oid else None)
+        if why is None:
+            if oid not in ids:
+                ids.append(oid)
+            continue
+        q = CBA._d(CBA._first_present(ours, CBA.EXEC_QTY_KEYS))
+        unc.append({"order_id_tail": PDD.order_tail(oid),
+                    "market": CBA._row_market(r) or None,
+                    "filled": str(q if q is not None and q > 0 else 0),
+                    "why": why, "state": None,
+                    "row_id": VCA._row_id(r)})
+    return {"ids": ids, "unclassified": unc}
+
+
+class Discovery:
+    """Finds manual order ids from the activity feed at a bounded pace.
+
+    The feed is newest first. The FIRST walk reads back to the SINCE
+    instant; each later one back to the previous walk's start less
+    OVERLAP_S, keeping every id already found (in memory: after a restart
+    the first walk runs again). A walk ends at the end of the feed, or
+    once its rows were in non-increasing time order and one is older than
+    its stop. A failed page abandons the walk; MAX_WALK_PAGES abandons it
+    too. `status` is None only while a walk completed within
+    DISCOVERY_MAX_AGE_S."""
+
+    def __init__(self) -> None:
+        self.ids: List[str] = []
+        self.unclassified: Dict[str, Dict[str, Any]] = {}
+        self.walk: Optional[Dict[str, Any]] = None
+        self.completed_t: Optional[float] = None
+        self.last_walk_start: Optional[float] = None
+        self.last_step_t: Optional[float] = None
+        self.error_t: Optional[float] = None
+        self.last_error: Optional[str] = None
+        self.since: Optional[float] = None
+        self.walks = 0
+
+    def step(self, transport: Any, now: float, since_epoch: float) -> int:
+        """Read at most PAGES_PER_STEP pages. Returns the pages read."""
+        from src import l5_cost_basis_audit as CBA
+        if self.since != since_epoch:
+            # a different SINCE: nothing found under the old one is kept
+            self.__init__()
+            self.since = since_epoch
+        if self.last_step_t is not None \
+                and now - self.last_step_t < STEP_INTERVAL_S:
+            return 0
+        if self.walk is None:
+            if self.error_t is not None and now - self.error_t \
+                    < ERROR_BACKOFF_S:
+                return 0
+            if self.completed_t is not None \
+                    and now - self.completed_t < REWALK_S:
+                return 0
+            stop = since_epoch if self.last_walk_start is None else max(
+                since_epoch, self.last_walk_start - OVERLAP_S)
+            self.walk = {"start": float(now), "stop": stop, "cursor": None,
+                         "pages": 0, "last_t": None, "monotonic": True}
+        w, read = self.walk, 0
+        self.last_step_t = float(now)
+        while read < PAGES_PER_STEP:
+            if w["pages"] >= MAX_WALK_PAGES:
+                return self._abandon(now, "MAX_WALK_PAGES", read)
+            got = CBA.walk_activities(transport, max_pages=w["pages"] + 1,
+                                      cursor=w["cursor"], rows=[],
+                                      pages_done=w["pages"])
+            ended = str(got.get("ended") or "")
+            if ended.startswith("error"):
+                return self._abandon(now, ended, read)
+            read += 1
+            w["pages"] += 1
+            rows = [r for r in (got.get("rows") or ())
+                    if isinstance(r, Mapping)]
+            self._take(rows, since_epoch)
+            from src import l5_venue_cost_attestation as VCA
+            for r in rows:
+                t = VCA.row_time(r)
+                if t is None:
+                    continue
+                t = t.timestamp()
+                if w["last_t"] is not None and t > w["last_t"]:
+                    w["monotonic"] = False
+                w["last_t"] = t
+            if ended in ("eof", "no_cursor"):
+                return self._complete(now, read)
+            if not got.get("next_cursor"):
+                return self._abandon(now, "NO_CONTINUATION", read)
+            w["cursor"] = str(got["next_cursor"])
+            if w["monotonic"] and w["last_t"] is not None \
+                    and w["last_t"] < w["stop"]:
+                return self._complete(now, read)
+        return read
+
+    def _take(self, rows: List[Mapping[str, Any]], since: float) -> None:
+        got = manual_rows(rows, since)
+        for oid in got["ids"]:
+            if oid not in self.ids:
+                self.ids.append(oid)
+        for u in got["unclassified"]:
+            key = str(u.get("row_id") or "%s|%s" % (u.get("market"),
+                                                     u.get("filled")))
+            if key not in self.unclassified \
+                    and len(self.unclassified) < MAX_UNCLASSIFIED:
+                self.unclassified[key] = {k: v for k, v in u.items()
+                                          if k != "row_id"}
+
+    def _complete(self, now: float, read: int) -> int:
+        self.last_walk_start = self.walk["start"] if self.walk else None
+        self.completed_t, self.walk = float(now), None
+        self.error_t = self.last_error = None
+        self.walks += 1
+        return read
+
+    def _abandon(self, now: float, why: str, read: int) -> int:
+        self.walk, self.error_t, self.last_error = None, float(now), why
+        return read
+
+    def status(self, now: float) -> Optional[str]:
+        if self.completed_t is None:
+            return "AUTO_MANUAL_DISCOVERY_INCOMPLETE"
+        if now - self.completed_t > DISCOVERY_MAX_AGE_S:
+            return "AUTO_MANUAL_DISCOVERY_STALE"
+        return None
+
+    def brief(self, now: float) -> Dict[str, Any]:
+        return {"found_ids": len(self.ids), "walks": self.walks,
+                "walking": self.walk is not None,
+                "completed_age_s": (None if self.completed_t is None
+                                    else round(now - self.completed_t, 1)),
+                "last_error": self.last_error, "status": self.status(now)}
+
+
 class Reader:
     """Reads the attested orders at a bounded pace and keeps what it read."""
 
     def __init__(self) -> None:
         #: order id -> {"t": last read, "got": parse_row(...), "final": bool}
         self.cache: Dict[str, Dict[str, Any]] = {}
+        #: only with the venue-indicator mode on
+        self.discovery: Optional[Discovery] = None
 
     def step(self, transport: Any, now: float,
              ids: Optional[List[str]] = None) -> Dict[str, Any]:
         """One tick. Returns the measurement to store; never raises on a
-        failed read -- that order is rejected until it reads again."""
-        want = PDD.attested_order_ids() if ids is None else list(ids)
-        for gone in [k for k in self.cache if k not in want]:
-            self.cache.pop(gone, None)
+        failed read -- that order is rejected until it reads again.
+
+        `ids` given: exactly those ids (no discovery). None: the attested
+        ids, plus -- with the venue-indicator mode ON -- the ids
+        `Discovery` found, read and verified the same way."""
         orders: List[Dict[str, Any]] = []
         rejected: List[Dict[str, Any]] = []
         unclassified: List[Dict[str, Any]] = []
+        cap, found, pages = PDD.MANUAL_MAX_ORDERS, None, 0
+        want = PDD.attested_order_ids() if ids is None else list(ids)
+        auto = PDD.auto_manual_config() if ids is None else {"state": PDD.OFF}
+        if auto.get("state") == "ON":
+            cap = PDD.AUTO_MANUAL_MAX_ORDERS
+            if self.discovery is None:
+                self.discovery = Discovery()
+            try:
+                pages = self.discovery.step(transport, float(now),
+                                            auto["since_epoch"])
+            except BaseException as exc:                       # noqa: BLE001
+                if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                    raise
+                self.discovery._abandon(float(now), "error:%s"
+                                        % type(exc).__name__, 0)
+            want += [i for i in self.discovery.ids if i not in want]
+            unclassified += [dict(u) for u in
+                             self.discovery.unclassified.values()]
+            gap = self.discovery.status(float(now))
+            if gap is not None:
+                rejected.append({"order_id_tail": "", "why": gap})
+            found = self.discovery.brief(float(now))
+        elif auto.get("state") != PDD.OFF:
+            self.discovery = None
+            rejected.append({"order_id_tail": "", "why": auto.get("why")})
+        else:
+            self.discovery = None
+        for gone in [k for k in self.cache if k not in want]:
+            self.cache.pop(gone, None)
         reads = 0
         for n, oid in enumerate(want):
             tail = PDD.order_tail(oid)
-            if n >= PDD.MANUAL_MAX_ORDERS:
+            if n >= cap:
                 rejected.append({"order_id_tail": tail,
                                  "why": "TOO_MANY_ATTESTED_ORDERS"})
                 continue
@@ -219,5 +442,8 @@ class Reader:
             else:
                 rejected.append({"order_id_tail": tail,
                                  "why": ent["got"].get("why")})
-        return {"t": float(now), "orders": orders, "rejected": rejected,
-                "unclassified": unclassified, "reads": reads}
+        out = {"t": float(now), "orders": orders, "rejected": rejected,
+               "unclassified": unclassified, "reads": reads}
+        if found is not None:
+            out.update(pages=pages, discovery=found)
+        return out

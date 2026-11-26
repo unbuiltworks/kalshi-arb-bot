@@ -65,6 +65,24 @@ exceed the total. A manual result that cannot be measured credits no loss
 and is counted as a possible full win. Every doubt therefore makes the BOT
 figure LARGER, the safe direction; the TOTAL figure is never adjusted.
 
+MANUAL ORDERS FOUND BY THE VENUE'S OWN INDICATOR (owner 2026-11-26:
+"prepare the existing bot-versus-total account risk split so future manual
+trades do not unnecessarily interrupt L5"). OFF by default. With
+L5_MANUAL_BY_VENUE_INDICATOR=1 AND L5_MANUAL_BY_VENUE_INDICATOR_SINCE_UTC
+set to an ISO instant, the ids need not be attested: the account's own
+activity feed is walked (bounded pages per pass) and every trade row whose
+OWN execution's order says MANUAL_ORDER_INDICATOR_MANUAL, at or after that
+instant, adds its order id to the attested ones. Each id is then read and
+verified exactly as an attested one (the venue's order row must say
+MANUAL) and costed by the same arithmetic. A row whose indicator cannot be
+read is NOT manual: it stays on the bot figure. A row that says MANUAL but
+cannot be costed (no order id, no time) is unclassified: a possible full
+win. Until one discovery walk has completed, or when the last one is too
+old, new exposure is refused, as for an attested id not read yet.
+Half-configured is a refusal. It changes nothing unless the split is ON,
+never adjusts the TOTAL figure and changes no limit. Move the SINCE
+instant only together with the anchor.
+
 PUBLISHED SO AN UNCHANGED READER ENFORCES BOTH. A reader computes
 max_drawdown_usd - drawdown_usd, so `max_drawdown_usd` stays the bot limit
 and `drawdown_usd` becomes the EFFECTIVE figure, bot limit minus the
@@ -86,12 +104,19 @@ TOTAL_MAX_DRAWDOWN_ENV = "L5_PORTFOLIO_TOTAL_MAX_DRAWDOWN_USD"
 #: venue order ids the owner attests were placed by hand, comma-separated
 MANUAL_ORDERS_ENV = "L5_MANUAL_ATTESTED_ORDERS"
 
+#: "1" identifies manual orders from the venue's own indicator, no id list
+AUTO_MANUAL_ENV = "L5_MANUAL_BY_VENUE_INDICATOR"
+#: required with it: only manual trades at or after this ISO instant count
+AUTO_MANUAL_SINCE_ENV = "L5_MANUAL_BY_VENUE_INDICATOR_SINCE_UTC"
+
 OFF = "OFF"
 BOT, TOTAL = "BOT", "TOTAL"
 #: a stored manual measurement older than this counts 0
 MANUAL_MAX_AGE_S = 180.0
 #: how many attested ids are read; the rest are listed as rejected
 MANUAL_MAX_ORDERS = 25
+#: with the venue indicator on: attested + found ids read in all
+AUTO_MANUAL_MAX_ORDERS = 100
 LIMIT_PREFIX = "PORTFOLIO_DRAWDOWN_LIMIT"
 
 
@@ -169,6 +194,40 @@ def attested_order_ids(env: Optional[Mapping[str, str]] = None) -> List[str]:
         if p and p not in out:
             out.append(p)
     return out
+
+
+def iso_epoch(raw: Any) -> Optional[float]:
+    """An ISO-8601 instant WITH a zone (or Z) as epoch seconds, else None."""
+    import datetime as _dt
+    s = str(raw or "").strip().replace("Z", "+00:00").replace("z", "+00:00")
+    try:
+        t = _dt.datetime.fromisoformat(s)
+    except ValueError:
+        return None
+    return None if t.tzinfo is None else t.timestamp()
+
+
+def auto_manual_config(env: Optional[Mapping[str, str]] = None
+                       ) -> Dict[str, Any]:
+    """{"state": OFF} | {"state": "ON", "since_epoch", "since_utc"} |
+    {"state": "INVALID", "why"}.
+
+    OFF when neither variable is set, or the switch is "0". ON only for
+    exactly "1" with a readable SINCE instant (zone required). Anything
+    else is INVALID, which refuses while the split is ON."""
+    e = os.environ if env is None else env
+    raw = str(e.get(AUTO_MANUAL_ENV) or "").strip()
+    since = str(e.get(AUTO_MANUAL_SINCE_ENV) or "").strip()
+    if raw == "0" or (not raw and not since):
+        return {"state": OFF}
+    if raw and raw != "1":
+        return {"state": "INVALID", "why": "AUTO_MANUAL_SWITCH_UNREADABLE"}
+    if not raw or not since:
+        return {"state": "INVALID", "why": "AUTO_MANUAL_HALF_CONFIGURED"}
+    t = iso_epoch(since)
+    if t is None:
+        return {"state": "INVALID", "why": "AUTO_MANUAL_SINCE_UNREADABLE"}
+    return {"state": "ON", "since_epoch": t, "since_utc": since}
 
 
 def order_tail(order_id: Any) -> str:
@@ -268,6 +327,8 @@ def manual_commitment(measurement: Optional[Mapping[str, Any]],
         return out
     out["rejected"] = [dict(r) for r in (measurement.get("rejected") or ())
                        if isinstance(r, Mapping)]
+    if isinstance(measurement.get("discovery"), Mapping):
+        out["discovery"] = dict(measurement["discovery"])
     try:
         age = float(now) - float(measurement.get("t"))
     except (TypeError, ValueError):
@@ -477,7 +538,10 @@ SPLIT_LABELS = (
     "credited and each is counted as a possible full win ($1 a contract), "
     "which can only OVERSTATE the bot figure -- attest the missing order "
     "(for example the sell), or remove the ids and correct " + ANCHOR_ENV
-    + " by the documented deposit/withdrawal path. Not-manual or "
+    + " by the documented deposit/withdrawal path. With " + AUTO_MANUAL_ENV
+    + "=1 ids are also found from the activity feed's own manual "
+    "indicator (trades at or after " + AUTO_MANUAL_SINCE_ENV + "); a row "
+    "whose indicator is unreadable is bot. Not-manual or "
     "unreadable orders count 0. A reading older than "
     + str(int(MANUAL_MAX_AGE_S)) + "s: nothing is taken off the bot "
     "figure; gains and worst cases still count.")
@@ -501,8 +565,13 @@ def manual_unaccounted(manual: Any,
     refused until every attested id is either measured or stated by the
     venue itself not to be manual. The reason does not start with the
     limit prefix, so every reader treats it as the publisher refusing.
-    With no attested ids there is nothing to account for."""
-    if not attested_order_ids(env):
+    With no attested ids, and the venue-indicator mode off, there is
+    nothing to account for. That mode half-configured or unreadable is a
+    refusal: a split someone tried to configure must not silently change."""
+    auto = auto_manual_config(env)
+    if auto.get("state") not in (OFF, "ON"):
+        return "PORTFOLIO_MANUAL_%s" % auto.get("why")
+    if not attested_order_ids(env) and auto.get("state") != "ON":
         return None
     if manual is None:
         return "PORTFOLIO_MANUAL_ORDERS_NOT_MEASURED"
@@ -599,6 +668,13 @@ def report(value: Optional[D], cfg: Optional[Dict[str, Any]] = None, *,
             "counted_zero_because": (m.get("why") if isinstance(
                 manual, Mapping) else (None if manual is not None
                                        else "MANUAL_NOT_MEASURED"))}
+        auto = auto_manual_config()
+        blk["manual_identification"] = {
+            "attested_ids": len(attested_order_ids()),
+            "by_venue_indicator": auto.get("state"),
+            "since_utc": auto.get("since_utc"), "why": auto.get("why"),
+            "discovery": (dict(m["discovery"]) if isinstance(
+                m.get("discovery"), Mapping) else None)}
         blk["labels"] = SPLIT_LABELS
         out["split"] = blk
     out["refusal"] = refusal(value, c, split=s, manual=manual)
