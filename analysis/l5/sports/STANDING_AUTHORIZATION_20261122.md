@@ -2005,3 +2005,31 @@ additional changes without authorization."
 
 Set `PMUS_RN1_PIN` to empty and `PMUS_TWO_SIDED_SUBMISSION_LOCK=1` (this
 ends the 21:15–23:15 window early; no trading). Everything else unchanged.
+
+### 70a. Stage 1 prepared for final authorization (22:30 UTC)
+
+Owner, typed: "Prepare Stage 1 for the next available UTC quarter-hour start.
+Use sports release 5cbca4d3c with PMUS_TWO_SIDED_MAX_MARKETS=2 and
+PMUS_RN1_PIN empty. Six-hour continuous campaign with automatic event
+rotation and a two-hour completions-only grace. ... Confirm the exact UTC
+start and end times, current account reconciliation, watchdog health and
+eligible market opportunities for final authorization. ... No capital
+increase or live authorization is granted by this message."
+
+**Checks:**
+- **Watchdog** (22:28): sweeping every 20 s, cancel enabled, no halt;
+  0 open, foreign or overdue orders; all three registries OK.
+- **Venue reconcile** (22:24): no positions, no orders, no mismatch.
+- **Cash** 311.8635, explained.
+- **Account risk:** ok. Day −24.81 (halt $50); lifetime −62.31 (ceiling
+  $75, room 12.69); drawdown 0.5467 of $20.
+- **Bot** (22:27): websocket up, loop not stalled, no latch, audit fresh,
+  rewards refresh on, lock `locked`.
+
+**Opportunities at 22:21:** one positive, `aec-atp-lucsil-diedur-2026-11-25`
+(ATP singles, live, +5.33/h theoretical). The other five estimated were
+negative. The second slot fills only when another market's estimate turns
+positive.
+
+**Proposed window:** 23:00–05:00 UTC 27 Nov, grace to 07:00. If the
+authorization arrives after 22:55, the next quarter hour after it.
