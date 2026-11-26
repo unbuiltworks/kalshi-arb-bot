@@ -2033,3 +2033,17 @@ positive.
 
 **Proposed window:** 23:00–05:00 UTC 27 Nov, grace to 07:00. If the
 authorization arrives after 22:55, the next quarter hour after it.
+
+## 71. Sports 31ddf1b06 and Stage 1 authorized — 26 Nov 2026, about 23:12 UTC
+
+Owner, typed: "I explicitly authorize deployment of sports release
+31ddf1b06341d15712fe655693acd028a5077e9f to pmus-spring-l5-probe with the
+submission lock held at 1. After successful boot, fresh venue
+reconciliation and watchdog verification, authorize Stage 1 with
+PMUS_TWO_SIDED_MAX_MARKETS=2 and PMUS_RN1_PIN empty. Opening window:
+November 26 at 23:30 UTC through November 27 at 05:30 UTC. If verification
+finishes late, use the next UTC quarter-hour for a six-hour campaign.
+Confirm the exact effective window before arming. Two-hour
+completions-only grace. All existing capital, exposure and loss limits
+unchanged. Maker-only. Esports off. Crypto unchanged and disarmed. ...
+Report hourly ..."
