@@ -258,6 +258,51 @@ def edge(*, side: str, px: Any, tick: Any, fair_yes: Any,
             "adds_exposure": bool(adds_exposure), "step": str(t)}
 
 
+def marginal_ev(*, fair: Any, px: Any, qty: Any, fill_rate: Any,
+                fee: Any = ZERO, gate_adverse: Any = ZERO,
+                adverse: Any = ZERO, risk: Any = ZERO,
+                reward_usd_per_hour: Any = 0.0,
+                rebate: Any = ZERO) -> Dict[str, Any]:
+    """Combined marginal net value of ONE proposed opening/extension bid,
+    in dollars per resting hour. Pure. (Engine flag PMUS_RN1_MARGINAL_EV.)
+
+      per contract filled = fair - px - fee - adverse - risk + rebate
+      trading per hour    = fill_rate x qty x per contract filled
+      total per hour      = trading per hour + incremental reward per hour
+
+    `adverse` is the adverse-selection cost charged per filled contract;
+    `gate_adverse` is the marginal test's own allowance. A bid whose
+    trade edge at the marginal test's allowance (fair - px - fee -
+    gate_adverse) is negative is refused whatever its reward: rewards never
+    rescue a negative trade edge. Otherwise it is accepted only when the
+    TOTAL is positive, so a zero standalone reward does not reject an
+    attractive bid and a positive reward cannot carry a negative total.
+    `rebate` is per contract; callers pass 0 unless a rebate is sourced."""
+    f, p, q = D(str(fair)), D(str(px)), D(str(qty))
+    fe, adv, gadv = D(str(fee)), D(str(adverse)), D(str(gate_adverse))
+    rk, rb = D(str(risk)), D(str(rebate))
+    trade_edge = f - p - fe - gadv
+    per_contract = f - p - fe - adv - rk + rb
+    fills_h = float(fill_rate) * float(q)
+    trading_h = fills_h * float(per_contract)
+    rew_h = max(0.0, float(reward_usd_per_hour or 0.0))
+    total = trading_h + rew_h
+    why = None
+    if trade_edge < ZERO:
+        why = "trade_edge_negative"
+    elif total <= 0.0:
+        why = "marginal_ev_not_positive"
+    return {"ok": why is None, "why": why, "fair": str(f), "px": str(p),
+            "qty": str(q), "fee": str(fe), "adverse": str(adv),
+            "risk": str(rk), "rebate": str(rb),
+            "trade_edge": str(trade_edge),
+            "per_contract": str(per_contract),
+            "fills_per_hour": round(fills_h, 6),
+            "trading_usd_per_hour": round(trading_h, 6),
+            "reward_usd_per_hour": round(rew_h, 6),
+            "ev_usd_per_hour": round(total, 6)}
+
+
 def quotes(*, yes_bid: Any, yes_ask: Any, tick: Any,
            pos: Mapping[str, Any], cost: Mapping[str, Any],
            last_fill_t: Optional[Mapping[str, Any]] = None,
@@ -485,6 +530,34 @@ def quotes(*, yes_bid: Any, yes_ask: Any, tick: Any,
                     None)
         if drop is None or all(out[sd]["role"] != "complete" for sd in live):
             drop = max(live, key=lambda sd: out[sd]["px"])
+            ev = out.get("edge") or {}
+            if k.get("ev_priority") and all(
+                    (ev.get(sd) or {}).get("net_edge") is not None
+                    for sd in live):
+                # ECONOMIC PRIORITY (engine PMUS_RN1_MARGINAL_EV): drop the
+                # bid worth less per fill (net edge x size), not the dearer
+                # one; ties keep the old rule.
+                val = {sd: D(ev[sd]["net_edge"]) * out[sd]["qty"]
+                       for sd in live}
+                lo = min(val.values())
+                low = [sd for sd in live if val[sd] == lo]
+                if len(low) == 1:
+                    drop = low[0]
+        if k.get("fit_pair_cap"):
+            # SIZE DOWN BEFORE DROPPING (engine PMUS_RN1_FIT_ALL_LEVELS):
+            # the dropped bid is first tried at each smaller whole size
+            # down to the venue minimum; the cap itself is unchanged.
+            def _over() -> bool:
+                return spent + sum(out[sd]["px"] * out[sd]["qty"]
+                                   for sd in live) > mcap
+            q0 = out[drop]["qty"]
+            while _over() and out[drop]["qty"] - ONE >= mq:
+                out[drop]["qty"] -= ONE
+            if not _over():
+                if out[drop]["qty"] != q0:
+                    out[drop]["why"] = "per_market_cap_sized"
+                return out
+            out[drop]["qty"] = q0
         out[drop] = None
         out["why_" + drop] = "per_market_cap"
     return out

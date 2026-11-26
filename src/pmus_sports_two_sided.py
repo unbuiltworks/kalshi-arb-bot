@@ -1494,6 +1494,50 @@ RN1_NET_OWN_LAG_S = float(os.getenv("PMUS_RN1_NET_OWN_LAG_S", "5") or 5)
 # cap, lock), they are cancelled as before. Completions are unaffected.
 # 0 = off (cancel at once, as before).
 RN1_NET_HOLD_S = float(os.getenv("PMUS_RN1_NET_HOLD_S", "0") or 0)
+# MARGINAL NET EV PER BID (external review of 1b496656c, findings 1, 2, 4).
+# The market-level net estimate (RN1_NET_RANK) stops every opening and
+# extension in a market whose estimated reward does not exceed a fixed
+# expected fill loss, even where a bid is cheap against the international
+# fair value; and a market-level positive estimate lets through a bid that
+# adds no reward and loses on its fills. With PMUS_RN1_MARGINAL_EV=1 every
+# opening/extension target AND every deeper ladder level is judged on its
+# own (src/pmus_rn1_replica.marginal_ev), per resting hour:
+#   fills/h x (fair - px - maker fee - adverse - concentration risk)
+#   + incremental THEORETICAL reward of this order (same-snapshot marginal
+#     ladder score, credited only when the day's projection clears the
+#     venue's minimum payout, then x RANK_REWARD_HAIRCUT)
+#   + rebates: none (no rebate is sourced; 0)
+#   fills/h      = qty x RN1_FILL_RATE (touch / behind), per competition
+#   adverse      = the larger of the marginal test's allowance
+#                  (ADVERSE_TICKS) and RN1_FILL_LOSS for the placement
+#   fair, risk   = exactly as the marginal test (RN1.edge) computes them;
+#                  each deeper level counts the levels above it as filled
+# A bid is kept only when that total is positive AND its trade edge at the
+# marginal test's own allowance is not negative (rewards never rescue a
+# negative trade edge). Without a fair value (marginal test off, or none
+# fresh) nothing is evaluated and the controller behaves exactly as before.
+# Where capital is short, the campaign cap removes the target of lowest
+# marginal EV first instead of the dearest (finding 2). A market whose
+# market-level estimate is not positive keeps quoting the bids that pass
+# on their own; only when none passes is it blocked "net_not_positive"
+# (hold, release and cancellation then exactly as before), so neither the
+# hold expiry nor the unqualified release cancels bids that pass (finding
+# 4). Completions are not evaluated here. Every cap, lock, halt and gate is
+# unchanged; this can only remove bids from, or stop the market-level block
+# removing bids from, the plan the existing rules produce. 0 = off.
+RN1_MARGINAL_EV = os.getenv("PMUS_RN1_MARGINAL_EV", "0").strip() == "1"
+RN1_MARGINAL_BOOK_TTL_S = float(os.getenv(
+    "PMUS_RN1_MARGINAL_BOOK_TTL_S", "60") or 60)
+# FIT EVERY LEVEL (review finding 3). PMUS_RN1_FIT_QTY sizes level 0 down to
+# the per-market caps only, and ladder levels only while it is on; the
+# campaign caps and the two-bid per-market cap drop a whole bid, and the
+# first deeper level that does not fit ends its side's ladder. With
+# PMUS_RN1_FIT_ALL_LEVELS=1 every one of those is first tried at each
+# smaller whole size down to the venue minimum, and a level that does not
+# fit at the minimum is skipped rather than ending the ladder (a deeper,
+# cheaper level may still fit). No cap changes. 0 = off.
+RN1_FIT_ALL_LEVELS = os.getenv("PMUS_RN1_FIT_ALL_LEVELS",
+                               "0").strip() == "1"
 
 
 def _comp_rates(name: str, default: str) -> Dict[str, float]:
@@ -5193,7 +5237,7 @@ class Engine:
 
     def rn1_ladder(self, slug: str, mk: Dict[str, Any],
                    want: Mapping[str, Any], tick: Any,
-                   clip: Any = None) -> list:
+                   clip: Any = None, min_qty: Any = 1) -> list:
         """Deeper bids behind each side's target (see RN1_LADDER_LEVELS):
         [{"side","px","qty","role","level"}]. A level is added only while
         this market's worst case with EVERY planned bid filled stays inside
@@ -5242,7 +5286,13 @@ class Engine:
                         other["unmatched"] + c["unmatched"] >
                         D(str(RN1.TOTAL_UNMATCHED_USD)) + tol)
                 lq = qty
-                if RN1.FIT_QTY:
+                if RN1_FIT_ALL_LEVELS:
+                    mq = max(D(1), D(str(min_qty)))
+                    while lq - 1 >= mq and not _fits(lq):
+                        lq -= 1
+                    if lq < mq or not _fits(lq):
+                        continue        # a deeper, cheaper level may fit
+                elif RN1.FIT_QTY:
                     while lq > 1 and not _fits(lq):
                         lq -= 1
                 if not _fits(lq):
@@ -5252,7 +5302,8 @@ class Engine:
         return out
 
     def rn1_campaign_caps(self, slug: str, mk: Dict[str, Any],
-                          want: Dict[str, Any], q: Dict[str, Any]) -> None:
+                          want: Dict[str, Any], q: Dict[str, Any],
+                          min_qty: Any = 1) -> None:
         """Owner 2026-11-22: $16 total spend and $6 unmatched across the
         campaign, counting filled inventory AND resting commitments. Drops
         opening/extension targets (dearest first) until this market's plan
@@ -5274,6 +5325,33 @@ class Engine:
             if not opt:
                 return
             drop = max(opt, key=lambda sd: want[sd]["px"] * want[sd]["qty"])
+            if RN1_MARGINAL_EV and len(opt) > 1 and \
+                    all(want[sd].get("mev") for sd in opt):
+                # ECONOMIC PRIORITY (RN1_MARGINAL_EV): among the targets
+                # whose removal alone brings the plan inside both campaign
+                # caps, the one of lowest marginal net EV goes, not the
+                # dearest. When no single removal fits (the dearest is
+                # usually the binding one) the dearest-first rule stays.
+                def _fits_without(sd_: str) -> bool:
+                    r_ = [(s2, t2["px"], t2["qty"], t2["role"] == "complete")
+                          for s2, t2 in want.items()
+                          if t2 is not None and s2 != sd_]
+                    c2 = RN1.committed(mk["pos"], mk["cost"], r_)
+                    return other["spend"] + c2["spend"] <= \
+                        RN1.TOTAL_SPEND_USD and other["unmatched"] + \
+                        c2["unmatched"] <= RN1.TOTAL_UNMATCHED_USD
+                fix = [sd for sd in opt if _fits_without(sd)]
+                if len(fix) > 1:
+                    drop = min(fix, key=lambda sd: (
+                        want[sd]["mev"]["ev_usd_per_hour"],
+                        -(want[sd]["px"] * want[sd]["qty"])))
+            mq = max(D(1), D(str(min_qty)))
+            if RN1_FIT_ALL_LEVELS and D(str(want[drop]["qty"])) - 1 >= mq:
+                # size down by one whole contract and test again
+                want[drop] = dict(want[drop],
+                                  qty=D(str(want[drop]["qty"])) - 1)
+                q["why_" + drop] = over + "_sized"
+                continue
             want[drop] = None
             q["why_" + drop] = over
 
@@ -5482,18 +5560,15 @@ class Engine:
                                      "quoting resumes after the re-check")
         self.b.save()
 
-    def _rn1_reward_estimate(self, slug: str, mk: Dict[str, Any],
-                             per: Mapping[str, Any], tick: D) -> None:
-        """THEORETICAL reward rate of this market's CURRENT resting legs
-        under the venue's published scoring rule, kept in `rn1_reward_est`
-        (one public book read per REWARD_WALK_CHECK_S, or when the legs
-        change). Its own key: the reward-first path's state is untouched."""
-        # Count all mature owned resting levels, not only the nearest bid.
-        # Young orders are omitted until the next measurement; the public
-        # book may not yet contain them.
-        now = time.time()
+    def _rn1_mature_own(self, mk: Mapping[str, Any], now: float
+                        ) -> Dict[str, Dict[D, D]]:
+        """{side: {px: qty left}} of this market's own open orders old
+        enough (RN1_NET_OWN_LAG_S) to be in the public book.
+        Count all mature owned resting levels, not only the nearest bid.
+        Young orders are omitted until the next measurement; the public
+        book may not yet contain them."""
         owned = set(self.b.d.get("own_order_ids", []))
-        levels = {"YES": {}, "NO": {}}
+        levels: Dict[str, Dict[D, D]] = {"YES": {}, "NO": {}}
         for oid, o in (mk.get("orders") or {}).items():
             side = o.get("side")
             if (oid not in owned or not o.get("open") or side not in levels
@@ -5505,6 +5580,139 @@ class Engine:
             left = D(o["qty"]) - D(o.get("filled", "0"))
             if left > 0:
                 levels[side][px] = levels[side].get(px, D(0)) + left
+        return levels
+
+    @staticmethod
+    def _rn1_visible_own(book: Mapping[str, Any],
+                         levels: Mapping[str, Mapping[D, D]], tick: Any
+                         ) -> tuple:
+        """(yes, no) [(contract px, qty)] of our own levels, each capped
+        at the size the public book shows at that price."""
+        from src import pmus_sports_rewards as R
+        bids, asks = R.book_sides(book)
+
+        def visible_levels(side, public):
+            visible: Dict[int, float] = {}
+            for p, q in public:
+                k = round(float(p) / float(tick))
+                visible[k] = visible.get(k, 0.0) + float(q)
+            result = []
+            for p, q in levels[side].items():
+                price = float(p) if side == "YES" else 1.0 - float(p)
+                amount = min(float(q), visible.get(
+                    round(price / float(tick)), 0.0))
+                if amount > 0:
+                    result.append((float(p), amount))
+            return result
+        return visible_levels("YES", bids), visible_levels("NO", asks)
+
+    def rn1_marginal_ev(self, slug: str, mk: Dict[str, Any],
+                        bbo: Mapping[str, Any], tick: D,
+                        qcfg: Mapping[str, Any], cands: list,
+                        planned: list) -> Optional[list]:
+        """See RN1_MARGINAL_EV. `cands`: the opening/extension bids to judge,
+        each {"side","px","qty","role"}, level order per side (level 0
+        first). `planned`: every bid this market would rest (cands and any
+        completion), for the incremental reward. Returns one
+        RN1.marginal_ev result per candidate, or None when there is no fair
+        value to judge against (the caller then changes nothing)."""
+        if not qcfg.get("edge_gate") or qcfg.get("fair_yes") is None:
+            return None
+        t = D(str(tick))
+        pos = {s_: D(str(mk["pos"][s_])) for s_ in ("YES", "NO")}
+        clip = D(str(qcfg.get("qty", RN1.QTY)))
+        touch = {"YES": D(str(bbo["bid"])), "NO": ONE - D(str(bbo["ask"]))}
+        adv_cfg = qcfg.get("adverse_ticks")
+        # reward: credited only when the day's projection qualifies
+        inc = (getattr(self, "_rn1_inc", {}) or {}).get(slug) or {}
+        per = self.rn1_reward(slug) if inc.get("why") == "qualifies" \
+            else None
+        book, own_y, own_n = None, [], []
+        rw_err = None
+        if per:
+            try:
+                cache = getattr(self, "_mev_book", None)
+                if cache is None:
+                    cache = self._mev_book = {}
+                hit = cache.get(slug)
+                if hit and time.monotonic() - hit[0] < \
+                        RN1_MARGINAL_BOOK_TTL_S:
+                    book = hit[1]
+                else:
+                    book = (self._reward_get()(
+                        f"/v1/markets/{slug}/book") or {}
+                    ).get("marketData") or {}
+                    cache[slug] = (time.monotonic(), book)
+                own_y, own_n = self._rn1_visible_own(
+                    book, self._rn1_mature_own(mk, time.time()), t)
+            except Exception as exc:                  # noqa: BLE001
+                book, rw_err = None, "book_error:%s" % type(exc).__name__
+        from src import pmus_sports_rewards as RW
+        out = []
+        ahead = {"YES": D(0), "NO": D(0)}
+        for x in planned:            # a completion fills before what is behind
+            if x.get("role") == "complete" and x["side"] in ahead:
+                ahead[x["side"]] += D(str(x["qty"]))
+        for c in cands:
+            side, px, qty = c["side"], D(str(c["px"])), D(str(c["qty"]))
+            other = "NO" if side == "YES" else "YES"
+            held = max(D(0), pos[side] + ahead[side] - pos[other])
+            clips = int((held / clip).to_integral_value(
+                rounding="ROUND_CEILING")) if clip > 0 else 0
+            adv = adv_cfg.get(c["role"], adv_cfg.get("default")) \
+                if isinstance(adv_cfg, Mapping) else adv_cfg
+            fy = qcfg.get("fair_yes_lo" if side == "YES" else "fair_yes_hi",
+                          qcfg["fair_yes"])
+            if fy is None:
+                fy = qcfg["fair_yes"]
+            ev = RN1.edge(side=side, px=px, tick=t, fair_yes=fy,
+                          adds_exposure=True, unpaired_clips=clips,
+                          fee_rate=RN1.MAKER_FEE_RATE, adverse_ticks=adv,
+                          risk_step_ticks=qcfg.get("risk_step_ticks"),
+                          incentive_ticks=0)
+            if ev.get("why") == "no_fair":
+                out.append({"ok": False, "why": "no_fair"})
+                ahead[side] += qty
+                continue
+            depth = max(0, int(((touch[side] - px) / t).to_integral_value(
+                rounding="ROUND_HALF_UP")))
+            loss = D(str(rn1_fill_param(RN1_FILL_LOSS, depth, slug)))
+            rew, why_r = 0.0, rw_err or ("no_qualifying_reward"
+                                          if not per else None)
+            if per and book is not None:
+                try:
+                    rest = [x for x in planned if x is not c]
+                    m = RW.marginal_ladder_reward(
+                        book, per,
+                        [(float(x["px"]), float(x["qty"])) for x in rest
+                         if x["side"] == "YES"],
+                        [(float(x["px"]), float(x["qty"])) for x in rest
+                         if x["side"] == "NO"],
+                        float(t), own_y, own_n, side, float(px), float(qty))
+                    rew = max(0.0, float(m["incremental_reward_usd_per_hour"])
+                              ) * max(0.0, min(1.0, RANK_REWARD_HAIRCUT))
+                except Exception as exc:              # noqa: BLE001
+                    rew, why_r = 0.0, "reward_error:%s" % type(exc).__name__
+            r = RN1.marginal_ev(
+                fair=ev["fair"], px=px, qty=qty,
+                fill_rate=rn1_fill_param(RN1_FILL_RATE, depth, slug),
+                fee=ev["fee"], gate_adverse=ev["adverse"],
+                adverse=max(D(ev["adverse"]), loss), risk=ev["risk"],
+                reward_usd_per_hour=rew, rebate=D(0))
+            r.update(side=side, depth=depth, level=c.get("level", 0),
+                     reward_why=why_r)
+            out.append(r)
+            ahead[side] += qty
+        return out
+
+    def _rn1_reward_estimate(self, slug: str, mk: Dict[str, Any],
+                             per: Mapping[str, Any], tick: D) -> None:
+        """THEORETICAL reward rate of this market's CURRENT resting legs
+        under the venue's published scoring rule, kept in `rn1_reward_est`
+        (one public book read per REWARD_WALK_CHECK_S, or when the legs
+        change). Its own key: the reward-first path's state is untouched."""
+        now = time.time()
+        levels = self._rn1_mature_own(mk, now)
         key = {side: [[str(p), str(q)] for p, q in sorted(lv.items())]
                for side, lv in levels.items() if lv}
         est = mk.get("rn1_reward_est")
@@ -5518,22 +5726,7 @@ class Engine:
         from src import pmus_sports_rewards as R
         book = (self._reward_get()(f"/v1/markets/{slug}/book") or {}
                 ).get("marketData") or {}
-        bids, asks = R.book_sides(book)
-        def visible_levels(side, public):
-            visible = {}
-            for p, q in public:
-                k = round(float(p) / float(tick))
-                visible[k] = visible.get(k, 0.0) + float(q)
-            result = []
-            for p, q in levels[side].items():
-                price = float(p) if side == "YES" else 1.0 - float(p)
-                amount = min(float(q), visible.get(
-                    round(price / float(tick)), 0.0))
-                if amount > 0:
-                    result.append((float(p), amount))
-            return result
-        y = visible_levels("YES", bids)
-        n = visible_levels("NO", asks)
+        y, n = self._rn1_visible_own(book, levels, tick)
         r = R.ladder_quote_estimate(book, per, y, n, float(tick), y, n)
         mk["rn1_reward_est"] = {"t": time.time(), "legs": key,
                                 "share": r.get("share"),
@@ -5773,6 +5966,7 @@ class Engine:
             new_block = "vol_pause"
         if not new_block and self.rn1_market_slots_full(slug, mk):
             new_block = "max_markets"
+        net_neg = False
         if not new_block and RN1_NET_RANK and \
                 not self.rn1_quote_qualifies(slug, mk):
             # no opening or extension while the fresh estimate (re-priced
@@ -5780,8 +5974,17 @@ class Engine:
             # go on. LIVE 25 Nov 23:45: markets carried over from before
             # the window quoted for up to RELEASE_UNQUALIFIED_S at a
             # negative estimate, and one filled.
-            new_block = "net_not_positive"
+            # With RN1_MARGINAL_EV the block is decided below, per bid.
+            if RN1_MARGINAL_EV:
+                net_neg = True
+            else:
+                new_block = "net_not_positive"
         qcfg = dict(self.rn1_quote_cfg(slug, mk, tick))
+        if RN1_MARGINAL_EV:
+            qcfg["ev_priority"] = True
+        if RN1_FIT_ALL_LEVELS:
+            qcfg["fit_qty"] = True
+            qcfg["fit_pair_cap"] = True
         join_why = self.rn1_join_touch(slug, mk, bbo, tick, rng, now)
         if join_why is None:
             qcfg["depth_ticks"] = 0
@@ -5839,9 +6042,71 @@ class Engine:
                     tg = None
             want[side] = tg
         self._gap_hold(slug, mk, q, want, bbo, new_block, now)
-        self.rn1_campaign_caps(slug, mk, want, q)
+        mev_on = RN1_MARGINAL_EV and not new_block
+        mev_pass = False
+        if mev_on:
+            # ECONOMIC PRIORITY for the campaign caps (finding 2)
+            lv0 = [dict(tg, side=sd) for sd, tg in want.items()
+                   if tg is not None and tg["role"] != "complete"]
+            got = self.rn1_marginal_ev(
+                slug, mk, bbo, tick, qcfg, lv0,
+                lv0 + [dict(tg, side=sd) for sd, tg in want.items()
+                       if tg is not None and tg["role"] == "complete"])
+            for c_, r_ in zip(lv0, got or ()):
+                want[c_["side"]] = dict(want[c_["side"]], mev=r_)
+        self.rn1_campaign_caps(slug, mk, want, q, min_qty=spec["min_qty"])
         ladder = self.rn1_ladder(slug, mk, want, tick,
-                                 clip=qcfg.get("qty", RN1.QTY))
+                                 clip=qcfg.get("qty", RN1.QTY),
+                                 min_qty=spec["min_qty"])
+        mev_log = None
+        if mev_on:
+            # MARGINAL NET EV PER BID (finding 1): level-0 targets and every
+            # deeper level, each against everything else planned
+            lv0 = [dict(tg, side=sd, level=0) for sd, tg in want.items()
+                   if tg is not None and tg["role"] != "complete"
+                   and not tg.get("kept") and not tg.get("held")]
+            cands = lv0 + [l_ for l_ in ladder
+                           if l_.get("role") != "complete"]
+            judged = {c_["side"] for c_ in lv0}
+            planned = lv0 + [dict(tg, side=sd) for sd, tg in want.items()
+                             if tg is not None and sd not in judged] + \
+                list(ladder)
+            got = self.rn1_marginal_ev(slug, mk, bbo, tick, qcfg, cands,
+                                       planned)
+            if got is None:
+                if net_neg:
+                    new_block = "net_not_positive"   # exactly as before
+            else:
+                mev_log = []
+                drop_ids = set()
+                for c_, r_ in zip(cands, got):
+                    mev_log.append({"side": c_["side"],
+                                    "level": c_.get("level", 0),
+                                    "px": str(c_["px"]),
+                                    "qty": str(c_["qty"]),
+                                    "ok": r_.get("ok"), "why": r_.get("why"),
+                                    "ev_usd_per_hour":
+                                        r_.get("ev_usd_per_hour"),
+                                    "reward_usd_per_hour":
+                                        r_.get("reward_usd_per_hour")})
+                    if not r_.get("ok"):
+                        drop_ids.add(id(c_))
+                        if c_.get("level", 0) == 0:
+                            want[c_["side"]] = None
+                            q["why_" + c_["side"]] = \
+                                "marginal_ev:" + str(r_.get("why"))
+                ladder = [l_ for l_ in ladder if id(l_) not in drop_ids]
+                mev_pass = any(
+                    tg is not None and tg["role"] != "complete"
+                    for tg in want.values()) or any(
+                    l_.get("role") != "complete" for l_ in ladder)
+                if net_neg and not mev_pass:
+                    new_block = "net_not_positive"
+            if new_block:
+                for sd in ("YES", "NO"):
+                    if want.get(sd) is not None and \
+                            want[sd]["role"] != "complete":
+                        want[sd] = None
         if new_block:
             # A block stops every opening and extension. The levels behind
             # a completing bid are openings (see rn1_ladder), so they stop
@@ -5871,6 +6136,7 @@ class Engine:
                         for l_ in ladder] or None,
                 extend_ev=q.get("extend_ev"),
                 edge=q.get("edge"),
+                marginal_ev=mev_log,
                 fair=(getattr(self, "_rn1_fair", {}) or {}).get(slug),
                 incentive=(getattr(self, "_rn1_inc", {}) or {}).get(slug),
                 reward=bool(self.rn1_reward(slug)),
@@ -5944,7 +6210,7 @@ class Engine:
                     any(o.get("open") for _oid, o in stale):
                 return       # a fill raced the cancel, or still pending
         flat = y == 0 and n == 0
-        if flat and RN1_RELEASE_UNQUALIFIED_S > 0 and \
+        if flat and RN1_RELEASE_UNQUALIFIED_S > 0 and not mev_pass and \
                 new_block in (None, "net_not_positive"):
             if self.rn1_quote_qualifies(slug, mk):
                 mk.pop("unqualified_since", None)
