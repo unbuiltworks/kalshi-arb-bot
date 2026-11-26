@@ -556,6 +556,66 @@ def round_trip_from_rows(rows: List[Mapping[str, Any]], market: str
                 for f in fills)}
 
 
+def closed_manual_cashflow_candidate(rows: List[Mapping[str, Any]], market: str,
+                                     *, complete_history: bool) -> Dict[str, Any]:
+    """Read-only candidate, NOT an authorization or ledger correction.
+
+    Requires full history, explicit manual ownership, unique executions,
+    explicit fees, and independent fee-inclusive venue cost/proceeds.
+    Sale cost semantics must be validated against authenticated production
+    rows before this helper is connected to any money or risk field.
+    """
+    def refuse(reason):
+        return {"ok": False, "reason": reason}
+
+    if complete_history is not True:
+        return refuse("HISTORY_INCOMPLETE")
+    net = {"UP": D(0), "DOWN": D(0)}
+    total = D(0)
+    seen = set()
+    fills = []
+    sells = False
+    for r in rows:
+        if CBA._row_market(r) != market or str(
+                r.get("kind") or r.get("type") or "").strip().lower() not in CBA.FILL_KINDS:
+            continue
+        b = CBA._payload(r)
+        ours = CBA._exec_objects(b)
+        order = ours[0].get("order") if len(ours) == 1 else None
+        if not isinstance(order, Mapping) or order.get("manualOrderIndicator") != "MANUAL_ORDER_INDICATOR_MANUAL":
+            return refuse("MANUAL_OWNERSHIP_UNPROVEN")
+        intent = _INTENTS.get(str(order.get("intent") or "").strip().upper())
+        tid = str(b.get("id") or b.get("tradeId") or "").strip()
+        vid = str(order.get("id") or "").strip()
+        q = CBA._d(CBA._first_present(ours, CBA.EXEC_QTY_KEYS))
+        p = CBA._d(CBA._first_present(ours, CBA.EXEC_PX_KEYS))
+        fee = CBA._d(CBA._first_present(ours, CBA.FEE_KEYS))
+        cost = CBA._d(b.get("cost"))
+        if (intent is None or not tid or not vid or tid in seen or
+                q is None or q <= 0 or p is None or not D(0) <= p <= D(1)
+                or fee is None or cost is None):
+            return refuse("EXECUTION_UNREADABLE")
+        side, sign = intent
+        gross = q * CBA.own_price(p, side)
+        # Candidate convention: positive cost for buys, positive net
+        # proceeds for sales. Do not guess alternate signs or fee meanings.
+        expected = gross + fee if sign > 0 else gross - fee
+        if expected < 0 or cost < 0 or abs(cost - expected) > CBA.CROSSCHECK_TOLERANCE:
+            return refuse("CASHFLOW_CROSSCHECK_FAILED")
+        cash = -cost if sign > 0 else cost
+        net[side] += sign * q
+        total += cash
+        sells = sells or sign < 0
+        seen.add(tid)
+        fills.append({"trade_id": tid, "venue_order_id": vid, "side": side,
+                      "qty": str(q), "cashflow": str(cash), "fee": str(fee)})
+    if not sells or any(net.values()):
+        return refuse("NOT_CLOSED_ROUND_TRIP")
+    return {"ok": True, "candidate_realized": str(total), "fills": fills,
+            "venue_net": {k: str(v) for k, v in net.items()},
+            "provenance": "CANDIDATE_ONLY_VENUE_CASHFLOW_CROSSCHECK"}
+
+
 def round_trip_retry(rec: Mapping[str, Any]) -> bool:
     """An exhausted market is read again for the round-trip form until that
     form has had its own bounded attempts or has ruled itself out."""
