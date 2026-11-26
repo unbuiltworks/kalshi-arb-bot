@@ -1907,3 +1907,32 @@ Sports `5cbca4d3c` deployed (deployment `77448372`, SUCCESS 21:00:31).
 
 **Result:** no ATP/WTA event with a fresh fair value qualifies. Reported
 to the owner; trading stays locked.
+
+## 69. Campaign D on ATP doubles authorized — 26 Nov 2026, about 21:05 UTC
+
+Owner's message (it included advisory text, then this line):
+"Authorized: set PMUS_RN1_EDGE_GATE=0 on pmus-spring-l5-probe and run
+Campaign D for two hours from the next quarter hour on
+aec-atpdb-alvvalflores-alvesperez-2026-11-26, provided the event remains
+active and economically eligible. Two-hour completions-only grace. All
+other settings and limits unchanged. Maker-only. Esports off. Crypto
+unchanged and disarmed. Keep PMUS_RN1_FIT_ALL_LEVELS enabled."
+
+The owner also asked for a way for marginal EV to support doubles, table
+tennis and other reward-eligible sports without an international singles
+feed, with no unvalidated fair-value substitute and no delay to live
+execution.
+
+Eligibility check: at 21:01 the market was live with YES 0.75–0.76, inside
+the 0.20–0.80 band. It was the only positive estimate (+8.47/h theoretical)
+and was SELECTED.
+
+21:06 set:
+- `PMUS_RN1_EDGE_GATE=0`;
+- `PMUS_RN1_PIN=aec-atpdb-alvvalflores-alvesperez-2026-11-26`;
+- lock `window:2026-11-26T21:15:00Z/2026-11-26T23:15:00Z` (grace 7,200 s
+  unchanged).
+
+`PMUS_RN1_MARGINAL_EV=1` and `PMUS_RN1_FIT_ALL_LEVELS=1` stay set; marginal
+EV has no fair value with the gate off, so it is inactive. Every other
+setting and limit is unchanged.
