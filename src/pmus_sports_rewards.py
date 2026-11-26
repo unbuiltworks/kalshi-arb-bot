@@ -476,3 +476,24 @@ def _combine_side_scores(b: dict, a: dict, period: Mapping[str, Any],
             "max_spread_ok": ms_ok, "mid": mid,
             "rate_usd_s": rate, "est_usd_per_hour": round(rate * 3600.0, 6),
             "est_usd_per_day": round(rate * 86400.0, 6), "label": LABEL}
+
+
+def marginal_ladder_reward(book_md: Mapping[str, Any],
+                           period: Mapping[str, Any],
+                           yes_levels: list, no_levels: list, tick: float,
+                           own_yes: list, own_no: list,
+                           side: str, price: float, quantity: float) -> dict:
+    """Incremental theoretical reward of adding one order, same snapshot.
+    Does not authorize execution or estimate fill losses."""
+    if side not in ("YES", "NO") or not (0 < price < 1) or quantity <= 0:
+        raise ValueError("invalid candidate")
+    before = ladder_quote_estimate(book_md, period, yes_levels, no_levels,
+                                   tick, own_yes, own_no)
+    y, n = list(yes_levels), list(no_levels)
+    (y if side == "YES" else n).append((price, quantity))
+    after = ladder_quote_estimate(book_md, period, y, n, tick, own_yes, own_no)
+    delta = after["rate_usd_s"] - before["rate_usd_s"]
+    return {"before": before, "after": after,
+            "incremental_reward_usd_per_hour": delta * 3600,
+            "incremental_notional_usd": price * quantity,
+            "label": LABEL}
