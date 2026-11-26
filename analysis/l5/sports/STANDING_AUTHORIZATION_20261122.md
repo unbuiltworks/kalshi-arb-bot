@@ -1818,3 +1818,23 @@ effective configuration needed to enable PMUS_RN1_MARGINAL_EV and
 PMUS_RN1_FIT_ALL_LEVELS. Do not deploy or activate those changes yet.
 Campaign D must establish actual two-sided inventory accumulation,
 replenishment and capital utilization throughout the event."
+
+### 67a. Ledger cdfa68f4d deployed; day figure made unknown — not armed (18:09–18:25 UTC)
+
+- 18:09 deployed `cdfa68f4d` (deployment `ddb519fe`) after full-suite
+  parity. Lifetime is now −60.6438 and `lifetime_basis.reconciled` is
+  true. Unresolved 0; venue cash 312.2135; drawdown 0.1967; no orders.
+- **Defect:** the repair put −5.10 into `realized_unattributed`. A
+  nonzero undated residual makes `utc_day_realized_usd` unknown, which
+  fails closed, so the account-risk record refuses and the sports bot
+  cannot open.
+- Fix: code `a4bb80f87`, release candidate
+  `c111abd67e3de543c6eacb4ddc1f8345006239a5`
+  (`release/l5-pmus-live-anchor2-c111abd67`).
+  - Like the other forms, the round trip refuses
+    `SETTLED_BEFORE_THE_LAST_REBASE`.
+  - The duke-mia restatement and the residual offset are reversed once:
+    the row is restored and the record kept for audit.
+  - Expected result: residual 0, day −23.15 readable, lifetime −60.64,
+    reconciled true.
+- Not deployed; needs the owner's authorization. Sports remains locked.

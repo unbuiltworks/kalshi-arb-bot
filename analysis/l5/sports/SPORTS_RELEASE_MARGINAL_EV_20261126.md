@@ -38,15 +38,25 @@ The value per hour is:
 
 ### Prerequisites
 
-These are unchanged and already set for Campaign C:
+Already set for Campaign C:
 
 - `PMUS_TWO_SIDED_RN1=1`
 - `PMUS_RN1_NET_RANK=1`
-- `PMUS_RN1_EDGE_GATE` unset (default on), which supplies the fair value
 
-With no fresh fair value, the new logic evaluates nothing and behaviour is
-as before. Before enabling, check from the live logs that the fair value is
-present for the pinned event.
+**Correction, 18:05 UTC.** The production boot record shows the RN1 fair-value
+edge gate is **off** (`rn1_edge_gate.on: false`). The new logic needs that
+fair value, so with the gate off `PMUS_RN1_MARGINAL_EV=1` evaluates nothing
+and behaviour is unchanged.
+
+Enabling it therefore also means turning the edge gate on
+(`PMUS_RN1_EDGE_GATE=1`). With the gate's no-fair-value rule ("no bid"),
+that is a further behaviour change:
+
+- a bid needs a fresh, stable international fair value;
+- for tennis that is the ATP/WTA name match.
+
+It needs the owner's approval with the flags. Before enabling, check from
+the live logs that the fair value is present for the pinned event.
 
 ### Unchanged
 
