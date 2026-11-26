@@ -1526,6 +1526,34 @@ RN1_NET_HOLD_S = float(os.getenv("PMUS_RN1_NET_HOLD_S", "0") or 0)
 # unchanged; this can only remove bids from, or stop the market-level block
 # removing bids from, the plan the existing rules produce. 0 = off.
 RN1_MARGINAL_EV = os.getenv("PMUS_RN1_MARGINAL_EV", "0").strip() == "1"
+# MARGINAL NET EV WITHOUT A FAIR VALUE (live 26 Nov: doubles, table
+# tennis, UTR and ITF have no international feed, so RN1_MARGINAL_EV judged
+# none of their bids). With PMUS_RN1_MARGINAL_EV_NO_FAIR=1 (needs
+# PMUS_RN1_MARGINAL_EV=1) a market with no international fair value has
+# each opening/extension target and each deeper level judged on its own
+# (src/pmus_rn1_replica.marginal_ev_no_fair), per resting hour:
+#   incremental THEORETICAL reward (same-snapshot marginal ladder score,
+#     only when the day's projection clears the minimum payout, x
+#     RANK_REWARD_HAIRCUT)
+#   - fills/h x (RN1_FILL_LOSS + maker fee + concentration risk)
+#   + rebates: none (0)
+#   fills/h = qty x RN1_FILL_RATE (touch / behind), per competition; the
+#   risk charge is RN1.concentration_risk, exactly the marginal test's.
+# NO TRADE-EDGE TERM: there is no fair value and none is substituted (not
+# the venue's mid, not a model). RN1_FILL_LOSS -- the settings cost the
+# market-level net estimate charges per fill -- is the adverse-selection
+# proxy. A bid rests only if that total is positive, so with no qualifying
+# reward nothing does. A market WITH a fair value is judged by
+# RN1.marginal_ev exactly as before.
+# ONLY WITH PMUS_RN1_EDGE_GATE=0. With the marginal test on, a market with
+# no fair value gets no bid at all (RN1.quotes refuses it "no_fair"); this
+# mode never overrides that and is inert there. With the gate off it can
+# only remove bids from the plan the existing rules produce, or (as
+# RN1_MARGINAL_EV does for fair-value markets) keep the market-level
+# net_not_positive block off bids that pass on their own. Every cap, lock,
+# halt and maker-only rule is unchanged. 0 = off.
+RN1_MARGINAL_EV_NO_FAIR = os.getenv("PMUS_RN1_MARGINAL_EV_NO_FAIR",
+                                    "0").strip() == "1"
 RN1_MARGINAL_BOOK_TTL_S = float(os.getenv(
     "PMUS_RN1_MARGINAL_BOOK_TTL_S", "60") or 60)
 # FIT EVERY LEVEL (review finding 3). PMUS_RN1_FIT_QTY sizes level 0 down to
@@ -5615,9 +5643,17 @@ class Engine:
         first). `planned`: every bid this market would rest (cands and any
         completion), for the incremental reward. Returns one
         RN1.marginal_ev result per candidate, or None when there is no fair
-        value to judge against (the caller then changes nothing)."""
+        value to judge against (the caller then changes nothing) -- unless
+        RN1_MARGINAL_EV_NO_FAIR applies (marginal test off, no
+        international fair value): then each candidate is judged by
+        RN1.marginal_ev_no_fair, reward against fill cost, no trade edge."""
+        no_fair = False
         if not qcfg.get("edge_gate") or qcfg.get("fair_yes") is None:
-            return None
+            if not (RN1_MARGINAL_EV_NO_FAIR and not RN1.EDGE_GATE
+                    and not qcfg.get("edge_gate")
+                    and self.intl_fair(slug) is None):
+                return None
+            no_fair = True
         t = D(str(tick))
         pos = {s_: D(str(mk["pos"][s_])) for s_ in ("YES", "NO")}
         clip = D(str(qcfg.get("qty", RN1.QTY)))
@@ -5659,18 +5695,25 @@ class Engine:
             held = max(D(0), pos[side] + ahead[side] - pos[other])
             clips = int((held / clip).to_integral_value(
                 rounding="ROUND_CEILING")) if clip > 0 else 0
-            adv = adv_cfg.get(c["role"], adv_cfg.get("default")) \
-                if isinstance(adv_cfg, Mapping) else adv_cfg
-            fy = qcfg.get("fair_yes_lo" if side == "YES" else "fair_yes_hi",
-                          qcfg["fair_yes"])
-            if fy is None:
-                fy = qcfg["fair_yes"]
-            ev = RN1.edge(side=side, px=px, tick=t, fair_yes=fy,
-                          adds_exposure=True, unpaired_clips=clips,
-                          fee_rate=RN1.MAKER_FEE_RATE, adverse_ticks=adv,
-                          risk_step_ticks=qcfg.get("risk_step_ticks"),
-                          incentive_ticks=0)
-            if ev.get("why") == "no_fair":
+            if no_fair:
+                ev = {"risk": RN1.concentration_risk(
+                    tick=t, unpaired_clips=clips,
+                    risk_step_ticks=qcfg.get("risk_step_ticks")),
+                    "fee": RN1.fee(px, RN1.MAKER_FEE_RATE)}
+            else:
+                adv = adv_cfg.get(c["role"], adv_cfg.get("default")) \
+                    if isinstance(adv_cfg, Mapping) else adv_cfg
+                fy = qcfg.get("fair_yes_lo" if side == "YES"
+                              else "fair_yes_hi", qcfg["fair_yes"])
+                if fy is None:
+                    fy = qcfg["fair_yes"]
+                ev = RN1.edge(side=side, px=px, tick=t, fair_yes=fy,
+                              adds_exposure=True, unpaired_clips=clips,
+                              fee_rate=RN1.MAKER_FEE_RATE,
+                              adverse_ticks=adv,
+                              risk_step_ticks=qcfg.get("risk_step_ticks"),
+                              incentive_ticks=0)
+            if not no_fair and ev.get("why") == "no_fair":
                 out.append({"ok": False, "why": "no_fair"})
                 ahead[side] += qty
                 continue
@@ -5693,12 +5736,22 @@ class Engine:
                               ) * max(0.0, min(1.0, RANK_REWARD_HAIRCUT))
                 except Exception as exc:              # noqa: BLE001
                     rew, why_r = 0.0, "reward_error:%s" % type(exc).__name__
-            r = RN1.marginal_ev(
-                fair=ev["fair"], px=px, qty=qty,
-                fill_rate=rn1_fill_param(RN1_FILL_RATE, depth, slug),
-                fee=ev["fee"], gate_adverse=ev["adverse"],
-                adverse=max(D(ev["adverse"]), loss), risk=ev["risk"],
-                reward_usd_per_hour=rew, rebate=D(0))
+            if no_fair:
+                # no trade edge: there is no fair value (see
+                # RN1_MARGINAL_EV_NO_FAIR); the fill loss is the
+                # adverse-selection proxy
+                r = RN1.marginal_ev_no_fair(
+                    px=px, qty=qty,
+                    fill_rate=rn1_fill_param(RN1_FILL_RATE, depth, slug),
+                    fill_loss=loss, fee=ev["fee"], risk=ev["risk"],
+                    reward_usd_per_hour=rew, rebate=D(0))
+            else:
+                r = RN1.marginal_ev(
+                    fair=ev["fair"], px=px, qty=qty,
+                    fill_rate=rn1_fill_param(RN1_FILL_RATE, depth, slug),
+                    fee=ev["fee"], gate_adverse=ev["adverse"],
+                    adverse=max(D(ev["adverse"]), loss), risk=ev["risk"],
+                    reward_usd_per_hour=rew, rebate=D(0))
             r.update(side=side, depth=depth, level=c.get("level", 0),
                      reward_why=why_r)
             out.append(r)
@@ -6089,6 +6142,8 @@ class Engine:
                                         r_.get("ev_usd_per_hour"),
                                     "reward_usd_per_hour":
                                         r_.get("reward_usd_per_hour")})
+                    if r_.get("basis"):
+                        mev_log[-1]["basis"] = r_["basis"]
                     if not r_.get("ok"):
                         drop_ids.add(id(c_))
                         if c_.get("level", 0) == 0:
