@@ -492,16 +492,25 @@ def round_trip_from_rows(rows: List[Mapping[str, Any]], market: str
     """{"sells": bool, "ok": bool, ...}: the market's venue trades read as
     signed per-side quantities with the venue's own realized result.
 
+    THE VENUE OMITS `realizedPnl` ON A TRADE THAT REALIZES NOTHING. LIVE
+    2026-11-26: the UConn buy row carried none and the sale row carried the
+    whole -20.63 (the sports audit counts 1,203 of 1,209 trade rows without
+    it). So the trades are replayed in time order against the venue's NET
+    position (UP - DOWN, the venue nets the two outcomes): a trade that
+    only moves the net AWAY from zero opens or adds and realizes nothing,
+    and a missing figure there is 0; a trade that moves it TOWARD zero (or
+    through it) closes, and must carry the venue's figure or the form
+    refuses.
+
     `sells` False: no sale was found and the round-trip form does not apply
     (the exact forms decide). `ok` True only when every trade row is
-    readable (intent, executed shares, realizedPnl, trade id), no trade id
-    repeats, and the net position on both sides is exactly zero."""
+    readable (intent, executed shares, time, trade id), every closing trade
+    carries realizedPnl, no trade id repeats, and the net position on both
+    sides is exactly zero at the end."""
     mine = [r for r in rows if CBA._row_market(r) == market
             and str(r.get("kind") or r.get("type") or "").strip().lower()
             in CBA.FILL_KINDS]
-    fills: List[Dict[str, Any]] = []
-    net = {"UP": D(0), "DOWN": D(0)}
-    realized = D(0)
+    parsed: List[Dict[str, Any]] = []
     sells = False
     problem: Optional[str] = None
     seen: set = set()
@@ -518,39 +527,67 @@ def round_trip_from_rows(rows: List[Mapping[str, Any]], market: str
             if ours else None
         rp = CBA._d(b.get("realizedPnl")) if isinstance(b, Mapping) else None
         tid = str((b or {}).get("id") or (b or {}).get("tradeId") or "")
+        t = row_time(r)
         if problem is None:
             if side_dir is None:
                 problem = "TRADE_INTENT_UNREADABLE"
             elif qty is None or qty <= 0:
                 problem = "TRADE_QTY_UNREADABLE"
-            elif rp is None:
-                problem = "TRADE_REALIZED_PNL_UNREADABLE"
             elif not tid:
                 problem = "TRADE_ID_MISSING"
             elif tid in seen:
                 problem = "TRADE_ID_REPEATED"
+            elif t is None:
+                problem = "TRADE_TIME_UNREADABLE"
         if problem is not None:
             continue
         seen.add(tid)
-        side, sign = side_dir
-        net[side] += sign * qty
-        realized += rp
-        fills.append({
-            "trade_id": tid,
-            "venue_order_id": str((order or {}).get("id") or "") or None,
-            "intent": intent, "side": side, "qty": str(qty),
-            "realized_pnl": str(rp),
-            "manual_indicator": (order or {}).get("manualOrderIndicator")})
+        parsed.append({"t": t, "tid": tid, "side": side_dir[0],
+                       "sign": side_dir[1], "qty": qty, "rp": rp,
+                       "intent": intent,
+                       "vid": str((order or {}).get("id") or "") or None,
+                       "manual": (order or {}).get("manualOrderIndicator")})
     if not sells:
         return {"sells": False, "ok": False, "reason": "NO_SALE_FOUND"}
     if problem is not None:
         return {"sells": True, "ok": False, "reason": problem}
-    if net["UP"] != 0 or net["DOWN"] != 0:
+    parsed.sort(key=lambda f: f["t"])
+    net = {"UP": D(0), "DOWN": D(0)}
+    realized = D(0)
+    fills: List[Dict[str, Any]] = []
+    for f in parsed:
+        before = net["UP"] - net["DOWN"]
+        net[f["side"]] += f["sign"] * f["qty"]
+        after = net["UP"] - net["DOWN"]
+        opening = abs(after) > abs(before) and (before == 0 or
+                                                (after > 0) == (before > 0))
+        rp = f["rp"]
+        if rp is None:
+            if not opening:
+                return {"sells": True, "ok": False,
+                        "reason": "CLOSING_TRADE_WITHOUT_REALIZED_PNL",
+                        "trade_id": f["tid"]}
+            rp = D(0)
+        realized += rp
+        fills.append({"trade_id": f["tid"], "venue_order_id": f["vid"],
+                      "intent": f["intent"], "side": f["side"],
+                      "qty": str(f["qty"]), "realized_pnl": str(rp),
+                      "realized_pnl_on_row": f["rp"] is not None,
+                      "opening": opening, "t": f["t"].isoformat(),
+                      "manual_indicator": f["manual"]})
+    if net["UP"] < 0 or net["DOWN"] < 0:
+        return {"sells": True, "ok": False, "reason": "SOLD_MORE_THAN_BOUGHT",
+                "venue_net": {k: str(v) for k, v in net.items()}}
+    if net["UP"] - net["DOWN"] != 0:
+        # the venue NETS the two outcomes: a market is closed when its net
+        # position is zero (a YES and an equal NO held together were netted
+        # away at the venue by the closing trade, which carried the result)
         return {"sells": True, "ok": False,
                 "reason": "POSITION_OPEN_AT_SETTLEMENT",
                 "venue_net": {k: str(v) for k, v in net.items()}}
     return {"sells": True, "ok": True, "realized": str(realized),
             "fills": fills, "venue_net": {k: "0" for k in net},
+            "gross_bought": {k: str(v) for k, v in net.items()},
             "all_manual": bool(fills) and all(
                 f["manual_indicator"] == "MANUAL_ORDER_INDICATOR_MANUAL"
                 for f in fills)}

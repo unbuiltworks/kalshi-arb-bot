@@ -2714,6 +2714,66 @@ class InventoryStore:
     #: not booked
     LIFETIME_BASIS_MAX_ROWS = 3000
 
+    #: owner variable: markets the OWNER accepts at their $1/share bound
+    #: (comma-separated slugs). A row listed here stays booked at the bound
+    #: and stops counting as UNRESOLVED; nothing else about it changes.
+    ACCEPT_BOUND_ENV = "L5_ACCEPT_BOUND_MARKETS"
+
+    def unresolved_bound(self) -> Optional[Dict[str, Any]]:
+        """Settled rows still booked at the $1/share UPPER BOUND since the
+        last cash re-anchor: a figure that is NOT a measured result.
+
+        OWNER 2026-11-26: "Ensure unknown cost basis cannot become a
+        fictitious confirmed realized loss. Unresolved accounting must remain
+        explicitly unresolved and fail closed." The row's booked figure stays
+        in the totals (so nothing is hidden) but it is published here as
+        unresolved, apart from `confirmed_realized_usd`, and every reader of
+        the account-wide loss figures must REFUSE while any remains -- a loss
+        limit fed a bound is not a limit, in either direction. A row clears
+        when the venue's own fills restate it (any attestation form), or when
+        the owner lists the market in L5_ACCEPT_BOUND_MARKETS. Rows settled
+        before the re-anchor are inside the anchoring cash read and are not
+        listed. None when a row or the re-anchor cannot be read."""
+        try:
+            log = [r for r in (self.state.get("accounting_rebase_log") or [])
+                   if isinstance(r, Mapping)]
+            since = None
+            if log:
+                since = dt.datetime.fromisoformat(
+                    str(log[-1]["t"]).replace("Z", "+00:00"))
+            accepted = {t.strip() for t in
+                        (os.getenv(self.ACCEPT_BOUND_ENV) or "").split(",")
+                        if t.strip()}
+            out, total = [], D(0)
+            for mkt, row in (self.state.get("retired_markets") or {}).items():
+                if not isinstance(row, Mapping):
+                    return None
+                if row.get("pnl_provenance") != "UNKNOWN_COST_UPPER_BOUND":
+                    continue
+                at = dt.datetime.fromisoformat(
+                    str(row["t"]).replace("Z", "+00:00"))
+                if since is not None and at <= since:
+                    continue
+                if str(mkt) in accepted:
+                    continue
+                pnl = D(str(row.get("settlement_pnl") or 0))
+                if not pnl.is_finite():
+                    return None
+                total += pnl
+                out.append({"market": str(mkt), "settled_t": str(row["t"]),
+                            "booked_bound_usd": str(pnl)})
+        except (KeyError, TypeError, ValueError, InvalidOperation):
+            return None
+        realized = self.realized_today()
+        return {"count": len(out), "booked_bound_usd": str(total),
+                "confirmed_realized_usd": str(realized - total),
+                "markets": sorted(out, key=lambda r: r["settled_t"])[-20:],
+                "accepted_by_owner": sorted(accepted),
+                "labels": ("booked at the $1/share bound: NOT a measured "
+                           "result. Every account-wide loss gate refuses "
+                           "while count > 0. confirmed_realized_usd excludes "
+                           "these rows.")}
+
     def lifetime_basis(self) -> Optional[Dict[str, Any]]:
         """What the lifetime realized figure is MADE OF, for a second
         strategy that must not count its own results twice or not at all.
@@ -12175,6 +12235,12 @@ class FaithfulExecutor:
             prov.stage("SAFETY_OVERLAY",
                        {"refused": "DAY_REALIZED_UNAVAILABLE"})
             return prov.refuse("SAFETY_OVERLAY", "DAY_REALIZED_UNAVAILABLE")
+        _unres = self.store.unresolved_bound()
+        if _unres is None or int(_unres.get("count") or 0) > 0:
+            _why = ("UNRESOLVED_COST_BASIS_UNREADABLE" if _unres is None
+                    else "UNRESOLVED_COST_BASIS:%d" % int(_unres["count"]))
+            prov.stage("SAFETY_OVERLAY", {"refused": _why})
+            return prov.refuse("SAFETY_OVERLAY", _why)
         # THE SECOND MAKER SLOT, established as EVIDENCE before the gate
         # runs. `_probe_leg_pending` and `_probe_round_pending` were set by
         # the two-sided path above when it chose this leg, so the claim state

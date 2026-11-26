@@ -52,12 +52,13 @@ def trade(market, intent, qty, realized, tid, vid, *, t, manual=True,
         "id": tid, "marketSlug": market, "qty": str(qty),
         "price": {"value": "0.95", "currency": "USD"},
         "cost": {"value": cost, "currency": "USD"},
-        "realizedPnl": {"value": str(realized), "currency": "USD"},
         "isAggressor": aggressor, key_mine: mine, key_other: other,
-        "time": t}}
+        "time": t,
+        **({} if realized is None else
+           {"realizedPnl": {"value": str(realized), "currency": "USD"}})}}
 
 
-def uconn_rows(*, sell_qty="469", sell_realized="-20.63", buy_realized="0"):
+def uconn_rows(*, sell_qty="469", sell_realized="-20.63", buy_realized=None):
     # newest first, as the feed returns them
     return [
         trade(UCONN, "ORDER_INTENT_SELL_SHORT", sell_qty, sell_realized,
@@ -154,7 +155,7 @@ class TestFailClosed:
         assert D(uconn.state["retired_markets"][UCONN]["settlement_pnl"]) \
             == D("-469")
 
-    def test_a_missing_realized_pnl_keeps_the_bound(self, uconn):
+    def test_a_closing_trade_without_realized_pnl_keeps_the_bound(self, uconn):
         rows = uconn_rows()
         del rows[0]["trade"]["realizedPnl"]
         run_until_idle(uconn, Feed([rows]))
@@ -222,3 +223,64 @@ class TestOtherFormsUnchanged:
         assert rec["round_trip_final"] is True
         assert D(s.state["retired_markets"][m]["settlement_pnl"]) == D("-5")
         assert VCA.candidates(s) == []
+
+
+class TestTheVenueRowShape:
+    """LIVE 2026-11-26: the venue omits realizedPnl on a trade that realizes
+    nothing. The first deployment refused UConn with
+    TRADE_REALIZED_PNL_UNREADABLE because the BUY row carried none."""
+
+    def test_the_production_shape_is_read(self):
+        rows = uconn_rows()
+        assert "realizedPnl" not in rows[1]["trade"]       # the buy row
+        rt = VCA.round_trip_from_rows(rows, UCONN)
+        assert rt["ok"] is True and D(rt["realized"]) == D("-20.63")
+        buy = [f for f in rt["fills"] if f["intent"].startswith(
+            "ORDER_INTENT_BUY")][0]
+        assert buy["opening"] is True and buy["realized_pnl_on_row"] is False
+
+    def test_rows_are_replayed_in_time_order(self):
+        rows = list(reversed(uconn_rows()))                # oldest first
+        rt = VCA.round_trip_from_rows(rows, UCONN)
+        assert rt["ok"] is True and D(rt["realized"]) == D("-20.63")
+
+    def test_buying_the_other_outcome_closes_and_must_carry_realized(self):
+        """Long YES 10, then buy NO 10: the venue nets them, so the NO buy
+        CLOSES and must carry realizedPnl; then a sale makes `sells` True."""
+        m = UCONN
+        rows = [
+            trade(m, "ORDER_INTENT_SELL_SHORT", "0.000001", "0", "T3", "V3",
+                  t="2026-11-26T02:13:00Z"),
+            trade(m, "ORDER_INTENT_BUY_SHORT", "10", None, "T2", "V2",
+                  t="2026-11-26T02:12:00Z"),
+            trade(m, "ORDER_INTENT_BUY_LONG", "10", None, "T1", "V1",
+                  t="2026-11-26T02:11:00Z"),
+        ]
+        rt = VCA.round_trip_from_rows(rows, m)
+        assert rt["ok"] is False
+        assert rt["reason"] == "CLOSING_TRADE_WITHOUT_REALIZED_PNL"
+
+    def test_selling_more_than_bought_refuses(self):
+        rows = uconn_rows(sell_qty="500")
+        rt = VCA.round_trip_from_rows(rows, UCONN)
+        assert rt["ok"] is False and rt["reason"] == "SOLD_MORE_THAN_BOUGHT"
+
+
+def test_a_position_netted_away_by_the_other_outcome_is_closed():
+    """Long YES 10 @ 0.40, then buy NO 10: the venue nets the two and the NO
+    buy realizes the result (+0.50 here); a later sale-free market is not a
+    round trip, so a tiny sale of the remainder is added to engage it."""
+    m = UCONN
+    rows = [
+        trade(m, "ORDER_INTENT_SELL_LONG", "2", "0.10", "T3", "V3",
+              t="2026-11-26T02:13:00Z"),
+        trade(m, "ORDER_INTENT_BUY_LONG", "2", None, "T2b", "V2b",
+              t="2026-11-26T02:12:30Z"),
+        trade(m, "ORDER_INTENT_BUY_SHORT", "10", "0.50", "T2", "V2",
+              t="2026-11-26T02:12:00Z"),
+        trade(m, "ORDER_INTENT_BUY_LONG", "10", None, "T1", "V1",
+              t="2026-11-26T02:11:00Z"),
+    ]
+    rt = VCA.round_trip_from_rows(rows, m)
+    assert rt["ok"] is True
+    assert D(rt["realized"]) == D("0.60")

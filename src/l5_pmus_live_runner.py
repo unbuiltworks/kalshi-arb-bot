@@ -6838,11 +6838,20 @@ class Runner:
             return {"readable": False,
                     "reason": "RISK_READ_FAILED:%s" % type(exc).__name__}
         dr = day.get("utc_day_realized_usd")
-        ok = dr is not None and cum is not None
+        unres = self.store.unresolved_bound()
+        unres_n = None if unres is None else int(unres.get("count") or 0)
+        ok = dr is not None and cum is not None and unres_n == 0
         return {
             "readable": bool(ok),
             "reason": None if ok else (
-                day.get("reason") or "CUMULATIVE_CEILING_UNREADABLE"),
+                day.get("reason")
+                or ("UNRESOLVED_COST_BASIS_UNREADABLE" if unres_n is None
+                    else "UNRESOLVED_COST_BASIS:%d" % unres_n
+                    if unres_n else None)
+                or "CUMULATIVE_CEILING_UNREADABLE"),
+            # THE BOUND IS NOT A RESULT. Added key: what of the figures below
+            # is booked at the $1/share bound and not yet measured.
+            "unresolved_cost_basis": unres,
             "utc_day": day.get("utc_day"),
             "utc_day_realized_usd": dr,
             "daily_halt_usd": day.get("halt_usd"),
@@ -6953,8 +6962,10 @@ class Runner:
                     "halt_usd": str(self.limits.daily_realized_loss_halt_usd),
                     "room_usd": None}
         halt = self.limits.daily_realized_loss_halt_usd
+        unres = self.store.unresolved_bound()
         return {
             "utc_day": now_utc().strftime("%Y-%m-%d"),
+            "unresolved_cost_basis": unres,
             "utc_day_realized_usd": None if day is None else str(day),
             "halt_usd": str(halt),
             "would_halt": None if day is None else bool(day <= -halt),
