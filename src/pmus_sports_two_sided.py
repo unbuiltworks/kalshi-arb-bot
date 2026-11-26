@@ -129,6 +129,17 @@ OPEN_LADDER = os.getenv("PMUS_TWO_SIDED_OPEN_LADDER", "1").strip() != "0"
 # OWNER 2026-11-14 "set up the daily reward credit check": the venue's own
 # /v1/incentives/earnings (credited vs pending split) every REWARD_CHECK_S.
 REWARD_CHECK_S = float(os.getenv("PMUS_TWO_SIDED_REWARD_CHECK_S", "3600"))
+# CAMPAIGN ECONOMICS REPORT (owner 2026-11-26, default OFF; read-only,
+# logging only; see src/pmus_campaign_economics.py). After each audit round
+# (REWARD_CHECK then PILOT_PNL), at most once per ECONOMICS_MIN_S, one
+# CAMPAIGN_ECONOMICS line joins by market the pilot meter's venue-reconciled
+# trading with the venue reward rows for that market, by sport and for the
+# campaign: settled trading P&L (realized), rewards PAID (realized income,
+# separate), rewards PENDING / SKIPPED (not realized), net = settled + PAID.
+ECONOMICS_REPORT = os.getenv("PMUS_ECONOMICS_REPORT", "0").strip() == "1"
+ECONOMICS_MIN_S = float(os.getenv("PMUS_ECONOMICS_REPORT_MIN_S") or "600")
+ECONOMICS_REWARD_ROWS = int(os.getenv("PMUS_ECONOMICS_REWARD_ROWS")
+                            or "2000")
 # OWNER 2026-11-14 "close out single-side fills early": a lone leg unpaired
 # for EXIT_S is completed by TAKING the complement at its ask, but only while
 # that pair costs <= EXIT_MAX_PAIR (a small, bounded realized loss). Beyond
@@ -1494,6 +1505,29 @@ RN1_NET_OWN_LAG_S = float(os.getenv("PMUS_RN1_NET_OWN_LAG_S", "5") or 5)
 # cap, lock), they are cancelled as before. Completions are unaffected.
 # 0 = off (cancel at once, as before).
 RN1_NET_HOLD_S = float(os.getenv("PMUS_RN1_NET_HOLD_S", "0") or 0)
+# DURATION-AWARE RANKING (owner 2026-11-26, default OFF; see
+# src/pmus_duration_rank.py). A market about to end should not take a slot
+# from one with a long remaining life. With RN1_DURATION_RANK on, each
+# candidate's expected remaining quoting time (to the late cut-off) comes
+# from its competition's expected duration (PMUS_RN1_DURATION_MIN, merged
+# over conservative defaults), its scheduled start and whether the venue
+# lists it live. Then:
+#   - a candidate with a KNOWN remaining time below RN1_MIN_REMAINING_S is
+#     not a candidate (an unknown one never is excluded for that alone);
+#   - the share/net ranking (RN1_RANK_SHARE, RN1_NET_RANK) scales each
+#     positive per-hour estimate by min(remaining, horizon) / horizon;
+#   - the per-contract ranking (RN1_RANK_NET) counts the reward term only
+#     for min(remaining, horizon) instead of the whole horizon.
+# Unknown remaining time gets RN1_DURATION_UNKNOWN_FACTOR (no full-life
+# credit). Ranking only: every bid still passes every gate and cap.
+RN1_DURATION_RANK = os.getenv("PMUS_RN1_DURATION_RANK", "0").strip() == "1"
+RN1_MIN_REMAINING_S = float(os.getenv("PMUS_RN1_MIN_REMAINING_S")
+                            or "900")              # 0 = no exclusion
+RN1_DURATION_HORIZON_S = float(os.getenv("PMUS_RN1_DURATION_HORIZON_S")
+                               or "3600")
+RN1_DURATION_UNKNOWN_FACTOR = float(os.getenv(
+    "PMUS_RN1_DURATION_UNKNOWN_FACTOR") or "0.5")
+RN1_DURATION_MIN = os.getenv("PMUS_RN1_DURATION_MIN", "")
 # MARGINAL NET EV PER BID (external review of 1b496656c, findings 1, 2, 4).
 # The market-level net estimate (RN1_NET_RANK) stops every opening and
 # extension in a market whose estimated reward does not exceed a fixed
@@ -2129,6 +2163,14 @@ def safeguards_cfg() -> Dict[str, Any]:
             "one_market_per_game": True,
             "loop_stall_s": LOOP_STALL_S,
             "rn1_reward_rank": RN1_REWARD_RANK,
+            **({"rn1_duration_rank": {
+                "min_remaining_s": RN1_MIN_REMAINING_S,
+                "horizon_s": RN1_DURATION_HORIZON_S,
+                "unknown_factor": RN1_DURATION_UNKNOWN_FACTOR,
+                "table_override": RN1_DURATION_MIN}}
+               if RN1_DURATION_RANK else {}),
+            **({"economics_report": {"min_interval_s": ECONOMICS_MIN_S}}
+               if ECONOMICS_REPORT else {}),
             "rn1_reward_only": RN1_REWARD_ONLY,
             "rn1_edge_gate": {"on": RN1.EDGE_GATE,
                               "adverse_ticks": RN1.ADVERSE_TICKS,
@@ -6962,6 +7004,27 @@ class Engine:
                       "and the price is calm; one tick back otherwise")
         return why
 
+    def duration_info(self, slug: str,
+                      now: Optional[float] = None) -> Dict[str, Any]:
+        """See RN1_DURATION_RANK: expected remaining quoting time (to the
+        late cut-off) and the ranking factor it gives this candidate."""
+        from src import pmus_duration_rank as DR
+        tab = getattr(self, "_dur_table", None)
+        if tab is None or tab[0] != RN1_DURATION_MIN:
+            tab = self._dur_table = (RN1_DURATION_MIN,
+                                     DR.parse_table(RN1_DURATION_MIN))
+        states = getattr(self.v, "states", {}) or {}
+        gs = (self.b.d["markets"].get(slug) or {}).get("game_start")
+        if gs is None:
+            gs = self._game_start.get(slug)
+        rem, why = DR.remaining_s(
+            slug, time.time() if now is None else now, gs,
+            states.get(slug), slug in states, tab[1])
+        return {"remaining_s": rem, "why": why,
+                "factor": DR.factor(rem, RN1_DURATION_HORIZON_S,
+                                    RN1_DURATION_UNKNOWN_FACTOR),
+                "excluded": DR.excluded(rem, RN1_MIN_REMAINING_S)}
+
     def rank_by_reward_share(self, scored: list,
                              rn1_rw: Mapping[str, Any]) -> list:
         """See RN1_RANK_SHARE. Order: programme markets with a positive
@@ -7006,7 +7069,15 @@ class Engine:
             if not hit or nowm - hit[0] > RANK_SHARE_TTL_S:
                 return (1, -float(rn1_rw[slug]["pool_rate_usd_s"]))
             v = float(hit[1].get("per_dollar_hour") or 0.0)
+            if RN1_DURATION_RANK and v > 0:
+                v *= dur(slug)
             return (0, -v) if v > 0 else (2, 0.0)
+        _dur: Dict[str, float] = {}
+
+        def dur(slug: str) -> float:
+            if slug not in _dur:
+                _dur[slug] = float(self.duration_info(slug)["factor"])
+            return _dur[slug]
         out = sorted(scored, key=lambda r: (cls(r), r))
         if RN1_NET_RANK:
             # only markets with a fresh positive net estimate are selected
@@ -7022,7 +7093,10 @@ class Engine:
                         "per_dollar_hour": o.get("per_dollar_hour"),
                         "usd_per_hour": o.get("usd_per_hour"),
                         "capital_usd": o.get("capital_usd"),
-                        "why": o.get("why")} for s_, o in top],
+                        "why": o.get("why"),
+                        **({"duration_factor": round(dur(s_), 4)}
+                           if RN1_DURATION_RANK else {})}
+                       for s_, o in top],
                 label="THEORETICAL reward of our own quote per dollar "
                       "committed; ranking only, not a payment")
         return out
@@ -7060,6 +7134,8 @@ class Engine:
                        % type(exc).__name__}
             cache[slug] = (nowm, opp)
             rows.append((slug, opp))
+        if RN1_DURATION_RANK:
+            rows = [(s, self._duration_opp(s, o)) for s, o in rows]
         order = [s for s, _o in PH.rank(rows)]
         by = {r[2]: r for r in scored}
         top = [(s, dict(rows)[s]) for s in order[:4]]
@@ -7069,13 +7145,30 @@ class Engine:
             log("RN1_NET_RANK", candidates=len(scored),
                 first=[{"slug": s, "net": o.get("net"),
                         "trade": o.get("trade"), "reward": o.get("reward"),
-                        "why": o.get("why")} for s, o in top],
+                        "why": o.get("why"),
+                        **({"duration_factor": o.get("duration_factor")}
+                           if RN1_DURATION_RANK else {})}
+                       for s, o in top],
                 label="expected trading result plus haircut theoretical "
                       "reward, per contract; an estimate, not a payment")
         if RN1.EDGE_GATE:
             priced = {s for s, o in rows if o.get("net") is not None}
             order = [s for s in order if s in priced]
         return [by[s] for s in order]
+
+    def _duration_opp(self, slug: str, o: Mapping[str, Any]
+                      ) -> Dict[str, Any]:
+        """RN1_RANK_NET under RN1_DURATION_RANK: the reward term counts
+        only for min(remaining, horizon), i.e. it is scaled by the factor.
+        The trading term (per fill, not per hour) is unchanged; a market
+        with no ranking number keeps none. The cached estimate is not
+        modified."""
+        f = float(self.duration_info(slug)["factor"])
+        if o.get("net") is None or o.get("trade") is None:
+            return dict(o, duration_factor=round(f, 4))
+        rw = D(str(o.get("reward") or 0)) * D(str(round(f, 6)))
+        return dict(o, net=D(str(o["trade"])) + rw, reward=rw,
+                    duration_factor=round(f, 4))
 
     def guard_tracked(self) -> list:
         """Markets the international feed should follow: the active ones,
@@ -7141,6 +7234,7 @@ class Engine:
         _pin_why: Dict[str, str] = {}
         _pinned = rn1_pin() if RN1.ON else None
         _seen = set()
+        _dur_out: list = []
         for tg in targets:
             slug = tg["slug"]
             _seen.add(slug)
@@ -7174,7 +7268,25 @@ class Engine:
                     not self.open_gate(slug)["allow"]:
                 _pin_why[slug] = "competition_not_permitted"
                 continue         # would be gated at open: don't take a slot
+            if RN1_DURATION_RANK:
+                _di = self.duration_info(slug)
+                if _di["excluded"]:
+                    _pin_why[slug] = "remaining_below_min:%ds<%ds" % (
+                        int(_di["remaining_s"]), int(RN1_MIN_REMAINING_S))
+                    _dur_out.append((slug, int(_di["remaining_s"])))
+                    continue     # about to end: no slot
             scored.append((a - b, abs(b - D("0.5")), slug))
+        if RN1_DURATION_RANK:
+            _dk = json.dumps(sorted(s_ for s_, _r in _dur_out))
+            if _dk != getattr(self, "_dur_logged", None):
+                self._dur_logged = _dk
+                log("RN1_DURATION_RANK", excluded=len(_dur_out),
+                    min_remaining_s=RN1_MIN_REMAINING_S,
+                    horizon_s=RN1_DURATION_HORIZON_S,
+                    first=[{"slug": s_, "remaining_s": r_}
+                           for s_, r_ in sorted(_dur_out)[:20]],
+                    label="expected remaining quoting time below the "
+                          "minimum: not a candidate; ranking only")
         _pin_why = {k: v for k, v in _pin_why.items()
                     if _pinned and k in _pinned}
         if _pinned:
@@ -7461,6 +7573,12 @@ class Engine:
         r_ok = self.reward_check()
         a_ok = self.account_audit()
         ok = bool(r_ok) and bool(a_ok)
+        if ECONOMICS_REPORT:
+            try:
+                self.economics_report(bool(r_ok), bool(a_ok))
+            except Exception as exc:                      # noqa: BLE001
+                log("CAMPAIGN_ECONOMICS", ok=False,
+                    err=f"{type(exc).__name__}:{str(exc)[:160]}")
         if not ok:
             self._audit_incomplete = int(getattr(
                 self, "_audit_incomplete", 0)) + 1
@@ -7476,6 +7594,37 @@ class Engine:
         else:
             self._audit_incomplete = 0
         return ok
+
+    def economics_report(self, reward_ok: bool, audit_ok: bool,
+                         force: bool = False) -> Optional[Dict[str, Any]]:
+        """See ECONOMICS_REPORT. READ-ONLY: joins what the audit round just
+        read (the pilot meter, the reward rows) and logs one bounded line.
+        No trading effect; nothing here is read by any gate."""
+        from src import pmus_campaign_economics as CE
+        nowm = time.monotonic()
+        last = getattr(self, "_econ_at", None)
+        if not force and last is not None and nowm - last < ECONOMICS_MIN_S:
+            return None
+        rr = getattr(self, "_reward_rows", None)
+        if not reward_ok or rr is None or not rr[1]:
+            return None              # no reward rows read: nothing to join
+        self._econ_at = nowm
+        pilot = getattr(self, "_pilot", None)
+        pat = getattr(self, "_pilot_at", None)
+        win = self.b.d.get("campaign_window") or None
+        camp = (self.b.d.get("campaign_auth") or {}).get("active") or {}
+        until = None
+        if win and self.since is not None and \
+                float(win[0]) == float(self.since):
+            until = float(win[1])
+        r = CE.economics(pilot, rr[2], since=self.since, until=until,
+                         our_markets=list(self.b.d.get("markets") or {}),
+                         campaign_id=camp.get("id"), rows_total=rr[3])
+        log("CAMPAIGN_ECONOMICS", ok=True, reward_ok=reward_ok,
+            audit_ok=audit_ok,
+            pilot_age_s=None if pat is None else round(nowm - pat, 1),
+            reward_rows_age_s=round(nowm - rr[0], 1), **r)
+        return r
 
     def pilot_block(self) -> Optional[str]:
         """Why the pilot's accounting forbids NEW RN1 exposure, or None.
@@ -7912,11 +8061,20 @@ class Engine:
         try:
             from src import pmus_incentive_audit as IA
             with self.safety_reads():
-                e = IA.earnings(self.v.t)
+                e = IA.earnings(self.v.t, detail_max=max(
+                    50, ECONOMICS_REWARD_ROWS)) if ECONOMICS_REPORT \
+                    else IA.earnings(self.v.t)
         except Exception as exc:                          # noqa: BLE001
             log("REWARD_CHECK", ok=False,
                 err=f"{type(exc).__name__}:{str(exc)[:160]}")
             return False
+        if ECONOMICS_REPORT:
+            # the economics line reads every row; REWARD_CHECK below keeps
+            # reading the first 50 exactly as before
+            self._reward_rows = (time.monotonic(), bool(e.get("ok")),
+                                 list(e.get("rows_detail") or []),
+                                 e.get("rows"))
+            e = dict(e, rows_detail=list(e.get("rows_detail") or [])[:50])
         ours = set(self.b.d.get("markets") or {})
         mine = [r for r in (e.get("rows_detail") or [])
                 if str(r.get("marketSlug") or "") in ours]
