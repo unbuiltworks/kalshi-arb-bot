@@ -1784,3 +1784,24 @@ that is what is deployed.
 Acceptance applies through `L5_ACCEPT_BOUND_MARKETS` only after both
 markets are confirmed closed with no open position or order. It changes
 no figure.
+
+### 66a. Ledger 8cfb39d37 verified except one reconciliation defect — not armed (16:40 UTC)
+
+- 15:52 deployed `8cfb39d37`; 16:15 `L5_ACCEPT_BOUND_MARKETS` set after the
+  venue showed zero non-zero positions and no orders account-wide
+  (sports `INVENTORY_RECONCILE` 15:24; ledger live orders 0).
+- Round-trip corrections against the venue's own trade rows: UConn
+  −469.00 → −20.63; NHL veg-edm 0 → +6.56; test-cricket afg-zim −1.00 →
+  −0.21; CFB duke-mia −5.00 → +0.10. UTR gaskan-hanbra was held to
+  settlement (booked 0) and is accepted by name. Unresolved rows: 0.
+- Day −23.1524 (halt $50, not tripped). Venue cash 312.2135; drawdown
+  0.1967 against anchor 312.4102.
+- **Defect:** duke-mia settled 14 Nov, before the 16 Nov cash re-anchor,
+  which already contains its real result. Lifetime moved +5.10:
+  −55.5438 published, −60.6438 correct. `lifetime_basis.reconciled` is
+  false. The other forms refuse such rows; the round-trip form did not.
+- Fix: code `7b60b56b1`, release candidate
+  `cdfa68f4d260e21f4e0623fe5913c73296133a2b`
+  (`release/l5-pmus-live-anchor-cdfa68f4d`). The row stays restated, the
+  re-anchor residual absorbs the delta, and the existing record is repaired
+  once. Not deployed. Sports remains locked.
