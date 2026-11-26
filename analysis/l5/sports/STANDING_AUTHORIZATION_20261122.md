@@ -1838,3 +1838,18 @@ replenishment and capital utilization throughout the event."
   - Expected result: residual 0, day −23.15 readable, lifetime −60.64,
     reconciled true.
 - Not deployed; needs the owner's authorization. Sports remains locked.
+
+## 68. Ledger c111abd67, sports 5cbca4d3c with marginal EV, Campaign D (ATP/WTA) — 26 Nov 2026
+
+Owner, typed: "Authorized: deploy ledger release
+c111abd67e3de543c6eacb4ddc1f8345006239a5 to l5-pmus-live. Once account
+reconciliation and the complete authorization path pass, deploy sports
+release 5cbca4d3cf609d4ecf2af9016d91b4481ec37104 to pmus-spring-l5-probe
+with: PMUS_RN1_MARGINAL_EV=1, PMUS_RN1_FIT_ALL_LEVELS=1,
+PMUS_RN1_EDGE_GATE=1. Run Campaign D for two hours from the next quarter
+hour after verification, with a two-hour completions-only grace, on an
+ATP/WTA event with fresh international fair value. All other settings and
+limits unchanged. Maker-only. Esports off. Crypto unchanged and disarmed.
+Confirm the effective configuration and explicitly test the enabled-feature
+regression cases before arming. ... If no suitable ATP/WTA event is
+available, report immediately rather than waiting indefinitely."
