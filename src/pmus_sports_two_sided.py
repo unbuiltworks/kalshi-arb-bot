@@ -3032,7 +3032,9 @@ class Engine:
         r = R.quote_estimate(book, rp, float(y[0]) if y else None,
                              float(n[0]) if n else None, q, float(tick),
                              own_yes=float(y[1]) if y else 0.0,
-                             own_no=float(n[1]) if n else 0.0)
+                             own_no=float(n[1]) if n else 0.0,
+                             yes_qty=float(y[1]) if y else 0.0,
+                             no_qty=float(n[1]) if n else 0.0)
         est = {"t": time.time(), "legs": key, **r}
         mk["reward_est"] = est
         return est
@@ -5501,7 +5503,9 @@ class Engine:
         r = R.quote_estimate(book, per, float(y[0]) if y else None,
                              float(n[0]) if n else None, q, float(tick),
                              own_yes=float(y[1]) if y else 0.0,
-                             own_no=float(n[1]) if n else 0.0)
+                             own_no=float(n[1]) if n else 0.0,
+                             yes_qty=float(y[1]) if y else 0.0,
+                             no_qty=float(n[1]) if n else 0.0)
         mk["rn1_reward_est"] = {"t": time.time(), "legs": key,
                                 "share": r.get("share"),
                                 "est_usd_per_hour": r.get("est_usd_per_hour"),
