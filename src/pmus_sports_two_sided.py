@@ -5139,12 +5139,16 @@ class Engine:
                 # it reduces risk and its cost is already reserved; the
                 # pair-cost ceiling above is its limit
                 return None
-            # backstop for the loss stops step_market enforces (the same
-            # evaluation, no new limit): no opening/extension while the
-            # campaign loss stop or the daily loss stop is in force, by
-            # whatever path the order came; completions continue (above)
-            if self.pilot_loss_stopped():
-                return "pilot_loss_stop"
+            # LOSS STOPS, again, immediately before submission (owner
+            # 2026-11-26). The decision layer (step_market) already refuses
+            # new exposure under either stop; this backstop holds even if a
+            # path reaches place() without it. Same evaluations, no new
+            # limit: the campaign stop and its fail-closed meter checks
+            # (pilot_block) and the bot's UTC-day stop (daily_stopped).
+            # Completions returned above and are never refused here.
+            pb = self.pilot_block()
+            if pb:
+                return "campaign_loss_stop:%s" % pb
             if self.daily_stopped():
                 return "daily_loss_stop"
             if RN1_LOSS_STOP_COUNTS_RESTING and PILOT_LOSS_USD > 0:
@@ -5187,16 +5191,41 @@ class Engine:
         from src import pmus_pilot_pnl as PP
         tot = {"spend": D(0), "unmatched": D(0)}
         markets = self.b.d.get("markets") or {}
+        # in-flight or uncertain submissions in OTHER markets count from
+        # before they are sent, exactly as at-risk counts them (owner
+        # 2026-11-24: "Include outstanding and in-flight orders")
+        reserved: Dict[str, list] = {}
+        for r in self.reserved_orders():
+            if r.get("slug") != exclude:
+                reserved.setdefault(str(r.get("slug")), []).append(r)
+        seen = set()
         for s_ in PP.pilot_slugs(markets, self.since):
             mk_ = markets[s_]
             if s_ == exclude or mk_.get("settle_px") is not None:
                 continue
+            seen.add(s_)
             resting = [(o["side"], o["px"],
                         D(o["qty"]) - D(o.get("filled") or "0"),
                         is_completion_stage(o.get("stage")))
                        for o in (mk_.get("orders") or {}).values()
                        if o.get("open")]
+            resting += [(r["side"], r["px"], D(str(r["qty"])),
+                         is_completion_stage(r.get("stage")))
+                        for r in reserved.get(s_, [])]
             c = RN1.committed(mk_["pos"], mk_["cost"], resting)
+            tot["spend"] += c["spend"]
+            tot["unmatched"] += c["unmatched"]
+        for s_, rs in reserved.items():
+            if s_ in seen:
+                continue
+            mk_ = markets.get(s_) or {"pos": {"YES": "0", "NO": "0"},
+                                      "cost": {"YES": "0", "NO": "0"}}
+            if mk_.get("settle_px") is not None:
+                continue
+            c = RN1.committed(mk_["pos"], mk_["cost"],
+                              [(r["side"], r["px"], D(str(r["qty"])),
+                                is_completion_stage(r.get("stage")))
+                               for r in rs])
             tot["spend"] += c["spend"]
             tot["unmatched"] += c["unmatched"]
         return tot

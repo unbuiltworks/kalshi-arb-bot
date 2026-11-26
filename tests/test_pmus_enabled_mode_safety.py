@@ -715,13 +715,14 @@ def test_the_final_gate_refuses_openings_under_the_campaign_loss_stop(
     e.b.d["pilot_loss_stop"] = {"t": "x", "net": "-4.10"}
     for stage in ("rn1_open", "rn1_extend"):
         assert e.final_gate(SLUG, "YES", D("0.47"), D("2"), stage) == \
-            "pilot_loss_stop"
+            "campaign_loss_stop:pilot_loss_stop"
     capsys.readouterr()
     n = len(v.orders)
     e.place(SLUG, "YES", D("0.47"), D("2"), "rn1_open")
     assert len(v.orders) == n
     assert any(r.get("kind") == "place_refused_final_gate" and
-               r.get("reason") == "pilot_loss_stop" for r in _sent(capsys))
+               r.get("reason") == "campaign_loss_stop:pilot_loss_stop"
+               for r in _sent(capsys))
     mk = e.b.m(SLUG)
     mk["pos"]["YES"], mk["cost"]["YES"] = D("2"), D("0.94")
     assert e.final_gate(SLUG, "NO", D("0.47"), D("2"),
