@@ -1561,3 +1561,46 @@ Done (section 61):
   `slomyk-fasiva` YES 1.68 @ 0.50 (open) and 1.5 @ 0.50 (extend), pre-match,
   markouts +0.5 to +1.5c at 5–300 s; $1.59 unpaired.
 - Issue #251 integration comment posted.
+
+## 62. Campaign C (single event) authorized; owner's manual UConn trade — 26 Nov, about 02:15 UTC
+
+Owner, typed: "Authorized: after 02:10 UTC deploy
+1b496656c45c2b38664166a912ee518073fc781a, then single-event campaign C for
+two hours, 02:30 to 04:30 UTC 26 Nov, with FINAL TERMS plus exactly the
+changes in CAMPAIGN_C_SINGLE_EVENT_20261126.md (one market, tracking 6,
+hold 300 s, release 600 s, three ladder levels); all capital and loss
+limits unchanged; esports off; crypto unchanged and disarmed. Also I placed
+a manual $25 trade on UConn cbb. Don't let that interfere"
+
+Done:
+- 02:16 deployed `1b496656c` (deployment `86899366`, SUCCESS 02:17:45).
+  Boot: Campaign B settings; lock completions-only (B grace); latch null.
+- Watchdog 02:19: 3 open orders, all ours; nothing foreign or overdue.
+- 02:20 set `MAX_MARKETS` 1, `MAX_TRACKED` 6, `PMUS_RN1_NET_HOLD_S` 300,
+  `PMUS_RN1_RELEASE_UNQUALIFIED_S` 600, `PMUS_RN1_LADDER_LEVELS` 3, lock
+  `window:2026-11-26T02:30:00Z/2026-11-26T04:30:00Z`. All other FINAL
+  TERMS values and every capital and loss limit unchanged.
+
+Manual trade:
+- What the venue shows: `aec-cbb-duke-uconn-2026-11-25` NO (DOWN) 469
+  contracts. Ledger reconcile 02:12 shows "venue holds a market we never
+  booked", adopted, with new exposure refused on the crypto lane, which is
+  disarmed anyway.
+- Effect on the bot: the shared account figure rose to 34.45 (02:08) and
+  24.55 (02:19) against the $20 limit, so the bot refuses all new openings
+  (fail-closed).
+- Watchdog: never cancels a venue-MANUAL order; this one is filled, not
+  resting.
+- Bot: skips any market with a foreign position.
+- The plan, per the "Manual orders" option B design and the owner's
+  instruction that the trade must not interfere:
+  1. Take the exact cost from the venue activity feed (`MANUAL_FILL_STUDY`
+     / `MANUAL_ORDER_IDS` at the next hourly audit, about 02:55).
+  2. Raise `L5_PORTFOLIO_ANCHOR_USD` by exactly that cost; nothing else
+     changes.
+  3. When the market settles, lower the anchor by its proceeds.
+  4. Record every step here with the venue figures.
+- The account limit ($20), the loss stops and the daily halt are
+  unchanged. The manual position is excluded from bot P&L by order id.
+  Until the correction, the bot stays refused (no interference with
+  safety, but no campaign quoting).
