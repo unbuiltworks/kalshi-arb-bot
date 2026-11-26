@@ -292,3 +292,4 @@
 2026-11-26T00:45Z as afd8a611d plus reward-scoring corrections (dev/chatgpt-rn1-net-read-guard 16aecb0fb) and own-order book-lag guard.
 2026-11-26T01:55Z as b8693dcf4 plus full-ladder reward scoring (dev/chatgpt-rn1-ladder-score 8137a82eb) and hold-through-a-dip (off by default).
 release candidate for 9b28e6bfe (RN1 marginal EV and fit-every-level, both off by default)
+release candidate for f956b2d6a (final-gate loss stops; in-flight orders across markets)
