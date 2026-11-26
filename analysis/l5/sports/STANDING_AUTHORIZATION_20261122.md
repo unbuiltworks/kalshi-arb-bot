@@ -1509,3 +1509,27 @@ opening or extension in any market whose fresh net is not positive, flat
 or not. Such a flat market is still released; completions continue. Test
 added. Regression: 5,706 passed, the same 24 unrelated failures. Not
 deployed; resuming needs the owner's authorization with new times.
+
+## 60. Resume authorized on afd8a611d — 26 Nov, about 00:00 UTC
+
+Owner, typed: "Authorized: deploy afd8a611d650a18603ab4e833278cd806c6331f5
+locked now, then resume revised campaign B for two hours, 00:10 to 02:10
+UTC 26 Nov (or, if deployment checks are not complete, from the next
+quarter hour for two hours), with exactly the settings and limits in FINAL
+TERMS of CAMPAIGN_B_NET_20261125.md. Ledger account limit $20; campaign
+loss stop and daily halt $10; sports lane $20 unchanged; esports off; crypto
+unchanged and disarmed. Verify the corrected opening-order gate before
+arming."
+
+- 23:59 deployed `afd8a611d` (deployment `3bc08412`, SUCCESS 00:00).
+  Completions only (old window); latch null; 1 open order, ours
+  (Garcar–Borvic completion); ledger figure 6.4443 of 20, capacity
+  13.5557.
+- Gate check before arming: the net-rank tests run against the exact
+  deployed commit pass (13), including "a flat market with no positive net
+  gets no openings". The lock check comes before the net block in the
+  quoting step, so the live check is made in the first passes of the
+  window: no opening in a market whose latest `RN1_NET_PLACEMENT` net is
+  not positive.
+- 00:02 lock set to `window:2026-11-26T00:10:00Z/2026-11-26T02:10:00Z`
+  (grace 7,200 s unchanged); all other FINAL TERMS values unchanged.
