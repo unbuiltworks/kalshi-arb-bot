@@ -1953,3 +1953,41 @@ setting and limit is unchanged.
   - `reactive_pull` then cancelled the YES legs, as designed.
   - Unpaired 1.68 against the $5 per-market cap.
 - Checks scheduled at 22:15, 23:16 and 01:16.
+
+### 69b. Campaign D event settled (21:49 UTC); mid-window check 22:15
+
+`aec-atpdb-alvvalflores-alvesperez-2026-11-26` closed at 21:49 and settled
+YES = 1 at 21:50.
+
+**Fills (venue-reconciled, 7 fills, 10 contracts, $4.35 spent):**
+
+| Time | Side | Contracts | Price | Role |
+|---|---|---|---|---|
+| 21:17:45 | NO | 2 | 0.30 | opening |
+| 21:17:45 | NO | 2 | 0.28 | opening |
+| 21:17:45 | NO | 2 | 0.26 | opening |
+| 21:23:43 | YES | 1 | 0.69 | completion |
+| 21:24:02 | YES | 1 | 0.66 | completion |
+| 21:25:22 | YES | 1 | 0.63 | completion |
+| 21:30–21:35 | YES | 1 (0.65 + 0.35) | 0.69 | completion |
+
+- **Final inventory:** YES 4.00 (cost 2.67, average 0.6675); NO 6 (cost
+  1.68, average 0.28).
+- **Settled (`PILOT_PNL`):**
+  - pairs +0.21 (4 at a combined 0.9475);
+  - residual 2 NO −0.56;
+  - **net −0.35**;
+  - fees 0, rebates 0.
+- **Cash:** 312.2135 → 311.8635, explained −0.35, unexplained 0.
+- **Rewards:** none credited yet for this market. REWARD_CHECK 22:08: paid
+  122 rows / $24.09 (unchanged); pending 10 rows / $0.86.
+- **Safety:**
+  - venue reconcile ok: no positions, no orders, no foreign orders;
+  - ACCOUNT_RISK ok: day −24.81, lifetime −62.31, loss room 12.69;
+  - drawdown 0.5467 of $20.
+  - One `position_mismatch_suspected` at 21:48:57, at the moment of
+    settlement (book 2 net, venue 0), cleared by `market_closed` at
+    21:49:02. No latch.
+- **Window:** the window to 23:15 stays open, but the pin allows only the
+  settled market, so nothing more can open. No extension or repin without
+  the owner's authorization.
