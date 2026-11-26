@@ -269,6 +269,21 @@ SHADOW_EMIT_S = 60.0
 #: exists for -- so asking at the boundary reads NOT_TERMINAL every time.
 SHADOW_SETTLE_GRACE_S = 60.0
 
+def unresolved_line_of(store: Any) -> Optional[Dict[str, Any]]:
+    """`store.unresolved_bound()` behind a total wrap. Never raises; a store
+    without it, or any failure, is None -- UNKNOWN, which the account-risk
+    record treats as unreadable (fail closed)."""
+    fn = getattr(store, "unresolved_bound", None)
+    if fn is None:
+        return None
+    try:
+        return fn()
+    except BaseException as exc:                               # noqa: BLE001
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        return None
+
+
 def settle_error_class(exc: BaseException) -> str:
     """Why a settlement read failed, in terms that distinguish the cases
     that converge from the ones that do not.
@@ -6838,7 +6853,7 @@ class Runner:
             return {"readable": False,
                     "reason": "RISK_READ_FAILED:%s" % type(exc).__name__}
         dr = day.get("utc_day_realized_usd")
-        unres = self.store.unresolved_bound()
+        unres = unresolved_line_of(self.store)
         unres_n = None if unres is None else int(unres.get("count") or 0)
         ok = dr is not None and cum is not None and unres_n == 0
         return {
@@ -6962,7 +6977,7 @@ class Runner:
                     "halt_usd": str(self.limits.daily_realized_loss_halt_usd),
                     "room_usd": None}
         halt = self.limits.daily_realized_loss_halt_usd
-        unres = self.store.unresolved_bound()
+        unres = unresolved_line_of(self.store)
         return {
             "utc_day": now_utc().strftime("%Y-%m-%d"),
             "unresolved_cost_basis": unres,
