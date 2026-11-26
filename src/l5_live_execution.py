@@ -3857,7 +3857,8 @@ class InventoryStore:
                                 final: bool, count_attempt: bool = True,
                                 sibling_attempts: Optional[int] = None,
                                 round_trip_attempts: Optional[int] = None,
-                                round_trip_final: Optional[bool] = None
+                                round_trip_final: Optional[bool] = None,
+                                round_trip_reader: Optional[int] = None
                                 ) -> Dict[str, Any]:
         """Record ONE refused attestation attempt. Writes no money field.
 
@@ -3876,6 +3877,8 @@ class InventoryStore:
                 rec["round_trip_attempts"] = int(round_trip_attempts)
             if round_trip_final is not None:
                 rec["round_trip_final"] = bool(round_trip_final)
+            if round_trip_reader is not None:
+                rec["round_trip_reader"] = int(round_trip_reader)
             rows[market] = rec
             self.save()
             return dict(rec)
@@ -3887,6 +3890,8 @@ class InventoryStore:
             rec["round_trip_attempts"] = int(round_trip_attempts)
         if round_trip_final is not None:
             rec["round_trip_final"] = bool(round_trip_final)
+        if round_trip_reader is not None:
+            rec["round_trip_reader"] = int(round_trip_reader)
         rec["status"] = "UPPER_BOUND_KEPT" if final else "PENDING"
         rec["last_reason"] = str(reason)[:200]
         rec["t"] = dt.datetime.now(dt.timezone.utc).isoformat()

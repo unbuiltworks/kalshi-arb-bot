@@ -284,3 +284,52 @@ def test_a_position_netted_away_by_the_other_outcome_is_closed():
     rt = VCA.round_trip_from_rows(rows, m)
     assert rt["ok"] is True
     assert D(rt["realized"]) == D("0.60")
+
+
+class TestAttemptsAreCountedPerReader:
+    """LIVE 2026-11-26: release 086380d88's reader refused UConn three
+    times (TRADE_REALIZED_PNL_UNREADABLE) and stored the attempts as final,
+    with no reader version. Release e69e20ac7's corrected reader then never
+    read UConn again. A corrected reader must get its own attempts."""
+
+    def _exhausted_by_the_old_reader(self, s):
+        for n in range(1, VCA.MAX_ROUND_TRIP_ATTEMPTS + 1):
+            s.note_venue_cost_attempt(
+                UCONN, reason="ROUND_TRIP:TRADE_REALIZED_PNL_UNREADABLE",
+                final=True, count_attempt=False, round_trip_attempts=n,
+                round_trip_final=n >= VCA.MAX_ROUND_TRIP_ATTEMPTS)
+
+    def test_the_production_record_is_read_again_and_corrected(self, uconn):
+        self._exhausted_by_the_old_reader(uconn)
+        assert VCA.candidates(uconn) != []
+        run_until_idle(uconn, Feed([uconn_rows()]))
+        row = uconn.state["retired_markets"][UCONN]
+        assert D(row["settlement_pnl"]) == D("-20.63")
+        assert uconn.realized_today() == D("-45.9314") + D("-20.63")
+        assert VCA.candidates(uconn) == []
+
+    def test_the_current_reader_is_still_bounded(self, uconn):
+        self._exhausted_by_the_old_reader(uconn)
+        rows = uconn_rows(sell_qty="200")
+        for _ in range(6):
+            run_until_idle(uconn, Feed([rows]))
+        rec = uconn.state["venue_cost_attestation"]["markets"][UCONN]
+        assert rec["round_trip_reader"] == VCA.ROUND_TRIP_READER
+        assert rec["round_trip_attempts"] == VCA.MAX_ROUND_TRIP_ATTEMPTS
+        assert rec["round_trip_final"] is True
+        assert VCA.candidates(uconn) == []
+        assert D(uconn.state["retired_markets"][UCONN]["settlement_pnl"]) \
+            == D("-469")
+
+    def test_a_rule_out_by_the_current_reader_is_final(self, tmp_path):
+        s = LX.InventoryStore(str(tmp_path / "inv.json"))
+        m = "cpc-btc-updown-5m-2026-11-13-1610z"
+        retire(s, m, up="5", yes="0", t="2026-11-13T16:16:00+00:00")
+        for _ in range(VCA.MAX_ATTEMPTS):
+            s.note_venue_cost_attempt(m, reason="NO_VENUE_FILLS_FOUND",
+                                      final=True)
+        run_until_idle(s, Feed([[fill(m, "UP", "4", "0.08", "T-1", "V-1",
+                                      t="2026-11-13T16:11:00Z")]]))
+        rec = s.state["venue_cost_attestation"]["markets"][m]
+        assert rec["round_trip_reader"] == VCA.ROUND_TRIP_READER
+        assert VCA.candidates(s) == []
