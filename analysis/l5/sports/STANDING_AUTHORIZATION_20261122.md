@@ -1727,3 +1727,20 @@ on reconstructed P&L. "Do not increase limits or reset genuine losses."
 12:49 UTC: source of `l5-pmus-live` set to `086380d88` (the session worker
 was restarted between authorization and deployment). Sports remains
 `PMUS_TWO_SIDED_SUBMISSION_LOCK=1`.
+
+## 65. Ledger e69e20ac7 and Campaign D authorized — 26 Nov 2026
+
+Owner, typed: "Authorized: deploy ledger release
+e69e20ac71fcd084183e25c14e8f28f836abc487 to l5-pmus-live. Once the UConn
+correction, account-risk record and loss halts are verified against the
+venue, run single-event Campaign D on sports release 1b496656c with the
+Campaign C settings for two hours from the next quarter hour after
+verification, with a two-hour completions-only grace. All existing limits
+unchanged. Maker-only. Esports off. Crypto unchanged and disarmed. ...
+Separately, prepare the existing bot-versus-total account risk split ...
+Keep the bot's $20 limit unchanged. Do not activate the split or increase
+account-wide limits without separate approval. Do not delay Campaign D for
+unrelated development."
+
+Ledger source set to `e69e20ac7`. Sports remains locked until the checks
+pass.
