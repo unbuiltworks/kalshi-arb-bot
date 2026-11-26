@@ -4219,6 +4219,77 @@ class InventoryStore:
     SIBLING_LEDGER_FORM = "VENUE_FILLS_EQUAL_SIBLING_LEDGER"
     ROUND_TRIP_FORM = "VENUE_ROUND_TRIP_CLOSED_BEFORE_SETTLEMENT"
 
+    def _inside_cash_anchor(self, settled_t: Any) -> Optional[bool]:
+        """True when a row settled before the LAST cash re-anchor (so that
+        flat-account cash read already contains its real result), False
+        after it or with no re-anchor on record, None when unreadable."""
+        try:
+            log = [r for r in (self.state.get("accounting_rebase_log") or [])
+                   if isinstance(r, Mapping)]
+            if not log:
+                return False
+            last = dt.datetime.fromisoformat(
+                str(log[-1]["t"]).replace("Z", "+00:00"))
+            at = dt.datetime.fromisoformat(
+                str(settled_t).replace("Z", "+00:00"))
+            return at <= last
+        except (KeyError, TypeError, ValueError):
+            return None
+
+    def repair_round_trips_inside_cash_anchor(self) -> List[Dict[str, Any]]:
+        """ONE-TIME repair of round-trip corrections applied before the
+        verb knew about the cash re-anchor.
+
+        LIVE 2026-11-26 (release 8cfb39d37): `aec-cfb-duke-mia-2026-11-14`,
+        settled 14 Nov, was restated -5.00 -> +0.10 and the lifetime figure
+        moved +5.10, although the 16 Nov flat-account cash re-anchor already
+        contained the real result: counted twice, `lifetime_basis.reconciled`
+        False. For each such record not yet marked, the re-anchor residual
+        (`realized_unattributed`) and the legacy scalar move by -delta, so
+        the lifetime figure returns to what the cash read says; the row and
+        the attributed line keep the venue's restated result. The record is
+        marked, so this runs once, durably. Never raises.
+        """
+        done: List[Dict[str, Any]] = []
+        try:
+            changed = False
+            for rec in (self.state.get("cost_basis_corrections") or []):
+                if not isinstance(rec, Mapping):
+                    continue
+                if rec.get("kind") != "VENUE_ATTESTED_ROUND_TRIP":
+                    continue
+                if "inside_cash_anchor" in rec:
+                    continue
+                inside = self._inside_cash_anchor(rec.get("settled_at"))
+                if inside is None:
+                    continue
+                delta = finite_decimal(rec.get("delta"))
+                if delta is None:
+                    continue
+                changed = True
+                if not inside:
+                    rec["inside_cash_anchor"] = False
+                    rec["lifetime_delta"] = str(delta)
+                    continue
+                self.state["realized_unattributed"] = str(
+                    D(str(self.state.get("realized_unattributed") or 0))
+                    - delta)
+                self.state["realized_today"] = str(
+                    D(str(self.state.get("realized_today") or 0)) - delta)
+                rec["inside_cash_anchor"] = True
+                rec["lifetime_delta"] = "0"
+                rec["inside_cash_anchor_repaired_at"] = dt.datetime.now(
+                    dt.timezone.utc).isoformat()
+                done.append({"market": rec.get("market"),
+                             "lifetime_moved_usd": str(-delta)})
+            if changed:
+                self.save()
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return [{"error": type(exc).__name__}]
+        return done
+
     def attest_retired_round_trip(self, market: str, *,
                                   round_trip: Mapping[str, Any],
                                   walk: Mapping[str, Any],
@@ -4351,10 +4422,22 @@ class InventoryStore:
         row["venue_cost_attested"] = {"trade_ids": list(ids),
                                       "venue_order_ids": list(order_ids),
                                       "form": self.ROUND_TRIP_FORM}
+        inside = self._inside_cash_anchor(row.get("t"))
+        if inside is None:
+            return no("REBASE_RECORD_UNREADABLE")
         self.state["realized_attributed"] = str(
             D(str(self.state.get("realized_attributed") or 0)) + delta)
-        self.state["realized_today"] = str(
-            D(str(self.state.get("realized_today") or 0)) + delta)
+        if inside:
+            # settled before the last cash re-anchor: that flat-account cash
+            # read already contains the market's real result. The row and
+            # the attributed line are restated; the re-anchor's residual
+            # absorbs the same amount, so the lifetime figure does not move
+            # (it would otherwise count the result twice).
+            self.state["realized_unattributed"] = str(
+                D(str(self.state.get("realized_unattributed") or 0)) - delta)
+        else:
+            self.state["realized_today"] = str(
+                D(str(self.state.get("realized_today") or 0)) + delta)
         removed = [k for k in (self.state.get("leg_cost_basis_unknown") or [])
                    if str(k).rsplit("|", 1)[0] == market]
         if removed:
@@ -4381,6 +4464,8 @@ class InventoryStore:
             "fills": [dict(f) for f in fills],
             "trade_ids": list(ids), "venue_order_ids": list(order_ids),
             "unknown_basis_keys_cleared": removed,
+            "inside_cash_anchor": bool(inside),
+            "lifetime_delta": "0" if inside else str(delta),
             "origin_set": ORIGIN.MANUAL if rt.get("all_manual") else None,
             "activity_walk": {k: walk.get(k) for k in
                               ("pages", "ended", "sufficient", "by",
