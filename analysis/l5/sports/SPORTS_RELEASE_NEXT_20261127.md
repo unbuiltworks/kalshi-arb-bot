@@ -654,3 +654,14 @@ for each of its periods). Medium-high confidence.**
   because the venue spreads it over the event's actual live window. That
   biases theoretical rewards low for short matches, and the calibration
   ratio partly absorbs it.
+
+## 11. Final release candidate (tests only added; scope frozen)
+
+- **Release:** `1c1d546b6d80ccb3eb5c98bf295b7e84e8195e7a`, branch
+  `release/pmus-sports-next-1c1d546b6`.
+- **Contents:** `8e6366786` (enabled-mode safety fixture for the activation
+  config, tests only) on the accepted candidate `a17a9c978`, plus one
+  deploy-trigger line.
+- **`src/` is identical to `a17a9c978`,** so runtime behaviour is unchanged.
+- It supersedes `a17a9c978` only so the release carries its own green
+  enabled-mode safety evidence.
