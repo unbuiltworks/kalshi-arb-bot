@@ -2327,7 +2327,7 @@ the exact three-hour live authorization packet for sports release
 
 - **Locks:** the window lock engaged at 07:45:02 (`window_ended`; new exposure
   and completions both locked). `PMUS_TWO_SIDED_SUBMISSION_LOCK=1` was set
-  explicitly on the sports service at about 07:56. Watchdog at 07:51 saw 0 open
+  explicitly on the sports service. After a worker restart here it went live at 12:12 (deployment b874807c; lock state `locked`). Watchdog at 07:51 saw 0 open
   orders. Venue reconcile at 07:48 was ok with 0 positions and 0 mismatches.
 - **Stage 1 result (23:45–07:45, venue-reconciled, cash-confirmed):** realized
   net **−$5.8631**. Cash went from 311.8635 to 306.0004, with $0 unexplained.
