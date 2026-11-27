@@ -303,6 +303,55 @@ def marginal_ev(*, fair: Any, px: Any, qty: Any, fill_rate: Any,
             "ev_usd_per_hour": round(total, 6)}
 
 
+def concentration_risk(*, tick: Any, unpaired_clips: int,
+                       risk_step_ticks: Any = None) -> D:
+    """Concentration/risk charge per contract for an exposure-adding bid,
+    exactly as `edge` computes it (one step = max(tick, EDGE_UNIT_USD),
+    times RISK_STEP_TICKS, times the unpaired clips already held). Pure."""
+    t = max(D(str(tick)), EDGE_UNIT_USD)
+    return t * D(str(RISK_STEP_TICKS if risk_step_ticks is None
+                     else risk_step_ticks)) * max(0, int(unpaired_clips))
+
+
+def marginal_ev_no_fair(*, px: Any, qty: Any, fill_rate: Any,
+                        fill_loss: Any, fee: Any = ZERO, risk: Any = ZERO,
+                        reward_usd_per_hour: Any = 0.0,
+                        rebate: Any = ZERO) -> Dict[str, Any]:
+    """Marginal net value of ONE opening/extension bid in a market with NO
+    fair value, in dollars per resting hour. Pure. (Engine flag
+    PMUS_RN1_MARGINAL_EV_NO_FAIR.)
+
+      cost per contract filled = fill_loss + fee + risk - rebate
+      total per hour = reward per hour - fill_rate x qty x cost per contract
+
+    THERE IS NO TRADE-EDGE TERM: without a fair value there is nothing to
+    measure the price against, and none is invented (not the venue's own
+    mid, not a model). `fill_loss` (RN1_FILL_LOSS for the placement and
+    competition, the same settings cost the market-level net estimate
+    charges) is the adverse-selection proxy for what a fill costs. A bid is
+    accepted only when the TOTAL is positive, so only a qualifying
+    incremental reward larger than its expected fill cost carries a bid;
+    with no reward every bid is refused. `rebate` is per contract; callers
+    pass 0 unless a rebate is sourced."""
+    p, q = D(str(px)), D(str(qty))
+    fe, ls, rk, rb = (D(str(fee)), max(ZERO, D(str(fill_loss))),
+                      D(str(risk)), D(str(rebate)))
+    cost = ls + fe + rk - rb
+    fills_h = float(fill_rate) * float(q)
+    cost_h = fills_h * float(cost)
+    rew_h = max(0.0, float(reward_usd_per_hour or 0.0))
+    total = rew_h - cost_h
+    why = None if total > 0.0 else "marginal_ev_not_positive"
+    return {"ok": why is None, "why": why, "basis": "no_fair",
+            "fair": None, "px": str(p), "qty": str(q), "fee": str(fe),
+            "adverse": str(ls), "risk": str(rk), "rebate": str(rb),
+            "trade_edge": None, "per_contract": str(-cost),
+            "fills_per_hour": round(fills_h, 6),
+            "trading_usd_per_hour": round(-cost_h, 6),
+            "reward_usd_per_hour": round(rew_h, 6),
+            "ev_usd_per_hour": round(total, 6)}
+
+
 def quotes(*, yes_bid: Any, yes_ask: Any, tick: Any,
            pos: Mapping[str, Any], cost: Mapping[str, Any],
            last_fill_t: Optional[Mapping[str, Any]] = None,
