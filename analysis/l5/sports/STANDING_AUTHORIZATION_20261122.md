@@ -2587,3 +2587,25 @@ the exact three-hour live authorization packet for sports release
   - drawdown 6.18 of 20; unresolved 0; unattributed 0;
   - sibling-feed settlements CONFIRMED 5, CONTRADICTED 0.
 - **Stop conditions:** none tripped. Close-out at 18:47 sets lock `1`.
+
+## 79. Integrated hybrid release candidate prepared; not authorized — 27 Nov 2026, about 18:15 UTC
+
+- **Candidate:** `release/pmus-sports-hybrid-integrated-05f4996f6`
+  (`05f4996f68c097b8721a239d71003cc0602a92d4`), on top of the deployed
+  `a51cfdbd2`. It contains:
+  - the account/day reward qualification;
+  - ChatGPT's feasible-ladder commit `3981feabf`, integrated, plus its
+    completion on the regular path and a fix for the refused-result
+    `KeyError`;
+  - the directional allocator;
+  - adaptive pause depth and paused-market rotation.
+  All default off.
+- **Validation:**
+  - full regression failure names identical to `a51cfdbd2`;
+  - clean Docker build: 62/62 modules import, and the engine boots with
+    every flag on and the lock held.
+- **Backtest:** production pauses protect. Pause depth is not supported
+  (stays off). The allocator's sign depends on the fill model. Rewards are
+  not modelled.
+- **Not deployed or armed.** The campaign close-out at 18:47 proceeds
+  unchanged.
