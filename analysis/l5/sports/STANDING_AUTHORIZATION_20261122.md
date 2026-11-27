@@ -2072,3 +2072,55 @@ Report hourly ..."
   - `aec-atp-lucsil-diedur-2026-11-25` (ATP singles, live);
   - `aec-setkameua-hnorom-abaspa-2026-11-27` (Setka, pregame; $5 day-of
     pool).
+
+### 71b. Stage 1 hourly report, 00:50 UTC
+
+**Fills (venue-reported):**
+
+| Market | Phase | Side | Contracts | Price |
+|---|---|---|---|---|
+| `setkameua-kobvit-khaser` | pregame | YES | 1 | 0.48 |
+| `setkameua-paryur-stoole` | pregame | NO | 2 | 0.47 |
+| | | NO | 1.72 | 0.45 |
+| | | NO | 1.73 | 0.47 |
+| | | NO | 1.75 | 0.45 |
+| `atp-timleg-karpol` | live (rotated in) | YES | 2 | 0.49 |
+| | | YES | 2 | 0.48 |
+| | | NO | 1 | 0.47 |
+
+**Inventory:**
+- `kobvit-khaser`: YES 1 (cost 0.48; completion NO 0.49 resting).
+- `paryur-stoole`: NO 7.20 (about 3.31, average about 0.46).
+- `timleg-karpol`: YES 4 (1.94, average 0.485), NO 1. One pair at 0.955; residual YES 3.
+
+**Capital (heartbeat 00:50:56):**
+- resting orders $5.25; unpaired $5.25 (campaign cap $10); paired awaiting
+  settlement $0.955;
+- own exposure $7.22 against lane $20;
+- account drawdown figure 5.75 against $20 (capacity 12.80).
+
+**Active markets:** `kobvit-khaser`, `kolval-volyur` (6-bid ladder 0.43–0.50
+posted 00:49), `timleg-karpol`, `paryur-stoole`, `kuzdmy-kurole`.
+
+**Activity:**
+- 72 orders, including extensions and completions;
+- 5 reactive pulls; 223 jump pauses (cumulative);
+- 19 flat releases / 15 reselections (churn as diagnosed).
+
+**Reward-qualifying time (cumulative, pregame):** 215,065 contract-seconds
+qualifying out of 310,277 resting.
+
+**Settled:** none yet; realized $0. **Rewards:** PAID unchanged at 122 rows /
+$24.09; PENDING 10 / $0.86.
+
+**Safety:**
+- venue reconcile 00:44 ok (1 position, matches the book);
+- watchdog 00:50: 10 open orders, all ours and managed, none overdue or
+  foreign;
+- no latch, loop not stalled, audit fresh;
+- 20 HTTP 429s with one cooldown, absorbed;
+- 2 `place_refused_account_risk` for `ACCOUNT_DRAWDOWN_UNREADABLE` (failed
+  closed, transient);
+- account risk ok: day 0 (new UTC day), lifetime −60.99, loss room 14.01.
+
+No action needed.
