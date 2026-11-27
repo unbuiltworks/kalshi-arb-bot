@@ -301,3 +301,4 @@ release candidate for f185c712b (directional allocation, PMUS_RN1_DIRECTIONAL de
 release candidate for 495e139b5 (hybrid allocator v2; all flags default off; not approved, not deployed)
 release candidate for 2e7dd4bdf (integrated hybrid: qualification scope, feasible ladder, allocator, pause options; all flags default off; not approved, not deployed)
 release candidate for f4dfe9226 (integrated hybrid v2: program_period qualification, feasible ladder, allocator, pause options; all flags default off; not approved, not deployed)
+release candidate for 87e348730 (integrated hybrid v3: contract_period qualification, unknown programme terms fail closed, feasible ladder, allocator, pause options; all flags default off; not approved, not deployed)
