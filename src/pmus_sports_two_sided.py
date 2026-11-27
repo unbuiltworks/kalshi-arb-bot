@@ -6839,9 +6839,12 @@ class Engine:
             RN1_REWARD_MIN_DAY_USD
         if rn1_paid_rule():
             pf = rn1_paid_fraction()
+            per_ = self.rn1_reward(slug) if slug else None
+            pool_ok = bool(per_) and (
+                RN1_REWARD_QUAL_SCOPE not in RN1_POOL_SCOPES or
+                bool(pj.get("pool")))           # a pool scope needs its pool
             pj.update(rule="paid_fraction", paid_fraction=pf,
-                      qualifies=bool(pf) and bool(
-                          slug and self.rn1_reward(slug)))
+                      qualifies=bool(pf) and pool_ok)
         return pj
 
     def rn1_incentive(self, slug: str, mk: Optional[Dict[str, Any]] = None,

@@ -98,6 +98,8 @@ def test_unified_qualification_under_paid_fraction(e, monkeypatch):
     assert e.rn1_reward_qualifies(S, 0.01)["qualifies"]
     monkeypatch.setattr(e, "rn1_reward", lambda slug: None)
     assert not e.rn1_reward_qualifies(S, 0.01)["qualifies"]   # no pool
+    monkeypatch.setattr(e, "rn1_reward", lambda slug: {"programId": "x"})
+    assert not e.rn1_reward_qualifies(S, 0.01)["qualifies"]   # no period
 
 
 def test_no_programme_still_credits_nothing(e, monkeypatch):
@@ -128,3 +130,29 @@ def test_event_live_records_phase(e, monkeypatch):
     assert e.event_live(S) is False and M.RN1_PHASE[S] == "pregame"
     e.b.m(S)["game_start"] = time.time() - 60
     assert e.event_live(S) is True and M.RN1_PHASE[S] == "live"
+
+
+# ------------------------------------------------ end to end (enabled mode)
+from tests.test_pmus_enabled_mode_safety import en  # noqa: E402,F401
+from tests.test_pmus_sports_continuous_controller import (  # noqa: E402
+    SLUG, resting)
+
+
+def test_e2e_below_projection_rests_only_under_paid_fraction(en,
+                                                             monkeypatch):
+    """The 21:56Z case: projection under $1, so the projection rule rests
+    nothing; the paid-fraction rule credits the reward at the venue's paid
+    share and the same reward-carried bids rest, every gate unchanged."""
+    e, v, feed = en
+    feed.projected_usd_h = 0.2
+    e.step_market(SLUG)
+    assert resting(v) == []
+    monkeypatch.setattr(M, "RN1_REWARD_MIN_RULE", "paid_fraction")
+    # the real incentive (the feed stubs the projection rule)
+    monkeypatch.setattr(e, "rn1_incentive",
+                        M.Engine.rn1_incentive.__get__(e))
+    e.step_market(SLUG)
+    assert resting(v) == []                  # paid fraction unknown: none
+    M.rn1_set_paid_fraction(BY)
+    e.step_market(SLUG)
+    assert resting(v), "reward-carried bids must rest at the paid share"
