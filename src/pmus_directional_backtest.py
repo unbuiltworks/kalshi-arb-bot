@@ -176,7 +176,8 @@ class Market:
 
     def _ladder(self, want: Mapping[str, Any]) -> list:
         lv = int(self.sim["ladder_levels"])
-        if lv <= 1:
+        if lv <= 1 and not any((getattr(self, "_extra", None) or {}
+                                ).values()):
             return []
         t = self.tick
         step = int(self.sim["ladder_step_ticks"])
@@ -194,7 +195,8 @@ class Market:
             behind_c = tg["role"] == "complete"
             qty = D(str(PRODUCTION_CFG["qty"])) if behind_c else tg["qty"]
             role = "open" if behind_c else tg["role"]
-            for k in range(1, lv):
+            for k in range(1, lv + int((getattr(self, "_extra", None)
+                                        or {}).get(side, 0))):
                 px = tg["px"] - k * step * t
                 if px < D(str(PRODUCTION_CFG["px_min"])) or px <= 0:
                     break
@@ -230,11 +232,32 @@ class Market:
             self._replace({}, t)
             self.decisions["not_open"] += 1
             return
+        qc = dict(PRODUCTION_CFG)
+        extra = {"YES": 0, "NO": 0}
+        prob0 = None
+        if self.policy.get("directional") and band and band["settled"]:
+            prob0 = DA.probability(band["mid"], band["lo"], band["hi"],
+                                   source="intl")
+        if prob0 is not None:
+            t0 = {"YES": f["yes_bid"], "NO": ONE - f["yes_ask"]}
+            fl0 = {s_: D(str(self.policy.get("fill_loss_touch",
+                                             self.sim["fill_loss_touch"])))
+                   for s_ in ("YES", "NO")}
+            qc["qty_side"] = DA.size_hint(
+                prob=prob0, touch=t0, clip=qc["qty"], fill_loss=fl0,
+                prev_favoured=self.favoured, cfg=self.policy.get("cfg"),
+                max_qty=qc["qty"])
+            extra = DA.ladder_hint(prob=prob0, touch=t0, fill_loss=fl0,
+                                   prev_favoured=self.favoured,
+                                   cfg=self.policy.get("cfg"))
+            if self.policy.get("price_adds"):
+                qc["adds_priced_externally"] = True
+        self._extra = extra
         q = RN1.quotes(yes_bid=f["yes_bid"], yes_ask=f["yes_ask"], tick=tick,
                        pos=self.pos, cost=self.cost,
                        last_fill_t=self.last_fill_t, now=t,
                        min_qty=D(str(self.sim["min_qty"])),
-                       c=PRODUCTION_CFG)
+                       c=qc)
         want = {s: q.get(s) for s in ("YES", "NO")}
         # production international guard (opening/extension only)
         margin = tick * int(self.sim["guard_margin_ticks"])

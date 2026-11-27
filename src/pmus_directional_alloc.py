@@ -65,6 +65,15 @@ DEFAULTS: Dict[str, Any] = {
     # empty) passes unchanged, so both sides still open and pair; only
     # same-side additions and bids behind them are judged.
     "judge_openings": True,
+    # FAVOURED-SIDE SIZING (size_hint): the favoured side may ask for up to
+    # `up_mult` x the engine's clip when its conservative edge is at least
+    # `upsize_edge`. The engine's own caps still bound the result; 1 = off.
+    "up_mult": "1",
+    "upsize_edge": "0.03",
+    # FAVOURED-SIDE DEPTH (ladder_hint): extra ladder levels for the
+    # favoured side under the same condition; the engine's worst-case caps
+    # still decide whether each level fits. 0 = off.
+    "extra_levels": 0,
 }
 
 
@@ -79,9 +88,17 @@ def _cfg(cfg: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
 
 
 def probability(p: Any, lo: Any = None, hi: Any = None,
-                source: str = "") -> Optional[Dict[str, Any]]:
+                source: str = "", age_s: Any = None,
+                max_age_s: Any = None,
+                drift_per_s: Any = 0) -> Optional[Dict[str, Any]]:
     """A probability band, or None when it cannot be used. lo/hi default to
-    p; anything outside (0, 1) or out of order is refused (None)."""
+    p; anything outside (0, 1) or out of order is refused (None).
+
+    REFERENCE FRESHNESS: with `age_s`, a reference older than `max_age_s`
+    is refused (None), and a younger one has its band widened by
+    `drift_per_s` x age on each side (how far the probability can have moved
+    since it was read), clipped inside (0, 1). A stale fair value can
+    therefore only make a bid harder to justify, never easier."""
     try:
         p_, lo_, hi_ = _d(p), _d(p if lo is None else lo), \
             _d(p if hi is None else hi)
@@ -89,7 +106,20 @@ def probability(p: Any, lo: Any = None, hi: Any = None,
         return None
     if not (ZERO < lo_ <= p_ <= hi_ < ONE):
         return None
-    return {"p": p_, "lo": lo_, "hi": hi_, "source": source}
+    age = None
+    if age_s is not None:
+        try:
+            age = max(ZERO, _d(age_s))
+        except Exception:                                 # noqa: BLE001
+            return None
+        if max_age_s is not None and age > _d(max_age_s):
+            return None
+        w = _d(drift_per_s or 0) * age
+        eps = D("0.0001")
+        lo_ = max(eps, lo_ - w)
+        hi_ = min(ONE - eps, hi_ + w)
+    return {"p": p_, "lo": lo_, "hi": hi_, "source": source,
+            "age_s": None if age is None else str(age)}
 
 
 def fair_for(prob: Mapping[str, Any], side: str, conservative: bool = True
@@ -305,3 +335,56 @@ def allocate_ladder(*, prob: Optional[Mapping[str, Any]], ladder: Any,
         kept.append(dict(lv, qty=D(a["qty"])))
         ahead[s] += D(a["qty"])
     return kept, refused
+
+
+def _favoured_with_edge(prob, touch, fill_loss, prev_favoured, c):
+    fav = favoured(prob, touch, prev_favoured, c)
+    if fav is None or touch.get(fav) is None:
+        return None
+    fl = _d((fill_loss or {}).get(fav) or 0)
+    e = fair_for(prob, fav) - _d(touch[fav]) - fl
+    return fav if e >= _d(c["upsize_edge"]) else None
+
+
+def ladder_hint(*, prob: Optional[Mapping[str, Any]],
+                touch: Mapping[str, Any],
+                fill_loss: Optional[Mapping[str, Any]] = None,
+                prev_favoured: Optional[str] = None,
+                cfg: Optional[Mapping[str, Any]] = None) -> Dict[str, int]:
+    """Extra ladder levels per side: `extra_levels` for the favoured side
+    when its conservative edge at the touch is at least `upsize_edge`, 0
+    otherwise (and always 0 with no probability)."""
+    c = _cfg(cfg)
+    out = {"YES": 0, "NO": 0}
+    n = int(c.get("extra_levels") or 0)
+    if prob is None or n <= 0:
+        return out
+    fav = _favoured_with_edge(prob, touch, fill_loss, prev_favoured, c)
+    if fav:
+        out[fav] = n
+    return out
+
+
+def size_hint(*, prob: Optional[Mapping[str, Any]], touch: Mapping[str, Any],
+              clip: Any, fill_loss: Optional[Mapping[str, Any]] = None,
+              prev_favoured: Optional[str] = None,
+              cfg: Optional[Mapping[str, Any]] = None,
+              max_qty: Any = None) -> Dict[str, Any]:
+    """Per-side clip the engine may ASK the quoting rule for, before its
+    caps: the favoured side gets `up_mult` x clip when its conservative edge
+    at the touch is at least `upsize_edge`; every other case is the clip
+    unchanged. With no probability, or up_mult 1, nothing changes. The
+    quoting rule's residual, per-market and campaign caps still apply to the
+    result, and `allocate` still judges every contract of it."""
+    c = _cfg(cfg)
+    q = _d(clip)
+    out = {"YES": q, "NO": q}
+    if prob is None or _d(c["up_mult"]) <= ONE:
+        return out
+    fav = _favoured_with_edge(prob, touch, fill_loss, prev_favoured, c)
+    if fav:
+        up = (q * _d(c["up_mult"])).to_integral_value(rounding=ROUND_FLOOR)
+        if max_qty is not None:
+            up = min(up, _d(max_qty))   # the per-order maximum is a limit
+        out[fav] = max(q, up)
+    return out

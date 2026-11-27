@@ -13343,6 +13343,4411 @@
    }
   ]
  },
+ "touch/adds_only_extra2": {
+  "label": "THEORETICAL: recorded books, modelled fills; not realized",
+  "policy": {
+   "directional": true,
+   "cfg": {
+    "risk_aversion": "0.005",
+    "judge_openings": false,
+    "extra_levels": 2
+   }
+  },
+  "sim": {
+   "ladder_levels": 3,
+   "ladder_step_ticks": 2,
+   "guard_margin_ticks": 1,
+   "intl_max_age_s": 20.0,
+   "fair_stable_s": 10.0,
+   "fair_max_range": "0.01",
+   "latency_s": 3.0,
+   "fill": "touch",
+   "size_cap": true,
+   "reprice_ticks": 1,
+   "min_qty": "1",
+   "fill_loss_touch": "0.089",
+   "fill_loss_behind": "0.042"
+  },
+  "markets": 65,
+  "markets_traded": 22,
+  "skipped": {},
+  "fills": 100,
+  "contracts": "159.94",
+  "spend_usd": "77.46925",
+  "1_settled_trading_pnl_after_fees_usd": "-8.599249999999999999999999999",
+  "fees_usd": "0",
+  "fee_basis": "maker-only, PMUS maker fee 0",
+  "2_confirmed_maker_rebates_usd": "0",
+  "3_confirmed_liquidity_rewards_usd": "0",
+  "4_total_realized_net_usd": "0 (backtest: nothing is realized)",
+  "5_modelled_incentives_usd": "0 (no reward programme recorded for these markets; not modelled)",
+  "6_matched_pnl_usd": "5.187867424765750925483111041",
+  "6_residual_pnl_usd": "-13.78711742476575092548311104",
+  "7_peak_capital_usd": "77.46925",
+  "7_return_on_peak_capital": "-0.1110",
+  "7_capital_turnover": "1.00",
+  "per_market_mean_usd": -0.3909,
+  "per_market_se_usd": 0.2291,
+  "rows": [
+   {
+    "slug": "aec-cfb-ark-tx-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 9,
+     "guard": 5
+    }
+   },
+   {
+    "slug": "aec-cfb-byu-kan-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 248,
+     "guard": 234
+    }
+   },
+   {
+    "slug": "aec-cfb-ga-sc-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 4
+    }
+   },
+   {
+    "slug": "aec-cfb-hou-wvir-2026-11-21",
+    "settled": true,
+    "fills": 1,
+    "contracts": "2",
+    "spend": "1.260",
+    "pos": {
+     "YES": "0",
+     "NO": "2"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "NO",
+    "residual_qty": "2",
+    "residual_cost": "1.260",
+    "residual_pnl": "-1.260",
+    "trading_pnl": "-1.260",
+    "decisions": {
+     "placed": 216,
+     "guard": 259,
+     "directional_refused": 259
+    }
+   },
+   {
+    "slug": "aec-cfb-ind-wash-2026-11-21",
+    "settled": true,
+    "fills": 8,
+    "contracts": "14",
+    "spend": "6.615",
+    "pos": {
+     "YES": "7",
+     "NO": "7"
+    },
+    "matched_qty": "7",
+    "matched_pnl": "0.385000000000000000000000000",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.385000000000000000000000000",
+    "decisions": {
+     "placed": 661,
+     "guard": 805,
+     "directional_refused": 750
+    }
+   },
+   {
+    "slug": "aec-cfb-iowa-ill-2026-11-21",
+    "settled": true,
+    "fills": 2,
+    "contracts": "4",
+    "spend": "1.940",
+    "pos": {
+     "YES": "2",
+     "NO": "2"
+    },
+    "matched_qty": "2",
+    "matched_pnl": "0.060",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.060",
+    "decisions": {
+     "placed": 276,
+     "guard": 328,
+     "directional_refused": 2124
+    }
+   },
+   {
+    "slug": "aec-cfb-lsu-tenn-2026-11-21",
+    "settled": true,
+    "fills": 6,
+    "contracts": "12",
+    "spend": "5.530",
+    "pos": {
+     "YES": "6",
+     "NO": "6"
+    },
+    "matched_qty": "6",
+    "matched_pnl": "0.470000000000000000000000000",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.470000000000000000000000000",
+    "decisions": {
+     "placed": 630,
+     "guard": 996,
+     "directional_refused": 2973
+    }
+   },
+   {
+    "slug": "aec-cfb-mary-usc-2026-11-21",
+    "settled": true,
+    "fills": 1,
+    "contracts": "2",
+    "spend": "1.840",
+    "pos": {
+     "YES": "0",
+     "NO": "2"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "NO",
+    "residual_qty": "2",
+    "residual_cost": "1.840",
+    "residual_pnl": "0.160",
+    "trading_pnl": "0.160",
+    "decisions": {
+     "placed": 29,
+     "guard": 499,
+     "directional_refused": 415
+    }
+   },
+   {
+    "slug": "aec-cfb-ncst-flst-2026-11-21",
+    "settled": true,
+    "fills": 2,
+    "contracts": "4",
+    "spend": "1.940",
+    "pos": {
+     "YES": "2",
+     "NO": "2"
+    },
+    "matched_qty": "2",
+    "matched_pnl": "0.060",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.060",
+    "decisions": {
+     "placed": 717,
+     "guard": 708,
+     "directional_refused": 2340
+    }
+   },
+   {
+    "slug": "aec-cfb-ohiost-nebr-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 28,
+     "placed": 37
+    }
+   },
+   {
+    "slug": "aec-cfb-okst-arzst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 6
+    }
+   },
+   {
+    "slug": "aec-cfb-pitt-lou-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 6,
+     "guard": 35
+    }
+   },
+   {
+    "slug": "aec-cfb-rutger-pennst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 107,
+     "guard": 198
+    }
+   },
+   {
+    "slug": "aec-cfb-smu-nd-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 3
+    }
+   },
+   {
+    "slug": "aec-cfb-txam-okl-2026-11-21",
+    "settled": true,
+    "fills": 6,
+    "contracts": "12",
+    "spend": "5.460",
+    "pos": {
+     "YES": "6",
+     "NO": "6"
+    },
+    "matched_qty": "6",
+    "matched_pnl": "0.540000000000000000000000000",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.540000000000000000000000000",
+    "decisions": {
+     "placed": 363,
+     "guard": 416,
+     "directional_refused": 3158
+    }
+   },
+   {
+    "slug": "aec-cfb-txtech-bayl-2026-11-21",
+    "settled": true,
+    "fills": 8,
+    "contracts": "16",
+    "spend": "7.030",
+    "pos": {
+     "YES": "6",
+     "NO": "10"
+    },
+    "matched_qty": "6",
+    "matched_pnl": "0.202000000000000000000000000",
+    "residual_side": "NO",
+    "residual_qty": "4",
+    "residual_cost": "1.232",
+    "residual_pnl": "-1.232",
+    "trading_pnl": "-1.030000000000000000000000000",
+    "decisions": {
+     "placed": 396,
+     "guard": 393,
+     "directional_refused": 1955
+    }
+   },
+   {
+    "slug": "aec-cfb-ucla-mich-2026-11-21",
+    "settled": true,
+    "fills": 10,
+    "contracts": "20",
+    "spend": "9.650",
+    "pos": {
+     "YES": "10",
+     "NO": "10"
+    },
+    "matched_qty": "10",
+    "matched_pnl": "0.350",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.350",
+    "decisions": {
+     "placed": 377,
+     "guard": 591,
+     "directional_refused": 3752
+    }
+   },
+   {
+    "slug": "aec-cfb-uk-missr-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 212,
+     "placed": 5
+    }
+   },
+   {
+    "slug": "aec-cfb-utah-tcu-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 6
+    }
+   },
+   {
+    "slug": "aec-cfb-vtech-mia-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 17,
+     "guard": 31
+    }
+   },
+   {
+    "slug": "aec-nba-bos-sac-2026-11-21",
+    "settled": true,
+    "fills": 1,
+    "contracts": "2",
+    "spend": "1.60",
+    "pos": {
+     "YES": "2",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.00",
+    "residual_side": "YES",
+    "residual_qty": "2",
+    "residual_cost": "1.60",
+    "residual_pnl": "-1.60",
+    "trading_pnl": "-1.60",
+    "decisions": {
+     "placed": 8,
+     "guard": 14,
+     "directional_refused": 1820
+    }
+   },
+   {
+    "slug": "aec-nba-lac-dal-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 6,
+     "guard": 1981
+    }
+   },
+   {
+    "slug": "aec-nba-mem-min-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 22,
+     "guard": 596
+    }
+   },
+   {
+    "slug": "aec-nba-mil-phi-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 13,
+     "guard": 9
+    }
+   },
+   {
+    "slug": "aec-nhl-buf-fla-2026-11-21",
+    "settled": true,
+    "fills": 4,
+    "contracts": "8",
+    "spend": "3.82",
+    "pos": {
+     "YES": "4",
+     "NO": "4"
+    },
+    "matched_qty": "4",
+    "matched_pnl": "0.180",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.180",
+    "decisions": {
+     "placed": 139,
+     "guard": 341,
+     "directional_refused": 1182
+    }
+   },
+   {
+    "slug": "aec-nhl-cbj-tor-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 2316,
+     "placed": 15
+    }
+   },
+   {
+    "slug": "aec-nhl-edm-car-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 7
+    }
+   },
+   {
+    "slug": "aec-nhl-min-van-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 602,
+     "placed": 5
+    }
+   },
+   {
+    "slug": "aec-nhl-nj-stl-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 3696,
+     "placed": 70
+    }
+   },
+   {
+    "slug": "aec-nhl-nyi-det-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 59,
+     "guard": 3941
+    }
+   },
+   {
+    "slug": "aec-nhl-phi-mon-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 3010,
+     "placed": 9
+    }
+   },
+   {
+    "slug": "aec-nhl-sea-sj-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 2198,
+     "placed": 3
+    }
+   },
+   {
+    "slug": "aec-cfb-lamon-applst-2026-11-21",
+    "settled": true,
+    "fills": 2,
+    "contracts": "4",
+    "spend": "2.580",
+    "pos": {
+     "YES": "4",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "YES",
+    "residual_qty": "4",
+    "residual_cost": "2.580",
+    "residual_pnl": "-2.580",
+    "trading_pnl": "-2.580",
+    "decisions": {
+     "placed": 96,
+     "guard": 111,
+     "directional_refused": 114
+    }
+   },
+   {
+    "slug": "aec-cfb-sfl-flatl-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-arpb-txs-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-del-nmxst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 33,
+     "guard": 49
+    }
+   },
+   {
+    "slug": "aec-cfb-dxst-webst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 75,
+     "guard": 55
+    }
+   },
+   {
+    "slug": "aec-cfb-etnst-merc-2026-11-21",
+    "settled": true,
+    "fills": 4,
+    "contracts": "8",
+    "spend": "5.000",
+    "pos": {
+     "YES": "6",
+     "NO": "2"
+    },
+    "matched_qty": "2",
+    "matched_pnl": "0.060",
+    "residual_side": "YES",
+    "residual_qty": "4",
+    "residual_cost": "3.060",
+    "residual_pnl": "-3.060",
+    "trading_pnl": "-3.000",
+    "decisions": {
+     "placed": 544,
+     "guard": 454,
+     "directional_refused": 37
+    }
+   },
+   {
+    "slug": "aec-cfb-flint-kenest-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-jackst-alcst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 28,
+     "placed": 38
+    }
+   },
+   {
+    "slug": "aec-cfb-pvam-alast-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 2
+    }
+   },
+   {
+    "slug": "aec-cfb-will-jac-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-flam-bcook-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 65,
+     "guard": 131
+    }
+   },
+   {
+    "slug": "aec-cfb-old-uconn-2026-11-21",
+    "settled": true,
+    "fills": 1,
+    "contracts": "2",
+    "spend": "1.780",
+    "pos": {
+     "YES": "0",
+     "NO": "2"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "NO",
+    "residual_qty": "2",
+    "residual_cost": "1.780",
+    "residual_pnl": "0.220",
+    "trading_pnl": "0.220",
+    "decisions": {
+     "placed": 120,
+     "guard": 21,
+     "directional_refused": 599
+    }
+   },
+   {
+    "slug": "aec-cfb-yale-harv-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 307,
+     "placed": 699
+    }
+   },
+   {
+    "slug": "aec-cfb-calpol-ucdv-2026-11-21",
+    "settled": true,
+    "fills": 1,
+    "contracts": "2",
+    "spend": "1.640",
+    "pos": {
+     "YES": "2",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "YES",
+    "residual_qty": "2",
+    "residual_cost": "1.640",
+    "residual_pnl": "-1.640",
+    "trading_pnl": "-1.640",
+    "decisions": {
+     "placed": 801,
+     "guard": 564,
+     "directional_refused": 175
+    }
+   },
+   {
+    "slug": "aec-cfb-gas-troy-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-gast-marsh-2026-11-21",
+    "settled": true,
+    "fills": 7,
+    "contracts": "7.37",
+    "spend": "3.74525",
+    "pos": {
+     "YES": "4.1",
+     "NO": "3.27"
+    },
+    "matched_qty": "3.27",
+    "matched_pnl": "0.137026829268292682926829268",
+    "residual_side": "YES",
+    "residual_qty": "0.83",
+    "residual_cost": "0.6122768292682926829268292683",
+    "residual_pnl": "-0.6122768292682926829268292683",
+    "trading_pnl": "-0.4752500000000000000000000003",
+    "decisions": {
+     "guard": 297,
+     "placed": 216,
+     "directional_refused": 493
+    }
+   },
+   {
+    "slug": "aec-cfb-incar-txamc-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-ncol-narz-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 187,
+     "guard": 565
+    }
+   },
+   {
+    "slug": "aec-cfb-nill-ndkst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-portst-ewash-2026-11-21",
+    "settled": true,
+    "fills": 23,
+    "contracts": "25.07",
+    "spend": "9.73250",
+    "pos": {
+     "YES": "11.3",
+     "NO": "13.77"
+    },
+    "matched_qty": "11.3",
+    "matched_pnl": "2.543840595497458242556281773",
+    "residual_side": "NO",
+    "residual_qty": "2.47",
+    "residual_cost": "0.9763405954974582425562817719",
+    "residual_pnl": "-0.9763405954974582425562817719",
+    "trading_pnl": "1.567500000000000000000000001",
+    "decisions": {
+     "guard": 334,
+     "placed": 395,
+     "directional_refused": 789
+    }
+   },
+   {
+    "slug": "aec-cfb-sala-soumis-2026-11-21",
+    "settled": true,
+    "fills": 7,
+    "contracts": "13",
+    "spend": "5.505",
+    "pos": {
+     "YES": "5",
+     "NO": "8"
+    },
+    "matched_qty": "5",
+    "matched_pnl": "0.200",
+    "residual_side": "NO",
+    "residual_qty": "3",
+    "residual_cost": "0.705",
+    "residual_pnl": "-0.705",
+    "trading_pnl": "-0.505",
+    "decisions": {
+     "placed": 290,
+     "guard": 428,
+     "directional_refused": 616
+    }
+   },
+   {
+    "slug": "aec-cfb-tarl-nal-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 80,
+     "guard": 10
+    }
+   },
+   {
+    "slug": "aec-cfb-ausp-cark-2026-11-21",
+    "settled": true,
+    "fills": 2,
+    "contracts": "0.2",
+    "spend": "0.1450",
+    "pos": {
+     "YES": "0.2",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "YES",
+    "residual_qty": "0.2",
+    "residual_cost": "0.1450",
+    "residual_pnl": "-0.1450",
+    "trading_pnl": "-0.1450",
+    "decisions": {
+     "placed": 222,
+     "guard": 582,
+     "directional_refused": 1059
+    }
+   },
+   {
+    "slug": "aec-cfb-chs-sutah-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-utrgv-houbap-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 942,
+     "placed": 486
+    }
+   },
+   {
+    "slug": "aec-cfb-idaho-idhst-2026-11-21",
+    "settled": true,
+    "fills": 2,
+    "contracts": "0.2",
+    "spend": "0.1220",
+    "pos": {
+     "YES": "0",
+     "NO": "0.2"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "NO",
+    "residual_qty": "0.2",
+    "residual_cost": "0.1220",
+    "residual_pnl": "0.0780",
+    "trading_pnl": "0.0780",
+    "decisions": {
+     "placed": 343,
+     "guard": 971,
+     "directional_refused": 242
+    }
+   },
+   {
+    "slug": "aec-cfb-washst-txst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 905,
+     "placed": 208
+    }
+   },
+   {
+    "slug": "aec-cfb-arkst-loutch-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 2064,
+     "placed": 23
+    }
+   },
+   {
+    "slug": "aec-cfb-arz-kanst-2026-11-21",
+    "settled": true,
+    "fills": 1,
+    "contracts": "2",
+    "spend": "0.450",
+    "pos": {
+     "YES": "0",
+     "NO": "2"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "NO",
+    "residual_qty": "2",
+    "residual_cost": "0.450",
+    "residual_pnl": "-0.450",
+    "trading_pnl": "-0.450",
+    "decisions": {
+     "placed": 24,
+     "guard": 21,
+     "directional_refused": 20
+    }
+   },
+   {
+    "slug": "aec-cfb-lamar-mcnst-2026-11-21",
+    "settled": true,
+    "fills": 1,
+    "contracts": "0.1",
+    "spend": "0.0845",
+    "pos": {
+     "YES": "0.1",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "YES",
+    "residual_qty": "0.1",
+    "residual_cost": "0.0845",
+    "residual_pnl": "0.0155",
+    "trading_pnl": "0.0155",
+    "decisions": {
+     "placed": 25,
+     "guard": 9,
+     "directional_refused": 144
+    }
+   },
+   {
+    "slug": "aec-cfb-unlv-sjst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 102,
+     "guard": 54
+    }
+   },
+   {
+    "slug": "aec-cfb-colst-frest-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 3
+    }
+   },
+   {
+    "slug": "aec-cfb-stan-cah-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 8
+    }
+   }
+  ]
+ },
+ "touch/adds_only_priced": {
+  "label": "THEORETICAL: recorded books, modelled fills; not realized",
+  "policy": {
+   "directional": true,
+   "price_adds": true,
+   "cfg": {
+    "risk_aversion": "0.005",
+    "judge_openings": false
+   }
+  },
+  "sim": {
+   "ladder_levels": 3,
+   "ladder_step_ticks": 2,
+   "guard_margin_ticks": 1,
+   "intl_max_age_s": 20.0,
+   "fair_stable_s": 10.0,
+   "fair_max_range": "0.01",
+   "latency_s": 3.0,
+   "fill": "touch",
+   "size_cap": true,
+   "reprice_ticks": 1,
+   "min_qty": "1",
+   "fill_loss_touch": "0.089",
+   "fill_loss_behind": "0.042"
+  },
+  "markets": 65,
+  "markets_traded": 22,
+  "skipped": {},
+  "fills": 100,
+  "contracts": "159.94",
+  "spend_usd": "77.46925",
+  "1_settled_trading_pnl_after_fees_usd": "-8.599249999999999999999999999",
+  "fees_usd": "0",
+  "fee_basis": "maker-only, PMUS maker fee 0",
+  "2_confirmed_maker_rebates_usd": "0",
+  "3_confirmed_liquidity_rewards_usd": "0",
+  "4_total_realized_net_usd": "0 (backtest: nothing is realized)",
+  "5_modelled_incentives_usd": "0 (no reward programme recorded for these markets; not modelled)",
+  "6_matched_pnl_usd": "5.187867424765750925483111041",
+  "6_residual_pnl_usd": "-13.78711742476575092548311104",
+  "7_peak_capital_usd": "77.46925",
+  "7_return_on_peak_capital": "-0.1110",
+  "7_capital_turnover": "1.00",
+  "per_market_mean_usd": -0.3909,
+  "per_market_se_usd": 0.2291,
+  "rows": [
+   {
+    "slug": "aec-cfb-ark-tx-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 9,
+     "guard": 5
+    }
+   },
+   {
+    "slug": "aec-cfb-byu-kan-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 248,
+     "guard": 234
+    }
+   },
+   {
+    "slug": "aec-cfb-ga-sc-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 4
+    }
+   },
+   {
+    "slug": "aec-cfb-hou-wvir-2026-11-21",
+    "settled": true,
+    "fills": 1,
+    "contracts": "2",
+    "spend": "1.260",
+    "pos": {
+     "YES": "0",
+     "NO": "2"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "NO",
+    "residual_qty": "2",
+    "residual_cost": "1.260",
+    "residual_pnl": "-1.260",
+    "trading_pnl": "-1.260",
+    "decisions": {
+     "placed": 214,
+     "guard": 259,
+     "directional_refused": 259
+    }
+   },
+   {
+    "slug": "aec-cfb-ind-wash-2026-11-21",
+    "settled": true,
+    "fills": 8,
+    "contracts": "14",
+    "spend": "6.615",
+    "pos": {
+     "YES": "7",
+     "NO": "7"
+    },
+    "matched_qty": "7",
+    "matched_pnl": "0.385000000000000000000000000",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.385000000000000000000000000",
+    "decisions": {
+     "placed": 737,
+     "guard": 889,
+     "directional_refused": 1258
+    }
+   },
+   {
+    "slug": "aec-cfb-iowa-ill-2026-11-21",
+    "settled": true,
+    "fills": 2,
+    "contracts": "4",
+    "spend": "1.940",
+    "pos": {
+     "YES": "2",
+     "NO": "2"
+    },
+    "matched_qty": "2",
+    "matched_pnl": "0.060",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.060",
+    "decisions": {
+     "placed": 387,
+     "guard": 383,
+     "directional_refused": 3318
+    }
+   },
+   {
+    "slug": "aec-cfb-lsu-tenn-2026-11-21",
+    "settled": true,
+    "fills": 6,
+    "contracts": "12",
+    "spend": "5.530",
+    "pos": {
+     "YES": "6",
+     "NO": "6"
+    },
+    "matched_qty": "6",
+    "matched_pnl": "0.470000000000000000000000000",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.470000000000000000000000000",
+    "decisions": {
+     "placed": 861,
+     "guard": 1161,
+     "directional_refused": 4603
+    }
+   },
+   {
+    "slug": "aec-cfb-mary-usc-2026-11-21",
+    "settled": true,
+    "fills": 1,
+    "contracts": "2",
+    "spend": "1.840",
+    "pos": {
+     "YES": "0",
+     "NO": "2"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "NO",
+    "residual_qty": "2",
+    "residual_cost": "1.840",
+    "residual_pnl": "0.160",
+    "trading_pnl": "0.160",
+    "decisions": {
+     "placed": 29,
+     "guard": 499,
+     "directional_refused": 415
+    }
+   },
+   {
+    "slug": "aec-cfb-ncst-flst-2026-11-21",
+    "settled": true,
+    "fills": 2,
+    "contracts": "4",
+    "spend": "1.940",
+    "pos": {
+     "YES": "2",
+     "NO": "2"
+    },
+    "matched_qty": "2",
+    "matched_pnl": "0.060",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.060",
+    "decisions": {
+     "placed": 870,
+     "guard": 807,
+     "directional_refused": 3064
+    }
+   },
+   {
+    "slug": "aec-cfb-ohiost-nebr-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 28,
+     "placed": 37
+    }
+   },
+   {
+    "slug": "aec-cfb-okst-arzst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 6
+    }
+   },
+   {
+    "slug": "aec-cfb-pitt-lou-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 6,
+     "guard": 35
+    }
+   },
+   {
+    "slug": "aec-cfb-rutger-pennst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 107,
+     "guard": 198
+    }
+   },
+   {
+    "slug": "aec-cfb-smu-nd-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 3
+    }
+   },
+   {
+    "slug": "aec-cfb-txam-okl-2026-11-21",
+    "settled": true,
+    "fills": 6,
+    "contracts": "12",
+    "spend": "5.460",
+    "pos": {
+     "YES": "6",
+     "NO": "6"
+    },
+    "matched_qty": "6",
+    "matched_pnl": "0.540000000000000000000000000",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.540000000000000000000000000",
+    "decisions": {
+     "placed": 525,
+     "guard": 534,
+     "directional_refused": 4982
+    }
+   },
+   {
+    "slug": "aec-cfb-txtech-bayl-2026-11-21",
+    "settled": true,
+    "fills": 8,
+    "contracts": "16",
+    "spend": "7.030",
+    "pos": {
+     "YES": "6",
+     "NO": "10"
+    },
+    "matched_qty": "6",
+    "matched_pnl": "0.202000000000000000000000000",
+    "residual_side": "NO",
+    "residual_qty": "4",
+    "residual_cost": "1.232",
+    "residual_pnl": "-1.232",
+    "trading_pnl": "-1.030000000000000000000000000",
+    "decisions": {
+     "placed": 459,
+     "guard": 414,
+     "directional_refused": 3333
+    }
+   },
+   {
+    "slug": "aec-cfb-ucla-mich-2026-11-21",
+    "settled": true,
+    "fills": 10,
+    "contracts": "20",
+    "spend": "9.650",
+    "pos": {
+     "YES": "10",
+     "NO": "10"
+    },
+    "matched_qty": "10",
+    "matched_pnl": "0.350",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.350",
+    "decisions": {
+     "placed": 467,
+     "guard": 606,
+     "directional_refused": 5514
+    }
+   },
+   {
+    "slug": "aec-cfb-uk-missr-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 212,
+     "placed": 5
+    }
+   },
+   {
+    "slug": "aec-cfb-utah-tcu-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 6
+    }
+   },
+   {
+    "slug": "aec-cfb-vtech-mia-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 17,
+     "guard": 31
+    }
+   },
+   {
+    "slug": "aec-nba-bos-sac-2026-11-21",
+    "settled": true,
+    "fills": 1,
+    "contracts": "2",
+    "spend": "1.60",
+    "pos": {
+     "YES": "2",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.00",
+    "residual_side": "YES",
+    "residual_qty": "2",
+    "residual_cost": "1.60",
+    "residual_pnl": "-1.60",
+    "trading_pnl": "-1.60",
+    "decisions": {
+     "placed": 8,
+     "guard": 14,
+     "directional_refused": 1820
+    }
+   },
+   {
+    "slug": "aec-nba-lac-dal-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 6,
+     "guard": 1981
+    }
+   },
+   {
+    "slug": "aec-nba-mem-min-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 22,
+     "guard": 596
+    }
+   },
+   {
+    "slug": "aec-nba-mil-phi-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 13,
+     "guard": 9
+    }
+   },
+   {
+    "slug": "aec-nhl-buf-fla-2026-11-21",
+    "settled": true,
+    "fills": 4,
+    "contracts": "8",
+    "spend": "3.82",
+    "pos": {
+     "YES": "4",
+     "NO": "4"
+    },
+    "matched_qty": "4",
+    "matched_pnl": "0.180",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.180",
+    "decisions": {
+     "placed": 144,
+     "guard": 411,
+     "directional_refused": 1842
+    }
+   },
+   {
+    "slug": "aec-nhl-cbj-tor-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 2316,
+     "placed": 15
+    }
+   },
+   {
+    "slug": "aec-nhl-edm-car-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 7
+    }
+   },
+   {
+    "slug": "aec-nhl-min-van-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 602,
+     "placed": 5
+    }
+   },
+   {
+    "slug": "aec-nhl-nj-stl-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 3696,
+     "placed": 68
+    }
+   },
+   {
+    "slug": "aec-nhl-nyi-det-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 59,
+     "guard": 3941
+    }
+   },
+   {
+    "slug": "aec-nhl-phi-mon-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 3010,
+     "placed": 9
+    }
+   },
+   {
+    "slug": "aec-nhl-sea-sj-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 2198,
+     "placed": 3
+    }
+   },
+   {
+    "slug": "aec-cfb-lamon-applst-2026-11-21",
+    "settled": true,
+    "fills": 2,
+    "contracts": "4",
+    "spend": "2.580",
+    "pos": {
+     "YES": "4",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "YES",
+    "residual_qty": "4",
+    "residual_cost": "2.580",
+    "residual_pnl": "-2.580",
+    "trading_pnl": "-2.580",
+    "decisions": {
+     "placed": 92,
+     "guard": 111,
+     "directional_refused": 114
+    }
+   },
+   {
+    "slug": "aec-cfb-sfl-flatl-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-arpb-txs-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-del-nmxst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 33,
+     "guard": 49
+    }
+   },
+   {
+    "slug": "aec-cfb-dxst-webst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 75,
+     "guard": 55
+    }
+   },
+   {
+    "slug": "aec-cfb-etnst-merc-2026-11-21",
+    "settled": true,
+    "fills": 4,
+    "contracts": "8",
+    "spend": "5.000",
+    "pos": {
+     "YES": "6",
+     "NO": "2"
+    },
+    "matched_qty": "2",
+    "matched_pnl": "0.060",
+    "residual_side": "YES",
+    "residual_qty": "4",
+    "residual_cost": "3.060",
+    "residual_pnl": "-3.060",
+    "trading_pnl": "-3.000",
+    "decisions": {
+     "placed": 543,
+     "guard": 454,
+     "directional_refused": 61
+    }
+   },
+   {
+    "slug": "aec-cfb-flint-kenest-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-jackst-alcst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 28,
+     "placed": 38
+    }
+   },
+   {
+    "slug": "aec-cfb-pvam-alast-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 2
+    }
+   },
+   {
+    "slug": "aec-cfb-will-jac-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-flam-bcook-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 65,
+     "guard": 131
+    }
+   },
+   {
+    "slug": "aec-cfb-old-uconn-2026-11-21",
+    "settled": true,
+    "fills": 1,
+    "contracts": "2",
+    "spend": "1.780",
+    "pos": {
+     "YES": "0",
+     "NO": "2"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "NO",
+    "residual_qty": "2",
+    "residual_cost": "1.780",
+    "residual_pnl": "0.220",
+    "trading_pnl": "0.220",
+    "decisions": {
+     "placed": 98,
+     "guard": 21,
+     "directional_refused": 247
+    }
+   },
+   {
+    "slug": "aec-cfb-yale-harv-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 307,
+     "placed": 699
+    }
+   },
+   {
+    "slug": "aec-cfb-calpol-ucdv-2026-11-21",
+    "settled": true,
+    "fills": 1,
+    "contracts": "2",
+    "spend": "1.640",
+    "pos": {
+     "YES": "2",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "YES",
+    "residual_qty": "2",
+    "residual_cost": "1.640",
+    "residual_pnl": "-1.640",
+    "trading_pnl": "-1.640",
+    "decisions": {
+     "placed": 800,
+     "guard": 564,
+     "directional_refused": 175
+    }
+   },
+   {
+    "slug": "aec-cfb-gas-troy-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-gast-marsh-2026-11-21",
+    "settled": true,
+    "fills": 7,
+    "contracts": "7.37",
+    "spend": "3.74525",
+    "pos": {
+     "YES": "4.1",
+     "NO": "3.27"
+    },
+    "matched_qty": "3.27",
+    "matched_pnl": "0.137026829268292682926829268",
+    "residual_side": "YES",
+    "residual_qty": "0.83",
+    "residual_cost": "0.6122768292682926829268292683",
+    "residual_pnl": "-0.6122768292682926829268292683",
+    "trading_pnl": "-0.4752500000000000000000000003",
+    "decisions": {
+     "guard": 299,
+     "placed": 213,
+     "directional_refused": 511
+    }
+   },
+   {
+    "slug": "aec-cfb-incar-txamc-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-ncol-narz-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 187,
+     "guard": 565
+    }
+   },
+   {
+    "slug": "aec-cfb-nill-ndkst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-portst-ewash-2026-11-21",
+    "settled": true,
+    "fills": 23,
+    "contracts": "25.07",
+    "spend": "9.73250",
+    "pos": {
+     "YES": "11.3",
+     "NO": "13.77"
+    },
+    "matched_qty": "11.3",
+    "matched_pnl": "2.543840595497458242556281773",
+    "residual_side": "NO",
+    "residual_qty": "2.47",
+    "residual_cost": "0.9763405954974582425562817719",
+    "residual_pnl": "-0.9763405954974582425562817719",
+    "trading_pnl": "1.567500000000000000000000001",
+    "decisions": {
+     "guard": 396,
+     "placed": 395,
+     "directional_refused": 733
+    }
+   },
+   {
+    "slug": "aec-cfb-sala-soumis-2026-11-21",
+    "settled": true,
+    "fills": 7,
+    "contracts": "13",
+    "spend": "5.505",
+    "pos": {
+     "YES": "5",
+     "NO": "8"
+    },
+    "matched_qty": "5",
+    "matched_pnl": "0.200",
+    "residual_side": "NO",
+    "residual_qty": "3",
+    "residual_cost": "0.705",
+    "residual_pnl": "-0.705",
+    "trading_pnl": "-0.505",
+    "decisions": {
+     "placed": 287,
+     "guard": 428,
+     "directional_refused": 616
+    }
+   },
+   {
+    "slug": "aec-cfb-tarl-nal-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 80,
+     "guard": 10
+    }
+   },
+   {
+    "slug": "aec-cfb-ausp-cark-2026-11-21",
+    "settled": true,
+    "fills": 2,
+    "contracts": "0.2",
+    "spend": "0.1450",
+    "pos": {
+     "YES": "0.2",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "YES",
+    "residual_qty": "0.2",
+    "residual_cost": "0.1450",
+    "residual_pnl": "-0.1450",
+    "trading_pnl": "-0.1450",
+    "decisions": {
+     "placed": 222,
+     "guard": 582,
+     "directional_refused": 1059
+    }
+   },
+   {
+    "slug": "aec-cfb-chs-sutah-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-utrgv-houbap-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 942,
+     "placed": 486
+    }
+   },
+   {
+    "slug": "aec-cfb-idaho-idhst-2026-11-21",
+    "settled": true,
+    "fills": 2,
+    "contracts": "0.2",
+    "spend": "0.1220",
+    "pos": {
+     "YES": "0",
+     "NO": "0.2"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "NO",
+    "residual_qty": "0.2",
+    "residual_cost": "0.1220",
+    "residual_pnl": "0.0780",
+    "trading_pnl": "0.0780",
+    "decisions": {
+     "placed": 340,
+     "guard": 971,
+     "directional_refused": 243
+    }
+   },
+   {
+    "slug": "aec-cfb-washst-txst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 905,
+     "placed": 208
+    }
+   },
+   {
+    "slug": "aec-cfb-arkst-loutch-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 2064,
+     "placed": 23
+    }
+   },
+   {
+    "slug": "aec-cfb-arz-kanst-2026-11-21",
+    "settled": true,
+    "fills": 1,
+    "contracts": "2",
+    "spend": "0.450",
+    "pos": {
+     "YES": "0",
+     "NO": "2"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "NO",
+    "residual_qty": "2",
+    "residual_cost": "0.450",
+    "residual_pnl": "-0.450",
+    "trading_pnl": "-0.450",
+    "decisions": {
+     "placed": 24,
+     "guard": 21,
+     "directional_refused": 20
+    }
+   },
+   {
+    "slug": "aec-cfb-lamar-mcnst-2026-11-21",
+    "settled": true,
+    "fills": 1,
+    "contracts": "0.1",
+    "spend": "0.0845",
+    "pos": {
+     "YES": "0.1",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "YES",
+    "residual_qty": "0.1",
+    "residual_cost": "0.0845",
+    "residual_pnl": "0.0155",
+    "trading_pnl": "0.0155",
+    "decisions": {
+     "placed": 25,
+     "guard": 9,
+     "directional_refused": 144
+    }
+   },
+   {
+    "slug": "aec-cfb-unlv-sjst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 102,
+     "guard": 54
+    }
+   },
+   {
+    "slug": "aec-cfb-colst-frest-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 3
+    }
+   },
+   {
+    "slug": "aec-cfb-stan-cah-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 8
+    }
+   }
+  ]
+ },
+ "touch/adds_only_priced_extra2": {
+  "label": "THEORETICAL: recorded books, modelled fills; not realized",
+  "policy": {
+   "directional": true,
+   "price_adds": true,
+   "cfg": {
+    "risk_aversion": "0.005",
+    "judge_openings": false,
+    "extra_levels": 2
+   }
+  },
+  "sim": {
+   "ladder_levels": 3,
+   "ladder_step_ticks": 2,
+   "guard_margin_ticks": 1,
+   "intl_max_age_s": 20.0,
+   "fair_stable_s": 10.0,
+   "fair_max_range": "0.01",
+   "latency_s": 3.0,
+   "fill": "touch",
+   "size_cap": true,
+   "reprice_ticks": 1,
+   "min_qty": "1",
+   "fill_loss_touch": "0.089",
+   "fill_loss_behind": "0.042"
+  },
+  "markets": 65,
+  "markets_traded": 22,
+  "skipped": {},
+  "fills": 100,
+  "contracts": "159.94",
+  "spend_usd": "77.46925",
+  "1_settled_trading_pnl_after_fees_usd": "-8.599249999999999999999999999",
+  "fees_usd": "0",
+  "fee_basis": "maker-only, PMUS maker fee 0",
+  "2_confirmed_maker_rebates_usd": "0",
+  "3_confirmed_liquidity_rewards_usd": "0",
+  "4_total_realized_net_usd": "0 (backtest: nothing is realized)",
+  "5_modelled_incentives_usd": "0 (no reward programme recorded for these markets; not modelled)",
+  "6_matched_pnl_usd": "5.187867424765750925483111041",
+  "6_residual_pnl_usd": "-13.78711742476575092548311104",
+  "7_peak_capital_usd": "77.46925",
+  "7_return_on_peak_capital": "-0.1110",
+  "7_capital_turnover": "1.00",
+  "per_market_mean_usd": -0.3909,
+  "per_market_se_usd": 0.2291,
+  "rows": [
+   {
+    "slug": "aec-cfb-ark-tx-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 9,
+     "guard": 5
+    }
+   },
+   {
+    "slug": "aec-cfb-byu-kan-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 248,
+     "guard": 234
+    }
+   },
+   {
+    "slug": "aec-cfb-ga-sc-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 4
+    }
+   },
+   {
+    "slug": "aec-cfb-hou-wvir-2026-11-21",
+    "settled": true,
+    "fills": 1,
+    "contracts": "2",
+    "spend": "1.260",
+    "pos": {
+     "YES": "0",
+     "NO": "2"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "NO",
+    "residual_qty": "2",
+    "residual_cost": "1.260",
+    "residual_pnl": "-1.260",
+    "trading_pnl": "-1.260",
+    "decisions": {
+     "placed": 216,
+     "guard": 259,
+     "directional_refused": 259
+    }
+   },
+   {
+    "slug": "aec-cfb-ind-wash-2026-11-21",
+    "settled": true,
+    "fills": 8,
+    "contracts": "14",
+    "spend": "6.615",
+    "pos": {
+     "YES": "7",
+     "NO": "7"
+    },
+    "matched_qty": "7",
+    "matched_pnl": "0.385000000000000000000000000",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.385000000000000000000000000",
+    "decisions": {
+     "placed": 739,
+     "guard": 889,
+     "directional_refused": 1258
+    }
+   },
+   {
+    "slug": "aec-cfb-iowa-ill-2026-11-21",
+    "settled": true,
+    "fills": 2,
+    "contracts": "4",
+    "spend": "1.940",
+    "pos": {
+     "YES": "2",
+     "NO": "2"
+    },
+    "matched_qty": "2",
+    "matched_pnl": "0.060",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.060",
+    "decisions": {
+     "placed": 387,
+     "guard": 383,
+     "directional_refused": 3318
+    }
+   },
+   {
+    "slug": "aec-cfb-lsu-tenn-2026-11-21",
+    "settled": true,
+    "fills": 6,
+    "contracts": "12",
+    "spend": "5.530",
+    "pos": {
+     "YES": "6",
+     "NO": "6"
+    },
+    "matched_qty": "6",
+    "matched_pnl": "0.470000000000000000000000000",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.470000000000000000000000000",
+    "decisions": {
+     "placed": 861,
+     "guard": 1161,
+     "directional_refused": 4603
+    }
+   },
+   {
+    "slug": "aec-cfb-mary-usc-2026-11-21",
+    "settled": true,
+    "fills": 1,
+    "contracts": "2",
+    "spend": "1.840",
+    "pos": {
+     "YES": "0",
+     "NO": "2"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "NO",
+    "residual_qty": "2",
+    "residual_cost": "1.840",
+    "residual_pnl": "0.160",
+    "trading_pnl": "0.160",
+    "decisions": {
+     "placed": 29,
+     "guard": 499,
+     "directional_refused": 415
+    }
+   },
+   {
+    "slug": "aec-cfb-ncst-flst-2026-11-21",
+    "settled": true,
+    "fills": 2,
+    "contracts": "4",
+    "spend": "1.940",
+    "pos": {
+     "YES": "2",
+     "NO": "2"
+    },
+    "matched_qty": "2",
+    "matched_pnl": "0.060",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.060",
+    "decisions": {
+     "placed": 870,
+     "guard": 807,
+     "directional_refused": 3064
+    }
+   },
+   {
+    "slug": "aec-cfb-ohiost-nebr-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 28,
+     "placed": 37
+    }
+   },
+   {
+    "slug": "aec-cfb-okst-arzst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 6
+    }
+   },
+   {
+    "slug": "aec-cfb-pitt-lou-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 6,
+     "guard": 35
+    }
+   },
+   {
+    "slug": "aec-cfb-rutger-pennst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 107,
+     "guard": 198
+    }
+   },
+   {
+    "slug": "aec-cfb-smu-nd-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 3
+    }
+   },
+   {
+    "slug": "aec-cfb-txam-okl-2026-11-21",
+    "settled": true,
+    "fills": 6,
+    "contracts": "12",
+    "spend": "5.460",
+    "pos": {
+     "YES": "6",
+     "NO": "6"
+    },
+    "matched_qty": "6",
+    "matched_pnl": "0.540000000000000000000000000",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.540000000000000000000000000",
+    "decisions": {
+     "placed": 525,
+     "guard": 534,
+     "directional_refused": 4982
+    }
+   },
+   {
+    "slug": "aec-cfb-txtech-bayl-2026-11-21",
+    "settled": true,
+    "fills": 8,
+    "contracts": "16",
+    "spend": "7.030",
+    "pos": {
+     "YES": "6",
+     "NO": "10"
+    },
+    "matched_qty": "6",
+    "matched_pnl": "0.202000000000000000000000000",
+    "residual_side": "NO",
+    "residual_qty": "4",
+    "residual_cost": "1.232",
+    "residual_pnl": "-1.232",
+    "trading_pnl": "-1.030000000000000000000000000",
+    "decisions": {
+     "placed": 459,
+     "guard": 414,
+     "directional_refused": 3333
+    }
+   },
+   {
+    "slug": "aec-cfb-ucla-mich-2026-11-21",
+    "settled": true,
+    "fills": 10,
+    "contracts": "20",
+    "spend": "9.650",
+    "pos": {
+     "YES": "10",
+     "NO": "10"
+    },
+    "matched_qty": "10",
+    "matched_pnl": "0.350",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.350",
+    "decisions": {
+     "placed": 467,
+     "guard": 606,
+     "directional_refused": 5514
+    }
+   },
+   {
+    "slug": "aec-cfb-uk-missr-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 212,
+     "placed": 5
+    }
+   },
+   {
+    "slug": "aec-cfb-utah-tcu-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 6
+    }
+   },
+   {
+    "slug": "aec-cfb-vtech-mia-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 17,
+     "guard": 31
+    }
+   },
+   {
+    "slug": "aec-nba-bos-sac-2026-11-21",
+    "settled": true,
+    "fills": 1,
+    "contracts": "2",
+    "spend": "1.60",
+    "pos": {
+     "YES": "2",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.00",
+    "residual_side": "YES",
+    "residual_qty": "2",
+    "residual_cost": "1.60",
+    "residual_pnl": "-1.60",
+    "trading_pnl": "-1.60",
+    "decisions": {
+     "placed": 8,
+     "guard": 14,
+     "directional_refused": 1820
+    }
+   },
+   {
+    "slug": "aec-nba-lac-dal-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 6,
+     "guard": 1981
+    }
+   },
+   {
+    "slug": "aec-nba-mem-min-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 22,
+     "guard": 596
+    }
+   },
+   {
+    "slug": "aec-nba-mil-phi-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 13,
+     "guard": 9
+    }
+   },
+   {
+    "slug": "aec-nhl-buf-fla-2026-11-21",
+    "settled": true,
+    "fills": 4,
+    "contracts": "8",
+    "spend": "3.82",
+    "pos": {
+     "YES": "4",
+     "NO": "4"
+    },
+    "matched_qty": "4",
+    "matched_pnl": "0.180",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.180",
+    "decisions": {
+     "placed": 145,
+     "guard": 411,
+     "directional_refused": 1842
+    }
+   },
+   {
+    "slug": "aec-nhl-cbj-tor-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 2316,
+     "placed": 15
+    }
+   },
+   {
+    "slug": "aec-nhl-edm-car-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 7
+    }
+   },
+   {
+    "slug": "aec-nhl-min-van-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 602,
+     "placed": 5
+    }
+   },
+   {
+    "slug": "aec-nhl-nj-stl-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 3696,
+     "placed": 70
+    }
+   },
+   {
+    "slug": "aec-nhl-nyi-det-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 59,
+     "guard": 3941
+    }
+   },
+   {
+    "slug": "aec-nhl-phi-mon-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 3010,
+     "placed": 9
+    }
+   },
+   {
+    "slug": "aec-nhl-sea-sj-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 2198,
+     "placed": 3
+    }
+   },
+   {
+    "slug": "aec-cfb-lamon-applst-2026-11-21",
+    "settled": true,
+    "fills": 2,
+    "contracts": "4",
+    "spend": "2.580",
+    "pos": {
+     "YES": "4",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "YES",
+    "residual_qty": "4",
+    "residual_cost": "2.580",
+    "residual_pnl": "-2.580",
+    "trading_pnl": "-2.580",
+    "decisions": {
+     "placed": 96,
+     "guard": 111,
+     "directional_refused": 114
+    }
+   },
+   {
+    "slug": "aec-cfb-sfl-flatl-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-arpb-txs-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-del-nmxst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 33,
+     "guard": 49
+    }
+   },
+   {
+    "slug": "aec-cfb-dxst-webst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 75,
+     "guard": 55
+    }
+   },
+   {
+    "slug": "aec-cfb-etnst-merc-2026-11-21",
+    "settled": true,
+    "fills": 4,
+    "contracts": "8",
+    "spend": "5.000",
+    "pos": {
+     "YES": "6",
+     "NO": "2"
+    },
+    "matched_qty": "2",
+    "matched_pnl": "0.060",
+    "residual_side": "YES",
+    "residual_qty": "4",
+    "residual_cost": "3.060",
+    "residual_pnl": "-3.060",
+    "trading_pnl": "-3.000",
+    "decisions": {
+     "placed": 546,
+     "guard": 454,
+     "directional_refused": 61
+    }
+   },
+   {
+    "slug": "aec-cfb-flint-kenest-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-jackst-alcst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 28,
+     "placed": 38
+    }
+   },
+   {
+    "slug": "aec-cfb-pvam-alast-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 2
+    }
+   },
+   {
+    "slug": "aec-cfb-will-jac-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-flam-bcook-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 65,
+     "guard": 131
+    }
+   },
+   {
+    "slug": "aec-cfb-old-uconn-2026-11-21",
+    "settled": true,
+    "fills": 1,
+    "contracts": "2",
+    "spend": "1.780",
+    "pos": {
+     "YES": "0",
+     "NO": "2"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "NO",
+    "residual_qty": "2",
+    "residual_cost": "1.780",
+    "residual_pnl": "0.220",
+    "trading_pnl": "0.220",
+    "decisions": {
+     "placed": 98,
+     "guard": 21,
+     "directional_refused": 247
+    }
+   },
+   {
+    "slug": "aec-cfb-yale-harv-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 307,
+     "placed": 699
+    }
+   },
+   {
+    "slug": "aec-cfb-calpol-ucdv-2026-11-21",
+    "settled": true,
+    "fills": 1,
+    "contracts": "2",
+    "spend": "1.640",
+    "pos": {
+     "YES": "2",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "YES",
+    "residual_qty": "2",
+    "residual_cost": "1.640",
+    "residual_pnl": "-1.640",
+    "trading_pnl": "-1.640",
+    "decisions": {
+     "placed": 801,
+     "guard": 564,
+     "directional_refused": 175
+    }
+   },
+   {
+    "slug": "aec-cfb-gas-troy-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-gast-marsh-2026-11-21",
+    "settled": true,
+    "fills": 7,
+    "contracts": "7.37",
+    "spend": "3.74525",
+    "pos": {
+     "YES": "4.1",
+     "NO": "3.27"
+    },
+    "matched_qty": "3.27",
+    "matched_pnl": "0.137026829268292682926829268",
+    "residual_side": "YES",
+    "residual_qty": "0.83",
+    "residual_cost": "0.6122768292682926829268292683",
+    "residual_pnl": "-0.6122768292682926829268292683",
+    "trading_pnl": "-0.4752500000000000000000000003",
+    "decisions": {
+     "guard": 299,
+     "placed": 213,
+     "directional_refused": 511
+    }
+   },
+   {
+    "slug": "aec-cfb-incar-txamc-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-ncol-narz-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 187,
+     "guard": 565
+    }
+   },
+   {
+    "slug": "aec-cfb-nill-ndkst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-portst-ewash-2026-11-21",
+    "settled": true,
+    "fills": 23,
+    "contracts": "25.07",
+    "spend": "9.73250",
+    "pos": {
+     "YES": "11.3",
+     "NO": "13.77"
+    },
+    "matched_qty": "11.3",
+    "matched_pnl": "2.543840595497458242556281773",
+    "residual_side": "NO",
+    "residual_qty": "2.47",
+    "residual_cost": "0.9763405954974582425562817719",
+    "residual_pnl": "-0.9763405954974582425562817719",
+    "trading_pnl": "1.567500000000000000000000001",
+    "decisions": {
+     "guard": 396,
+     "placed": 395,
+     "directional_refused": 733
+    }
+   },
+   {
+    "slug": "aec-cfb-sala-soumis-2026-11-21",
+    "settled": true,
+    "fills": 7,
+    "contracts": "13",
+    "spend": "5.505",
+    "pos": {
+     "YES": "5",
+     "NO": "8"
+    },
+    "matched_qty": "5",
+    "matched_pnl": "0.200",
+    "residual_side": "NO",
+    "residual_qty": "3",
+    "residual_cost": "0.705",
+    "residual_pnl": "-0.705",
+    "trading_pnl": "-0.505",
+    "decisions": {
+     "placed": 290,
+     "guard": 428,
+     "directional_refused": 616
+    }
+   },
+   {
+    "slug": "aec-cfb-tarl-nal-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 80,
+     "guard": 10
+    }
+   },
+   {
+    "slug": "aec-cfb-ausp-cark-2026-11-21",
+    "settled": true,
+    "fills": 2,
+    "contracts": "0.2",
+    "spend": "0.1450",
+    "pos": {
+     "YES": "0.2",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "YES",
+    "residual_qty": "0.2",
+    "residual_cost": "0.1450",
+    "residual_pnl": "-0.1450",
+    "trading_pnl": "-0.1450",
+    "decisions": {
+     "placed": 222,
+     "guard": 582,
+     "directional_refused": 1059
+    }
+   },
+   {
+    "slug": "aec-cfb-chs-sutah-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-utrgv-houbap-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 942,
+     "placed": 486
+    }
+   },
+   {
+    "slug": "aec-cfb-idaho-idhst-2026-11-21",
+    "settled": true,
+    "fills": 2,
+    "contracts": "0.2",
+    "spend": "0.1220",
+    "pos": {
+     "YES": "0",
+     "NO": "0.2"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "NO",
+    "residual_qty": "0.2",
+    "residual_cost": "0.1220",
+    "residual_pnl": "0.0780",
+    "trading_pnl": "0.0780",
+    "decisions": {
+     "placed": 340,
+     "guard": 971,
+     "directional_refused": 243
+    }
+   },
+   {
+    "slug": "aec-cfb-washst-txst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 905,
+     "placed": 208
+    }
+   },
+   {
+    "slug": "aec-cfb-arkst-loutch-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 2064,
+     "placed": 23
+    }
+   },
+   {
+    "slug": "aec-cfb-arz-kanst-2026-11-21",
+    "settled": true,
+    "fills": 1,
+    "contracts": "2",
+    "spend": "0.450",
+    "pos": {
+     "YES": "0",
+     "NO": "2"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "NO",
+    "residual_qty": "2",
+    "residual_cost": "0.450",
+    "residual_pnl": "-0.450",
+    "trading_pnl": "-0.450",
+    "decisions": {
+     "placed": 24,
+     "guard": 21,
+     "directional_refused": 20
+    }
+   },
+   {
+    "slug": "aec-cfb-lamar-mcnst-2026-11-21",
+    "settled": true,
+    "fills": 1,
+    "contracts": "0.1",
+    "spend": "0.0845",
+    "pos": {
+     "YES": "0.1",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "YES",
+    "residual_qty": "0.1",
+    "residual_cost": "0.0845",
+    "residual_pnl": "0.0155",
+    "trading_pnl": "0.0155",
+    "decisions": {
+     "placed": 25,
+     "guard": 9,
+     "directional_refused": 144
+    }
+   },
+   {
+    "slug": "aec-cfb-unlv-sjst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 102,
+     "guard": 54
+    }
+   },
+   {
+    "slug": "aec-cfb-colst-frest-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 3
+    }
+   },
+   {
+    "slug": "aec-cfb-stan-cah-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 8
+    }
+   }
+  ]
+ },
  "touch/full_l0.005_fl_lead": {
   "label": "THEORETICAL: recorded books, modelled fills; not realized",
   "policy": {
@@ -28164,6 +32569,4396 @@
     "trading_pnl": "0",
     "decisions": {
      "placed": 12
+    }
+   }
+  ]
+ },
+ "through/adds_only_extra2": {
+  "label": "THEORETICAL: recorded books, modelled fills; not realized",
+  "policy": {
+   "directional": true,
+   "cfg": {
+    "risk_aversion": "0.005",
+    "judge_openings": false,
+    "extra_levels": 2
+   }
+  },
+  "sim": {
+   "ladder_levels": 3,
+   "ladder_step_ticks": 2,
+   "guard_margin_ticks": 1,
+   "intl_max_age_s": 20.0,
+   "fair_stable_s": 10.0,
+   "fair_max_range": "0.01",
+   "latency_s": 3.0,
+   "fill": "through",
+   "size_cap": true,
+   "reprice_ticks": 1,
+   "min_qty": "1",
+   "fill_loss_touch": "0.089",
+   "fill_loss_behind": "0.042"
+  },
+  "markets": 65,
+  "markets_traded": 17,
+  "skipped": {},
+  "fills": 80,
+  "contracts": "128.54",
+  "spend_usd": "60.65825",
+  "1_settled_trading_pnl_after_fees_usd": "-3.888249999999999999999999999",
+  "fees_usd": "0",
+  "fee_basis": "maker-only, PMUS maker fee 0",
+  "2_confirmed_maker_rebates_usd": "0",
+  "3_confirmed_liquidity_rewards_usd": "0",
+  "4_total_realized_net_usd": "0 (backtest: nothing is realized)",
+  "5_modelled_incentives_usd": "0 (no reward programme recorded for these markets; not modelled)",
+  "6_matched_pnl_usd": "5.238465595497458242556281773",
+  "6_residual_pnl_usd": "-9.126715595497458242556281772",
+  "7_peak_capital_usd": "60.65825",
+  "7_return_on_peak_capital": "-0.0641",
+  "7_capital_turnover": "1.00",
+  "per_market_mean_usd": -0.2287,
+  "per_market_se_usd": 0.2556,
+  "rows": [
+   {
+    "slug": "aec-cfb-ark-tx-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 9,
+     "guard": 5
+    }
+   },
+   {
+    "slug": "aec-cfb-byu-kan-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 248,
+     "guard": 234
+    }
+   },
+   {
+    "slug": "aec-cfb-ga-sc-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 4
+    }
+   },
+   {
+    "slug": "aec-cfb-hou-wvir-2026-11-21",
+    "settled": true,
+    "fills": 1,
+    "contracts": "2",
+    "spend": "1.260",
+    "pos": {
+     "YES": "0",
+     "NO": "2"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "NO",
+    "residual_qty": "2",
+    "residual_cost": "1.260",
+    "residual_pnl": "-1.260",
+    "trading_pnl": "-1.260",
+    "decisions": {
+     "placed": 216,
+     "guard": 259,
+     "directional_refused": 259
+    }
+   },
+   {
+    "slug": "aec-cfb-ind-wash-2026-11-21",
+    "settled": true,
+    "fills": 4,
+    "contracts": "8",
+    "spend": "3.650",
+    "pos": {
+     "YES": "4",
+     "NO": "4"
+    },
+    "matched_qty": "4",
+    "matched_pnl": "0.3500",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.3500",
+    "decisions": {
+     "placed": 698,
+     "guard": 812,
+     "directional_refused": 783
+    }
+   },
+   {
+    "slug": "aec-cfb-iowa-ill-2026-11-21",
+    "settled": true,
+    "fills": 2,
+    "contracts": "4",
+    "spend": "1.940",
+    "pos": {
+     "YES": "2",
+     "NO": "2"
+    },
+    "matched_qty": "2",
+    "matched_pnl": "0.060",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.060",
+    "decisions": {
+     "placed": 276,
+     "guard": 328,
+     "directional_refused": 2124
+    }
+   },
+   {
+    "slug": "aec-cfb-lsu-tenn-2026-11-21",
+    "settled": true,
+    "fills": 8,
+    "contracts": "16",
+    "spend": "7.520",
+    "pos": {
+     "YES": "8",
+     "NO": "8"
+    },
+    "matched_qty": "8",
+    "matched_pnl": "0.48000",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.48000",
+    "decisions": {
+     "placed": 597,
+     "guard": 894,
+     "directional_refused": 2647
+    }
+   },
+   {
+    "slug": "aec-cfb-mary-usc-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 55,
+     "guard": 499
+    }
+   },
+   {
+    "slug": "aec-cfb-ncst-flst-2026-11-21",
+    "settled": true,
+    "fills": 2,
+    "contracts": "4",
+    "spend": "1.940",
+    "pos": {
+     "YES": "2",
+     "NO": "2"
+    },
+    "matched_qty": "2",
+    "matched_pnl": "0.060",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.060",
+    "decisions": {
+     "placed": 717,
+     "guard": 708,
+     "directional_refused": 2340
+    }
+   },
+   {
+    "slug": "aec-cfb-ohiost-nebr-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 28,
+     "placed": 37
+    }
+   },
+   {
+    "slug": "aec-cfb-okst-arzst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 6
+    }
+   },
+   {
+    "slug": "aec-cfb-pitt-lou-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 6,
+     "guard": 35
+    }
+   },
+   {
+    "slug": "aec-cfb-rutger-pennst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 107,
+     "guard": 198
+    }
+   },
+   {
+    "slug": "aec-cfb-smu-nd-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 3
+    }
+   },
+   {
+    "slug": "aec-cfb-txam-okl-2026-11-21",
+    "settled": true,
+    "fills": 6,
+    "contracts": "12",
+    "spend": "5.620",
+    "pos": {
+     "YES": "6",
+     "NO": "6"
+    },
+    "matched_qty": "6",
+    "matched_pnl": "0.380000000000000000000000000",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.380000000000000000000000000",
+    "decisions": {
+     "placed": 374,
+     "guard": 570,
+     "directional_refused": 2966
+    }
+   },
+   {
+    "slug": "aec-cfb-txtech-bayl-2026-11-21",
+    "settled": true,
+    "fills": 4,
+    "contracts": "8",
+    "spend": "3.860",
+    "pos": {
+     "YES": "4",
+     "NO": "4"
+    },
+    "matched_qty": "4",
+    "matched_pnl": "0.140",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.140",
+    "decisions": {
+     "placed": 540,
+     "guard": 502,
+     "directional_refused": 1117
+    }
+   },
+   {
+    "slug": "aec-cfb-ucla-mich-2026-11-21",
+    "settled": true,
+    "fills": 8,
+    "contracts": "16",
+    "spend": "7.730",
+    "pos": {
+     "YES": "8",
+     "NO": "8"
+    },
+    "matched_qty": "8",
+    "matched_pnl": "0.27000",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.27000",
+    "decisions": {
+     "placed": 495,
+     "guard": 590,
+     "directional_refused": 3617
+    }
+   },
+   {
+    "slug": "aec-cfb-uk-missr-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 212,
+     "placed": 5
+    }
+   },
+   {
+    "slug": "aec-cfb-utah-tcu-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 6
+    }
+   },
+   {
+    "slug": "aec-cfb-vtech-mia-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 17,
+     "guard": 31
+    }
+   },
+   {
+    "slug": "aec-nba-bos-sac-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 22,
+     "guard": 14
+    }
+   },
+   {
+    "slug": "aec-nba-lac-dal-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 6,
+     "guard": 1981
+    }
+   },
+   {
+    "slug": "aec-nba-mem-min-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 22,
+     "guard": 596
+    }
+   },
+   {
+    "slug": "aec-nba-mil-phi-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 13,
+     "guard": 9
+    }
+   },
+   {
+    "slug": "aec-nhl-buf-fla-2026-11-21",
+    "settled": true,
+    "fills": 4,
+    "contracts": "8",
+    "spend": "3.64",
+    "pos": {
+     "YES": "4",
+     "NO": "4"
+    },
+    "matched_qty": "4",
+    "matched_pnl": "0.36",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.36",
+    "decisions": {
+     "placed": 147,
+     "guard": 326,
+     "directional_refused": 1122
+    }
+   },
+   {
+    "slug": "aec-nhl-cbj-tor-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 2316,
+     "placed": 15
+    }
+   },
+   {
+    "slug": "aec-nhl-edm-car-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 7
+    }
+   },
+   {
+    "slug": "aec-nhl-min-van-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 602,
+     "placed": 5
+    }
+   },
+   {
+    "slug": "aec-nhl-nj-stl-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 3696,
+     "placed": 70
+    }
+   },
+   {
+    "slug": "aec-nhl-nyi-det-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 59,
+     "guard": 3941
+    }
+   },
+   {
+    "slug": "aec-nhl-phi-mon-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 3010,
+     "placed": 9
+    }
+   },
+   {
+    "slug": "aec-nhl-sea-sj-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 2198,
+     "placed": 3
+    }
+   },
+   {
+    "slug": "aec-cfb-lamon-applst-2026-11-21",
+    "settled": true,
+    "fills": 1,
+    "contracts": "2",
+    "spend": "1.300",
+    "pos": {
+     "YES": "2",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "YES",
+    "residual_qty": "2",
+    "residual_cost": "1.300",
+    "residual_pnl": "-1.300",
+    "trading_pnl": "-1.300",
+    "decisions": {
+     "placed": 107,
+     "guard": 111,
+     "directional_refused": 113
+    }
+   },
+   {
+    "slug": "aec-cfb-sfl-flatl-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-arpb-txs-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-del-nmxst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 33,
+     "guard": 49
+    }
+   },
+   {
+    "slug": "aec-cfb-dxst-webst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 75,
+     "guard": 55
+    }
+   },
+   {
+    "slug": "aec-cfb-etnst-merc-2026-11-21",
+    "settled": true,
+    "fills": 4,
+    "contracts": "8",
+    "spend": "5.000",
+    "pos": {
+     "YES": "6",
+     "NO": "2"
+    },
+    "matched_qty": "2",
+    "matched_pnl": "0.060",
+    "residual_side": "YES",
+    "residual_qty": "4",
+    "residual_cost": "3.060",
+    "residual_pnl": "-3.060",
+    "trading_pnl": "-3.000",
+    "decisions": {
+     "placed": 544,
+     "guard": 454,
+     "directional_refused": 37
+    }
+   },
+   {
+    "slug": "aec-cfb-flint-kenest-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-jackst-alcst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 28,
+     "placed": 38
+    }
+   },
+   {
+    "slug": "aec-cfb-pvam-alast-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 2
+    }
+   },
+   {
+    "slug": "aec-cfb-will-jac-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-flam-bcook-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 65,
+     "guard": 131
+    }
+   },
+   {
+    "slug": "aec-cfb-old-uconn-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 85,
+     "guard": 20
+    }
+   },
+   {
+    "slug": "aec-cfb-yale-harv-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 307,
+     "placed": 699
+    }
+   },
+   {
+    "slug": "aec-cfb-calpol-ucdv-2026-11-21",
+    "settled": true,
+    "fills": 1,
+    "contracts": "2",
+    "spend": "1.640",
+    "pos": {
+     "YES": "2",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "YES",
+    "residual_qty": "2",
+    "residual_cost": "1.640",
+    "residual_pnl": "-1.640",
+    "trading_pnl": "-1.640",
+    "decisions": {
+     "placed": 801,
+     "guard": 564,
+     "directional_refused": 175
+    }
+   },
+   {
+    "slug": "aec-cfb-gas-troy-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-gast-marsh-2026-11-21",
+    "settled": true,
+    "fills": 6,
+    "contracts": "7.27",
+    "spend": "3.67075",
+    "pos": {
+     "YES": "4",
+     "NO": "3.27"
+    },
+    "matched_qty": "3.27",
+    "matched_pnl": "0.137625000000000000000000000",
+    "residual_side": "YES",
+    "residual_qty": "0.73",
+    "residual_cost": "0.538375",
+    "residual_pnl": "-0.538375",
+    "trading_pnl": "-0.400750000000000000000000000",
+    "decisions": {
+     "guard": 297,
+     "placed": 216,
+     "directional_refused": 493
+    }
+   },
+   {
+    "slug": "aec-cfb-incar-txamc-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-ncol-narz-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 187,
+     "guard": 565
+    }
+   },
+   {
+    "slug": "aec-cfb-nill-ndkst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-portst-ewash-2026-11-21",
+    "settled": true,
+    "fills": 23,
+    "contracts": "25.07",
+    "spend": "9.73250",
+    "pos": {
+     "YES": "11.3",
+     "NO": "13.77"
+    },
+    "matched_qty": "11.3",
+    "matched_pnl": "2.543840595497458242556281773",
+    "residual_side": "NO",
+    "residual_qty": "2.47",
+    "residual_cost": "0.9763405954974582425562817719",
+    "residual_pnl": "-0.9763405954974582425562817719",
+    "trading_pnl": "1.567500000000000000000000001",
+    "decisions": {
+     "guard": 334,
+     "placed": 395,
+     "directional_refused": 789
+    }
+   },
+   {
+    "slug": "aec-cfb-sala-soumis-2026-11-21",
+    "settled": true,
+    "fills": 3,
+    "contracts": "4.0",
+    "spend": "1.6030",
+    "pos": {
+     "YES": "2",
+     "NO": "2.0"
+    },
+    "matched_qty": "2",
+    "matched_pnl": "0.3970",
+    "residual_side": null,
+    "residual_qty": "0.0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.3970",
+    "decisions": {
+     "placed": 377,
+     "guard": 428,
+     "directional_refused": 389
+    }
+   },
+   {
+    "slug": "aec-cfb-tarl-nal-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 80,
+     "guard": 10
+    }
+   },
+   {
+    "slug": "aec-cfb-ausp-cark-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 379,
+     "guard": 893
+    }
+   },
+   {
+    "slug": "aec-cfb-chs-sutah-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-utrgv-houbap-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 942,
+     "placed": 486
+    }
+   },
+   {
+    "slug": "aec-cfb-idaho-idhst-2026-11-21",
+    "settled": true,
+    "fills": 2,
+    "contracts": "0.2",
+    "spend": "0.1220",
+    "pos": {
+     "YES": "0",
+     "NO": "0.2"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "NO",
+    "residual_qty": "0.2",
+    "residual_cost": "0.1220",
+    "residual_pnl": "0.0780",
+    "trading_pnl": "0.0780",
+    "decisions": {
+     "placed": 343,
+     "guard": 971,
+     "directional_refused": 242
+    }
+   },
+   {
+    "slug": "aec-cfb-washst-txst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 905,
+     "placed": 208
+    }
+   },
+   {
+    "slug": "aec-cfb-arkst-loutch-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 2064,
+     "placed": 23
+    }
+   },
+   {
+    "slug": "aec-cfb-arz-kanst-2026-11-21",
+    "settled": true,
+    "fills": 1,
+    "contracts": "2",
+    "spend": "0.430",
+    "pos": {
+     "YES": "0",
+     "NO": "2"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "NO",
+    "residual_qty": "2",
+    "residual_cost": "0.430",
+    "residual_pnl": "-0.430",
+    "trading_pnl": "-0.430",
+    "decisions": {
+     "placed": 27,
+     "guard": 21,
+     "directional_refused": 15
+    }
+   },
+   {
+    "slug": "aec-cfb-lamar-mcnst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 27,
+     "guard": 9
+    }
+   },
+   {
+    "slug": "aec-cfb-unlv-sjst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 102,
+     "guard": 54
+    }
+   },
+   {
+    "slug": "aec-cfb-colst-frest-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 3
+    }
+   },
+   {
+    "slug": "aec-cfb-stan-cah-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 8
+    }
+   }
+  ]
+ },
+ "through/adds_only_priced": {
+  "label": "THEORETICAL: recorded books, modelled fills; not realized",
+  "policy": {
+   "directional": true,
+   "price_adds": true,
+   "cfg": {
+    "risk_aversion": "0.005",
+    "judge_openings": false
+   }
+  },
+  "sim": {
+   "ladder_levels": 3,
+   "ladder_step_ticks": 2,
+   "guard_margin_ticks": 1,
+   "intl_max_age_s": 20.0,
+   "fair_stable_s": 10.0,
+   "fair_max_range": "0.01",
+   "latency_s": 3.0,
+   "fill": "through",
+   "size_cap": true,
+   "reprice_ticks": 1,
+   "min_qty": "1",
+   "fill_loss_touch": "0.089",
+   "fill_loss_behind": "0.042"
+  },
+  "markets": 65,
+  "markets_traded": 17,
+  "skipped": {},
+  "fills": 80,
+  "contracts": "128.54",
+  "spend_usd": "60.65825",
+  "1_settled_trading_pnl_after_fees_usd": "-3.888249999999999999999999999",
+  "fees_usd": "0",
+  "fee_basis": "maker-only, PMUS maker fee 0",
+  "2_confirmed_maker_rebates_usd": "0",
+  "3_confirmed_liquidity_rewards_usd": "0",
+  "4_total_realized_net_usd": "0 (backtest: nothing is realized)",
+  "5_modelled_incentives_usd": "0 (no reward programme recorded for these markets; not modelled)",
+  "6_matched_pnl_usd": "5.238465595497458242556281773",
+  "6_residual_pnl_usd": "-9.126715595497458242556281772",
+  "7_peak_capital_usd": "60.65825",
+  "7_return_on_peak_capital": "-0.0641",
+  "7_capital_turnover": "1.00",
+  "per_market_mean_usd": -0.2287,
+  "per_market_se_usd": 0.2556,
+  "rows": [
+   {
+    "slug": "aec-cfb-ark-tx-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 9,
+     "guard": 5
+    }
+   },
+   {
+    "slug": "aec-cfb-byu-kan-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 248,
+     "guard": 234
+    }
+   },
+   {
+    "slug": "aec-cfb-ga-sc-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 4
+    }
+   },
+   {
+    "slug": "aec-cfb-hou-wvir-2026-11-21",
+    "settled": true,
+    "fills": 1,
+    "contracts": "2",
+    "spend": "1.260",
+    "pos": {
+     "YES": "0",
+     "NO": "2"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "NO",
+    "residual_qty": "2",
+    "residual_cost": "1.260",
+    "residual_pnl": "-1.260",
+    "trading_pnl": "-1.260",
+    "decisions": {
+     "placed": 214,
+     "guard": 259,
+     "directional_refused": 259
+    }
+   },
+   {
+    "slug": "aec-cfb-ind-wash-2026-11-21",
+    "settled": true,
+    "fills": 4,
+    "contracts": "8",
+    "spend": "3.650",
+    "pos": {
+     "YES": "4",
+     "NO": "4"
+    },
+    "matched_qty": "4",
+    "matched_pnl": "0.3500",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.3500",
+    "decisions": {
+     "placed": 803,
+     "guard": 949,
+     "directional_refused": 1461
+    }
+   },
+   {
+    "slug": "aec-cfb-iowa-ill-2026-11-21",
+    "settled": true,
+    "fills": 2,
+    "contracts": "4",
+    "spend": "1.940",
+    "pos": {
+     "YES": "2",
+     "NO": "2"
+    },
+    "matched_qty": "2",
+    "matched_pnl": "0.060",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.060",
+    "decisions": {
+     "placed": 387,
+     "guard": 383,
+     "directional_refused": 3318
+    }
+   },
+   {
+    "slug": "aec-cfb-lsu-tenn-2026-11-21",
+    "settled": true,
+    "fills": 8,
+    "contracts": "16",
+    "spend": "7.520",
+    "pos": {
+     "YES": "8",
+     "NO": "8"
+    },
+    "matched_qty": "8",
+    "matched_pnl": "0.48000",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.48000",
+    "decisions": {
+     "placed": 812,
+     "guard": 1176,
+     "directional_refused": 4333
+    }
+   },
+   {
+    "slug": "aec-cfb-mary-usc-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 55,
+     "guard": 499
+    }
+   },
+   {
+    "slug": "aec-cfb-ncst-flst-2026-11-21",
+    "settled": true,
+    "fills": 2,
+    "contracts": "4",
+    "spend": "1.940",
+    "pos": {
+     "YES": "2",
+     "NO": "2"
+    },
+    "matched_qty": "2",
+    "matched_pnl": "0.060",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.060",
+    "decisions": {
+     "placed": 870,
+     "guard": 807,
+     "directional_refused": 3064
+    }
+   },
+   {
+    "slug": "aec-cfb-ohiost-nebr-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 28,
+     "placed": 37
+    }
+   },
+   {
+    "slug": "aec-cfb-okst-arzst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 6
+    }
+   },
+   {
+    "slug": "aec-cfb-pitt-lou-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 6,
+     "guard": 35
+    }
+   },
+   {
+    "slug": "aec-cfb-rutger-pennst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 107,
+     "guard": 198
+    }
+   },
+   {
+    "slug": "aec-cfb-smu-nd-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 3
+    }
+   },
+   {
+    "slug": "aec-cfb-txam-okl-2026-11-21",
+    "settled": true,
+    "fills": 6,
+    "contracts": "12",
+    "spend": "5.620",
+    "pos": {
+     "YES": "6",
+     "NO": "6"
+    },
+    "matched_qty": "6",
+    "matched_pnl": "0.380000000000000000000000000",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.380000000000000000000000000",
+    "decisions": {
+     "placed": 518,
+     "guard": 529,
+     "directional_refused": 4433
+    }
+   },
+   {
+    "slug": "aec-cfb-txtech-bayl-2026-11-21",
+    "settled": true,
+    "fills": 4,
+    "contracts": "8",
+    "spend": "3.860",
+    "pos": {
+     "YES": "4",
+     "NO": "4"
+    },
+    "matched_qty": "4",
+    "matched_pnl": "0.140",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.140",
+    "decisions": {
+     "placed": 654,
+     "guard": 581,
+     "directional_refused": 1811
+    }
+   },
+   {
+    "slug": "aec-cfb-ucla-mich-2026-11-21",
+    "settled": true,
+    "fills": 8,
+    "contracts": "16",
+    "spend": "7.730",
+    "pos": {
+     "YES": "8",
+     "NO": "8"
+    },
+    "matched_qty": "8",
+    "matched_pnl": "0.27000",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.27000",
+    "decisions": {
+     "placed": 647,
+     "guard": 599,
+     "directional_refused": 5239
+    }
+   },
+   {
+    "slug": "aec-cfb-uk-missr-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 212,
+     "placed": 5
+    }
+   },
+   {
+    "slug": "aec-cfb-utah-tcu-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 6
+    }
+   },
+   {
+    "slug": "aec-cfb-vtech-mia-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 17,
+     "guard": 31
+    }
+   },
+   {
+    "slug": "aec-nba-bos-sac-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 22,
+     "guard": 14
+    }
+   },
+   {
+    "slug": "aec-nba-lac-dal-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 6,
+     "guard": 1981
+    }
+   },
+   {
+    "slug": "aec-nba-mem-min-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 22,
+     "guard": 596
+    }
+   },
+   {
+    "slug": "aec-nba-mil-phi-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 13,
+     "guard": 9
+    }
+   },
+   {
+    "slug": "aec-nhl-buf-fla-2026-11-21",
+    "settled": true,
+    "fills": 4,
+    "contracts": "8",
+    "spend": "3.64",
+    "pos": {
+     "YES": "4",
+     "NO": "4"
+    },
+    "matched_qty": "4",
+    "matched_pnl": "0.36",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.36",
+    "decisions": {
+     "placed": 158,
+     "guard": 400,
+     "directional_refused": 1141
+    }
+   },
+   {
+    "slug": "aec-nhl-cbj-tor-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 2316,
+     "placed": 15
+    }
+   },
+   {
+    "slug": "aec-nhl-edm-car-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 7
+    }
+   },
+   {
+    "slug": "aec-nhl-min-van-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 602,
+     "placed": 5
+    }
+   },
+   {
+    "slug": "aec-nhl-nj-stl-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 3696,
+     "placed": 68
+    }
+   },
+   {
+    "slug": "aec-nhl-nyi-det-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 59,
+     "guard": 3941
+    }
+   },
+   {
+    "slug": "aec-nhl-phi-mon-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 3010,
+     "placed": 9
+    }
+   },
+   {
+    "slug": "aec-nhl-sea-sj-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 2198,
+     "placed": 3
+    }
+   },
+   {
+    "slug": "aec-cfb-lamon-applst-2026-11-21",
+    "settled": true,
+    "fills": 1,
+    "contracts": "2",
+    "spend": "1.300",
+    "pos": {
+     "YES": "2",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "YES",
+    "residual_qty": "2",
+    "residual_cost": "1.300",
+    "residual_pnl": "-1.300",
+    "trading_pnl": "-1.300",
+    "decisions": {
+     "placed": 102,
+     "guard": 111,
+     "directional_refused": 113
+    }
+   },
+   {
+    "slug": "aec-cfb-sfl-flatl-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-arpb-txs-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-del-nmxst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 33,
+     "guard": 49
+    }
+   },
+   {
+    "slug": "aec-cfb-dxst-webst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 75,
+     "guard": 55
+    }
+   },
+   {
+    "slug": "aec-cfb-etnst-merc-2026-11-21",
+    "settled": true,
+    "fills": 4,
+    "contracts": "8",
+    "spend": "5.000",
+    "pos": {
+     "YES": "6",
+     "NO": "2"
+    },
+    "matched_qty": "2",
+    "matched_pnl": "0.060",
+    "residual_side": "YES",
+    "residual_qty": "4",
+    "residual_cost": "3.060",
+    "residual_pnl": "-3.060",
+    "trading_pnl": "-3.000",
+    "decisions": {
+     "placed": 543,
+     "guard": 454,
+     "directional_refused": 61
+    }
+   },
+   {
+    "slug": "aec-cfb-flint-kenest-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-jackst-alcst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 28,
+     "placed": 38
+    }
+   },
+   {
+    "slug": "aec-cfb-pvam-alast-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 2
+    }
+   },
+   {
+    "slug": "aec-cfb-will-jac-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-flam-bcook-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 65,
+     "guard": 131
+    }
+   },
+   {
+    "slug": "aec-cfb-old-uconn-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 85,
+     "guard": 20
+    }
+   },
+   {
+    "slug": "aec-cfb-yale-harv-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 307,
+     "placed": 699
+    }
+   },
+   {
+    "slug": "aec-cfb-calpol-ucdv-2026-11-21",
+    "settled": true,
+    "fills": 1,
+    "contracts": "2",
+    "spend": "1.640",
+    "pos": {
+     "YES": "2",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "YES",
+    "residual_qty": "2",
+    "residual_cost": "1.640",
+    "residual_pnl": "-1.640",
+    "trading_pnl": "-1.640",
+    "decisions": {
+     "placed": 800,
+     "guard": 564,
+     "directional_refused": 175
+    }
+   },
+   {
+    "slug": "aec-cfb-gas-troy-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-gast-marsh-2026-11-21",
+    "settled": true,
+    "fills": 6,
+    "contracts": "7.27",
+    "spend": "3.67075",
+    "pos": {
+     "YES": "4",
+     "NO": "3.27"
+    },
+    "matched_qty": "3.27",
+    "matched_pnl": "0.137625000000000000000000000",
+    "residual_side": "YES",
+    "residual_qty": "0.73",
+    "residual_cost": "0.538375",
+    "residual_pnl": "-0.538375",
+    "trading_pnl": "-0.400750000000000000000000000",
+    "decisions": {
+     "guard": 299,
+     "placed": 213,
+     "directional_refused": 511
+    }
+   },
+   {
+    "slug": "aec-cfb-incar-txamc-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-ncol-narz-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 187,
+     "guard": 565
+    }
+   },
+   {
+    "slug": "aec-cfb-nill-ndkst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-portst-ewash-2026-11-21",
+    "settled": true,
+    "fills": 23,
+    "contracts": "25.07",
+    "spend": "9.73250",
+    "pos": {
+     "YES": "11.3",
+     "NO": "13.77"
+    },
+    "matched_qty": "11.3",
+    "matched_pnl": "2.543840595497458242556281773",
+    "residual_side": "NO",
+    "residual_qty": "2.47",
+    "residual_cost": "0.9763405954974582425562817719",
+    "residual_pnl": "-0.9763405954974582425562817719",
+    "trading_pnl": "1.567500000000000000000000001",
+    "decisions": {
+     "guard": 396,
+     "placed": 395,
+     "directional_refused": 733
+    }
+   },
+   {
+    "slug": "aec-cfb-sala-soumis-2026-11-21",
+    "settled": true,
+    "fills": 3,
+    "contracts": "4.0",
+    "spend": "1.6030",
+    "pos": {
+     "YES": "2",
+     "NO": "2.0"
+    },
+    "matched_qty": "2",
+    "matched_pnl": "0.3970",
+    "residual_side": null,
+    "residual_qty": "0.0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.3970",
+    "decisions": {
+     "placed": 421,
+     "guard": 448,
+     "directional_refused": 567
+    }
+   },
+   {
+    "slug": "aec-cfb-tarl-nal-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 80,
+     "guard": 10
+    }
+   },
+   {
+    "slug": "aec-cfb-ausp-cark-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 379,
+     "guard": 893
+    }
+   },
+   {
+    "slug": "aec-cfb-chs-sutah-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-utrgv-houbap-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 942,
+     "placed": 486
+    }
+   },
+   {
+    "slug": "aec-cfb-idaho-idhst-2026-11-21",
+    "settled": true,
+    "fills": 2,
+    "contracts": "0.2",
+    "spend": "0.1220",
+    "pos": {
+     "YES": "0",
+     "NO": "0.2"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "NO",
+    "residual_qty": "0.2",
+    "residual_cost": "0.1220",
+    "residual_pnl": "0.0780",
+    "trading_pnl": "0.0780",
+    "decisions": {
+     "placed": 340,
+     "guard": 971,
+     "directional_refused": 243
+    }
+   },
+   {
+    "slug": "aec-cfb-washst-txst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 905,
+     "placed": 208
+    }
+   },
+   {
+    "slug": "aec-cfb-arkst-loutch-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 2064,
+     "placed": 23
+    }
+   },
+   {
+    "slug": "aec-cfb-arz-kanst-2026-11-21",
+    "settled": true,
+    "fills": 1,
+    "contracts": "2",
+    "spend": "0.430",
+    "pos": {
+     "YES": "0",
+     "NO": "2"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "NO",
+    "residual_qty": "2",
+    "residual_cost": "0.430",
+    "residual_pnl": "-0.430",
+    "trading_pnl": "-0.430",
+    "decisions": {
+     "placed": 27,
+     "guard": 21,
+     "directional_refused": 15
+    }
+   },
+   {
+    "slug": "aec-cfb-lamar-mcnst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 27,
+     "guard": 9
+    }
+   },
+   {
+    "slug": "aec-cfb-unlv-sjst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 102,
+     "guard": 54
+    }
+   },
+   {
+    "slug": "aec-cfb-colst-frest-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 3
+    }
+   },
+   {
+    "slug": "aec-cfb-stan-cah-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 8
+    }
+   }
+  ]
+ },
+ "through/adds_only_priced_extra2": {
+  "label": "THEORETICAL: recorded books, modelled fills; not realized",
+  "policy": {
+   "directional": true,
+   "price_adds": true,
+   "cfg": {
+    "risk_aversion": "0.005",
+    "judge_openings": false,
+    "extra_levels": 2
+   }
+  },
+  "sim": {
+   "ladder_levels": 3,
+   "ladder_step_ticks": 2,
+   "guard_margin_ticks": 1,
+   "intl_max_age_s": 20.0,
+   "fair_stable_s": 10.0,
+   "fair_max_range": "0.01",
+   "latency_s": 3.0,
+   "fill": "through",
+   "size_cap": true,
+   "reprice_ticks": 1,
+   "min_qty": "1",
+   "fill_loss_touch": "0.089",
+   "fill_loss_behind": "0.042"
+  },
+  "markets": 65,
+  "markets_traded": 17,
+  "skipped": {},
+  "fills": 80,
+  "contracts": "128.54",
+  "spend_usd": "60.65825",
+  "1_settled_trading_pnl_after_fees_usd": "-3.888249999999999999999999999",
+  "fees_usd": "0",
+  "fee_basis": "maker-only, PMUS maker fee 0",
+  "2_confirmed_maker_rebates_usd": "0",
+  "3_confirmed_liquidity_rewards_usd": "0",
+  "4_total_realized_net_usd": "0 (backtest: nothing is realized)",
+  "5_modelled_incentives_usd": "0 (no reward programme recorded for these markets; not modelled)",
+  "6_matched_pnl_usd": "5.238465595497458242556281773",
+  "6_residual_pnl_usd": "-9.126715595497458242556281772",
+  "7_peak_capital_usd": "60.65825",
+  "7_return_on_peak_capital": "-0.0641",
+  "7_capital_turnover": "1.00",
+  "per_market_mean_usd": -0.2287,
+  "per_market_se_usd": 0.2556,
+  "rows": [
+   {
+    "slug": "aec-cfb-ark-tx-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 9,
+     "guard": 5
+    }
+   },
+   {
+    "slug": "aec-cfb-byu-kan-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 248,
+     "guard": 234
+    }
+   },
+   {
+    "slug": "aec-cfb-ga-sc-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 4
+    }
+   },
+   {
+    "slug": "aec-cfb-hou-wvir-2026-11-21",
+    "settled": true,
+    "fills": 1,
+    "contracts": "2",
+    "spend": "1.260",
+    "pos": {
+     "YES": "0",
+     "NO": "2"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "NO",
+    "residual_qty": "2",
+    "residual_cost": "1.260",
+    "residual_pnl": "-1.260",
+    "trading_pnl": "-1.260",
+    "decisions": {
+     "placed": 216,
+     "guard": 259,
+     "directional_refused": 259
+    }
+   },
+   {
+    "slug": "aec-cfb-ind-wash-2026-11-21",
+    "settled": true,
+    "fills": 4,
+    "contracts": "8",
+    "spend": "3.650",
+    "pos": {
+     "YES": "4",
+     "NO": "4"
+    },
+    "matched_qty": "4",
+    "matched_pnl": "0.3500",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.3500",
+    "decisions": {
+     "placed": 807,
+     "guard": 949,
+     "directional_refused": 1461
+    }
+   },
+   {
+    "slug": "aec-cfb-iowa-ill-2026-11-21",
+    "settled": true,
+    "fills": 2,
+    "contracts": "4",
+    "spend": "1.940",
+    "pos": {
+     "YES": "2",
+     "NO": "2"
+    },
+    "matched_qty": "2",
+    "matched_pnl": "0.060",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.060",
+    "decisions": {
+     "placed": 387,
+     "guard": 383,
+     "directional_refused": 3318
+    }
+   },
+   {
+    "slug": "aec-cfb-lsu-tenn-2026-11-21",
+    "settled": true,
+    "fills": 8,
+    "contracts": "16",
+    "spend": "7.520",
+    "pos": {
+     "YES": "8",
+     "NO": "8"
+    },
+    "matched_qty": "8",
+    "matched_pnl": "0.48000",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.48000",
+    "decisions": {
+     "placed": 812,
+     "guard": 1176,
+     "directional_refused": 4333
+    }
+   },
+   {
+    "slug": "aec-cfb-mary-usc-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 55,
+     "guard": 499
+    }
+   },
+   {
+    "slug": "aec-cfb-ncst-flst-2026-11-21",
+    "settled": true,
+    "fills": 2,
+    "contracts": "4",
+    "spend": "1.940",
+    "pos": {
+     "YES": "2",
+     "NO": "2"
+    },
+    "matched_qty": "2",
+    "matched_pnl": "0.060",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.060",
+    "decisions": {
+     "placed": 870,
+     "guard": 807,
+     "directional_refused": 3064
+    }
+   },
+   {
+    "slug": "aec-cfb-ohiost-nebr-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 28,
+     "placed": 37
+    }
+   },
+   {
+    "slug": "aec-cfb-okst-arzst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 6
+    }
+   },
+   {
+    "slug": "aec-cfb-pitt-lou-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 6,
+     "guard": 35
+    }
+   },
+   {
+    "slug": "aec-cfb-rutger-pennst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 107,
+     "guard": 198
+    }
+   },
+   {
+    "slug": "aec-cfb-smu-nd-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 3
+    }
+   },
+   {
+    "slug": "aec-cfb-txam-okl-2026-11-21",
+    "settled": true,
+    "fills": 6,
+    "contracts": "12",
+    "spend": "5.620",
+    "pos": {
+     "YES": "6",
+     "NO": "6"
+    },
+    "matched_qty": "6",
+    "matched_pnl": "0.380000000000000000000000000",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.380000000000000000000000000",
+    "decisions": {
+     "placed": 518,
+     "guard": 529,
+     "directional_refused": 4433
+    }
+   },
+   {
+    "slug": "aec-cfb-txtech-bayl-2026-11-21",
+    "settled": true,
+    "fills": 4,
+    "contracts": "8",
+    "spend": "3.860",
+    "pos": {
+     "YES": "4",
+     "NO": "4"
+    },
+    "matched_qty": "4",
+    "matched_pnl": "0.140",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.140",
+    "decisions": {
+     "placed": 654,
+     "guard": 581,
+     "directional_refused": 1811
+    }
+   },
+   {
+    "slug": "aec-cfb-ucla-mich-2026-11-21",
+    "settled": true,
+    "fills": 8,
+    "contracts": "16",
+    "spend": "7.730",
+    "pos": {
+     "YES": "8",
+     "NO": "8"
+    },
+    "matched_qty": "8",
+    "matched_pnl": "0.27000",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.27000",
+    "decisions": {
+     "placed": 647,
+     "guard": 599,
+     "directional_refused": 5239
+    }
+   },
+   {
+    "slug": "aec-cfb-uk-missr-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 212,
+     "placed": 5
+    }
+   },
+   {
+    "slug": "aec-cfb-utah-tcu-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 6
+    }
+   },
+   {
+    "slug": "aec-cfb-vtech-mia-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 17,
+     "guard": 31
+    }
+   },
+   {
+    "slug": "aec-nba-bos-sac-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 22,
+     "guard": 14
+    }
+   },
+   {
+    "slug": "aec-nba-lac-dal-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 6,
+     "guard": 1981
+    }
+   },
+   {
+    "slug": "aec-nba-mem-min-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 22,
+     "guard": 596
+    }
+   },
+   {
+    "slug": "aec-nba-mil-phi-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 13,
+     "guard": 9
+    }
+   },
+   {
+    "slug": "aec-nhl-buf-fla-2026-11-21",
+    "settled": true,
+    "fills": 4,
+    "contracts": "8",
+    "spend": "3.64",
+    "pos": {
+     "YES": "4",
+     "NO": "4"
+    },
+    "matched_qty": "4",
+    "matched_pnl": "0.36",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.36",
+    "decisions": {
+     "placed": 159,
+     "guard": 400,
+     "directional_refused": 1141
+    }
+   },
+   {
+    "slug": "aec-nhl-cbj-tor-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 2316,
+     "placed": 15
+    }
+   },
+   {
+    "slug": "aec-nhl-edm-car-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 7
+    }
+   },
+   {
+    "slug": "aec-nhl-min-van-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 602,
+     "placed": 5
+    }
+   },
+   {
+    "slug": "aec-nhl-nj-stl-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 3696,
+     "placed": 70
+    }
+   },
+   {
+    "slug": "aec-nhl-nyi-det-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 59,
+     "guard": 3941
+    }
+   },
+   {
+    "slug": "aec-nhl-phi-mon-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 3010,
+     "placed": 9
+    }
+   },
+   {
+    "slug": "aec-nhl-sea-sj-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 2198,
+     "placed": 3
+    }
+   },
+   {
+    "slug": "aec-cfb-lamon-applst-2026-11-21",
+    "settled": true,
+    "fills": 1,
+    "contracts": "2",
+    "spend": "1.300",
+    "pos": {
+     "YES": "2",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "YES",
+    "residual_qty": "2",
+    "residual_cost": "1.300",
+    "residual_pnl": "-1.300",
+    "trading_pnl": "-1.300",
+    "decisions": {
+     "placed": 107,
+     "guard": 111,
+     "directional_refused": 113
+    }
+   },
+   {
+    "slug": "aec-cfb-sfl-flatl-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-arpb-txs-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-del-nmxst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 33,
+     "guard": 49
+    }
+   },
+   {
+    "slug": "aec-cfb-dxst-webst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 75,
+     "guard": 55
+    }
+   },
+   {
+    "slug": "aec-cfb-etnst-merc-2026-11-21",
+    "settled": true,
+    "fills": 4,
+    "contracts": "8",
+    "spend": "5.000",
+    "pos": {
+     "YES": "6",
+     "NO": "2"
+    },
+    "matched_qty": "2",
+    "matched_pnl": "0.060",
+    "residual_side": "YES",
+    "residual_qty": "4",
+    "residual_cost": "3.060",
+    "residual_pnl": "-3.060",
+    "trading_pnl": "-3.000",
+    "decisions": {
+     "placed": 546,
+     "guard": 454,
+     "directional_refused": 61
+    }
+   },
+   {
+    "slug": "aec-cfb-flint-kenest-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-jackst-alcst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 28,
+     "placed": 38
+    }
+   },
+   {
+    "slug": "aec-cfb-pvam-alast-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 2
+    }
+   },
+   {
+    "slug": "aec-cfb-will-jac-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-flam-bcook-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 65,
+     "guard": 131
+    }
+   },
+   {
+    "slug": "aec-cfb-old-uconn-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 85,
+     "guard": 20
+    }
+   },
+   {
+    "slug": "aec-cfb-yale-harv-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 307,
+     "placed": 699
+    }
+   },
+   {
+    "slug": "aec-cfb-calpol-ucdv-2026-11-21",
+    "settled": true,
+    "fills": 1,
+    "contracts": "2",
+    "spend": "1.640",
+    "pos": {
+     "YES": "2",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "YES",
+    "residual_qty": "2",
+    "residual_cost": "1.640",
+    "residual_pnl": "-1.640",
+    "trading_pnl": "-1.640",
+    "decisions": {
+     "placed": 801,
+     "guard": 564,
+     "directional_refused": 175
+    }
+   },
+   {
+    "slug": "aec-cfb-gas-troy-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-gast-marsh-2026-11-21",
+    "settled": true,
+    "fills": 6,
+    "contracts": "7.27",
+    "spend": "3.67075",
+    "pos": {
+     "YES": "4",
+     "NO": "3.27"
+    },
+    "matched_qty": "3.27",
+    "matched_pnl": "0.137625000000000000000000000",
+    "residual_side": "YES",
+    "residual_qty": "0.73",
+    "residual_cost": "0.538375",
+    "residual_pnl": "-0.538375",
+    "trading_pnl": "-0.400750000000000000000000000",
+    "decisions": {
+     "guard": 299,
+     "placed": 213,
+     "directional_refused": 511
+    }
+   },
+   {
+    "slug": "aec-cfb-incar-txamc-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-ncol-narz-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 187,
+     "guard": 565
+    }
+   },
+   {
+    "slug": "aec-cfb-nill-ndkst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-portst-ewash-2026-11-21",
+    "settled": true,
+    "fills": 23,
+    "contracts": "25.07",
+    "spend": "9.73250",
+    "pos": {
+     "YES": "11.3",
+     "NO": "13.77"
+    },
+    "matched_qty": "11.3",
+    "matched_pnl": "2.543840595497458242556281773",
+    "residual_side": "NO",
+    "residual_qty": "2.47",
+    "residual_cost": "0.9763405954974582425562817719",
+    "residual_pnl": "-0.9763405954974582425562817719",
+    "trading_pnl": "1.567500000000000000000000001",
+    "decisions": {
+     "guard": 396,
+     "placed": 395,
+     "directional_refused": 733
+    }
+   },
+   {
+    "slug": "aec-cfb-sala-soumis-2026-11-21",
+    "settled": true,
+    "fills": 3,
+    "contracts": "4.0",
+    "spend": "1.6030",
+    "pos": {
+     "YES": "2",
+     "NO": "2.0"
+    },
+    "matched_qty": "2",
+    "matched_pnl": "0.3970",
+    "residual_side": null,
+    "residual_qty": "0.0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0.3970",
+    "decisions": {
+     "placed": 427,
+     "guard": 448,
+     "directional_refused": 567
+    }
+   },
+   {
+    "slug": "aec-cfb-tarl-nal-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 80,
+     "guard": 10
+    }
+   },
+   {
+    "slug": "aec-cfb-ausp-cark-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 379,
+     "guard": 893
+    }
+   },
+   {
+    "slug": "aec-cfb-chs-sutah-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {}
+   },
+   {
+    "slug": "aec-cfb-utrgv-houbap-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 942,
+     "placed": 486
+    }
+   },
+   {
+    "slug": "aec-cfb-idaho-idhst-2026-11-21",
+    "settled": true,
+    "fills": 2,
+    "contracts": "0.2",
+    "spend": "0.1220",
+    "pos": {
+     "YES": "0",
+     "NO": "0.2"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "NO",
+    "residual_qty": "0.2",
+    "residual_cost": "0.1220",
+    "residual_pnl": "0.0780",
+    "trading_pnl": "0.0780",
+    "decisions": {
+     "placed": 340,
+     "guard": 971,
+     "directional_refused": 243
+    }
+   },
+   {
+    "slug": "aec-cfb-washst-txst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 905,
+     "placed": 208
+    }
+   },
+   {
+    "slug": "aec-cfb-arkst-loutch-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "guard": 2064,
+     "placed": 23
+    }
+   },
+   {
+    "slug": "aec-cfb-arz-kanst-2026-11-21",
+    "settled": true,
+    "fills": 1,
+    "contracts": "2",
+    "spend": "0.430",
+    "pos": {
+     "YES": "0",
+     "NO": "2"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0.000",
+    "residual_side": "NO",
+    "residual_qty": "2",
+    "residual_cost": "0.430",
+    "residual_pnl": "-0.430",
+    "trading_pnl": "-0.430",
+    "decisions": {
+     "placed": 27,
+     "guard": 21,
+     "directional_refused": 15
+    }
+   },
+   {
+    "slug": "aec-cfb-lamar-mcnst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 27,
+     "guard": 9
+    }
+   },
+   {
+    "slug": "aec-cfb-unlv-sjst-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 102,
+     "guard": 54
+    }
+   },
+   {
+    "slug": "aec-cfb-colst-frest-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 3
+    }
+   },
+   {
+    "slug": "aec-cfb-stan-cah-2026-11-21",
+    "settled": true,
+    "fills": 0,
+    "contracts": "0",
+    "spend": "0",
+    "pos": {
+     "YES": "0",
+     "NO": "0"
+    },
+    "matched_qty": "0",
+    "matched_pnl": "0",
+    "residual_side": null,
+    "residual_qty": "0",
+    "residual_cost": "0",
+    "residual_pnl": null,
+    "trading_pnl": "0",
+    "decisions": {
+     "placed": 8
     }
    }
   ]

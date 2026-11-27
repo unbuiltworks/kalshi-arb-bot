@@ -1,7 +1,7 @@
-Full regression, flags off, 27 Nov 2026
+Full regression, flags off, 27 Nov 2026 (hybrid allocator v2)
 baseline a51cfdbd2 (deployed): 26 failed, 6003 passed, 28 skipped, 1 xfailed, 3315 warnings in 163.61s (0:02:43)
-dev/pmus-directional-allocation: 26 failed, 6031 passed, 28 skipped, 1 xfailed, 3315 warnings in 173.95s (0:02:53)
-failure names identical: yes (26, all pre-existing on a51cfdbd2):
+dev/pmus-directional-allocation: 26 failed, 6040 passed, 28 skipped, 1 xfailed, 3315 warnings in 169.40s (0:02:49)
+failure names identical: yes (26, all pre-existing on a51cfdbd2)
 FAILED tests/test_deploy_fallthrough_guard.py::test_src_main_also_refuses_under_a_managed_runtime
 FAILED tests/test_deploy_fallthrough_guard.py::test_src_main_still_runs_when_explicitly_opted_in
 FAILED tests/test_orderbook.py::TestOrderBookManager::test_book_update_callback
@@ -29,6 +29,5 @@ FAILED tests/test_spread_scanner.py::TestSpreadScanner::test_quantity_capped_by_
 FAILED tests/test_spread_scanner.py::TestSpreadScanner::test_signal_on_arb
 FAILED tests/test_spread_scanner.py::TestSpreadScanner::test_skips_insufficient_depth
 
-enabled-mode safety + directional engine with PMUS_RN1_DIRECTIONAL=1: 64 passed
-image guard tests/test_pmus_spring_image_modules.py: passed (failed before the Dockerfile COPY was added)
-docker (local build of this branch): 62/62 src modules import with activation flags; engine boot with RN1+directional on, lock 1, 75 s, no loop/latch/market errors
+directional tests (module 18, engine 12, harness 7) + enabled-mode safety 57: pass with flags on
+docker (local build): 62/62 src modules import with PMUS_RN1_DIRECTIONAL, DIR_SHARP, DIR_PRICE_ADDS, DIR_EXTRA_LEVELS on; engine boot RN1+all flags, lock 1, 75 s: no loop/latch/market errors

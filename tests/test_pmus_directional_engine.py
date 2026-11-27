@@ -129,3 +129,83 @@ def test_campaign_loss_stop_still_pulls_openings_with_directional_on(
     e.step_market(SLUG)
     assert e.b.d["pilot_loss_stop"]["net"] == "-4.10"
     assert only_completion(e)
+
+
+def _sharp(e, fair, age_s=0.0, odds_age_s=0.0):
+    import time as _t
+    e.b.d.setdefault("sharp_shadow", {})[SLUG] = {
+        "t": _t.time() - age_s, "fair_yes": fair, "odds_age_s": odds_age_s,
+        "source": "pinnacle"}
+
+
+def test_sportsbook_probability_used_when_no_international_fair(
+        dr, monkeypatch, capsys):
+    e, v, _ = dr
+    _fair(e, monkeypatch, "0.60", settled=False)
+    monkeypatch.setattr(M, "RN1_DIR_SHARP", True)
+    _sharp(e, "0.60")
+    e.step_market(SLUG)
+    q = quotes(capsys)[-1]
+    assert q["directional"]["source"] == "sportsbook:pinnacle"
+    assert [r for r in resting(v) if r[0] == "NO"] == [("NO", "0.49", "2")]
+
+
+def test_stale_sportsbook_probability_changes_nothing(dr, monkeypatch):
+    e, v, _ = dr
+    _fair(e, monkeypatch, "0.60", settled=False)
+    monkeypatch.setattr(M, "RN1_DIR_SHARP", True)
+    _sharp(e, "0.60", age_s=M.RN1_DIR_SHARP_MAX_AGE_S + 5)
+    full_ladder(e, v)
+
+
+def test_sportsbook_off_by_default_changes_nothing(dr, monkeypatch):
+    e, v, _ = dr
+    _fair(e, monkeypatch, "0.60", settled=False)
+    _sharp(e, "0.60")
+    full_ladder(e, v)
+
+
+def test_upsizing_never_exceeds_the_per_order_maximum(dr, monkeypatch,
+                                                    capsys):
+    """up_mult 2 asks for more, but the final gate's per-order maximum is a
+    limit: the hint is capped at it, so nothing is refused at the gate."""
+    e, v, _ = dr
+    _fair(e, monkeypatch, "0.70")
+    monkeypatch.setitem(M.RN1_DIR_CFG, "up_mult", "2")
+    e.step_market(SLUG)
+    out = capsys.readouterr().out
+    assert "size_above_maximum" not in out
+    assert all(D(r[2]) <= M.rn1_max_clip() for r in resting(v))
+
+
+def test_favoured_side_gets_extra_levels_inside_the_caps(dr, monkeypatch):
+    """extra_levels 2: the favoured YES side may ladder deeper; every level
+    still has to fit the exact worst-case caps."""
+    e, v, _ = dr
+    _fair(e, monkeypatch, "0.70")
+    monkeypatch.setitem(M.RN1_DIR_CFG, "extra_levels", 2)
+    e.step_market(SLUG)
+    ys = [r for r in resting(v) if r[0] == "YES"]
+    assert len(ys) >= 3
+    c = worst(e)
+    assert c["unmatched"] <= R.RESIDUAL_CAP_USD
+    assert c["spend"] <= R.PER_MARKET_USD
+
+
+def test_priced_additions_withdrawn_if_allocation_fails(dr, monkeypatch):
+    e, v, _ = dr
+    _fair(e, monkeypatch, "0.60")
+    monkeypatch.setattr(M, "RN1_DIR_PRICE_ADDS", True)
+    e.step_market(SLUG)
+    _fill(v, "YES", "0.47")
+    e.step_market(SLUG)
+    _cool_down(e)
+
+    def boom(**kw):
+        raise RuntimeError("x")
+    monkeypatch.setattr(DA, "allocate", boom)
+    e.step_market(SLUG)
+    mk = e.b.m(SLUG)
+    yes_open = [o for o in mk["orders"].values() if o.get("open")
+                and o["side"] == "YES" and o.get("level", 0) == 0]
+    assert all(o.get("stage") != "rn1_extend" for o in yes_open)

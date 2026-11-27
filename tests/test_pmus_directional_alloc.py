@@ -170,3 +170,40 @@ def test_the_module_imports_no_venue_or_market_code():
         elif isinstance(node, ast.ImportFrom):
             mods.add((node.module or "").split(".")[0])
     assert mods <= {"__future__", "decimal", "typing"}
+
+
+def test_freshness_refuses_stale_and_widens_young_references():
+    assert DA.probability("0.6", age_s=901, max_age_s=900) is None
+    p = DA.probability("0.6", age_s=100, max_age_s=900, drift_per_s="0.0005")
+    assert p["lo"] == D("0.55") and p["hi"] == D("0.65")
+    a = DA.assess(prob=p, side="YES", px="0.57", qty="2", pos=FLAT)
+    b = DA.assess(prob=DA.probability("0.6"), side="YES", px="0.57",
+                  qty="2", pos=FLAT)
+    assert a["qty"] == "0" and D(b["qty"]) == D(2)
+
+
+def test_size_hint_upsizes_only_the_favoured_side_with_edge():
+    p = DA.probability("0.70")
+    t = {"YES": D("0.60"), "NO": D("0.38")}
+    assert DA.size_hint(prob=p, touch=t, clip="2") == {"YES": D(2),
+                                                        "NO": D(2)}
+    h = DA.size_hint(prob=p, touch=t, clip="2", cfg={"up_mult": "2"})
+    assert h == {"YES": D(4), "NO": D(2)}
+    thin = DA.size_hint(prob=DA.probability("0.62"), touch=t, clip="2",
+                        cfg={"up_mult": "2"})
+    assert thin["YES"] == D(2)
+    assert DA.size_hint(prob=None, touch=t, clip="2",
+                        cfg={"up_mult": "2"}) == {"YES": D(2), "NO": D(2)}
+
+
+def test_size_hint_respects_the_per_order_maximum_and_ladder_hint():
+    p = DA.probability("0.70")
+    t = {"YES": D("0.60"), "NO": D("0.38")}
+    h = DA.size_hint(prob=p, touch=t, clip="2", cfg={"up_mult": "3"},
+                     max_qty="2")
+    assert h == {"YES": D(2), "NO": D(2)}
+    assert DA.ladder_hint(prob=p, touch=t, cfg={"extra_levels": 2}) == \
+        {"YES": 2, "NO": 0}
+    assert DA.ladder_hint(prob=p, touch=t) == {"YES": 0, "NO": 0}
+    assert DA.ladder_hint(prob=None, touch=t, cfg={"extra_levels": 2}) == \
+        {"YES": 0, "NO": 0}
