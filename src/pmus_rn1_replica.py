@@ -382,9 +382,12 @@ def quotes(*, yes_bid: Any, yes_ask: Any, tick: Any,
     if not (ZERO < yb < ya < ONE):
         out["why"] = "no_two_sided_book"
         return out
+    # per-side placement (engine PMUS_RN1_TOUCH_EV); absent = `depth` for
+    # both sides, exactly as before
+    dside = k.get("depth_ticks_side") or {}
     for s, o in (("YES", "NO"), ("NO", "YES")):
         touch = side_bid(s, yb, ya)
-        px = _floor(touch - depth * t, t)
+        px = _floor(touch - int(dside.get(s, depth)) * t, t)
         role, why = None, None
         if p[o] > p[s]:
             # COMPLETING the lighter side: profitable pair only, patient

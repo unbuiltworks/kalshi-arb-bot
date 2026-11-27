@@ -1667,6 +1667,69 @@ def rn1_fill_param(table: Mapping[int, Mapping[str, float]], depth: int,
     return float(t.get(comp, t[""]))
 
 
+def rn1_comp_value(table: Mapping[str, float], slug: str) -> float:
+    """A per-competition setting (see _comp_rates) for this market."""
+    comp = slug.split("-")[1].lower() if slug.count("-") >= 1 else ""
+    return float(table.get(comp, table[""]))
+
+
+_CAL_PARSED: Dict[str, Any] = {}
+
+
+def rn1_reward_cal_table(raw: Optional[str] = None) -> Dict[str, float]:
+    """PMUS_RN1_REWARD_CALIBRATION_TABLE parsed: {"program=<id>": m,
+    "<competition>": m, "*": m}; malformed entries are ignored."""
+    raw = RN1_REWARD_CAL_TABLE if raw is None else raw
+    hit = _CAL_PARSED.get(raw)
+    if hit is not None:
+        return hit
+    out: Dict[str, float] = {}
+    for part in (raw or "").split(","):
+        k, _, v = part.strip().rpartition(":")
+        if not k:
+            continue
+        try:
+            f = float(v)
+        except ValueError:
+            continue
+        if f == f:                                   # not NaN
+            out[k.strip().lower()] = f
+    _CAL_PARSED[raw] = out
+    return out
+
+
+def rn1_reward_mult(slug: str, per: Optional[Mapping[str, Any]] = None
+                    ) -> float:
+    """The multiplier applied to a THEORETICAL reward credited for this
+    market (see RN1_REWARD_CALIBRATION). Flag off: the clamped
+    RANK_REWARD_HAIRCUT, exactly what the haircut sites applied."""
+    hc = max(0.0, min(1.0, RANK_REWARD_HAIRCUT))
+    if not RN1_REWARD_CALIBRATION:
+        return hc
+    tab = rn1_reward_cal_table()
+    comp = slug.split("-")[1].lower() if slug.count("-") >= 1 else ""
+    prog = str((per or {}).get("programId") or "").lower()
+    m = None
+    for k in (("program=" + prog) if prog else None, comp, "*"):
+        if k and k in tab:
+            m = tab[k]
+            break
+    m = hc if m is None else max(0.0, min(1.0, float(m)))
+    div = 1.0
+    if RN1_REWARD_POOL_SCOPE == "event":
+        div = float((per or {}).get("M_event") or 1)
+    elif RN1_REWARD_POOL_SCOPE == "program":
+        div = float((per or {}).get("M_program") or 1)
+    return m / max(1.0, div)
+
+
+def rn1_reward_cal(slug: str, per: Optional[Mapping[str, Any]] = None
+                   ) -> float:
+    """At a site that credited the raw theoretical reward before: 1.0 with
+    the calibration flag off (unchanged), rn1_reward_mult with it on."""
+    return rn1_reward_mult(slug, per) if RN1_REWARD_CALIBRATION else 1.0
+
+
 # JOIN THE BEST BID WHEN IT IS JUSTIFIED (owner 2026-11-25: "Competitive
 # maker quoting that can join the best bid when economically justified").
 # PMUS_RN1_DEPTH_TICKS=1 rests every bid one tick behind the touch. The
@@ -1689,6 +1752,66 @@ RN1_JOIN_MIN_SPREAD_TICKS = int(os.getenv(
 RN1_JOIN_MAX_RANGE_USD = float(os.getenv(
     "PMUS_RN1_JOIN_MAX_RANGE_USD", "0.01"))
 RN1_JOIN_CALM_S = float(os.getenv("PMUS_RN1_JOIN_CALM_S", "60"))
+# PER-COMPETITION VOLATILITY THRESHOLD (owner 2026-11-27). The hard
+# "price_moving" refusal above uses one RN1_JOIN_MAX_RANGE_USD for every
+# competition. PMUS_RN1_JOIN_MAX_RANGE_COMP ("atp:0.01,utr:0.02") sets it per
+# competition (the 30 s mid range above which the touch is never joined);
+# a competition not listed keeps RN1_JOIN_MAX_RANGE_USD. Unset = exactly as
+# before. jump_pause, recent_jump, reactive_pull, vol_pause and every loss
+# stop and cap are unchanged hard protections.
+RN1_JOIN_MAX_RANGE = _comp_rates("PMUS_RN1_JOIN_MAX_RANGE_COMP",
+                                 str(RN1_JOIN_MAX_RANGE_USD))
+# ECONOMICALLY JUSTIFIED PLACEMENT (owner 2026-11-27, default OFF). With
+# RN1_TOUCH_EV on, the placement of each opening/extension bid (the touch,
+# one tick behind, ... RN1_TOUCH_EV_MAX_DEPTH ticks behind) is the one with
+# the best reward-adjusted marginal value per resting hour:
+#   EV(d) = calibrated incremental reward at that placement (the venue's
+#           ladder rule, pmus_sports_rewards.marginal_ladder_reward, times
+#           rn1_reward_mult)
+#         - fills/h(d) x qty x (fill loss(d) + maker fee + concentration
+#           charge), fill rate and loss from RN1_FILL_RATE / RN1_FILL_LOSS
+#           for that placement and competition.
+# Only a placement with EV > 0 is chosen (ties: the deeper one); with none,
+# the bid stays at max(1, RN1.DEPTH_TICKS) behind, as without the flag.
+# The touch is never chosen while a hard protection holds (spread under the
+# join minimum, the competition's volatility threshold, a recent jump), when
+# the bid would cross or lock the book, when the side's unpaired cost would
+# exceed the residual cap, or when the pair of both bids would exceed the
+# pair cap. Market selection scores every candidate with the SAME function
+# (rn1_touch_ev) on the same inputs, so a market is selected on the
+# placement it will be quoted at. Completion bids keep today's placement.
+RN1_TOUCH_EV = os.getenv("PMUS_RN1_TOUCH_EV", "0").strip() == "1"
+RN1_TOUCH_EV_MAX_DEPTH = max(1, int(os.getenv("PMUS_RN1_TOUCH_EV_MAX_DEPTH")
+                                    or "2"))
+# REWARD CALIBRATION (owner 2026-11-27, default OFF). Every theoretical
+# reward the bot credits (ranking, marginal EV, standing start, the day's
+# projection, the touch EV) is multiplied by rn1_reward_mult(slug):
+#   flag off: RANK_REWARD_HAIRCUT where a haircut applied before, nothing
+#             where none did (exactly as before);
+#   flag on:  PMUS_RN1_REWARD_CALIBRATION_TABLE, e.g.
+#             "program=atp_wta_moneyline_live_20261018:0.4,atpdb:0.45,*:0.4"
+#             (programme id first, then competition, then "*", else
+#             RANK_REWARD_HAIRCUT), clamped to [0, 1], divided by the pool
+#             scope divisor PMUS_RN1_REWARD_POOL_SCOPE: "market" (default,
+#             1: the evidence says each market has its own pool), "event"
+#             (M_event) or "program" (M_program: shared across the
+#             programme's markets on the slate).
+# A read-only routine (src/pmus_reward_calibration.py) logs
+# REWARD_CALIBRATION after each reward check (at most every
+# RN1_REWARD_CAL_LOG_S): venue rows (PAID preferred, PENDING flagged) over
+# the bot's own logged theoretical accrual per market and day, by
+# competition. It is never applied automatically; the owner sets the table.
+RN1_REWARD_CALIBRATION = os.getenv("PMUS_RN1_REWARD_CALIBRATION",
+                                   "0").strip() == "1"
+RN1_REWARD_CAL_TABLE = os.getenv("PMUS_RN1_REWARD_CALIBRATION_TABLE", "")
+RN1_REWARD_POOL_SCOPE = (os.getenv("PMUS_RN1_REWARD_POOL_SCOPE") or
+                         "market").strip().lower()
+RN1_REWARD_CAL_LOG_S = float(os.getenv("PMUS_RN1_REWARD_CAL_LOG_S")
+                             or "3600")
+# venue reward rows are dated by the venue's day (US Eastern, 25 Nov rows =
+# 05:00-05:00 UTC): the theoretical accrual is keyed the same way
+RN1_REWARD_CAL_DAY_OFFSET_H = float(os.getenv(
+    "PMUS_RN1_REWARD_CAL_DAY_OFFSET_H") or "-5")
 # DURABLE HALT ON A RECONCILIATION FAILURE, with no session involved
 # (owner 2026-11-23: "reconciliation failures must trigger a durable halt";
 # LIVE 2026-11-22 22:10Z a fill was recorded 89 s after the venue made it,
@@ -5825,7 +5948,8 @@ class Engine:
             alive = {id(c) for c in cands}
             while True:
                 proj = self._rn1_boot_projection(book, per, planned, cands,
-                                                 alive, t, own_y, own_n)
+                                                 alive, t, own_y, own_n,
+                                                 slug)
                 out = self._rn1_judge(slug, mk, cands, planned, no_fair,
                                       pos, clip, touch, adv_cfg, qcfg, t,
                                       per, book, own_y, own_n, rw_err,
@@ -5841,7 +5965,7 @@ class Engine:
                                rw_err, None)
 
     def _rn1_boot_projection(self, book, per, planned, cands, alive, t,
-                             own_y, own_n) -> float:
+                             own_y, own_n, slug: str = "") -> float:
         """THEORETICAL projected USD over RN1_REWARD_PROJECT_H of the
         ladder that would rest: every planned bid except a candidate not
         in `alive` (refused). The existing projection's formula
@@ -5862,7 +5986,7 @@ class Engine:
             est = RW.ladder_quote_estimate(book, per, ys, ns, float(t),
                                            own_y, own_n)
             return max(0.0, float(est.get("est_usd_per_hour") or 0.0)) * \
-                RN1_REWARD_PROJECT_H
+                RN1_REWARD_PROJECT_H * rn1_reward_cal(slug, per)
         except Exception:                                 # noqa: BLE001
             return 0.0
 
@@ -5927,8 +6051,9 @@ class Engine:
                         [(float(x["px"]), float(x["qty"])) for x in rest
                          if x["side"] == "NO"],
                         float(t), own_y, own_n, side, float(px), float(qty))
+                    # flag off: the clamped RANK_REWARD_HAIRCUT, as before
                     rew = max(0.0, float(m["incremental_reward_usd_per_hour"])
-                              ) * max(0.0, min(1.0, RANK_REWARD_HAIRCUT))
+                              ) * rn1_reward_mult(slug, per)
                 except Exception as exc:              # noqa: BLE001
                     rew, why_r = 0.0, "reward_error:%s" % type(exc).__name__
             if no_fair:
@@ -5958,6 +6083,66 @@ class Engine:
             out.append(r)
             ahead[side] += qty
         return out
+
+    def _rn1_theo_accrue(self, slug: str, mk: Dict[str, Any],
+                         now: float) -> None:
+        """RN1_REWARD_CALIBRATION: accrue this market's THEORETICAL reward
+        (rn1_reward_est, the venue rule on the resting legs, full pool, no
+        haircut) over the time since the last pass (at most 300 s per
+        step), keyed by the venue's reward day, in mk["reward_theo"]. Only
+        while a programme is paying and the estimate is fresh. Recording
+        only: nothing reads it to decide an order."""
+        try:
+            last = mk.get("reward_theo_t")
+            mk["reward_theo_t"] = now
+            if last is None:
+                return
+            dt = max(0.0, min(300.0, now - float(last)))
+            est = mk.get("rn1_reward_est") or {}
+            rate = float(est.get("est_usd_per_hour") or 0.0)
+            if dt <= 0 or rate <= 0 or time.time() - float(
+                    est.get("t") or 0) > 4 * REWARD_WALK_CHECK_S or \
+                    not self.rn1_reward(slug):
+                return
+            day = datetime.fromtimestamp(
+                now + RN1_REWARD_CAL_DAY_OFFSET_H * 3600.0,
+                timezone.utc).strftime("%Y-%m-%d")
+            th = mk.setdefault("reward_theo", {})
+            th[day] = round(float(th.get(day) or 0.0) + rate * dt / 3600.0,
+                            6)
+        except Exception:                                 # noqa: BLE001
+            return
+
+    def reward_calibration(self, rows: Any) -> Optional[Dict[str, Any]]:
+        """RN1_REWARD_CALIBRATION: log REWARD_CALIBRATION (at most every
+        RN1_REWARD_CAL_LOG_S) from the venue rows just read and the bot's
+        own theoretical accrual. READ-ONLY; never applied automatically."""
+        if not RN1_REWARD_CALIBRATION:
+            return None
+        nowm = time.monotonic()
+        last = getattr(self, "_cal_logged", None)
+        if last is not None and nowm - last < RN1_REWARD_CAL_LOG_S:
+            return None
+        try:
+            from src import pmus_reward_calibration as RC
+            theo = {s_: dict(m_.get("reward_theo") or {})
+                    for s_, m_ in (self.b.d.get("markets") or {}).items()
+                    if m_.get("reward_theo")}
+            got = RC.calibrate(rows, theo)
+        except Exception as exc:                          # noqa: BLE001
+            log("REWARD_CALIBRATION", ok=False,
+                err="%s:%s" % (type(exc).__name__, str(exc)[:120]))
+            return None
+        self._cal_logged = nowm
+        log("REWARD_CALIBRATION", ok=True,
+            by_competition=got["by_competition"],
+            by_program=got["by_program"],
+            table_in_force=rn1_reward_cal_table(),
+            pool_scope=RN1_REWARD_POOL_SCOPE,
+            haircut_fallback=RANK_REWARD_HAIRCUT,
+            day_offset_h=RN1_REWARD_CAL_DAY_OFFSET_H,
+            label=got["label"])
+        return got
 
     def _rn1_reward_estimate(self, slug: str, mk: Dict[str, Any],
                              per: Mapping[str, Any], tick: D) -> None:
@@ -6008,7 +6193,9 @@ class Engine:
                 if time.time() - float(est.get("t") or 0) > \
                         4 * REWARD_WALK_CHECK_S:
                     continue                  # an old estimate is not one
-                total += float(est.get("est_usd_per_hour") or 0.0)
+                total += float(est.get("est_usd_per_hour") or 0.0) * (
+                    rn1_reward_cal(s, self.rn1_reward(s))
+                    if RN1_REWARD_CALIBRATION else 1.0)
             proj = total * RN1_REWARD_PROJECT_H
             out.update(projected_usd=round(proj, 4),
                        min_payout_usd=RN1_REWARD_MIN_DAY_USD,
@@ -6149,6 +6336,8 @@ class Engine:
                 locked_edge_per_pair=ONE - cpair, mode="rn1",
                 label="locked pair economics; realized at settlement")
         rng = self._vol(slug, bbo, now)
+        if RN1_REWARD_CALIBRATION:
+            self._rn1_theo_accrue(slug, mk, now)
         ph = self.market_phase(slug, mk, bbo, now)
         self._phase_resting(mk, mk.get("phase_now") or ph["phase"], now)
         mk["phase_now"] = ph["phase"]
@@ -6247,10 +6436,17 @@ class Engine:
                                                  spec["min_qty"], rng,
                                                  VOL_SHRINK_USD))
         nc_ = (getattr(self, "_net_choice", None) or {}).get(slug)
-        if RN1_NET_RANK and nc_ and nc_.get("qty") is not None:
+        if (RN1_NET_RANK or RN1_TOUCH_EV) and nc_ and \
+                nc_.get("qty") is not None:
             pq = max(min(pq, D(str(nc_["qty"]))), D(str(spec["min_qty"])))
         if pq != D(str(RN1.QTY)):
             qcfg["qty"] = pq
+        if RN1_TOUCH_EV:
+            # per-side placement by reward-adjusted marginal EV, on the
+            # same function the selection used (see RN1_TOUCH_EV)
+            tev = self.rn1_touch_ev_quote(slug, mk, bbo, tick, rng, pq,
+                                          qcfg, now)
+            qcfg["depth_ticks_side"] = tev["depth_side"]
         if RN1_KEEP_TOL_USD > 0 and not new_block:
             qcfg["keep_tol_usd"] = RN1_KEEP_TOL_USD
             qcfg["keep_px"] = {o["side"]: o["px"]
@@ -7002,6 +7198,9 @@ class Engine:
         if not bids or not asks:
             return {"why": "no_two_sided_book"}
         bb, ba = D(str(bids[0][0])), D(str(asks[0][0]))
+        if RN1_TOUCH_EV:
+            # the placement the controller will quote (same function)
+            return self._touch_ev_score(slug, book, per, bb, ba, tick)
         depth = max(0, int(RN1.DEPTH_TICKS))
         yes_px = bb - depth * tick
         no_px = (ONE - ba) - depth * tick
@@ -7013,7 +7212,8 @@ class Engine:
         est = R.quote_estimate(book, per, float(yes_px), float(no_px),
                                float(qty), float(tick))
         cap = qty * (yes_px + no_px)
-        rate = float(est.get("est_usd_per_hour") or 0.0)
+        rate = float(est.get("est_usd_per_hour") or 0.0) * \
+            rn1_reward_cal(slug, per)
         return {"usd_per_hour": round(rate, 6),
                 "capital_usd": str(cap),
                 "per_dollar_hour": round(rate / float(cap), 6)
@@ -7116,7 +7316,8 @@ class Engine:
                           "own_no": min(float(own["NO"]), float(visible_n))}
             est = R.quote_estimate(book, per, float(y), float(n),
                                    float(qty), float(tick), **kwargs)
-            rew = float(est.get("est_usd_per_hour") or 0.0)
+            rew = float(est.get("est_usd_per_hour") or 0.0) * \
+                rn1_reward_cal(slug, per)
             cost = 2 * float(qty) * rn1_fill_param(RN1_FILL_RATE, d, slug) \
                 * rn1_fill_param(RN1_FILL_LOSS, d, slug)
             capital = float(qty * (y + n))
@@ -7145,6 +7346,28 @@ class Engine:
             if c:
                 c.pop(slug, None)
 
+    def rn1_touch_hard(self, slug: str, mk: Mapping[str, Any],
+                       bbo: Mapping[str, Any], tick: Any,
+                       rng: Any) -> Optional[str]:
+        """The hard protections against resting AT the touch (None = none
+        applies): a spread under the join minimum, the 30 s mid range above
+        the competition's threshold (RN1_JOIN_MAX_RANGE; unknown = moving),
+        a price jump within RN1_JOIN_CALM_S. Used by rn1_join_touch and by
+        rn1_touch_ev, at selection and when quoting."""
+        spread = D(str(bbo["ask"])) - D(str(bbo["bid"]))
+        last_jump = float(mk.get("jump_pause_until") or 0) - JUMP_PAUSE_S
+        min_t = 1 if RN1_JOIN_ONE_TICK else \
+            max(2, RN1_JOIN_MIN_SPREAD_TICKS)
+        if spread < min_t * D(str(tick)):
+            return "spread_too_tight"
+        if rng is None or float(rng) > rn1_comp_value(RN1_JOIN_MAX_RANGE,
+                                                       slug):
+            return "price_moving"
+        if mk.get("jump_pause_until") and \
+                time.time() - last_jump < RN1_JOIN_CALM_S:
+            return "recent_jump"
+        return None
+
     def rn1_join_touch(self, slug: str, mk: Dict[str, Any],
                        bbo: Mapping[str, Any], tick: D, rng: Any,
                        now: float) -> Optional[str]:
@@ -7161,17 +7384,7 @@ class Engine:
         elif RN1_NET_RANK and nc and nc.get("depth") == 1:
             why = "net_prefers_one_tick_behind"
         else:
-            spread = D(str(bbo["ask"])) - D(str(bbo["bid"]))
-            last_jump = float(mk.get("jump_pause_until") or 0) - JUMP_PAUSE_S
-            min_t = 1 if RN1_JOIN_ONE_TICK else \
-                max(2, RN1_JOIN_MIN_SPREAD_TICKS)
-            if spread < min_t * D(str(tick)):
-                why = "spread_too_tight"
-            elif rng is None or float(rng) > RN1_JOIN_MAX_RANGE_USD:
-                why = "price_moving"
-            elif mk.get("jump_pause_until") and \
-                    time.time() - last_jump < RN1_JOIN_CALM_S:
-                why = "recent_jump"
+            why = self.rn1_touch_hard(slug, mk, bbo, tick, rng)
         was = joined.get(slug)
         joined[slug] = why is None
         if RN1_JOIN_TOUCH and was is not None and was != (why is None):
@@ -7180,6 +7393,286 @@ class Engine:
                 label="bids rest at the best bid while the spread is wide "
                       "and the price is calm; one tick back otherwise")
         return why
+
+    # ------------------------------------------------ RN1_TOUCH_EV
+    def rn1_touch_ev(self, slug: str, book: Optional[Mapping[str, Any]],
+                     per: Optional[Mapping[str, Any]],
+                     bbo: Mapping[str, Any], tick: Any, qty: Any,
+                     pos: Mapping[str, Any], cost: Mapping[str, Any],
+                     hard: Optional[str], own_y: Any = (), own_n: Any = (),
+                     risk_step_ticks: Any = None,
+                     completion_depth: Optional[int] = None
+                     ) -> Dict[str, Any]:
+        """See RN1_TOUCH_EV. Pure in its inputs (no request, no state
+        change): the same call scores a selection candidate and decides
+        where a tracked market's bids rest.
+
+        Per side that would OPEN or EXTEND, every placement d = 0 (the
+        touch) .. RN1_TOUCH_EV_MAX_DEPTH is scored
+            EV(d) = rn1_reward_mult x incremental THEORETICAL reward(d)
+                    - fill_rate(d) x qty x (fill_loss(d) + fee + risk)
+        and the best d with EV > 0 is chosen (ties: deeper). A side with
+        none rests at max(1, RN1.DEPTH_TICKS) ("fallback"). A COMPLETION
+        side is not decided here: it keeps `completion_depth` (today's
+        placement). Returns {"sides", "depth_side", "net_usd_per_hour",
+        "reward_usd_per_hour", "capital_usd", "touch", "hard"}. Every
+        figure is THEORETICAL."""
+        from src import pmus_sports_rewards as RW
+        t = D(str(tick))
+        q = D(str(qty))
+        yb, ya = D(str(bbo["bid"])), D(str(bbo["ask"]))
+        p = {s_: D(str(pos.get(s_) or 0)) for s_ in ("YES", "NO")}
+        c = {s_: D(str(cost.get(s_) or 0)) for s_ in ("YES", "NO")}
+        touch = {"YES": yb, "NO": ONE - ya}
+        opp_ask = {"YES": ya, "NO": ONE - yb}
+        fallback = max(1, int(RN1.DEPTH_TICKS))
+        comp_d = int(RN1.DEPTH_TICKS if completion_depth is None
+                     else completion_depth)
+        cap = D(str(RN1.PAIR_CAP))
+        rcap = D(str(RN1.RESIDUAL_CAP_USD))
+        pmin, pmax = D(str(RN1.PX_MIN)), D(str(RN1.PX_MAX))
+        mult = rn1_reward_mult(slug, per)
+        clip = D(str(RN1.QTY)) if D(str(RN1.QTY)) > 0 else q
+        sides: Dict[str, Any] = {}
+        role = {}
+        for s_, o_ in (("YES", "NO"), ("NO", "YES")):
+            role[s_] = "complete" if p[o_] > p[s_] else (
+                "open" if p[s_] == 0 else "extend")
+        for s_, o_ in (("YES", "NO"), ("NO", "YES")):
+            if role[s_] == "complete":
+                sides[s_] = {"role": "complete", "depth": comp_d,
+                             "why": "completion_keeps_placement"}
+                continue
+            held = max(D(0), p[s_] - p[o_])
+            clips = int((held / clip).to_integral_value(
+                rounding="ROUND_CEILING")) if clip > 0 else 0
+            risk = RN1.concentration_risk(tick=t, unpaired_clips=clips,
+                                          risk_step_ticks=risk_step_ticks)
+            # the other side's bid as it would rest, for the pair check and
+            # (with maxSpread, where both sides must qualify) the reward
+            o_d = comp_d if role[o_] == "complete" else fallback
+            o_px = touch[o_] - o_d * t
+            rows: Dict[int, Any] = {}
+            for d in range(0, RN1_TOUCH_EV_MAX_DEPTH + 1):
+                px = touch[s_] - d * t
+                row: Dict[str, Any] = {"px": str(px)}
+                rows[d] = row
+                if not (D(0) < px < ONE) or px < pmin or px > pmax:
+                    row["why"] = "price_band"
+                    continue
+                if px >= opp_ask[s_]:
+                    row["why"] = "would_cross_or_lock"   # post-only holds
+                    continue
+                if d == 0 and hard:
+                    row["why"] = "hard:" + str(hard)
+                    continue
+                avg = (c[s_] + px * q) / (p[s_] + q)
+                if max(D(0), p[s_] + q - p[o_]) * avg > rcap + \
+                        D("0.000001"):
+                    row["why"] = "residual_cap"
+                    continue
+                if role[o_] == "complete" and D(0) < o_px < ONE and \
+                        px + RN1.fee(px, RN1.MAKER_FEE_RATE) + o_px > \
+                        cap + D("0.0000001"):
+                    row["why"] = "pair_cap"
+                    continue
+                rew = 0.0
+                if per and book:
+                    try:
+                        ys = [(float(o_px), float(q))] if (
+                            o_ == "YES" and per.get("maxSpread")
+                            and D(0) < o_px < ONE) else []
+                        ns = [(float(o_px), float(q))] if (
+                            o_ == "NO" and per.get("maxSpread")
+                            and D(0) < o_px < ONE) else []
+                        m = RW.marginal_ladder_reward(
+                            book, per, ys, ns, float(t), list(own_y),
+                            list(own_n), s_, float(px), float(q))
+                        rew = max(0.0, float(
+                            m["incremental_reward_usd_per_hour"])) * mult
+                    except Exception as exc:              # noqa: BLE001
+                        row["reward_error"] = type(exc).__name__
+                        rew = 0.0
+                fr = rn1_fill_param(RN1_FILL_RATE, d, slug)
+                fl = rn1_fill_param(RN1_FILL_LOSS, d, slug)
+                fe = RN1.fee(px, RN1.MAKER_FEE_RATE)
+                cost_h = fr * float(q) * (fl + float(fe) + float(risk))
+                row.update(reward_usd_per_hour=round(rew, 6),
+                           fill_cost_usd_per_hour=round(cost_h, 6),
+                           ev_usd_per_hour=round(rew - cost_h, 6),
+                           fill_rate=fr, fill_loss=fl, risk=str(risk))
+            ok = [d for d, r in rows.items()
+                  if r.get("ev_usd_per_hour") is not None
+                  and r["ev_usd_per_hour"] > 0]
+            best = max(ok, key=lambda d: (rows[d]["ev_usd_per_hour"], d)) \
+                if ok else None
+            sides[s_] = {"role": role[s_], "rows": rows, "chosen": best,
+                         "depth": fallback if best is None else best,
+                         "why": None if best is not None
+                         else "no_positive_placement"}
+        # PAIR CAP for two simultaneous openings: the touch is left (the
+        # dearer touch bid first) until the pair of both bids fits
+        def _px(s_):
+            return touch[s_] - int(sides[s_]["depth"]) * t
+
+        def _over() -> bool:
+            if not all(sides[s_].get("role") != "complete"
+                       for s_ in ("YES", "NO")):
+                return False
+            y, n = _px("YES"), _px("NO")
+            return y + RN1.fee(y, RN1.MAKER_FEE_RATE) + n + \
+                RN1.fee(n, RN1.MAKER_FEE_RATE) > cap + D("0.0000001")
+        while _over():
+            at = [s_ for s_ in ("YES", "NO") if sides[s_]["depth"] == 0]
+            if not at:
+                break                     # the quoting rule reprices it
+            s_ = max(at, key=_px)
+            rows = sides[s_]["rows"]
+            rows[0]["why"] = "pair_cap"
+            ok = [d for d, r in rows.items() if d >= 1 and
+                  r.get("ev_usd_per_hour") is not None and
+                  r["ev_usd_per_hour"] > 0]
+            best = max(ok, key=lambda d: (rows[d]["ev_usd_per_hour"], d)) \
+                if ok else None
+            sides[s_].update(chosen=best,
+                             depth=fallback if best is None else best,
+                             why=None if best is not None
+                             else "no_positive_placement")
+        net = rew_t = cap_usd = 0.0
+        for s_ in ("YES", "NO"):
+            sd = sides[s_]
+            if sd.get("role") == "complete":
+                continue
+            r = sd["rows"].get(sd["depth"]) or {}
+            if r.get("ev_usd_per_hour") is None:
+                continue
+            net += float(r["ev_usd_per_hour"])
+            rew_t += float(r["reward_usd_per_hour"])
+            cap_usd += float(D(r["px"]) * q)
+        return {"sides": sides,
+                "depth_side": {s_: int(sides[s_]["depth"])
+                               for s_ in ("YES", "NO")},
+                "net_usd_per_hour": round(net, 6),
+                "reward_usd_per_hour": round(rew_t, 6),
+                "capital_usd": round(cap_usd, 4),
+                "touch": any(sides[s_]["depth"] == 0 and
+                             sides[s_].get("role") != "complete"
+                             for s_ in ("YES", "NO")),
+                "hard": hard, "qty": str(q), "reward_mult": mult,
+                "label": "THEORETICAL calibrated reward minus expected "
+                         "fill cost per resting hour; not a payment"}
+
+    def _rn1_book(self, slug: str) -> Optional[Mapping[str, Any]]:
+        """The public book, cached RN1_MARGINAL_BOOK_TTL_S (the marginal-EV
+        cache). None when it cannot be read (no reward is then credited)."""
+        try:
+            cache = getattr(self, "_mev_book", None)
+            if cache is None:
+                cache = self._mev_book = {}
+            hit = cache.get(slug)
+            if hit and time.monotonic() - hit[0] < RN1_MARGINAL_BOOK_TTL_S:
+                return hit[1]
+            book = (self._reward_get()(f"/v1/markets/{slug}/book") or {}
+                    ).get("marketData") or {}
+            cache[slug] = (time.monotonic(), book)
+            return book
+        except Exception:                                 # noqa: BLE001
+            return None
+
+    def rn1_touch_ev_quote(self, slug: str, mk: Dict[str, Any],
+                           bbo: Mapping[str, Any], tick: Any, rng: Any,
+                           qty: Any, qcfg: Mapping[str, Any],
+                           now: float) -> Dict[str, Any]:
+        """RN1_TOUCH_EV for a tracked market's quote this pass: the same
+        rn1_touch_ev the selection scored it with, on this pass's book,
+        inventory, hard protections and size. Records whether a bid rests
+        at the touch (the reactive pull reads it) and logs each change."""
+        per = self.rn1_reward(slug)
+        book = self._rn1_book(slug) if per else None
+        own_y, own_n = [], []
+        if book:
+            try:
+                own_y, own_n = self._rn1_visible_own(
+                    book, self._rn1_mature_own(mk, time.time()),
+                    D(str(tick)))
+            except Exception:                             # noqa: BLE001
+                own_y, own_n = [], []
+        hard = self.rn1_touch_hard(slug, mk, bbo, tick, rng)
+        out = self.rn1_touch_ev(
+            slug, book, per, bbo, tick, qty, mk["pos"], mk["cost"], hard,
+            own_y, own_n, risk_step_ticks=qcfg.get("risk_step_ticks"),
+            completion_depth=int(qcfg.get("depth_ticks", RN1.DEPTH_TICKS)))
+        joined = getattr(self, "_rn1_joined", None)
+        if joined is None:
+            joined = self._rn1_joined = {}
+        joined[slug] = bool(out["touch"]) or any(
+            out["sides"][s_].get("role") == "complete" and
+            out["depth_side"][s_] == 0 for s_ in ("YES", "NO"))
+        key = json.dumps([out["depth_side"], out["hard"]], sort_keys=True)
+        if mk.get("touch_ev_logged") != key:
+            mk["touch_ev_logged"] = key
+            log("RN1_TOUCH_EV", slug=slug, depth=out["depth_side"],
+                hard=out["hard"], qty=out["qty"],
+                net_usd_per_hour=out["net_usd_per_hour"],
+                reward_mult=out["reward_mult"],
+                sides={s_: {k: v for k, v in sd.items() if k != "rows"} |
+                       {"rows": {str(d): {k2: r.get(k2) for k2 in (
+                           "px", "why", "ev_usd_per_hour",
+                           "reward_usd_per_hour",
+                           "fill_cost_usd_per_hour")}
+                           for d, r in (sd.get("rows") or {}).items()}}
+                       for s_, sd in out["sides"].items()},
+                label=out["label"])
+        return out
+
+    def _touch_ev_score(self, slug: str, book: Mapping[str, Any],
+                        per: Mapping[str, Any], bb: D, ba: D, tick: D
+                        ) -> Dict[str, Any]:
+        """RN1_TOUCH_EV at selection: rn1_touch_ev on the candidate's book,
+        its inventory (none if untracked), its hard protections (the same
+        30 s mid range the controller reads) and each clip size the net
+        ranking compares (capped at the phase size the controller would
+        send). Stores the chosen size as the net ranking does."""
+        now = time.time()
+        mk = (self.b.d.get("markets") or {}).get(slug) or {}
+        pos = mk.get("pos") or {"YES": "0", "NO": "0"}
+        cost = mk.get("cost") or {"YES": "0", "NO": "0"}
+        bbo = {"bid": bb, "ask": ba}
+        rng = self._vol(slug, bbo, now)
+        hard = self.rn1_touch_hard(slug, mk, bbo, tick, rng)
+        own_y, own_n = [], []
+        if mk.get("orders"):
+            try:
+                own_y, own_n = self._rn1_visible_own(
+                    book, self._rn1_mature_own(mk, now), tick)
+            except Exception:                             # noqa: BLE001
+                own_y, own_n = [], []
+        top = rn1_live_qty() if self.event_live(slug) else rn1_pregame_qty()
+        top = min(top, rn1_max_clip())
+        sizes = [x for x in RN1_NET_SIZES if 0 < x <= top] or [top]
+        best = None
+        for q_ in sizes:
+            got = self.rn1_touch_ev(slug, book, per, bbo, tick, q_, pos,
+                                    cost, hard, own_y, own_n)
+            if best is None or got["net_usd_per_hour"] > \
+                    best["net_usd_per_hour"] + 1e-12:
+                best = got
+        cap_usd = float(best["capital_usd"])
+        dep = min(best["depth_side"].values())
+        out = {"usd_per_hour": best["reward_usd_per_hour"],
+               "net_usd_per_hour": best["net_usd_per_hour"],
+               "capital_usd": str(best["capital_usd"]),
+               "per_dollar_hour": round(best["net_usd_per_hour"] / cap_usd,
+                                        6) if cap_usd > 0 else 0.0,
+               "depth": dep, "depth_side": best["depth_side"],
+               "qty": best["qty"], "touch_ev": True, "hard": hard}
+        choice = getattr(self, "_net_choice", None)
+        if choice is None:
+            choice = self._net_choice = {}
+        choice[slug] = {"t": now, "depth": dep, "qty": D(best["qty"]),
+                        "net_usd_per_hour": best["net_usd_per_hour"],
+                        "depth_side": best["depth_side"]}
+        return out
 
     def duration_info(self, slug: str,
                       now: Optional[float] = None) -> Dict[str, Any]:
@@ -7560,7 +8053,9 @@ class Engine:
         return PH.opportunity(
             edge_yes=e["YES"], edge_no=e["NO"],
             reward_usd_per_contract_hour=per_h, horizon_h=RANK_HORIZON_H,
-            reward_haircut=RANK_REWARD_HAIRCUT, reward_pays=pays)
+            reward_haircut=(rn1_reward_mult(slug, per)
+                            if RN1_REWARD_CALIBRATION and per
+                            else RANK_REWARD_HAIRCUT), reward_pays=pays)
 
     def select(self, acct: Mapping[str, Any]) -> None:
         if os.getenv(ENABLED_ENV, "").upper() != "YES":
@@ -8424,18 +8919,22 @@ class Engine:
             from src import pmus_incentive_audit as IA
             with self.safety_reads():
                 e = IA.earnings(self.v.t, detail_max=max(
-                    50, ECONOMICS_REWARD_ROWS)) if ECONOMICS_REPORT \
+                    50, ECONOMICS_REWARD_ROWS)) if (
+                    ECONOMICS_REPORT or RN1_REWARD_CALIBRATION) \
                     else IA.earnings(self.v.t)
         except Exception as exc:                          # noqa: BLE001
             log("REWARD_CHECK", ok=False,
                 err=f"{type(exc).__name__}:{str(exc)[:160]}")
             return False
+        if RN1_REWARD_CALIBRATION and e.get("ok"):
+            self.reward_calibration(list(e.get("rows_detail") or []))
         if ECONOMICS_REPORT:
             # the economics line reads every row; REWARD_CHECK below keeps
             # reading the first 50 exactly as before
             self._reward_rows = (time.monotonic(), bool(e.get("ok")),
                                  list(e.get("rows_detail") or []),
                                  e.get("rows"))
+        if ECONOMICS_REPORT or RN1_REWARD_CALIBRATION:
             e = dict(e, rows_detail=list(e.get("rows_detail") or [])[:50])
         ours = set(self.b.d.get("markets") or {})
         mine = [r for r in (e.get("rows_detail") or [])
