@@ -124,6 +124,13 @@ COPY src/l5_account_risk.py src/l5_account_risk.py
 COPY src/pmus_sports_sharp.py src/pmus_sports_sharp.py
 COPY src/pmus_combo_maker.py src/pmus_combo_maker.py
 COPY src/pmus_rn1_replica.py src/pmus_rn1_replica.py
+# Imported lazily by pmus_sports_two_sided.py when PMUS_RN1_DURATION_RANK /
+# PMUS_RN1_LIVE_FIRST, PMUS_RN1_REWARD_CALIBRATION and PMUS_ECONOMICS_REPORT
+# are on. LIVE 2026-11-27 12:47Z: 1c1d546b6 shipped without them and the
+# loop raised ImportError until the safety latch tripped (lock held, no orders).
+COPY src/pmus_duration_rank.py src/pmus_duration_rank.py
+COPY src/pmus_reward_calibration.py src/pmus_reward_calibration.py
+COPY src/pmus_campaign_economics.py src/pmus_campaign_economics.py
 COPY src/pmus_request_budget.py src/pmus_request_budget.py
 COPY src/pmus_pilot_pnl.py src/pmus_pilot_pnl.py
 COPY src/pmus_fill_markout.py src/pmus_fill_markout.py
