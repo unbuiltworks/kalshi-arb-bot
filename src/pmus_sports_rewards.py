@@ -32,6 +32,24 @@ SYMBOLS_CAP_GUARD = 100
 MIN_GAP_S = 0.5                     # <= 2 rps on the public gateway
 LIVE_HOURS_DEFAULT = 3.0
 EPS = 1e-9
+# Liquidity time-period fields this module understands (every field the
+# venue's /v1/incentives payload carried in 40,793 recorded periods on
+# 10 Sep 2026 and in the active slate on 27 Nov 2026, plus maxSpread). The
+# CFTC rule filing PMX-2026-70 describes OPTIONAL programme terms (an
+# executed-notional reward cap, a minimum volume) that no payload has shown
+# so far. A period carrying ANY other field may carry such a term, so it is
+# not credited as payable (fail closed) until this module is taught it.
+KNOWN_PERIOD_KEYS = frozenset((
+    "programId", "programType", "start", "rewardPool", "status",
+    "discountFactor", "targetSize", "period", "createdAt", "maxSpread"))
+import os as _os
+UNKNOWN_TERMS_FAIL_CLOSED = _os.getenv(
+    "PMUS_REWARD_UNKNOWN_TERMS", "fail_closed").strip().lower() != "ignore"
+
+
+def unknown_terms(tp: Mapping[str, Any]) -> list:
+    """Fields of a time period this module does not understand."""
+    return sorted(str(k) for k in tp.keys() if k not in KNOWN_PERIOD_KEYS)
 
 
 # ------------------------------------------------- copied from the recorder
@@ -247,6 +265,7 @@ def build_program_map(found: Mapping[str, Mapping[str, Any]],
                 "maxSpread": _max_spread(tp),
                 "maxSpread_raw": tp.get("maxSpread"),
                 "status": tp.get("status"), "start": tp.get("start"),
+                "unknown_terms": unknown_terms(tp),
                 "M_event": max(1, len(by_prog_ev[key + (ev,)])),
                 "M_program": max(1, len(by_prog[key])),
             })
@@ -289,6 +308,8 @@ def paying_period(prog: Mapping[str, Any], now: Optional[float] = None,
     est = _ts(prog.get("eventStartTime"))
     best = None
     for p in prog.get("periods") or ():
+        if UNKNOWN_TERMS_FAIL_CLOSED and p.get("unknown_terms"):
+            continue           # a possible cap / minimum volume: not payable
         paying, secs, basis = period_pacing(p, est, now, event_live)
         if not paying or not secs:
             continue
@@ -298,6 +319,7 @@ def paying_period(prog: Mapping[str, Any], now: Optional[float] = None,
                     "period": p["period"], "df": p["df"],
                     "targetSize": p["target"], "maxSpread": p["maxSpread"],
                     "period_s": secs, "pacing": basis,
+                    "start": p.get("start"),
                     "pool_rate_usd_s": rate,
                     "M_event": p.get("M_event", 1),
                     "M_program": p.get("M_program", 1)}

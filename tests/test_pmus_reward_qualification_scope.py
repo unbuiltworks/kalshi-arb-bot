@@ -189,7 +189,8 @@ def test_accrual_is_keyed_by_pool(e, monkeypatch):
     mk["rn1_reward_est"] = {"t": time.time(), "est_usd_per_hour": 3.6}
     mk["reward_theo_t"] = time.time() - 100
     e._rn1_theo_accrue(A, mk, time.time())
-    assert set(mk["reward_theo_pool"]) == {"tt_live_20261127|live"}
+    assert set(mk["reward_theo_pool"]) == {
+        "tt_live_20261127|live", A + "|tt_live_20261127|live|"}
     assert mk["reward_theo_pool"]["tt_live_20261127|live"] == \
         pytest.approx(0.1, abs=0.002)
 
@@ -198,3 +199,73 @@ def test_pool_key():
     assert M.rn1_pool_key({"programId": "p", "period": "live"}) == "p|live"
     assert M.rn1_pool_key({"programId": "p"}) is None
     assert M.rn1_pool_key(None) is None
+
+
+# ------------------------------------------------ contract_period scope
+# The venue's payloads (data/pmus/incentives_2026-11-27/) show one
+# programmeId|period spanning many contracts with the same rewardPool each:
+# the pool is one contract's time period.
+def _cp(e, monkeypatch, pers):
+    monkeypatch.setattr(M, "RN1_REWARD_QUAL_SCOPE", "contract_period")
+    monkeypatch.setattr(e, "rn1_reward", lambda slug: pers.get(slug))
+
+
+LIVE = {"programId": "atp_wta_moneyline_live_20261018", "period": "live",
+        "start": "2026-10-18T18:00:00Z"}
+
+
+def test_contract_period_never_aggregates_another_match(e, monkeypatch):
+    """Same programme and period on two matches: B's plan does not help A
+    (program_period would have pooled them)."""
+    _cp(e, monkeypatch, {A: dict(LIVE), B: dict(LIVE)})
+    _plan(e, B, 0.29)
+    q = e.rn1_reward_qualifies(A, extra_usd_h=0.29)
+    assert q["pool"] == A + "|atp_wta_moneyline_live_20261018|live|" \
+        "2026-10-18T18:00:00Z"
+    assert q["rate_usd_per_hour"] == pytest.approx(0.29)
+    assert q["markets"] == 0 and not q["qualifies"]        # 0.87 < 1
+    monkeypatch.setattr(M, "RN1_REWARD_QUAL_SCOPE", "program_period")
+    assert e.rn1_reward_qualifies(A, extra_usd_h=0.29)["qualifies"]
+
+
+def test_contract_period_counts_only_own_accrual_in_the_period(
+        e, monkeypatch):
+    _cp(e, monkeypatch, {A: dict(LIVE), B: dict(LIVE)})
+    own = A + "|atp_wta_moneyline_live_20261018|live|2026-10-18T18:00:00Z"
+    e.b.m(B)["reward_theo_pool"] = {
+        B + "|atp_wta_moneyline_live_20261018|live|2026-10-18T18:00:00Z":
+        50.0, "atp_wta_moneyline_live_20261018|live": 50.0}
+    e.b.m(A)["reward_theo_pool"] = {
+        A + "|atp_wta_moneyline_day_of_20261018|day_of|"
+        "2026-10-18T18:00:00Z": 50.0}                       # other period
+    assert e.rn1_reward_pool_projection(A)["accrued_pool_usd"] == 0.0
+    e.b.m(A)["reward_theo_pool"][own] = 2.0
+    assert e.rn1_reward_pool_projection(A)["accrued_pool_usd"] == \
+        pytest.approx(0.8)
+
+
+def test_contract_period_own_rate_alone_can_qualify(e, monkeypatch):
+    _cp(e, monkeypatch, {A: dict(LIVE), B: None})
+    q = e.rn1_reward_qualifies(A, extra_usd_h=0.34)        # 1.02 >= 1
+    assert q["qualifies"] and q["scope"] == "contract_period"
+    assert not e.rn1_reward_qualifies(A, extra_usd_h=0.33)["qualifies"]
+
+
+def test_contract_period_minimum_and_no_pool(e, monkeypatch):
+    assert M.RN1_REWARD_MIN_DAY_USD == 1.0
+    _cp(e, monkeypatch, {A: None, B: dict(LIVE)})
+    q = e.rn1_reward_qualifies(A, extra_usd_h=100.0)
+    assert q["why"] == "no_paying_pool" and not q["qualifies"]
+
+
+def test_contract_pool_key():
+    assert M.rn1_pool_key(LIVE, "s") == \
+        "s|atp_wta_moneyline_live_20261018|live|2026-10-18T18:00:00Z"
+    assert M.rn1_pool_key({"programId": "p"}, "s") is None
+
+
+def test_contract_period_incentive_uses_it(e, monkeypatch):
+    _cp(e, monkeypatch, {A: dict(LIVE), B: dict(LIVE)})
+    monkeypatch.setattr(e, "_rn1_reward_estimate", lambda *a, **k: None)
+    _plan(e, B, 5.0)                     # another match's large plan
+    assert e.rn1_incentive(A)["why"] == "below_minimum_payout"

@@ -517,10 +517,20 @@ RN1_REWARD_PROJECT_H = float(os.getenv("PMUS_RN1_REWARD_PROJECT_H", "3"))
 # counts toward a bid, and a market with no paying pool qualifies nothing.
 # "account_day" stays available but is NOT recommended: no source supports
 # account-wide daily aggregation.
+# "contract_period" (27 Nov, release correction; RECOMMENDED): a programme id
+# is NOT one pool. The venue's own payloads show one programmeId|period
+# spanning many contracts (atp_wta_moneyline_live_20261018 has run since
+# 18 Oct over every ATP/WTA match; cfb_t2_ml_live_20261125 over 43 games),
+# each carrying the same rewardPool, and scoring is normalised per contract
+# book per snapshot. The pool is therefore one CONTRACT's time period: key
+# (market slug, programId, period, start). Only that contract's own accrual
+# in that period and its own resting/planned rate count; no other match,
+# no other period, no expired period. Data/pmus/incentives_2026-11-27/.
 RN1_REWARD_QUAL_SCOPE = os.getenv("PMUS_RN1_REWARD_QUAL_SCOPE",
                                   "market").strip().lower()
 #: the scopes that use the one unified qualification at every site
-RN1_QUAL_UNIFIED = ("account_day", "program_period")
+RN1_QUAL_UNIFIED = ("account_day", "program_period", "contract_period")
+RN1_POOL_SCOPES = ("program_period", "contract_period")
 #: a planned (not yet resting) market's rate is used for this long
 RN1_REWARD_PLAN_TTL_S = float(os.getenv("PMUS_RN1_REWARD_PLAN_TTL_S", "120"))
 
@@ -1822,15 +1832,27 @@ def rn1_reward_mult(slug: str, per: Optional[Mapping[str, Any]] = None
     return m / max(1.0, div)
 
 
-def rn1_pool_key(per: Optional[Mapping[str, Any]]) -> Optional[str]:
-    """The reward pool a paying period belongs to: "programId|period"
-    (the programme id carries its date), or None without both."""
+def rn1_pool_key(per: Optional[Mapping[str, Any]],
+                 slug: Optional[str] = None) -> Optional[str]:
+    """The reward pool a paying period belongs to. With `slug` (scope
+    "contract_period"): "slug|programId|period|start", one contract's time
+    period. Without: "programId|period". None without the needed parts."""
     if not per:
         return None
     pid, prd = per.get("programId"), per.get("period")
     if not pid or not prd:
         return None
+    if slug is not None:
+        return "%s|%s|%s|%s" % (slug, pid, prd, per.get("start") or "")
     return "%s|%s" % (pid, prd)
+
+
+def rn1_scope_pool_key(per: Optional[Mapping[str, Any]],
+                       slug: Optional[str]) -> Optional[str]:
+    """The pool key for the configured scope."""
+    if RN1_REWARD_QUAL_SCOPE == "contract_period":
+        return rn1_pool_key(per, slug) if slug else None
+    return rn1_pool_key(per)
 
 
 def rn1_reward_cal(slug: str, per: Optional[Mapping[str, Any]] = None
@@ -6489,11 +6511,13 @@ class Engine:
             # "program_period"): programme id + period, never pooled with
             # another programme or another period of the same market
             per_ = self.rn1_reward(slug) or {}
-            pk = rn1_pool_key(per_)
-            if pk:
-                tp = mk.setdefault("reward_theo_pool", {})
-                tp[pk] = round(float(tp.get(pk) or 0.0) +
-                               rate * dt / 3600.0, 6)
+            tp = None
+            for pk in {rn1_pool_key(per_), rn1_pool_key(per_, slug)}:
+                if pk:
+                    tp = mk.setdefault("reward_theo_pool", {}) \
+                        if tp is None else tp
+                    tp[pk] = round(float(tp.get(pk) or 0.0) +
+                                   rate * dt / 3600.0, 6)
         except Exception:                                 # noqa: BLE001
             return
 
@@ -6628,19 +6652,23 @@ class Engine:
         for `slug`, over min(RN1_REWARD_PROJECT_H, window left, period
         left). No paying pool for `slug` = 0. Never raises."""
         now = time.time() if now is None else now
-        out = {"scope": "program_period", "pool": None,
+        out = {"scope": RN1_REWARD_QUAL_SCOPE if RN1_REWARD_QUAL_SCOPE in
+               RN1_POOL_SCOPES else "program_period", "pool": None,
                "accrued_pool_usd": 0.0, "rate_usd_per_hour": 0.0,
                "horizon_h": 0.0, "projected_usd": 0.0, "markets": 0,
                "label": "THEORETICAL reward projection; not a payment"}
         try:
             per = self.rn1_reward(slug) if slug else None
-            pk = rn1_pool_key(per)
+            contract = out["scope"] == "contract_period"
+            pk = rn1_pool_key(per, slug) if contract else rn1_pool_key(per)
             if not pk:
                 out["why"] = "no_paying_pool"
                 return out
             out["pool"] = pk
             acc = 0.0
             for s_, m_ in (self.b.d.get("markets") or {}).items():
+                if contract and s_ != slug:
+                    continue                 # another contract's pool
                 v_ = (m_.get("reward_theo_pool") or {}).get(pk)
                 if v_:
                     acc += float(v_) * rn1_reward_cal(s_, per)
@@ -6650,8 +6678,9 @@ class Engine:
                 if s_ == slug and extra_usd_h:
                     continue
                 per_s = self.rn1_reward(s_)
-                if rn1_pool_key(per_s) != pk:
-                    continue                 # another programme or period
+                if (rn1_pool_key(per_s, s_) if contract else
+                        rn1_pool_key(per_s)) != pk:
+                    continue                 # another contract/programme/period
                 est = (self.b.m(s_).get("rn1_reward_est") or {})
                 r_ = 0.0
                 if now - float(est.get("t") or 0) <= \
@@ -6709,7 +6738,7 @@ class Engine:
         """The one qualification every site uses (see RN1_REWARD_QUAL_SCOPE):
         "program_period" tests `slug`'s own pool; "account_day" the
         account's day total."""
-        if RN1_REWARD_QUAL_SCOPE == "program_period":
+        if RN1_REWARD_QUAL_SCOPE in RN1_POOL_SCOPES:
             pj = self.rn1_reward_pool_projection(slug, extra_usd_h)
         else:
             pj = self.rn1_reward_day_projection(slug, extra_usd_h)
