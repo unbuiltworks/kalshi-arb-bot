@@ -2521,3 +2521,26 @@ the exact three-hour live authorization packet for sports release
   `analysis/l5/sports/directional/DIRECTIONAL_ALLOCATION_20261127.md` on the
   dev branch; the live-fill study is in `analysis/l5/sports/adverse/`.
 - Activation needs separate owner authorization.
+
+## 78. RN1/Bonereaper hybrid allocator v2 prepared; not authorized — 27 Nov 2026, about 15:45 UTC
+
+- **Sports release candidate:** `release/pmus-sports-hybrid-8da588386`
+  (`8da58838600e1e772cc30c3f0a0c2ed2983710bf`), on top of the deployed
+  `a51cfdbd2`.
+  - Every new behaviour is default off: `PMUS_RN1_DIRECTIONAL`,
+    `PMUS_RN1_DIR_SHARP`, `PMUS_RN1_DIR_PRICE_ADDS`,
+    `PMUS_RN1_DIR_EXTRA_LEVELS`, `PMUS_RN1_DIR_UP_MULT`. Upsizing is capped
+    at the final gate's per-order maximum.
+  - Regression failure names are identical to `a51cfdbd2` (26
+    pre-existing).
+  - The image was built locally: 62/62 modules import, and the engine booted
+    with every flag on and the lock held.
+- **Crypto:** `dev/l5-crypto-shared-allocator` (`693174069`), built from
+  `19ca55ad2`. The adapter only; the controller is unchanged and nothing is
+  wired. Regression failure and error names are identical. The crypto
+  development session was informed.
+- **Results** (THEORETICAL): `HYBRID_ALLOCATOR_20261127.md` on the sports
+  branch. Residual losses fall in both lanes. No configuration is
+  profitable before incentives.
+- **Not deployed or armed.** The running campaign was not touched.
+  Activation needs separate owner authorization.
