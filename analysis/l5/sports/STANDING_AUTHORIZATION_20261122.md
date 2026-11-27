@@ -2322,3 +2322,45 @@ the exact three-hour live authorization packet for sports release
   Completion bids only from now on.
 - **Venue reconcile 05:48:** ok, 4 positions. One 27 s drawdown blip at
   05:42. No bot settlement this hour.
+
+### 71h. Stage 1 close-out — 27 Nov 2026, about 07:55 UTC
+
+- **Locks:** the window lock engaged at 07:45:02 (`window_ended`; new exposure
+  and completions both locked). `PMUS_TWO_SIDED_SUBMISSION_LOCK=1` was set
+  explicitly on the sports service at about 07:56. Watchdog at 07:51 saw 0 open
+  orders. Venue reconcile at 07:48 was ok with 0 positions and 0 mismatches.
+- **Stage 1 result (23:45–07:45, venue-reconciled, cash-confirmed):** realized
+  net **−$5.8631**. Cash went from 311.8635 to 306.0004, with $0 unexplained.
+  Fees were $0 and rebates $0.
+
+  | Market | Result | Net |
+  |---|---|---|
+  | `timleg` | pair | +0.1800 |
+  | `kobvit` | pair | +0.2800 |
+  | `kolval` | pair | +0.0300 |
+  | `kuzdmy` | pair | +0.1900 |
+  | `sydvik` | pair | +0.1345 |
+  | `savvol` | 1 pair +0.0348; residual NO 5.69 lost −2.5903 | −2.5555 |
+  | `paryur` | residual NO 8.95 lost | −4.1221 |
+  | Total | pair edge +0.8493; residual −6.7124 | **−5.8631** |
+
+  - 3 markets had no fills.
+  - 34 fills, 39.54 contracts, $18.31 spent.
+  - Average pair cost 0.932.
+- **Rewards:** PAID was unchanged at $24.09. No Stage 1 reward has been
+  credited. The $0.86 PENDING is from earlier dates.
+- **Ledger 9b5f4995a:**
+  - Feed settlements CONFIRMED: 3 (`kolval`, `sydvik`, `kuzdmy`). CONTRADICTED: 0.
+  - `paryur` settled on the ordinary path.
+  - `savvol` fell back with `VENUE_NET_NE_FEED_NET`: the venue had already
+    netted the expired position before the feed form ran. Its settlement line
+    shows the $1 bound (−5.69).
+  - Account risk was unreadable at 07:13 and readable again by 07:33. This was
+    during completions-only, so no openings were lost.
+  - Ledger day is −5.8631 and lifetime −66.8569. Both match cash. Unattributed
+    $0, unresolved 0.
+  - Drawdown is 6.4098 of 20 (room 13.5902).
+  - Reconciliation did not fail, so no rollback was needed.
+- **Against the Stage 2 criteria:** not met. Net after confirmed rewards is
+  negative, because two residual legs lost after the window. Stage 2 is not
+  advanced.
