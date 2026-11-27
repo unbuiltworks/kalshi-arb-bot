@@ -6011,10 +6011,33 @@ class Engine:
                 proj = self._rn1_boot_projection(book, per, planned, cands,
                                                  alive, t, own_y, own_n,
                                                  slug)
-                out = self._rn1_judge(slug, mk, cands, planned, no_fair,
-                                      pos, clip, touch, adv_cfg, qcfg, t,
-                                      per, book, own_y, own_n, rw_err,
-                                      {i: proj for i in alive})
+                # Judge only the surviving ladder. Rejected candidates
+                # must not contribute reward or concentration to survivors.
+                if RN1_REWARD_QUAL_SCOPE == "account_day":
+                    candidate_ids = {id(c) for c in cands}
+                    feasible = [c for c in cands if id(c) in alive]
+                    feasible_planned = [
+                        x for x in planned
+                        if id(x) not in candidate_ids or id(x) in alive
+                    ]
+                    judged = self._rn1_judge(
+                        slug, mk, feasible, feasible_planned, no_fair,
+                        pos, clip, touch, adv_cfg, qcfg, t,
+                        per, book, own_y, own_n, rw_err,
+                        {i: proj for i in alive})
+                    by_id = {id(c): result
+                             for c, result in zip(feasible, judged)}
+                    out = [by_id.get(id(c), {
+                        "ok": False, "why": "marginal_ev_not_positive",
+                        "side": c["side"], "level": c.get("level", 0),
+                        "reward_why": "rejected_from_feasible_ladder",
+                        "reward_usd_per_hour": 0.0,
+                    }) for c in cands]
+                else:
+                    out = self._rn1_judge(slug, mk, cands, planned, no_fair,
+                                          pos, clip, touch, adv_cfg, qcfg, t,
+                                          per, book, own_y, own_n, rw_err,
+                                          {i: proj for i in alive})
                 ok = {id(c) for c, r in zip(cands, out) if r.get("ok")} \
                     & alive
                 if ok == alive:
