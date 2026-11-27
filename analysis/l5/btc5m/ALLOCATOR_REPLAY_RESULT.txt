@@ -1,0 +1,48 @@
+windows: 187 (THEORETICAL replay on public quotes; maker fee 0)
+-- existing controller (live configuration)
+   FIRST HALF  fills 1541  spend $  45.85  matched -0.0075 [-0.014,-0.000]  residual -0.0122 [-0.028,+0.005]
+               net -0.0197 [-0.040,+0.002]  total $-1.829  refused 0
+   SECOND HALF fills 1543  spend $  44.81  matched -0.0094 [-0.015,-0.003]  residual -0.0200 [-0.034,-0.004]
+               net -0.0294 [-0.047,-0.010]  total $-2.763  refused 0
+   ALL         fills 3084  spend $  90.66  matched -0.0084 [-0.013,-0.003]  residual -0.0161 [-0.027,-0.005]
+               net -0.0246 [-0.039,-0.010]  total $-4.591  refused 0
+-- + allocator, fill loss 0
+   FIRST HALF  fills 1422  spend $  41.79  matched -0.0104 [-0.016,-0.004]  residual -0.0093 [-0.020,+0.002]
+               net -0.0198 [-0.034,-0.004]  total $-1.839  refused 774
+   SECOND HALF fills 1443  spend $  41.63  matched -0.0099 [-0.016,-0.004]  residual -0.0153 [-0.026,-0.003]
+               net -0.0253 [-0.040,-0.009]  total $-2.376  refused 633
+   ALL         fills 2865  spend $  83.41  matched -0.0102 [-0.015,-0.006]  residual -0.0123 [-0.020,-0.004]
+               net -0.0225 [-0.033,-0.012]  total $-4.214  refused 1407
+   PAIRED vs existing, net per window +0.0020 [-0.006,+0.009], total $+0.377
+-- + allocator, fill loss 0.01
+   FIRST HALF  fills 1374  spend $  41.02  matched -0.0113 [-0.017,-0.005]  residual -0.0073 [-0.017,+0.004]
+               net -0.0186 [-0.032,-0.004]  total $-1.734  refused 918
+   SECOND HALF fills 1420  spend $  40.93  matched -0.0113 [-0.017,-0.005]  residual -0.0158 [-0.026,-0.004]
+               net -0.0270 [-0.041,-0.012]  total $-2.541  refused 744
+   ALL         fills 2794  spend $  81.96  matched -0.0113 [-0.016,-0.007]  residual -0.0116 [-0.019,-0.004]
+               net -0.0229 [-0.033,-0.012]  total $-4.275  refused 1662
+   PAIRED vs existing, net per window +0.0017 [-0.007,+0.010], total $+0.316
+-- + allocator, fill loss 0.02
+   FIRST HALF  fills 1337  spend $  40.29  matched -0.0120 [-0.017,-0.006]  residual -0.0056 [-0.016,+0.005]
+               net -0.0176 [-0.031,-0.003]  total $-1.633  refused 1038
+   SECOND HALF fills 1400  spend $  40.39  matched -0.0116 [-0.017,-0.005]  residual -0.0155 [-0.025,-0.004]
+               net -0.0271 [-0.040,-0.012]  total $-2.546  refused 869
+   ALL         fills 2737  spend $  80.68  matched -0.0118 [-0.016,-0.007]  residual -0.0106 [-0.018,-0.003]
+               net -0.0223 [-0.032,-0.012]  total $-4.179  refused 1907
+   PAIRED vs existing, net per window +0.0022 [-0.007,+0.011], total $+0.413
+-- + allocator, fill loss 0.01, additions only
+   FIRST HALF  fills 1387  spend $  42.03  matched -0.0122 [-0.018,-0.006]  residual -0.0068 [-0.016,+0.004]
+               net -0.0190 [-0.032,-0.005]  total $-1.767  refused 843
+   SECOND HALF fills 1420  spend $  41.48  matched -0.0131 [-0.019,-0.007]  residual -0.0142 [-0.025,-0.002]
+               net -0.0273 [-0.042,-0.011]  total $-2.564  refused 672
+   ALL         fills 2807  spend $  83.51  matched -0.0127 [-0.017,-0.008]  residual -0.0105 [-0.018,-0.002]
+               net -0.0232 [-0.033,-0.012]  total $-4.331  refused 1515
+   PAIRED vs existing, net per window +0.0014 [-0.007,+0.010], total $+0.261
+-- + allocator, fill loss 0.01, lambda 0.02
+   FIRST HALF  fills 1372  spend $  41.01  matched -0.0113 [-0.017,-0.005]  residual -0.0073 [-0.017,+0.004]
+               net -0.0186 [-0.032,-0.004]  total $-1.728  refused 923
+   SECOND HALF fills 1417  spend $  40.85  matched -0.0113 [-0.017,-0.005]  residual -0.0157 [-0.026,-0.004]
+               net -0.0271 [-0.041,-0.011]  total $-2.545  refused 754
+   ALL         fills 2789  spend $  81.85  matched -0.0113 [-0.016,-0.007]  residual -0.0115 [-0.019,-0.004]
+               net -0.0229 [-0.033,-0.012]  total $-4.273  refused 1677
+   PAIRED vs existing, net per window +0.0017 [-0.007,+0.010], total $+0.318

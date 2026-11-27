@@ -1,0 +1,6 @@
+Full regression (--continue-on-collection-errors), 27 Nov 2026
+baseline 19ca55ad2: 61 failed, 24081 passed, 28 skipped, 1 xfailed, 3320 warnings, 26 errors in 1288.75s (0:21:28)
+dev/l5-crypto-shared-allocator: 61 failed, 24111 passed, 28 skipped, 1 xfailed, 3320 warnings, 26 errors in 1265.38s (0:21:05)
+failure and error names identical: yes (26 errors are collection errors for modules not installed in this sandbox, e.g. httpx)
+new: tests/test_l5_crypto_alloc_adapter.py + tests/test_pmus_directional_alloc.py = 30 passed
+image: no crypto deploy file or controller import changes; the adapter is not wired into any runtime
