@@ -2364,3 +2364,22 @@ the exact three-hour live authorization packet for sports release
 - **Against the Stage 2 criteria:** not met. Net after confirmed rewards is
   negative, because two residual legs lost after the window. Stage 2 is not
   advanced.
+
+## 74. 1c1d546b6 authorization packet, revision 1 — 27 Nov 2026, about 12:25 UTC
+
+- **Not yet authorized; nothing deployed or armed.** The owner asked for
+  immediate preparation and the final authorization request.
+- **Pre-authorization checks** (SPORTS_1C1D546B6_LIVE_AUTHORIZATION_PACKET_20261127.md,
+  revision 1):
+  - paryur and savvol: all 12 opening/extension fills would have been
+    refused by the no-fair marginal-EV rule. The calibrated projection was
+    always below $1. Stage 1's build had no no-fair EV rule.
+  - The $8.14 lifetime room halts openings only on realized losses. The
+    packet therefore tightens the campaign stop (resting counted) from $10
+    to $8.
+  - Pool scope stays per market.
+  - The ledger fallback failed closed: bound booked, openings refused, venue
+    attestation restated it at 07:32, cash matched.
+  - Fresh reconcile, watchdog, lock and ledger checks were clean as of
+    12:12–12:21.
+- **Proposed window:** 12:45–15:45 UTC, grace to 17:45.
