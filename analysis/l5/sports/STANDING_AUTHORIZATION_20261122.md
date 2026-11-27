@@ -2764,3 +2764,21 @@ weaken safety gates, increase capital or deploy without authorization."
   and `reward_economics_20261127/`.
 - **Regression:** 6,090 passed; the 26 failure names are identical to a51.
 - **Not deployed or armed.**
+
+## 84. Reward-economics release candidate 6e6cc2d5d (pre-activation checks done); next campaign prepared; not authorized — 27 Nov 2026, about 22:45 UTC
+
+**Owner (verbatim, excerpt):** "Make c6fdc12b1 our next sports release
+candidate. Complete the running campaign without interruption. [...] Do
+not increase capital or deploy without explicit authorization."
+
+- **Candidate:** `6e6cc2d5d27d2e169010fc853760962707b1a2f2` on
+  `release/pmus-sports-reward-economics-6e6cc2d5d`; code `e3ef7eb79`. It is
+  `c6fdc12b1` plus the pre-activation corrections:
+  - per-sport pregame fill multipliers;
+  - `PMUS_RN1_RANK_BY=net_per_hour`;
+  - pool-identity and balanced-release tests.
+- **Regression:** 6,100 passed; the 26 failure names are identical to a51.
+- **Image:** clean boot with the exact activation set, lock held.
+- **Checks and capacity:**
+  `analysis/l5/sports/PRE_ACTIVATION_CHECKS_20261127.md`.
+- **The running campaign is untouched.** Not deployed or armed.

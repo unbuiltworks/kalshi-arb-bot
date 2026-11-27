@@ -1,0 +1,59 @@
+POSITIVE ALLOWLISTED MARKETS at clip 2: 17 in band 10
+slug pool target inband | net$/h, capital$, net per $-hour, share  at q=2 | net$/h at q=5,10,20,50
+utr-stearc-gaacor-2026-11-27 10 250 False | 0.485 0.92 0.527 0.8919 | 0.482 0.432 0.313 -0.061
+utr-nanlea-harash-2026-11-27 10 250 False | 0.278 1.02 0.273 0.5303 | 0.33 0.328 0.249 -0.09
+utr-niemar-vaseva-2026-11-27 10 250 True | 0.231 1.42 0.163 0.4489 | 0.218 0.171 0.065 -0.272
+utr-ishhar-girjam-2026-11-27 10 250 False | 0.216 0.28 0.772 0.4224 | 0.203 0.15 0.029 -0.345
+utr-traemm-khaame-2026-11-27 10 250 False | 0.196 1.36 0.144 0.3871 | 0.195 0.149 0.036 -0.323
+utr-dunkat-mcpkay-2026-11-27 10 250 False | 0.166 1.66 0.1 0.3344 | 0.214 0.216 0.153 -0.152
+setkameua-masyev-cherom-2026-11-28 5 3200 True | 0.061 1.92 0.032 0.5221 | -0.013 -0.201 -0.621 -1.93
+utr-caltes-kimeli-2026-11-27 10 250 False | 0.044 1.48 0.03 0.1212 | 0.073 0.078 0.027 -0.252
+setkameua-melval-cherom-2026-11-28 5 3200 True | 0.032 1.94 0.016 0.4204 | -0.037 -0.218 -0.632 -1.935
+utr-stajer-conluc-2026-11-27 10 250 True | 0.027 1.7 0.016 0.0919 | 0.045 0.042 -0.015 -0.297
+setkameua-plivol-kovnaz-2026-11-28 5 3200 True | 0.027 1.94 0.014 0.4033 | -0.086 -0.295 -0.723 -2.024
+setkamemd-filmih-culdmi-2026-11-27 5 3200 True | 0.026 1.94 0.013 0.3981 | -0.077 -0.275 -0.691 -1.979
+setkameua-marmak-gomole-2026-11-28 5 3200 True | 0.022 1.94 0.012 0.3869 | -0.046 -0.224 -0.635 -1.936
+setkameua-tuzole-cherom-2026-11-27 5 3200 True | 0.022 1.94 0.012 0.3868 | -0.058 -0.242 -0.651 -1.946
+setkameua-tuzole-masyev-2026-11-27 5 3200 True | 0.016 1.92 0.009 0.3659 | -0.081 -0.275 -0.689 -1.976
+setkameua-romiva-kovnaz-2026-11-27 5 3200 True | 0.007 1.94 0.004 0.3341 | -0.085 -0.276 -0.687 -1.973
+setkameua-tuzole-rezrom-2026-11-28 5 3200 False | 0.001 1.94 0.001 0.3132 | -0.103 -0.309 -0.739 -2.046
+
+AGGREGATE over in-band positive markets (all concurrently, THEORETICAL):
+clip 2: markets 10, net $0.47/h, capital resting $19, net per $-hour 0.025
+clip 5: markets 10, net $0.26/h, capital resting $46, net per $-hour 0.006
+clip 10: markets 10, net $0.21/h, capital resting $93, net per $-hour 0.002
+clip 20: markets 10, net $0.07/h, capital resting $186, net per $-hour 0.000
+clip 50: markets 10, net $0.00/h, capital resting $465, net per $-hour 0.000
+top 2 at clip 2: $0.29/h, capital $3.3; at clip 10: $0.17/h, capital $17
+top 4 at clip 2: $0.35/h, capital $7.0; at clip 10: $0.21/h, capital $35
+top 8 at clip 2: $0.45/h, capital $14.7; at clip 10: $0.21/h, capital $74
+top 16 at clip 2: $0.47/h, capital $18.6; at clip 10: $0.21/h, capital $93
+
+POOL CEILING on the slate snapshot (22:00Z, markets in a paying period with a book): competition period markets pool$/h(sum) median_target allowlisted
+nhl live 7 816.67 8000 False
+atp live 2 122.67 19000 True
+wta live 1 61.33 19000 True
+valorant live 2 53.33 7500 False
+cs2 live 2 53.33 7500 False
+setkameua day_of 48 40.0 3200 True
+itfme live 2 34.67 7500 False
+atp day_of 5 33.33 19000 True
+cfb live 5 30.0 86000 False
+utr day_of 17 28.33 250 True
+wtadb live 1 23.33 4000 True
+nhl day_of 4 22.0 12000 False
+pdcdarts live 2 16.67 2500 False
+nfl live 1 15.0 625000 False
+ebfwca live 6 12.0 2000 False
+modus day_of 10 8.33 2500 False
+ebfwca day_of 24 8.0 2000 False
+wta day_of 1 6.67 19000 True
+setkameua live 1 5.67 4800 True
+setkamemd live 1 5.67 4800 True
+atpdb day_of 3 5.0 6000 True
+setkamemd day_of 6 5.0 3200 True
+itfwo day_of 2 4.0 7500 False
+pdcdarts day_of 4 3.33 2500 False
+valorant day_of 1 1.67 15000 False
+ebfpl day_of 3 1.0 2000 False
+ALL paying pools $1417.0/h; allowlisted $337.0/h (100% capture, before calibration/paid fraction)
