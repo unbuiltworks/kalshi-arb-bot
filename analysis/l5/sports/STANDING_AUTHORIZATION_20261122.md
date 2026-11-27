@@ -2609,3 +2609,19 @@ the exact three-hour live authorization packet for sports release
   not modelled.
 - **Not deployed or armed.** The campaign close-out at 18:47 proceeds
   unchanged.
+
+## 80. Integrated hybrid v2 release candidate (program_period); not authorized — 27 Nov 2026, about 19:05 UTC
+
+- **Candidate:** `release/pmus-sports-hybrid-integrated-d595c47d0`
+  (`d595c47d045042bff8e39fcfc99c45d250d9eacc`).
+- **Reward qualification:**
+  - adds `program_period` (pool-keyed);
+  - `account_day` is not to be activated: no source supports it and our
+    reward rows argue against it;
+  - the scope of the $1 minimum stays unverified: the CFTC text is
+    unreachable from this environment and our rows carry no programme id.
+- **Validation:**
+  - full regression failure names identical to `a51cfdbd2`;
+  - suites pass in all three scopes;
+  - clean Docker build boots with every flag on.
+- **Not deployed or armed.**
