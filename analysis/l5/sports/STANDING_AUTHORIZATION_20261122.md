@@ -2544,3 +2544,29 @@ the exact three-hour live authorization packet for sports release
   profitable before incentives.
 - **Not deployed or armed.** The running campaign was not touched.
   Activation needs separate owner authorization.
+
+### 76c/76d. Campaign hours 1–2 (13:45–15:55 UTC, a51cfdbd2), combined; written late at 15:56
+
+- **Fills (venue-reconciled):** 8 fills, 8 contracts, $3.77 spent.
+  - `atpdb-fominkrutyk-ovcharwhiteh`: YES 2 @0.40 (opening, live) at about
+    14:24. NO completions 0.58 @0.57, 1 @0.56 and 0.42 @0.57 between 14:26
+    and 14:29. 300 s markouts −0.5c to +1.5c.
+  - A Setka UA market: 4 fills, paired.
+  - Completed pairs: 4.00, average pair cost 0.943, pair edge **+$0.2275**
+    (atpdb +$0.07, setkameua +$0.1575). Residual 0 contracts.
+- **Inventory now:** flat. 0 open orders (watchdog 15:55:10, all
+  registries OK).
+- **Rewards:** PAID unchanged at $24.09; PENDING $0.86 (rows from earlier
+  dates). No campaign reward credited.
+- **Settled trading:** the campaign meter shows realized cash +$0.2275 and
+  unexplained $0. The ledger booked one more feed settlement (CONFIRMED 3 →
+  4; day −5.8631 → −5.7056).
+- **Ledger 15:54:**
+  - lifetime −66.6994 (room 8.30); unresolved 0; unattributed 0;
+  - drawdown 6.18 of 20; cash 306.2279.
+- **Stop conditions:** none tripped.
+  - Campaign stop $8: realized +$0.23.
+  - No `gate_error`, latch, final-gate refusal or loop error.
+  - Maker-only throughout; reward check ok; reconcile ok at 15:40.
+  - The cricket filter learned and excluded two new leagues (`hjs`,
+    `plunket`) at 15:30; nothing was traded there.
