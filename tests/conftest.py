@@ -114,7 +114,7 @@ def _enabled_mode_paying_reward(monkeypatch, request):
 
     So, for a market the test gave NO programme, every marginal-EV
     evaluation is served a realistic paying programme, public book and
-    qualifying projection (tests/pmus_enabled_mode.py, profile "doubles"),
+    qualifying projection (tests/pmus_enabled_mode.py, default profile "doubles_live"),
     scored by the real venue rule. Only that evaluation sees it: ranking,
     reward-first quoting, release and every other path keep the test's own
     state, and no assertion changes. A market the test gave its own

@@ -26,9 +26,15 @@ through the seams the existing tests already use:
   projection is below the minimum payout credits nothing.
 
 Profiles are calibrated to observed live estimates (theoretical, never
-P&L): ``doubles`` ~ a liquid ATP doubles market ($1-9/h for the market,
-~$0.1-0.6/h for one 4-10 contract bid one tick behind); ``thin`` ~ a thin
-market ($0.01-0.2/h, projection below the $1 minimum payout).
+P&L): ``doubles_live`` (the default) ~ a live ATP doubles market under its
+published live programme ($70 over a 3 h live period; ~$2.25/h for a
+qty-2 bid each side one tick behind, at most the $9.43/h observed live),
+sized so the full ladder clears the activation config's fill costs after
+its 0.4 reward multiplier; ``doubles`` ~ a liquid ATP doubles market
+under a daily pool ($1-9/h for the market, ~$0.1-0.6/h for one 4-10
+contract bid one tick behind; sized for the 0.5 haircut and the default
+fill costs); ``thin`` ~ a thin market ($0.01-0.2/h, projection below the
+$1 minimum payout).
 
 Every number produced here is THEORETICAL. Nothing here places, cancels or
 blocks an order; the engine under test does all of that itself.
@@ -71,7 +77,32 @@ PROFILES: Dict[str, Dict[str, Any]] = {
     # thin market: big resting size ahead of us, small pool
     "thin": dict(pool=40.0, df=0.5, target=200.0, level_qty=60.0,
                  levels=6, max_spread=None, projected_usd_h=0.15),
+    # DEFAULT. A live ATP doubles market under the venue's published
+    # programme doubles_moneyline_live_20261018 (analysis/l5/rewards/
+    # pmus_liquidity_programs_20261121.json; reward_program log lines on
+    # 26 Nov: pool 70.0, period "live", period_s 10800 => $23.3/h for the
+    # market). The book is thin (3 contracts a level), as in-play doubles
+    # books are. With it, a qty-2 bid on each side one tick behind earns
+    # ~$2.25/h THEORETICAL two-sided and 10 contracts at each touch
+    # ~$9.3/h, both inside what was observed live (atpdb-alvvalflores-
+    # alvesperez 26 Nov 21:01: $9.43/h two-sided at qty 2, one behind;
+    # atpdb-delanedelane-falcksuarez 25 Nov: $0.74-0.97/h). Never above.
+    # Why it exists: under the proposed activation config (calibration
+    # table *:0.4, fill rate behind 1.5/h, fill loss behind 0.042 at qty 2
+    # => $0.126-0.186/h of fill cost per bid, levels 1-3 ticks behind) the
+    # "doubles" book below credits each bid $0.02-0.03/h, so NO bid rests
+    # and no safety scenario is reached. Here every level of the fixture's
+    # three-level ladder clears its own fill cost by $0.03-0.22/h after the
+    # 0.4 multiplier, so each scenario places real orders and its
+    # protection acts on them. distance factor 0.8 / target 100 are the
+    # fixture's (the programme's own 0.3 / 4000 cannot carry a bid three
+    # ticks behind at these fill costs without crediting a one-behind bid
+    # far above the observed per-bid magnitudes).
+    "doubles_live": dict(pool=70.0, period="live", df=0.8, target=100.0,
+                         level_qty=3.0, levels=40, max_spread=None,
+                         projected_usd_h=3.0),
 }
+DEFAULT_PROFILE = "doubles_live"
 
 
 class RewardFeed:
@@ -85,7 +116,8 @@ class RewardFeed:
       over RN1_REWARD_PROJECT_H it stops qualifying.
     """
 
-    def __init__(self, engine, profile: str = "doubles", **over):
+    def __init__(self, engine, profile: str = None, **over):
+        profile = profile or DEFAULT_PROFILE
         self.e = engine
         self.p = dict(PROFILES[profile], **over)
         self.present = True
@@ -97,7 +129,8 @@ class RewardFeed:
     # ------------------------------------------------ venue payloads
     def incentive_row(self, slug: str) -> Dict[str, Any]:
         tp = {"programType": "liquidityProgram", "programId": "LP-" + slug,
-              "rewardPool": str(self.p["pool"]), "period": "daily",
+              "rewardPool": str(self.p["pool"]),
+              "period": self.p.get("period", "daily"),
               "discountFactor": str(self.p["df"]),
               "targetSize": str(self.p["target"]),
               "status": self.status}
@@ -235,7 +268,7 @@ class RewardFeed:
                 cache.pop(slug, None)
 
 
-def feed_for(engine, profile: str = "doubles") -> RewardFeed:
+def feed_for(engine, profile: str = None) -> RewardFeed:
     f = engine.__dict__.get("_enabled_mode_feed")
     if f is None:
         f = engine.__dict__["_enabled_mode_feed"] = RewardFeed(engine,

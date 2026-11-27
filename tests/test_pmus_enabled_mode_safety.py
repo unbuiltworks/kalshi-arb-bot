@@ -10,7 +10,8 @@ and a market with NO international fair value (a doubles match), so every
 opening/extension bid and every deeper level rests only if its qualifying
 incremental theoretical reward beats its expected fill cost. The market is
 given a realistic paying liquidity programme and public book
-(tests/pmus_enabled_mode.py, profile "doubles"), discovered and scored by
+(tests/pmus_enabled_mode.py, default profile "doubles_live"; it
+also carries the proposed activation config), discovered and scored by
 the engine's own code. Each protection is exercised AFTER real orders are
 resting, so the assertion measures the protection, not the absence of a
 reward. All reward numbers are THEORETICAL; none is P&L.
@@ -214,6 +215,29 @@ def test_a_thin_programme_below_the_minimum_payout_credits_nothing(
     q = quotes(capsys)[-1]
     assert q["incentive"]["why"] == "below_minimum_payout"
     assert all(r["reward_usd_per_hour"] == 0 for r in q["marginal_ev"])
+
+
+def test_the_default_profile_is_the_observed_live_programme(en):
+    """The default fixture profile (doubles_live) is the venue's published
+    live doubles programme ($70 over the 3 h live period) on a thin book,
+    and every magnitude it produces stays at or under what was observed
+    live: $9.43/h two-sided at qty 2 one tick behind
+    (atpdb-alvvalflores-alvesperez, 26 Nov). THEORETICAL, never P&L."""
+    e, v, feed = en
+    assert feed.p is not PROFILES["doubles_live"]
+    assert feed.p == PROFILES["doubles_live"]
+    per = feed.rn1_reward(SLUG)
+    assert per["pool"] == 70.0 and per["period"] == "live"
+    assert per["period_s"] == 10800.0
+    book = feed.book(SLUG)
+    one_behind = RW.quote_estimate(book, per, 0.47, 0.49, 2.0, 0.01)
+    at_touch = RW.quote_estimate(book, per, 0.48, 0.50, 10.0, 0.01)
+    assert 0.74 <= one_behind["est_usd_per_hour"] <= 9.43
+    assert at_touch["est_usd_per_hour"] <= 9.43
+    ladder = RW.ladder_quote_estimate(
+        book, per, [(0.47, 2.0), (0.46, 2.0), (0.45, 2.0)],
+        [(0.49, 2.0), (0.48, 2.0), (0.47, 2.0)], 0.01, [], [])
+    assert ladder["est_usd_per_hour"] <= 9.43
 
 
 # ------------------------------------------------- 1. loss stops
@@ -900,12 +924,37 @@ def test_a_standing_start_projects_only_what_would_rest(en, monkeypatch,
     credited and nothing rests -- the projection never counts a bid that
     is not planned."""
     e, v, feed = en
+    # The scenario needs a programme whose one-level ladder projects BELOW
+    # the minimum payout while the full three-level ladder would project
+    # AT OR ABOVE it (so counting an unplanned bid would change the
+    # answer). The projection is the engine's own formula, including the
+    # reward multiplier it applies (rn1_reward_cal: 1.0 with calibration
+    # off, the table's 0.4 with the activation config), so the pool is
+    # set to put the one-level projection at 70% of the minimum payout
+    # under whichever multiplier is in force (always <= the observed live
+    # programme pool of the default profile; see tests/pmus_enabled_mode.py).
+    ys3 = [(0.47, 2.0), (0.46, 2.0), (0.45, 2.0)]
+    ns3 = [(0.49, 2.0), (0.48, 2.0), (0.47, 2.0)]
+    per = e.rn1_reward(SLUG)
+    m = M.rn1_reward_cal(SLUG, per)
+    one = RW.ladder_quote_estimate(feed.book(SLUG), per, [(0.47, 2.0)],
+                                   [(0.49, 2.0)], 0.01, [], [])
+    k = 0.7 * M.RN1_REWARD_MIN_DAY_USD / (
+        one["est_usd_per_hour"] * M.RN1_REWARD_PROJECT_H * m)
+    assert k <= 1.0                               # never above the profile
+    feed = RewardFeed(e, pool=feed.p["pool"] * k).install(monkeypatch)
     monkeypatch.setattr(M, "RN1_LADDER_LEVELS", 1)
     _real_projection(e, monkeypatch)
-    est = RW.ladder_quote_estimate(feed.book(SLUG), e.rn1_reward(SLUG),
+    per = e.rn1_reward(SLUG)
+    est = RW.ladder_quote_estimate(feed.book(SLUG), per,
                                    [(0.47, 2.0)], [(0.49, 2.0)], 0.01,
                                    [], [])
-    assert est["est_usd_per_hour"] * M.RN1_REWARD_PROJECT_H < \
+    assert est["est_usd_per_hour"] * M.RN1_REWARD_PROJECT_H * m < \
+        M.RN1_REWARD_MIN_DAY_USD
+    # the discriminating half: the unplanned deeper levels WOULD qualify
+    full = RW.ladder_quote_estimate(feed.book(SLUG), per, ys3, ns3, 0.01,
+                                    [], [])
+    assert full["est_usd_per_hour"] * M.RN1_REWARD_PROJECT_H * m >= \
         M.RN1_REWARD_MIN_DAY_USD
     for _ in range(3):
         e.step_market(SLUG)
@@ -1109,4 +1158,5 @@ def test_a_fill_that_raced_the_cancel_is_booked_once(fl):
 def test_profiles_are_theoretical_and_respect_the_minimum_payout():
     for name, p in PROFILES.items():
         proj = p["projected_usd_h"] * M.RN1_REWARD_PROJECT_H
-        assert (proj >= M.RN1_REWARD_MIN_DAY_USD) == (name == "doubles")
+        assert (proj >= M.RN1_REWARD_MIN_DAY_USD) == (name != "thin")
+        assert p.get("period", "daily") in ("daily", "live")
