@@ -2294,3 +2294,31 @@ the exact three-hour live authorization packet for sports release
     opening refused;
   - account risk otherwise ok.
 - **Rewards:** PAID unchanged.
+
+### 71g. Stage 1 hourly report, 05:50 UTC: window closed, completions-only
+
+- **05:45:02** lock state `window_completions_only`; grace to 07:45.
+- **Fills 04:50–05:50:**
+  - `kolval-volyur`: NO 1 @ 0.50 (live completion → pair 0.97);
+  - `sydvik-dunvol`: NO 1 @ 0.52, 0.1 @ 0.50, 2 @ 0.52 (completions → 3.1
+    pairs);
+  - `savvol-hryevh`: NO 1 @ 0.39 (extension).
+  - Orders: rn1_open 7, rn1_extend 7, two_sided_complete 6.
+- **Realized (PILOT_PNL 05:48): +$0.611**, from locked pair edge:
+  - `timleg` +0.18 (settled);
+  - `kobvit` +0.28 (settled);
+  - `kolval` +0.03;
+  - `sydvik` about +0.12.
+  - Cash 304.2224; unexplained 0.
+- **Unpaired ($8.25):**
+
+  | Market | Side | Contracts | Cost |
+  |---|---|---|---|
+  | `paryur` | NO | 8.95 | 4.12 |
+  | `savvol` | NO | 6.69 | 3.05 |
+  | `kuzdmy` | YES | 2 | 0.93 |
+  | `sydvik` | YES | 0.35 | 0.15 |
+
+  Completion bids only from now on.
+- **Venue reconcile 05:48:** ok, 4 positions. One 27 s drawdown blip at
+  05:42. No bot settlement this hour.
