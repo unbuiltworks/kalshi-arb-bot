@@ -6007,6 +6007,7 @@ class Engine:
             # fixed point: a refused candidate never carries the others'
             # projection; repeat until the credited set is self-supporting
             alive = {id(c) for c in cands}
+            last_seen: Dict[int, Dict[str, Any]] = {}
             while True:
                 proj = self._rn1_boot_projection(book, per, planned, cands,
                                                  alive, t, own_y, own_n,
@@ -6027,12 +6028,11 @@ class Engine:
                         {i: proj for i in alive})
                     by_id = {id(c): result
                              for c, result in zip(feasible, judged)}
-                    out = [by_id.get(id(c), {
-                        "ok": False, "why": "marginal_ev_not_positive",
-                        "side": c["side"], "level": c.get("level", 0),
-                        "reward_why": "rejected_from_feasible_ladder",
-                        "reward_usd_per_hour": 0.0,
-                    }) for c in cands]
+                    last_seen.update(by_id)
+                    # a candidate refused earlier keeps the judgement it was
+                    # refused with (its own figures, never a survivor's)
+                    out = [by_id.get(id(c)) or last_seen.get(id(c)) or
+                           self._rn1_rejected(c) for c in cands]
                 else:
                     out = self._rn1_judge(slug, mk, cands, planned, no_fair,
                                           pos, clip, touch, adv_cfg, qcfg, t,
@@ -6043,10 +6043,46 @@ class Engine:
                 if ok == alive:
                     return out
                 alive = ok
+        if RN1_REWARD_QUAL_SCOPE == "account_day" and not boot:
+            # the same surviving-ladder rule outside a standing start: a
+            # bid refused on its own economics is taken out of the plan and
+            # every survivor is judged again without it (its reward share
+            # and the inventory it would have added ahead), until no
+            # survivor changes. Survivors only ever see a smaller plan.
+            ids = {id(c) for c in cands}
+            alive = set(ids)
+            seen: Dict[int, Dict[str, Any]] = {}
+            while True:
+                feasible = [c for c in cands if id(c) in alive]
+                fplan = [x for x in planned
+                         if id(x) not in ids or id(x) in alive]
+                judged = self._rn1_judge(slug, mk, feasible, fplan, no_fair,
+                                         pos, clip, touch, adv_cfg, qcfg, t,
+                                         per, book, own_y, own_n, rw_err,
+                                         None)
+                by_id = {id(c): r for c, r in zip(feasible, judged)}
+                seen.update(by_id)
+                ok = {i for i, r in by_id.items() if r.get("ok")}
+                if ok == alive:
+                    return [by_id.get(id(c)) or seen.get(id(c)) or
+                            self._rn1_rejected(c) for c in cands]
+                alive = ok
         return self._rn1_judge(slug, mk, cands, planned, no_fair, pos, clip,
                                touch, adv_cfg, qcfg, t,
                                None if boot else per, book, own_y, own_n,
                                rw_err, None)
+
+    @staticmethod
+    def _rn1_rejected(c: Mapping[str, Any]) -> Dict[str, Any]:
+        """The result for a candidate taken out of the feasible ladder: the
+        same keys every reader of a marginal-EV result uses (the campaign
+        caps' economic priority reads ev_usd_per_hour), credited nothing."""
+        return {"ok": False, "why": "marginal_ev_not_positive",
+                "side": c["side"], "level": c.get("level", 0),
+                "px": str(c["px"]), "qty": str(c["qty"]),
+                "reward_why": "rejected_from_feasible_ladder",
+                "reward_usd_per_hour": 0.0, "ev_usd_per_hour": 0.0,
+                "trading_usd_per_hour": 0.0}
 
     def _rn1_ev_hold(self, mk: Dict[str, Any], c: Mapping[str, Any],
                      r: Mapping[str, Any], tick: Any, now: float,
