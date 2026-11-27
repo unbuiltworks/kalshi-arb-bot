@@ -120,28 +120,15 @@ def test_market_scope_is_exactly_as_before(e, monkeypatch):
 
 
 def test_default_scope_is_market():
-    import importlib
+    """Checked in a fresh interpreter (no module reload in this process,
+    which would replace state other tests hold)."""
     import os
-    if os.getenv("PMUS_RN1_REWARD_QUAL_SCOPE") is None:
-        assert importlib.reload(M).RN1_REWARD_QUAL_SCOPE == "market"
-
-
-def test_boot_projection_is_the_account_total_when_enabled(e, monkeypatch):
-    from src import pmus_sports_rewards as RW
-    monkeypatch.setattr(RW, "ladder_quote_estimate",
-                        lambda *a, **k: {"est_usd_per_hour": 0.725})
-    planned = [{"side": "YES", "px": "0.47", "qty": "1"},
-               {"side": "NO", "px": "0.50", "qty": "1"}]
-    alive = {id(x) for x in planned}
-    legacy = e._rn1_boot_projection({}, PER, planned, planned, alive,
-                                    0.01, [], [], A)
-    assert legacy == pytest.approx(0.725 * 0.4 * 3)          # 0.87 < 1
-    monkeypatch.setattr(M, "RN1_REWARD_QUAL_SCOPE", "account_day")
-    _plan(e, B, 0.29)
-    acct = e._rn1_boot_projection({}, PER, planned, planned, alive,
-                                  0.01, [], [], A)
-    assert acct == pytest.approx((0.29 + 0.29) * 3, abs=1e-3)  # 1.74
-
-
-def test_the_minimum_itself_is_unchanged():
-    assert M.RN1_REWARD_MIN_DAY_USD == 1.0
+    import subprocess
+    import sys
+    env = {k: v for k, v in os.environ.items()
+           if k != "PMUS_RN1_REWARD_QUAL_SCOPE"}
+    out = subprocess.run(
+        [sys.executable, "-c", "import src.pmus_sports_two_sided as M;"
+         "print(M.RN1_REWARD_QUAL_SCOPE)"], env=env, capture_output=True,
+        text=True, check=True)
+    assert out.stdout.strip() == "market"

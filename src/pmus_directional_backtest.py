@@ -56,6 +56,10 @@ SIM_DEFAULTS: Dict[str, Any] = {
     "latency_s": 3.0, "fill": "touch", "size_cap": True,
     "reprice_ticks": 1, "min_qty": "1",
     "fill_loss_touch": "0.089", "fill_loss_behind": "0.042",
+    # production pauses (PMUS_TWO_SIDED_VOL_*, JUMP_*); pauses=False = none
+    "pauses": False, "vol_window_s": 30.0, "vol_pause_usd": "0.03",
+    "vol_calm_s": 60.0, "jump_ticks": 2, "jump_min_px": "0.02",
+    "jump_pause_s": 15.0, "pause_extra_ticks": 1,
 }
 
 
@@ -124,6 +128,11 @@ class Market:
         self.favoured: Optional[str] = None
         self.spend = ZERO
         self.decisions = defaultdict(int)
+        self.mid_hist: deque = deque()
+        self.vol_until = 0.0
+        self.jump_until = 0.0
+        self.paused_s = 0.0
+        self.last_t: Optional[float] = None
 
     # fair band exactly as Engine.intl_fair_band (on recorded samples)
     def band(self, t: float, mid: Optional[D]) -> Optional[dict]:
@@ -227,6 +236,29 @@ class Market:
             im = (f["ib"] + f["ia"]) / 2
             mid = (ONE - im) if flip else im
         band = self.band(t, mid)
+        pause_ticks = None
+        if self.sim.get("pauses"):
+            m_now = (f["yes_bid"] + f["yes_ask"]) / 2
+            mh = self.mid_hist
+            if mh:
+                jump = abs(m_now - mh[-1][1])
+                if jump >= tick * int(self.sim["jump_ticks"]) and \
+                        jump >= D(str(self.sim["jump_min_px"])):
+                    self.jump_until = t + float(self.sim["jump_pause_s"])
+            mh.append((t, m_now))
+            while mh and t - mh[0][0] > float(self.sim["vol_window_s"]):
+                mh.popleft()
+            rng = max(m for _t, m in mh) - min(m for _t, m in mh)
+            if rng >= D(str(self.sim["vol_pause_usd"])):
+                self.vol_until = t + float(self.sim["vol_calm_s"])
+            if t < self.vol_until or t < self.jump_until:
+                if self.last_t is not None:
+                    self.paused_s += t - self.last_t
+                tk = int((rng / tick).to_integral_value(
+                    rounding="ROUND_CEILING"))
+                pause_ticks = max(tk, int(self.sim["jump_ticks"])) + \
+                    int(self.sim["pause_extra_ticks"])
+        self.last_t = t
         if f.get("state") not in (None, "MARKET_STATE_OPEN") or \
                 f["yes_ask"] <= f["yes_bid"]:
             self._replace({}, t)
@@ -253,12 +285,22 @@ class Market:
             if self.policy.get("price_adds"):
                 qc["adds_priced_externally"] = True
         self._extra = extra
+        if pause_ticks is not None and self.policy.get("pause_depth"):
+            qc["depth_ticks"] = max(int(qc.get("depth_ticks", 1)),
+                                    pause_ticks)
+            qc["depth_ticks_side"] = {"YES": qc["depth_ticks"],
+                                      "NO": qc["depth_ticks"]}
         q = RN1.quotes(yes_bid=f["yes_bid"], yes_ask=f["yes_ask"], tick=tick,
                        pos=self.pos, cost=self.cost,
                        last_fill_t=self.last_fill_t, now=t,
                        min_qty=D(str(self.sim["min_qty"])),
                        c=qc)
         want = {s: q.get(s) for s in ("YES", "NO")}
+        if pause_ticks is not None and not self.policy.get("pause_depth"):
+            for s_ in ("YES", "NO"):
+                if want[s_] is not None and want[s_]["role"] != "complete":
+                    want[s_] = None
+                    self.decisions["paused"] += 1
         # production international guard (opening/extension only)
         margin = tick * int(self.sim["guard_margin_ticks"])
         for s in ("YES", "NO"):
@@ -390,16 +432,38 @@ def run(frames_by_slug: Mapping[str, List[dict]],
         events += [(f["t"], slug, f) for f in fr]
     events.sort(key=lambda e: e[0])
     peak, out_cost = ZERO, {}
+    rest_cost: Dict[str, D] = {}
+    cap_int, rest_int, t_prev, t_first = 0.0, 0.0, None, None
     for t, slug, f in events:
         m = mk[slug]
         m.fills_at(f)
         m.decide(f, meta[slug]["flip"])
+        if t_prev is not None and t > t_prev:
+            dt = t - t_prev
+            cap_int += float(sum(out_cost.values(), ZERO) +
+                             sum(rest_cost.values(), ZERO)) * dt
+            rest_int += float(sum(rest_cost.values(), ZERO)) * dt
+        t_first = t if t_first is None else t_first
+        t_prev = t
         out_cost[slug] = m.cost["YES"] + m.cost["NO"]
+        rest_cost[slug] = sum((o["px"] * o["left"]
+                               for o in m.orders.values()), ZERO)
         tot = sum(out_cost.values(), ZERO)
         if tot > peak:
             peak = tot
+    span = (t_prev - t_first) if t_prev and t_first else 0.0
+    capital = {"time_weighted_deployed_usd": round(cap_int / span, 4)
+               if span else 0.0,
+               "time_weighted_resting_usd": round(rest_int / span, 4)
+               if span else 0.0, "span_s": round(span, 1),
+               "paused_market_s": round(sum(m.paused_s
+                                            for m in mk.values()), 1),
+               "label": "deployed = filled inventory cost + resting bid "
+                        "value, summed over every market in the recording"}
     rows = [m.result() for m in mk.values()]
-    return summarise(rows, peak, skipped, policy, s)
+    out = summarise(rows, peak, skipped, policy, s)
+    out["capital"] = capital
+    return out
 
 
 def summarise(rows: List[dict], peak: D, skipped: Mapping[str, str],

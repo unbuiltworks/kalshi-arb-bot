@@ -1385,6 +1385,24 @@ FILL_EXACT_EVERY_S = float(os.getenv(
 #       one, so nothing about its accounting restarts. A market that
 #       closed, settled or holds anything is never reselected. Default 0.
 RN1_PAUSED_RELEASE_S = float(os.getenv("PMUS_RN1_PAUSED_RELEASE_S", "120"))
+# ADAPTIVE PAUSE DEPTH (2026-11-27, default OFF). Campaign 27 Nov
+# 13:45-16:45Z: 373 of 466 side-outcomes the reward-adjusted placement scored
+# positive were blocked by jump_pause / vol_pause, and bids rested only 6.7%
+# of the window. With PMUS_RN1_PAUSE_DEPTH=1 a jump or volatility pause no
+# longer withdraws every opening/extension bid: they may rest no closer than
+# the 30 s mid range (rounded up to ticks) plus PMUS_RN1_PAUSE_DEPTH_EXTRA_TICKS
+# below the touch -- below where the move has already been -- and only if
+# every later gate (marginal EV with the behind-the-touch fill loss, the
+# international guard, every cap, the final gate) still passes. The touch is
+# never joined during a pause. Completions are unchanged. 0 = as before.
+RN1_PAUSE_DEPTH = os.getenv("PMUS_RN1_PAUSE_DEPTH", "0").strip() == "1"
+RN1_PAUSE_DEPTH_EXTRA_TICKS = int(os.getenv(
+    "PMUS_RN1_PAUSE_DEPTH_EXTRA_TICKS", "1"))
+# PAUSED-MARKET ROTATION (default 0 = as before). A flat market with nothing
+# resting that is only paused (jump/vol) releases its slot after this many
+# seconds instead of max(120, RN1_PAUSED_RELEASE_S), so another eligible
+# market can be quoted; with RN1_RESELECT it may be selected again later.
+RN1_PAUSE_ROTATE_S = float(os.getenv("PMUS_RN1_PAUSE_ROTATE_S", "0"))
 RN1_RESELECT = os.getenv("PMUS_RN1_RESELECT", "0").strip() == "1"
 RN1_RESELECT_COOLDOWN_S = float(os.getenv(
     "PMUS_RN1_RESELECT_COOLDOWN_S", "60"))
@@ -5596,6 +5614,18 @@ class Engine:
         except Exception:                                 # noqa: BLE001
             return not RN1_NET_RANK
 
+    @staticmethod
+    def rn1_pause_depth(rng: Any, tick: Any) -> int:
+        """RN1_PAUSE_DEPTH: ticks below the touch an opening/extension bid
+        rests at while the market is paused: the 30 s mid range rounded up
+        to ticks plus RN1_PAUSE_DEPTH_EXTRA_TICKS, and at least JUMP_TICKS
+        plus that (a jump pause can follow a single update)."""
+        t = D(str(tick))
+        r = max(D(0), D(str(rng or 0)))
+        ticks = int((r / t).to_integral_value(rounding="ROUND_CEILING")) \
+            if t > 0 else 0
+        return max(ticks, JUMP_TICKS) + max(0, RN1_PAUSE_DEPTH_EXTRA_TICKS)
+
     def rn1_directional_prob(self, slug: str) -> Optional[Dict[str, Any]]:
         """The probability band for RN1_DIRECTIONAL, or None (= no change):
         the international fair band once settled; otherwise, with
@@ -6744,6 +6774,7 @@ class Engine:
             self._kickoff_hold(slug, mk, ph, now)
             return
         new_block = None
+        pause_reason: Optional[str] = None   # see RN1_PAUSE_DEPTH
         if os.getenv(ENABLED_ENV, "").upper() != "YES":
             new_block = "not_enabled"
         elif submission_locked():
@@ -6780,7 +6811,10 @@ class Engine:
             new_block = "open_ev_gate"
         if not new_block and self.ws is not None and \
                 now < float(mk.get("jump_pause_until") or 0):
-            new_block = "jump_pause"
+            if RN1_PAUSE_DEPTH:
+                pause_reason = "jump_pause"
+            else:
+                new_block = "jump_pause"
         if not new_block and slate() == "live" and \
                 ph["phase"] == "pregame":
             # LIVE 2026-11-25 17:08Z: with the slate switched to in-play
@@ -6805,7 +6839,10 @@ class Engine:
                 label="price moving fast: opening and extension bids "
                       "pulled until it is calm")
         if not new_block and now < vp:
-            new_block = "vol_pause"
+            if RN1_PAUSE_DEPTH:
+                pause_reason = pause_reason or "vol_pause"
+            else:
+                new_block = "vol_pause"
         if not new_block and self.rn1_market_slots_full(slug, mk):
             new_block = "max_markets"
         net_neg = False
@@ -6828,7 +6865,7 @@ class Engine:
             qcfg["fit_qty"] = True
             qcfg["fit_pair_cap"] = True
         join_why = self.rn1_join_touch(slug, mk, bbo, tick, rng, now)
-        if join_why is None:
+        if join_why is None and not pause_reason:
             qcfg["depth_ticks"] = 0
         pq = PH.qty_for(ph["phase"], pregame_qty=rn1_pregame_qty(),
                         live_qty_now=PH.live_qty(rn1_live_qty(),
@@ -6846,6 +6883,15 @@ class Engine:
             tev = self.rn1_touch_ev_quote(slug, mk, bbo, tick, rng, pq,
                                           qcfg, now)
             qcfg["depth_ticks_side"] = tev["depth_side"]
+        if pause_reason:
+            # RN1_PAUSE_DEPTH: rest below where the move has already been
+            pdep = self.rn1_pause_depth(rng, tick)
+            base = qcfg.get("depth_ticks_side") or {}
+            dflt = int(qcfg.get("depth_ticks", RN1.DEPTH_TICKS))
+            qcfg["depth_ticks_side"] = {
+                sd: max(int(base.get(sd, dflt)), pdep)
+                for sd in ("YES", "NO")}
+            qcfg["depth_ticks"] = max(dflt, pdep)
         if RN1_KEEP_TOL_USD > 0 and not new_block:
             qcfg["keep_tol_usd"] = RN1_KEEP_TOL_USD
             qcfg["keep_px"] = {o["side"]: o["px"]
@@ -7054,6 +7100,9 @@ class Engine:
                 edge=q.get("edge"),
                 marginal_ev=mev_log,
                 directional=q.get("directional"),
+                pause_depth=(None if not pause_reason else
+                             {"reason": pause_reason,
+                              "ticks": self.rn1_pause_depth(rng, tick)}),
                 fair=(getattr(self, "_rn1_fair", {}) or {}).get(slug),
                 incentive=(getattr(self, "_rn1_inc", {}) or {}).get(slug),
                 reward=bool(self.rn1_reward(slug)),
@@ -7160,11 +7209,15 @@ class Engine:
             # only paused: the price is moving, or the international price
             # is missing this pass. Anything else (late, out of scope, no
             # edge, thin) is about the market itself.
-            paused = new_block in ("jump_pause", "vol_pause") or (
+            paused = new_block in ("jump_pause", "vol_pause") or \
+                bool(pause_reason) or (
                 new_block is None and any(
                     str(q.get("why_" + s_) or "").startswith("no_fair")
                     for s_ in ("YES", "NO")))
             limit = max(120.0, RN1_PAUSED_RELEASE_S) if paused else 120.0
+            if paused and RN1_PAUSE_ROTATE_S > 0:
+                # RN1_PAUSE_ROTATE_S: a paused flat market frees its slot
+                limit = max(15.0, min(limit, RN1_PAUSE_ROTATE_S))
             if now - float(idle) > limit and \
                     not any(o.get("open") for o in mk["orders"].values()):
                 mk["done"] = True
