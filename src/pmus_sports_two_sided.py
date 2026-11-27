@@ -485,6 +485,28 @@ RN1_FAIR_STABLE_S = float(os.getenv("PMUS_RN1_FAIR_STABLE_S", "10"))
 RN1_FAIR_MAX_RANGE_USD = _env_d("PMUS_RN1_FAIR_MAX_RANGE_USD", "0.01")
 RN1_REWARD_MIN_DAY_USD = float(os.getenv("PMUS_RN1_REWARD_MIN_DAY_USD", "1"))
 RN1_REWARD_PROJECT_H = float(os.getenv("PMUS_RN1_REWARD_PROJECT_H", "3"))
+# REWARD QUALIFICATION SCOPE (2026-11-27, default "market" = unchanged).
+# LIVE 2026-11-27 16:02Z: RN1_TOUCH_EV scored copmih-dumvit at +$0.166/h
+# (calibrated reward $0.146/h a bid) while the marginal test credited $0
+# ("below_minimum_payout"): the standing-start projection counted only THAT
+# market's planned bids over 3 h (~$0.88), whereas the regular projection
+# (rn1_incentive) counts every active market, the selection check counted
+# every active market WITHOUT the calibration multiplier, and RN1_TOUCH_EV
+# applied no minimum at all. Four sites, three scopes. The venue's records
+# show the minimum is not per market (paid rows of $0.01;
+# analysis/l5/rewards/REWARD_PAYOUT_THRESHOLD_20261122.md).
+# "account_day": ONE qualification for all four sites -- the calibrated
+# theoretical reward already accrued today on every market, plus the
+# calibrated rate of every active market (what rests, or the bids it is
+# about to rest when nothing does yet) and of the candidate, over
+# min(RN1_REWARD_PROJECT_H, time left in the trading window, time left in
+# the venue's reward day), must reach RN1_REWARD_MIN_DAY_USD. RN1_TOUCH_EV
+# then credits a reward only when that qualification holds, so selection,
+# placement and the order gate agree. The minimum itself is unchanged.
+RN1_REWARD_QUAL_SCOPE = os.getenv("PMUS_RN1_REWARD_QUAL_SCOPE",
+                                  "market").strip().lower()
+#: a planned (not yet resting) market's rate is used for this long
+RN1_REWARD_PLAN_TTL_S = float(os.getenv("PMUS_RN1_REWARD_PLAN_TTL_S", "120"))
 
 # OWNER 2026-11-22 "The bot must reliably stop and cancel orders without
 # depending on Claude's session." LIVE that morning: a reconciliation
@@ -5953,8 +5975,12 @@ class Engine:
         # credit is still the haircut incremental reward of the bid alone.
         boot = False
         if no_fair and per is None and \
-                inc.get("why") == "below_minimum_payout" and \
-                float(inc.get("projected_usd") or 0.0) <= 0.0:
+                inc.get("why") == "below_minimum_payout" and (
+                    float(inc.get("projected_usd") or 0.0) <= 0.0 or
+                    RN1_REWARD_QUAL_SCOPE == "account_day"):
+            # account_day: the planned ladder is projected together with
+            # everything else (accrued today, the other active markets),
+            # so it is tested whenever the total is still short
             per = self.rn1_reward(slug)
             boot = bool(per)
         book, own_y, own_n = None, [], []
@@ -6055,8 +6081,14 @@ class Engine:
                 return 0.0
             est = RW.ladder_quote_estimate(book, per, ys, ns, float(t),
                                            own_y, own_n)
-            return max(0.0, float(est.get("est_usd_per_hour") or 0.0)) * \
-                RN1_REWARD_PROJECT_H * rn1_reward_cal(slug, per)
+            rate = max(0.0, float(est.get("est_usd_per_hour") or 0.0)) * \
+                rn1_reward_cal(slug, per)
+            if RN1_REWARD_QUAL_SCOPE == "account_day":
+                # the same account/day total as every other site: this
+                # market's planned ladder plus every other active market
+                return float(self.rn1_reward_day_projection(
+                    slug, extra_usd_h=rate)["projected_usd"])
+            return rate * RN1_REWARD_PROJECT_H
         except Exception:                                 # noqa: BLE001
             return 0.0
 
@@ -6242,6 +6274,75 @@ class Engine:
                                 "est_usd_per_hour": r.get("est_usd_per_hour"),
                                 "max_spread_ok": r.get("max_spread_ok")}
 
+    def rn1_reward_day_projection(self, slug: Optional[str] = None,
+                                  extra_usd_h: float = 0.0,
+                                  now: Optional[float] = None
+                                  ) -> Dict[str, Any]:
+        """RN1_REWARD_QUAL_SCOPE "account_day": the THEORETICAL, calibrated
+        day total the minimum payout is tested against. Pure reads; never
+        raises (doubt = 0). `slug`'s own rate is replaced by `extra_usd_h`
+        (already calibrated) when that is given."""
+        now = time.time() if now is None else now
+        out = {"scope": "account_day", "accrued_today_usd": 0.0,
+               "rate_usd_per_hour": 0.0, "horizon_h": 0.0,
+               "projected_usd": 0.0, "markets": 0,
+               "label": "THEORETICAL reward projection; not a payment"}
+        try:
+            off = RN1_REWARD_CAL_DAY_OFFSET_H * 3600.0
+            dt_day = datetime.fromtimestamp(now + off, timezone.utc)
+            day = dt_day.strftime("%Y-%m-%d")
+            day_end = datetime(dt_day.year, dt_day.month, dt_day.day,
+                               tzinfo=timezone.utc).timestamp() + 86400.0 \
+                - off
+            acc = 0.0
+            for s_, m_ in (self.b.d.get("markets") or {}).items():
+                th = (m_.get("reward_theo") or {}).get(day)
+                if th:
+                    acc += float(th) * rn1_reward_cal(s_, self.rn1_reward(s_))
+            rate = 0.0
+            plan = getattr(self, "_net_choice", None) or {}
+            seen = 0
+            for s_ in self.active():
+                if s_ == slug and extra_usd_h:
+                    continue
+                per = self.rn1_reward(s_)
+                if not per:
+                    continue
+                est = (self.b.m(s_).get("rn1_reward_est") or {})
+                r_ = 0.0
+                if now - float(est.get("t") or 0) <= \
+                        4 * REWARD_WALK_CHECK_S:
+                    r_ = float(est.get("est_usd_per_hour") or 0.0) * \
+                        rn1_reward_cal(s_, per)
+                pl = plan.get(s_) or {}
+                if r_ <= 0.0 and now - float(pl.get("t") or 0) <= \
+                        RN1_REWARD_PLAN_TTL_S:
+                    r_ = float(pl.get("reward_usd_per_hour") or 0.0)
+                rate += max(0.0, r_)
+                seen += 1
+            rate += max(0.0, float(extra_usd_h or 0.0))
+            h = max(0.0, RN1_REWARD_PROJECT_H)
+            w = lock_window()
+            if w is not None and float(w[1]) > now:
+                h = min(h, (float(w[1]) - now) / 3600.0)
+            h = min(h, max(0.0, (day_end - now) / 3600.0))
+            out.update(accrued_today_usd=round(acc, 4),
+                       rate_usd_per_hour=round(rate, 6),
+                       horizon_h=round(h, 4), markets=seen,
+                       projected_usd=round(acc + rate * h, 4))
+        except Exception:                                 # noqa: BLE001
+            pass
+        return out
+
+    def rn1_reward_qualifies(self, slug: Optional[str] = None,
+                             extra_usd_h: float = 0.0) -> Dict[str, Any]:
+        """The one account/day qualification (see RN1_REWARD_QUAL_SCOPE)."""
+        pj = self.rn1_reward_day_projection(slug, extra_usd_h)
+        pj["min_payout_usd"] = RN1_REWARD_MIN_DAY_USD
+        pj["qualifies"] = pj["projected_usd"] + 1e-9 >= \
+            RN1_REWARD_MIN_DAY_USD
+        return pj
+
     def rn1_incentive(self, slug: str, mk: Optional[Dict[str, Any]] = None,
                       tick: Any = None) -> Dict[str, Any]:
         """{"ticks", "why", ...}: the reward credit the marginal test may
@@ -6257,6 +6358,20 @@ class Engine:
             mk = self.b.m(slug) if mk is None else mk
             if tick is not None:
                 self._rn1_reward_estimate(slug, mk, per, D(str(tick)))
+            if RN1_REWARD_QUAL_SCOPE == "account_day":
+                pj = self.rn1_reward_qualifies()
+                out.update(projected_usd=pj["projected_usd"],
+                           min_payout_usd=RN1_REWARD_MIN_DAY_USD,
+                           scope="account_day",
+                           accrued_today_usd=pj["accrued_today_usd"],
+                           horizon_h=pj["horizon_h"],
+                           label="THEORETICAL reward projection; not a "
+                                 "payment")
+                if not pj["qualifies"]:
+                    out["why"] = "below_minimum_payout"
+                    return out
+                out.update(ticks=RN1_REWARD_CREDIT_TICKS, why="qualifies")
+                return out
             total = 0.0
             for s in self.active():
                 est = (self.b.m(s).get("rn1_reward_est") or {})
@@ -7707,6 +7822,13 @@ class Engine:
             slug, book, per, bbo, tick, qty, mk["pos"], mk["cost"], hard,
             own_y, own_n, risk_step_ticks=qcfg.get("risk_step_ticks"),
             completion_depth=int(qcfg.get("depth_ticks", RN1.DEPTH_TICKS)))
+        out = self._touch_ev_qualified(
+            slug, out, lambda: self.rn1_touch_ev(
+                slug, None, None, bbo, tick, qty, mk["pos"], mk["cost"],
+                hard, own_y, own_n,
+                risk_step_ticks=qcfg.get("risk_step_ticks"),
+                completion_depth=int(qcfg.get("depth_ticks",
+                                              RN1.DEPTH_TICKS))))
         joined = getattr(self, "_rn1_joined", None)
         if joined is None:
             joined = self._rn1_joined = {}
@@ -7720,6 +7842,9 @@ class Engine:
                 hard=out["hard"], qty=out["qty"],
                 net_usd_per_hour=out["net_usd_per_hour"],
                 reward_mult=out["reward_mult"],
+                qualification=out.get("qualification"),
+                unqualified_reward_usd_per_hour=out.get(
+                    "unqualified_reward_usd_per_hour"),
                 sides={s_: {k: v for k, v in sd.items() if k != "rows"} |
                        {"rows": {str(d): {k2: r.get(k2) for k2 in (
                            "px", "why", "ev_usd_per_hour",
@@ -7729,6 +7854,27 @@ class Engine:
                        for s_, sd in out["sides"].items()},
                 label=out["label"])
         return out
+
+    def _touch_ev_qualified(self, slug: str, out: Dict[str, Any],
+                            unrewarded: Any) -> Dict[str, Any]:
+        """RN1_REWARD_QUAL_SCOPE "account_day": RN1_TOUCH_EV's reward
+        counts only when the account/day qualification holds with this
+        market's scored bids added; otherwise the same scoring with no
+        reward (`unrewarded()`). Scope "market": unchanged."""
+        if RN1_REWARD_QUAL_SCOPE != "account_day" or \
+                float(out.get("reward_usd_per_hour") or 0.0) <= 0.0:
+            return out
+        try:
+            q = self.rn1_reward_qualifies(
+                slug, extra_usd_h=float(out["reward_usd_per_hour"]))
+            if q["qualifies"]:
+                return dict(out, qualification=q)
+            alt = unrewarded()
+            return dict(alt, qualification=q,
+                        unqualified_reward_usd_per_hour=out[
+                            "reward_usd_per_hour"])
+        except Exception:                                 # noqa: BLE001
+            return out
 
     def _touch_ev_score(self, slug: str, book: Mapping[str, Any],
                         per: Mapping[str, Any], bb: D, ba: D, tick: D
@@ -7759,6 +7905,10 @@ class Engine:
         for q_ in sizes:
             got = self.rn1_touch_ev(slug, book, per, bbo, tick, q_, pos,
                                     cost, hard, own_y, own_n)
+            got = self._touch_ev_qualified(
+                slug, got, lambda q_=q_: self.rn1_touch_ev(
+                    slug, None, None, bbo, tick, q_, pos, cost, hard,
+                    own_y, own_n))
             if best is None or got["net_usd_per_hour"] > \
                     best["net_usd_per_hour"] + 1e-12:
                 best = got
@@ -7775,6 +7925,8 @@ class Engine:
         if choice is None:
             choice = self._net_choice = {}
         choice[slug] = {"t": now, "depth": dep, "qty": D(best["qty"]),
+                        "reward_usd_per_hour":
+                            float(best.get("reward_usd_per_hour") or 0.0),
                         "net_usd_per_hour": best["net_usd_per_hour"],
                         "depth_side": best["depth_side"]}
         return out
@@ -8155,6 +8307,10 @@ class Engine:
                          for s in self.active())
             pays = (active + usd_h) * RN1_REWARD_PROJECT_H + 1e-9 >= \
                 RN1_REWARD_MIN_DAY_USD
+            if RN1_REWARD_QUAL_SCOPE == "account_day":
+                pays = self.rn1_reward_qualifies(
+                    slug, extra_usd_h=usd_h * rn1_reward_cal(slug, per)
+                )["qualifies"]
         return PH.opportunity(
             edge_yes=e["YES"], edge_no=e["NO"],
             reward_usd_per_contract_hour=per_h, horizon_h=RANK_HORIZON_H,

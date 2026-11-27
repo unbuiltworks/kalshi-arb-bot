@@ -220,8 +220,23 @@ class RewardFeed:
         monkeypatch.setattr(e, "rn1_incentive",
                             lambda slug, mk=None, tick=None:
                             self.incentive(slug))
+        # RN1_REWARD_QUAL_SCOPE "account_day": the same day projection
+        # serves the account/day qualification (every site reads it), so a
+        # test that lowers projected_usd_h lowers it there too
+        monkeypatch.setattr(e, "rn1_reward_day_projection",
+                            lambda slug=None, extra_usd_h=0.0, now=None:
+                            self.day_projection())
         self.refresh(slugs)
         return self
+
+    def day_projection(self) -> Dict[str, Any]:
+        """Engine.rn1_reward_day_projection's answer for this feed."""
+        h = M.RN1_REWARD_PROJECT_H
+        return {"scope": "account_day", "accrued_today_usd": 0.0,
+                "rate_usd_per_hour": self.projected_usd_h, "horizon_h": h,
+                "projected_usd": round(self.projected_usd_h * h, 4),
+                "markets": 1,
+                "label": "THEORETICAL reward projection; not a payment"}
 
     def refresh(self, slugs=None) -> None:
         """The engine's programme cache expires (REWARD_REFRESH_S passes)
