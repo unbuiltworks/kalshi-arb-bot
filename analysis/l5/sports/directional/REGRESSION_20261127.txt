@@ -1,0 +1,34 @@
+Full regression, flags off, 27 Nov 2026
+baseline a51cfdbd2 (deployed): 26 failed, 6003 passed, 28 skipped, 1 xfailed, 3315 warnings in 163.61s (0:02:43)
+dev/pmus-directional-allocation: 26 failed, 6031 passed, 28 skipped, 1 xfailed, 3315 warnings in 173.95s (0:02:53)
+failure names identical: yes (26, all pre-existing on a51cfdbd2):
+FAILED tests/test_deploy_fallthrough_guard.py::test_src_main_also_refuses_under_a_managed_runtime
+FAILED tests/test_deploy_fallthrough_guard.py::test_src_main_still_runs_when_explicitly_opted_in
+FAILED tests/test_orderbook.py::TestOrderBookManager::test_book_update_callback
+FAILED tests/test_orderbook.py::TestOrderBookManager::test_delta_before_snapshot_ignored
+FAILED tests/test_orderbook.py::TestOrderBookManager::test_handle_delta
+FAILED tests/test_orderbook.py::TestOrderBookManager::test_handle_snapshot_fp_format
+FAILED tests/test_orderbook.py::TestOrderBookManager::test_handle_snapshot_legacy_format
+FAILED tests/test_pmus_spring_l5_deploy.py::test_watch_patterns_cover_every_file_the_image_copies
+FAILED tests/test_pmus_spring_probe_readiness.py::test_completion_floor_still_clamps_to_two_when_measured
+FAILED tests/test_pmus_spring_probe_readiness.py::test_floor_two_with_two_category_completions_passes_evidence_layer
+FAILED tests/test_pmus_spring_probe_readiness.py::test_fully_asserted_environment_reports_ready
+FAILED tests/test_pmus_spring_probe_readiness.py::test_replication_without_executable_economics_is_separated
+FAILED tests/test_pmus_spring_probe_readiness.py::test_report_names_every_remaining_gate_and_blocker
+FAILED tests/test_pmus_spring_probe_readiness.py::test_two_layer_bar_default_floor_is_now_advisory_not_a_blocker
+FAILED tests/test_probe_image_completeness.py::test_copied_modules_are_also_watched
+FAILED tests/test_shutdown_settlement_liveness.py::test_one_stuck_market_cannot_block_the_others
+FAILED tests/test_shutdown_settlement_liveness.py::test_the_budget_prices_the_whole_set_not_the_batch
+FAILED tests/test_spread_scanner.py::TestSpreadScanner::test_edge_below_threshold
+FAILED tests/test_spread_scanner.py::TestSpreadScanner::test_empty_book_no_crash
+FAILED tests/test_spread_scanner.py::TestSpreadScanner::test_no_signal_normal_spread
+FAILED tests/test_spread_scanner.py::TestSpreadScanner::test_one_side_empty_no_crash
+FAILED tests/test_spread_scanner.py::TestSpreadScanner::test_picks_better_maker_side
+FAILED tests/test_spread_scanner.py::TestSpreadScanner::test_quantity_capped_by_depth
+FAILED tests/test_spread_scanner.py::TestSpreadScanner::test_quantity_capped_by_order_size
+FAILED tests/test_spread_scanner.py::TestSpreadScanner::test_signal_on_arb
+FAILED tests/test_spread_scanner.py::TestSpreadScanner::test_skips_insufficient_depth
+
+enabled-mode safety + directional engine with PMUS_RN1_DIRECTIONAL=1: 64 passed
+image guard tests/test_pmus_spring_image_modules.py: passed (failed before the Dockerfile COPY was added)
+docker (local build of this branch): 62/62 src modules import with activation flags; engine boot with RN1+directional on, lock 1, 75 s, no loop/latch/market errors

@@ -1,0 +1,22 @@
+THEORETICAL backtest: recorded books, modelled fills, nothing realized. Recordings: analysis/l5/sports_wallets/cross_venue_20261121_2027_2217.jsonl.gz, analysis/l5/sports_wallets/cross_venue_20261121_2218_0015_sizes.jsonl.gz
+markets in recordings: 65; skipped: 0 {}
+touch/baseline                     mkts  65 traded  22 fills  159 ctr  266.42 spend 131.0995 trading -12.6695 (matched 6.84479, residual -19.5142) per-mkt -0.576 se 0.302 peak 131.099 ROC -0.0966 turnover 1.00
+touch/directional_l0               mkts  65 traded  11 fills   76 ctr   127.2 spend  61.4220 trading -10.0220 (matched 4.34475, residual -14.3667) per-mkt -0.911 se 0.552 peak 61.4220 ROC -0.1632 turnover 1.00
+touch/directional_l0.0025          mkts  65 traded  11 fills   76 ctr   127.2 spend  61.4020 trading -10.0020 (matched 4.36475, residual -14.3667) per-mkt -0.909 se 0.5525 peak 61.4020 ROC -0.1629 turnover 1.00
+touch/directional_l0.005           mkts  65 traded  11 fills   77 ctr   127.2 spend  61.3920 trading -9.99200 (matched 4.37475, residual -14.3667) per-mkt -0.908 se 0.5528 peak 61.3920 ROC -0.1628 turnover 1.00
+touch/directional_l0.01            mkts  65 traded  11 fills   76 ctr   125.2 spend  60.4170 trading -10.0170 (matched 4.34612, residual -14.3631) per-mkt -0.911 se 0.5536 peak 60.4170 ROC -0.1658 turnover 1.00
+touch/directional_l0.005_nodepth   mkts  65 traded  11 fills   77 ctr   127.2 spend  61.3920 trading -9.99200 (matched 4.37475, residual -14.3667) per-mkt -0.908 se 0.5528 peak 61.3920 ROC -0.1628 turnover 1.00
+touch/adds_only_l0.005             mkts  65 traded  22 fills  100 ctr  159.94 spend 77.46925 trading -8.59924 (matched 5.18786, residual -13.7871) per-mkt -0.391 se 0.2291 peak 77.4692 ROC -0.1110 turnover 1.00
+touch/adds_only_l0.005_fl_lead     mkts  65 traded  22 fills  118 ctr  188.34 spend 91.29225 trading -10.0222 (matched 5.92814, residual -15.9503) per-mkt -0.456 se 0.2558 peak 91.2922 ROC -0.1098 turnover 1.00
+touch/adds_only_l0.01_fl_lead      mkts  65 traded  22 fills  116 ctr  186.34 spend 90.44225 trading -10.1722 (matched 5.77814, residual -15.9503) per-mkt -0.462 se 0.2542 peak 90.4422 ROC -0.1125 turnover 1.00
+touch/full_l0.005_fl_lead          mkts  65 traded  17 fills   95 ctr   152.8 spend  74.4470 trading -11.4470 (matched 4.81247, residual -16.2594) per-mkt -0.673 se 0.4359 peak 74.4470 ROC -0.1538 turnover 1.00
+through/baseline                   mkts  65 traded  17 fills  105 ctr  175.37 spend 82.81235 trading -14.6423 (matched 5.52045, residual -20.1628) per-mkt -0.861 se 0.3179 peak 82.8123 ROC -0.1768 turnover 1.00
+through/directional_l0             mkts  65 traded   9 fills   60 ctr   100.9 spend  48.8005 trading -7.50049 (matched 3.80875, residual -11.3092) per-mkt -0.833 se 0.6022 peak 48.8005 ROC -0.1537 turnover 1.00
+through/directional_l0.0025        mkts  65 traded   9 fills   60 ctr   100.9 spend  48.8005 trading -7.50049 (matched 3.80875, residual -11.3092) per-mkt -0.833 se 0.6022 peak 48.8005 ROC -0.1537 turnover 1.00
+through/directional_l0.005         mkts  65 traded   9 fills   60 ctr   100.9 spend  48.7805 trading -7.48049 (matched 3.82875, residual -11.3092) per-mkt -0.831 se 0.6028 peak 48.7805 ROC -0.1534 turnover 1.00
+through/directional_l0.01          mkts  65 traded   9 fills   60 ctr    97.9 spend  47.4355 trading -8.13549 (matched 3.74175, residual -11.8772) per-mkt -0.904 se 0.6051 peak 47.4355 ROC -0.1715 turnover 1.00
+through/directional_l0.005_nodepth mkts  65 traded   9 fills   60 ctr   100.9 spend  48.7805 trading -7.48049 (matched 3.82875, residual -11.3092) per-mkt -0.831 se 0.6028 peak 48.7805 ROC -0.1534 turnover 1.00
+through/adds_only_l0.005           mkts  65 traded  17 fills   80 ctr  128.54 spend 60.65825 trading -3.88824 (matched 5.23846, residual -9.12671) per-mkt -0.229 se 0.2556 peak 60.6582 ROC -0.0641 turnover 1.00
+through/adds_only_l0.005_fl_lead   mkts  65 traded  17 fills   96 ctr  147.94 spend 67.84025 trading -4.67024 (matched 6.54354, residual -11.2137) per-mkt -0.275 se 0.2447 peak 67.8402 ROC -0.0688 turnover 1.00
+through/adds_only_l0.01_fl_lead    mkts  65 traded  17 fills   93 ctr  145.94 spend 68.35125 trading -4.18124 (matched 5.72374, residual -9.90499) per-mkt -0.246 se 0.248 peak 68.3512 ROC -0.0612 turnover 1.00
+through/full_l0.005_fl_lead        mkts  65 traded  15 fills   83 ctr   134.5 spend  65.9755 trading -9.07550 (matched 4.32647, residual -13.4019) per-mkt -0.605 se 0.3935 peak 65.9755 ROC -0.1376 turnover 1.00
