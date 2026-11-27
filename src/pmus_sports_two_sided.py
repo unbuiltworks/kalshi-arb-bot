@@ -1781,6 +1781,16 @@ RN1_JOIN_MAX_RANGE = _comp_rates("PMUS_RN1_JOIN_MAX_RANGE_COMP",
 # (rn1_touch_ev) on the same inputs, so a market is selected on the
 # placement it will be quoted at. Completion bids keep today's placement.
 RN1_TOUCH_EV = os.getenv("PMUS_RN1_TOUCH_EV", "0").strip() == "1"
+# SIDES REPLENISH INDEPENDENTLY (owner 2026-11-27, default OFF). When a
+# pass cancels a stale bid and the venue has not yet confirmed that cancel
+# (no fill raced it: inventory unchanged), the pass used to stop there, so
+# the OTHER side's new or replenishing bid waited a pass for an unrelated
+# cancel. With RN1_SIDE_INDEPENDENT on only the side whose cancel is
+# pending waits; the other side's targets are placed this pass (each still
+# through the final gate, which counts the still-open order). A fill that
+# raced a cancel still stops the whole pass (inventory changed).
+RN1_SIDE_INDEPENDENT = os.getenv("PMUS_RN1_SIDE_INDEPENDENT",
+                                 "0").strip() == "1"
 RN1_TOUCH_EV_MAX_DEPTH = max(1, int(os.getenv("PMUS_RN1_TOUCH_EV_MAX_DEPTH")
                                     or "2"))
 # REWARD CALIBRATION (owner 2026-11-27, default OFF). Every theoretical
@@ -6654,13 +6664,17 @@ class Engine:
                 stale.append((oid, o))
             else:
                 matched.add(hit)
+        wait_sides: set = set()
         if stale:
             before = (str(mk["pos"]["YES"]), str(mk["pos"]["NO"]))
             self._cancel_legs(slug, stale)
             self.b.save()
-            if (str(mk["pos"]["YES"]), str(mk["pos"]["NO"])) != before or \
-                    any(o.get("open") for _oid, o in stale):
+            raced = (str(mk["pos"]["YES"]), str(mk["pos"]["NO"])) != before
+            pending = {o["side"] for _oid, o in stale if o.get("open")}
+            if raced or (pending and not RN1_SIDE_INDEPENDENT):
                 return       # a fill raced the cancel, or still pending
+            # RN1_SIDE_INDEPENDENT: only the side still cancelling waits
+            wait_sides = pending
         flat = y == 0 and n == 0
         if flat and RN1_RELEASE_UNQUALIFIED_S > 0 and not mev_pass and \
                 new_block in (None, "net_not_positive"):
@@ -6707,7 +6721,7 @@ class Engine:
             return
         mk.pop("idle_since", None)
         for i, (side, tg, _lv) in enumerate(targets):
-            if i in matched:
+            if i in matched or side in wait_sides:
                 continue
             stage = {"complete": "two_sided_complete",
                      "extend": "rn1_extend"}.get(tg["role"], "rn1_open")
