@@ -2168,3 +2168,19 @@ qualifying out of 340,141 resting. **Rewards:** PAID unchanged at
   - watchdog clean; drawdown readable at 7.55 / 20.
 - Expected to clear when the ledger's round-trip attestation restates it
   from the venue's trades (about 20–30 minutes). Re-checked at about 02:20.
+
+## 72. Unified sports candidate accepted; scope frozen — 27 Nov 2026
+
+Owner, typed: "Accept the unified release as the candidate. Freeze scope.
+Complete the remaining enabled-mode safety fixture verification and reward
+pool attribution check. Finish the ledger settlement correction first. Once
+the ledger is deployed under separate authorization and verified, bring
+forward the unified sports release for an exact three-hour live
+authorization. Keep all existing capital limits and hard protections. No
+additional strategy research, shadow campaigns or unrelated functionality."
+
+- Candidate: `a17a9c978a8c733f4cdf9d125f1ff8aac6567d48`
+  (`release/pmus-sports-next-ad7cd6237`). Not deployed.
+- Order: (1) ledger sports-settlement release, separately authorized,
+  deployed and verified; (2) the unified sports release for an exact
+  three-hour live window.
