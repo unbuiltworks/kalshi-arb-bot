@@ -2570,3 +2570,20 @@ the exact three-hour live authorization packet for sports release
   - Maker-only throughout; reward check ok; reconcile ok at 15:40.
   - The cricket filter learned and excluded two new leagues (`hjs`,
     `plunket`) at 15:30; nothing was traded there.
+
+### 76e. Window closed 16:45 UTC; completions-only to 18:45 — report at 17:15 UTC
+
+- **Lock:** `SUBMISSION_LOCK_STATE` at 16:45:02 shows `window_completions_only`:
+  new exposure locked, completions allowed.
+- **Fills since 15:55:** none. The campaign total stands at 8 fills (8
+  contracts, $3.77), 4.00 completed pairs at average cost 0.943, pair edge
+  **+$0.2275**, residual 0.
+- **Inventory:** flat; 0 open orders (watchdog 17:14:24, all registries
+  OK). Reconcile at 16:40: ok, 0 positions, 0 mismatches.
+- **Rewards:** PAID still $24.09. No campaign reward has been credited
+  (see the reward-qualification investigation, 16:02 discrepancy).
+- **Ledger 17:14:**
+  - day −5.6356, lifetime −66.6294 (room 8.37);
+  - drawdown 6.18 of 20; unresolved 0; unattributed 0;
+  - sibling-feed settlements CONFIRMED 5, CONTRADICTED 0.
+- **Stop conditions:** none tripped. Close-out at 18:47 sets lock `1`.
