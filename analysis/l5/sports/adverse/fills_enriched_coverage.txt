@@ -1,0 +1,14 @@
+records total: 110; open/extend: 66 (open 47, extend 19); complete: 44
+open/extend with book_at_fill present: 66; with age<=60s: 66
+open/extend with book_m30 present: 57; with age<=60s: 38
+open/extend with book_m60 present: 54; with age<=60s: 39
+open/extend with book_m120 present: 53; with age<=60s: 39
+open/extend with pos/cost/incentive from an RN1_QUOTE at/before fill: 65 (quote age<=60s: 56)
+open/extend with pause (VOL_PAUSE/jump_pause) in prior 120s: 28
+settle_yes present: open/extend 58/66; all records 93/110
+slugs without SETTLEMENT_RECORDED: aec-atp-gabdeb-sankop-2026-11-23, aec-atp-karpol-benwei-2026-11-23, aec-atp-robstr-tiaper-2026-11-23, aec-nba-det-atl-2026-11-22
+fill_t sources: {"FILL.t - markout.seen_after_s (FILL lacks seen_late_s)": 8, "FILL.t - FILL.seen_late_s": 102}
+records not timed from a FILL event: none
+open/extend with incentive {why, projected_usd} non-null: 57 (RN1_QUOTE on korvol-kozden, traemm-zylame, carjem-caltes carried no incentive field; delanedelane open had no RN1_QUOTE at all before the fill)
+null m30/m60/m120 = no bot-logged price for that slug before that time in the pulled windows (market selected only seconds before the fill): m30 9, m60 12, m120 13
+stale carry-forward (age > 60 s, value kept with its age): m30 19, m60 15, m120 14 — mostly fills that happened shortly after (re)selection or while RN1_QUOTE was not being emitted for the slug (e.g. sydvik-dunvol 03:55, savvol-hryevh 03:55/05:42, kolval-volyur 04:01, sydvik-dunvol 05:42, paryur-stoole 02:31 m120)

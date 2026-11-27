@@ -1,0 +1,8925 @@
+[
+ {
+  "order_id": "DWR3D31014F1",
+  "slug": "aec-nba-det-atl-2026-11-22",
+  "side": "YES",
+  "px": "0.5700",
+  "qty": "2",
+  "role": "open",
+  "phase": null,
+  "unpaired_before": "0",
+  "fill_t": "2026-11-22T21:36:22.502533+00:00",
+  "fill_t_source": "FILL.t - markout.seen_after_s (FILL lacks seen_late_s)",
+  "book_at_fill": {
+   "bid": 0.58,
+   "ask": 0.59,
+   "mid": 0.585,
+   "age_s": 1.64,
+   "source": "RN1_QUOTE"
+  },
+  "book_m30": {
+   "bid": 0.57,
+   "ask": 0.58,
+   "mid": 0.575,
+   "age_s": 10.73,
+   "source": "jump_pause.new"
+  },
+  "book_m60": {
+   "bid": 0.54,
+   "ask": 0.55,
+   "mid": 0.545,
+   "age_s": 5.18,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.53,
+   "ask": 0.54,
+   "mid": 0.535,
+   "age_s": 173.98,
+   "source": "jump_pause.new"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0
+  },
+  "quote_before_age_s": 1.64,
+  "h": {
+   "5": {
+    "markout": -0.035,
+    "late_s": 3.68,
+    "bid": 0.53,
+    "ask": 0.54
+   },
+   "30": {
+    "markout": -0.035,
+    "late_s": 0.49,
+    "bid": 0.53,
+    "ask": 0.54
+   },
+   "120": {
+    "markout": -0.005,
+    "late_s": 5.0,
+    "bid": 0.56,
+    "ask": 0.57
+   },
+   "300": {
+    "markout": 0.005,
+    "late_s": 4.46,
+    "bid": 0.57,
+    "ask": 0.58
+   }
+  },
+  "settle_yes": null
+ },
+ {
+  "order_id": "DWRC2VS013YB",
+  "slug": "aec-nba-det-atl-2026-11-22",
+  "side": "NO",
+  "px": "0.3800",
+  "qty": "2",
+  "role": "complete",
+  "phase": null,
+  "unpaired_before": "-2",
+  "fill_t": "2026-11-22T21:55:23.633899+00:00",
+  "fill_t_source": "FILL.t - markout.seen_after_s (FILL lacks seen_late_s)",
+  "book_at_fill": {
+   "bid": 0.59,
+   "ask": 0.61,
+   "mid": 0.6,
+   "age_s": 4.93,
+   "source": "FILL_MARKOUT.book_before(DWRC2VS013YB)"
+  },
+  "book_m30": {
+   "bid": 0.56,
+   "ask": 0.57,
+   "mid": 0.565,
+   "age_s": 44.22,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.56,
+   "ask": 0.57,
+   "mid": 0.565,
+   "age_s": 14.22,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.57,
+   "ask": 0.58,
+   "mid": 0.575,
+   "age_s": 353.63,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "2",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "1.1400",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0
+  },
+  "quote_before_age_s": 4.93,
+  "h": {
+   "5": {
+    "markout": 0.025,
+    "late_s": 1.13,
+    "bid": 0.59,
+    "ask": 0.6
+   },
+   "30": {
+    "markout": -0.015,
+    "late_s": 3.69,
+    "bid": 0.63,
+    "ask": 0.64
+   },
+   "120": {
+    "markout": 0.115,
+    "late_s": 3.32,
+    "bid": 0.5,
+    "ask": 0.51
+   },
+   "300": {
+    "markout": 0.015,
+    "late_s": 5.4,
+    "bid": 0.6,
+    "ask": 0.61
+   }
+  },
+  "settle_yes": null
+ },
+ {
+  "order_id": "DWRCSGA013ZK",
+  "slug": "aec-nba-det-atl-2026-11-22",
+  "side": "YES",
+  "px": "0.5500",
+  "qty": "2",
+  "role": "extend",
+  "phase": null,
+  "unpaired_before": "0",
+  "fill_t": "2026-11-22T21:57:02.955695+00:00",
+  "fill_t_source": "FILL.t - markout.seen_after_s (FILL lacks seen_late_s)",
+  "book_at_fill": {
+   "bid": 0.56,
+   "ask": 0.57,
+   "mid": 0.565,
+   "age_s": 4.69,
+   "source": "FILL_MARKOUT.book_before(DWRCSGA013ZK)"
+  },
+  "book_m30": {
+   "bid": 0.56,
+   "ask": 0.57,
+   "mid": 0.565,
+   "age_s": 0.9,
+   "source": "jump_pause.new"
+  },
+  "book_m60": {
+   "bid": 0.63,
+   "ask": 0.64,
+   "mid": 0.635,
+   "age_s": 5.63,
+   "source": "FILL_MARKOUT.h30(DWRC2VS013YB)"
+  },
+  "book_m120": {
+   "bid": 0.58,
+   "ask": 0.59,
+   "mid": 0.585,
+   "age_s": 1.17,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "2",
+   "NO": "2"
+  },
+  "cost_before": {
+   "YES": "1.1400",
+   "NO": "0.7600"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0
+  },
+  "quote_before_age_s": 11.49,
+  "h": {
+   "5": {
+    "markout": -0.055,
+    "late_s": 2.12,
+    "bid": 0.49,
+    "ask": 0.5
+   },
+   "30": {
+    "markout": -0.025,
+    "late_s": 5.08,
+    "bid": 0.52,
+    "ask": 0.53
+   },
+   "120": {
+    "markout": 0.025,
+    "late_s": 3.85,
+    "bid": 0.57,
+    "ask": 0.58
+   },
+   "300": {
+    "markout": 0.075,
+    "late_s": 2.68,
+    "bid": 0.62,
+    "ask": 0.63
+   }
+  },
+  "settle_yes": null
+ },
+ {
+  "order_id": "DWRCY68G13ZK",
+  "slug": "aec-nba-det-atl-2026-11-22",
+  "side": "NO",
+  "px": "0.4100",
+  "qty": "2",
+  "role": "complete",
+  "phase": null,
+  "unpaired_before": "-2",
+  "fill_t": "2026-11-22T21:59:44.511583+00:00",
+  "fill_t_source": "FILL.t - markout.seen_after_s (FILL lacks seen_late_s)",
+  "book_at_fill": {
+   "bid": 0.57,
+   "ask": 0.58,
+   "mid": 0.575,
+   "age_s": 4.26,
+   "source": "RN1_QUOTE"
+  },
+  "book_m30": {
+   "bid": 0.57,
+   "ask": 0.58,
+   "mid": 0.575,
+   "age_s": 7.66,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.53,
+   "ask": 0.54,
+   "mid": 0.535,
+   "age_s": 5.2,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.52,
+   "ask": 0.53,
+   "mid": 0.525,
+   "age_s": 6.48,
+   "source": "FILL_MARKOUT.h30(DWRCSGA013ZK)"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "4",
+   "NO": "2"
+  },
+  "cost_before": {
+   "YES": "2.2400",
+   "NO": "0.7600"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0005
+  },
+  "quote_before_age_s": 4.26,
+  "h": {
+   "5": {
+    "markout": -0.035,
+    "late_s": 1.25,
+    "bid": 0.62,
+    "ask": 0.63
+   },
+   "30": {
+    "markout": 0.025,
+    "late_s": 3.83,
+    "bid": 0.56,
+    "ask": 0.57
+   },
+   "120": {
+    "markout": -0.015,
+    "late_s": 3.53,
+    "bid": 0.6,
+    "ask": 0.61
+   },
+   "300": {
+    "markout": -0.025,
+    "late_s": 2.39,
+    "bid": 0.61,
+    "ask": 0.62
+   }
+  },
+  "settle_yes": null
+ },
+ {
+  "order_id": "DWRE7SS014ET",
+  "slug": "aec-nba-det-atl-2026-11-22",
+  "side": "YES",
+  "px": "0.5800",
+  "qty": "2",
+  "role": "extend",
+  "phase": null,
+  "unpaired_before": "0",
+  "fill_t": "2026-11-22T22:00:01.789196+00:00",
+  "fill_t_source": "FILL.t - markout.seen_after_s (FILL lacks seen_late_s)",
+  "book_at_fill": {
+   "bid": 0.62,
+   "ask": 0.63,
+   "mid": 0.625,
+   "age_s": 0.82,
+   "source": "RN1_QUOTE"
+  },
+  "book_m30": {
+   "bid": 0.54,
+   "ask": 0.55,
+   "mid": 0.545,
+   "age_s": 2.09,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.56,
+   "ask": 0.57,
+   "mid": 0.565,
+   "age_s": 10.86,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.52,
+   "ask": 0.53,
+   "mid": 0.525,
+   "age_s": 23.75,
+   "source": "FILL_MARKOUT.h30(DWRCSGA013ZK)"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "4",
+   "NO": "4"
+  },
+  "cost_before": {
+   "YES": "2.2400",
+   "NO": "1.5800"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0
+  },
+  "quote_before_age_s": 0.82,
+  "h": {
+   "5": {
+    "markout": -0.005,
+    "late_s": 1.19,
+    "bid": 0.57,
+    "ask": 0.58
+   },
+   "30": {
+    "markout": 0.025,
+    "late_s": 3.9,
+    "bid": 0.6,
+    "ask": 0.61
+   },
+   "120": {
+    "markout": 0.045,
+    "late_s": 3.83,
+    "bid": 0.62,
+    "ask": 0.63
+   },
+   "300": {
+    "markout": 0.035,
+    "late_s": 2.32,
+    "bid": 0.61,
+    "ask": 0.62
+   }
+  },
+  "settle_yes": null
+ },
+ {
+  "order_id": "DWREP03G53ZD",
+  "slug": "aec-nba-det-atl-2026-11-22",
+  "side": "NO",
+  "px": "0.4000",
+  "qty": "2",
+  "role": "complete",
+  "phase": null,
+  "unpaired_before": "-2",
+  "fill_t": "2026-11-22T22:01:15.234084+00:00",
+  "fill_t_source": "FILL.t - markout.seen_after_s (FILL lacks seen_late_s)",
+  "book_at_fill": {
+   "bid": 0.59,
+   "ask": 0.6,
+   "mid": 0.595,
+   "age_s": 1.28,
+   "source": "jump_pause.new"
+  },
+  "book_m30": {
+   "bid": 0.6,
+   "ask": 0.62,
+   "mid": 0.61,
+   "age_s": 4.33,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.57,
+   "ask": 0.58,
+   "mid": 0.575,
+   "age_s": 7.13,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.57,
+   "ask": 0.58,
+   "mid": 0.575,
+   "age_s": 8.38,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "6",
+   "NO": "4"
+  },
+  "cost_before": {
+   "YES": "3.4000",
+   "NO": "1.5800"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0169
+  },
+  "quote_before_age_s": 10.09,
+  "h": {
+   "5": {
+    "markout": -0.005,
+    "late_s": 0.91,
+    "bid": 0.6,
+    "ask": 0.61
+   },
+   "30": {
+    "markout": -0.005,
+    "late_s": 2.79,
+    "bid": 0.6,
+    "ask": 0.61
+   },
+   "120": {
+    "markout": -0.025,
+    "late_s": 1.58,
+    "bid": 0.62,
+    "ask": 0.63
+   },
+   "300": {
+    "markout": -0.035,
+    "late_s": 3.14,
+    "bid": 0.63,
+    "ask": 0.64
+   }
+  },
+  "settle_yes": null
+ },
+ {
+  "order_id": "DWRJ9XQG14EX",
+  "slug": "aec-nba-det-atl-2026-11-22",
+  "side": "NO",
+  "px": "0.2300",
+  "qty": "2",
+  "role": "extend",
+  "phase": null,
+  "unpaired_before": "0",
+  "fill_t": "2026-11-22T22:08:54.629455+00:00",
+  "fill_t_source": "FILL.t - markout.seen_after_s (FILL lacks seen_late_s)",
+  "book_at_fill": {
+   "bid": 0.74,
+   "ask": 0.76,
+   "mid": 0.75,
+   "age_s": 4.9,
+   "source": "RN1_QUOTE"
+  },
+  "book_m30": {
+   "bid": 0.69,
+   "ask": 0.7,
+   "mid": 0.695,
+   "age_s": 13.02,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.71,
+   "ask": 0.72,
+   "mid": 0.715,
+   "age_s": 8.14,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.65,
+   "ask": 0.67,
+   "mid": 0.66,
+   "age_s": 5.83,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "6",
+   "NO": "6"
+  },
+  "cost_before": {
+   "YES": "3.4000",
+   "NO": "2.3800"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0016
+  },
+  "quote_before_age_s": 4.9,
+  "h": {
+   "5": {
+    "missed": true,
+    "why": "no_book_sample_within_30s_of_the_horizon"
+   },
+   "30": {
+    "missed": true,
+    "why": "no_book_sample_within_30s_of_the_horizon"
+   },
+   "120": {
+    "markout": -0.105,
+    "late_s": 3.04,
+    "bid": 0.87,
+    "ask": 0.88
+   },
+   "300": {
+    "markout": -0.085,
+    "late_s": 2.0,
+    "bid": 0.85,
+    "ask": 0.86
+   }
+  },
+  "settle_yes": null
+ },
+ {
+  "order_id": "DWRK1K2G13YY",
+  "slug": "aec-nba-det-atl-2026-11-22",
+  "side": "YES",
+  "px": "0.6100",
+  "qty": "2",
+  "role": "complete",
+  "phase": null,
+  "unpaired_before": "-2",
+  "fill_t": "2026-11-22T22:26:37.570845+00:00",
+  "fill_t_source": "FILL.t - markout.seen_after_s (FILL lacks seen_late_s)",
+  "book_at_fill": {
+   "bid": 0.62,
+   "ask": 0.63,
+   "mid": 0.625,
+   "age_s": 0.37,
+   "source": "jump_pause.new"
+  },
+  "book_m30": {
+   "bid": 0.73,
+   "ask": 0.74,
+   "mid": 0.735,
+   "age_s": 34.54,
+   "source": "jump_pause.new"
+  },
+  "book_m60": {
+   "bid": 0.73,
+   "ask": 0.74,
+   "mid": 0.735,
+   "age_s": 4.54,
+   "source": "jump_pause.new"
+  },
+  "book_m120": {
+   "bid": 0.83,
+   "ask": 0.84,
+   "mid": 0.835,
+   "age_s": 30.81,
+   "source": "jump_pause.new"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "6",
+   "NO": "8"
+  },
+  "cost_before": {
+   "YES": "3.4000",
+   "NO": "2.8400"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0
+  },
+  "quote_before_age_s": 76.97,
+  "h": {
+   "5": {
+    "markout": -0.035,
+    "late_s": 2.13,
+    "bid": 0.57,
+    "ask": 0.58
+   },
+   "30": {
+    "markout": -0.025,
+    "late_s": 5.89,
+    "bid": 0.58,
+    "ask": 0.59
+   },
+   "120": {
+    "markout": -0.025,
+    "late_s": 4.0,
+    "bid": 0.58,
+    "ask": 0.59
+   },
+   "300": {
+    "markout": -0.245,
+    "late_s": 2.61,
+    "bid": 0.36,
+    "ask": 0.37
+   }
+  },
+  "settle_yes": null
+ },
+ {
+  "order_id": "DX8Z349G13ZK",
+  "slug": "aec-atp-robstr-tiaper-2026-11-23",
+  "side": "YES",
+  "px": "0.6600",
+  "qty": "2",
+  "role": "open",
+  "phase": "live",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-23T17:15:25.484211+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.67,
+   "ask": 0.68,
+   "mid": 0.675,
+   "age_s": 6.63,
+   "source": "RN1_QUOTE"
+  },
+  "book_m30": {
+   "bid": 0.67,
+   "ask": 0.68,
+   "mid": 0.675,
+   "age_s": 2.64,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.67,
+   "ask": 0.68,
+   "mid": 0.675,
+   "age_s": 37.12,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.66,
+   "ask": 0.68,
+   "mid": 0.67,
+   "age_s": 3.83,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0
+  },
+  "quote_before_age_s": 6.63,
+  "h": {
+   "5": {
+    "markout": -0.015,
+    "late_s": 0.55,
+    "bid": 0.64,
+    "ask": 0.65
+   },
+   "30": {
+    "markout": -0.015,
+    "late_s": 8.78,
+    "bid": 0.64,
+    "ask": 0.65
+   },
+   "120": {
+    "markout": 0.005,
+    "late_s": 7.21,
+    "bid": 0.66,
+    "ask": 0.67
+   },
+   "300": {
+    "markout": -0.165,
+    "late_s": 3.96,
+    "bid": 0.48,
+    "ask": 0.51
+   }
+  },
+  "settle_yes": null
+ },
+ {
+  "order_id": "DX97AENG13YB",
+  "slug": "aec-atp-robstr-tiaper-2026-11-23",
+  "side": "NO",
+  "px": "0.2900",
+  "qty": "2",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-2",
+  "fill_t": "2026-11-23T17:33:19.910345+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.69,
+   "ask": 0.7,
+   "mid": 0.695,
+   "age_s": 2.32,
+   "source": "RN1_QUOTE"
+  },
+  "book_m30": {
+   "bid": 0.68,
+   "ask": 0.69,
+   "mid": 0.685,
+   "age_s": 9.13,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.66,
+   "ask": 0.67,
+   "mid": 0.665,
+   "age_s": 7.12,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.69,
+   "ask": 0.7,
+   "mid": 0.695,
+   "age_s": 11.66,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE"
+  ],
+  "pos_before": {
+   "YES": "2",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "1.3200",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0
+  },
+  "quote_before_age_s": 2.32,
+  "h": {
+   "5": {
+    "markout": -0.025,
+    "late_s": 0.9,
+    "bid": 0.73,
+    "ask": 0.74
+   },
+   "30": {
+    "markout": -0.04,
+    "late_s": 9.93,
+    "bid": 0.72,
+    "ask": 0.78
+   },
+   "120": {
+    "markout": 0.035,
+    "late_s": 2.74,
+    "bid": 0.67,
+    "ask": 0.68
+   },
+   "300": {
+    "markout": -0.035,
+    "late_s": 0.09,
+    "bid": 0.74,
+    "ask": 0.75
+   }
+  },
+  "settle_yes": null
+ },
+ {
+  "order_id": "DX97JPX0144P",
+  "slug": "aec-atp-karpol-benwei-2026-11-23",
+  "side": "YES",
+  "px": "0.6500",
+  "qty": "1",
+  "role": "open",
+  "phase": "live",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-23T17:33:54.233051+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.66,
+   "ask": 0.67,
+   "mid": 0.665,
+   "age_s": 6.26,
+   "source": "FILL_MARKOUT.book_before(DX97JPX0144P)"
+  },
+  "book_m30": {
+   "bid": 0.66,
+   "ask": 0.67,
+   "mid": 0.665,
+   "age_s": 2.53,
+   "source": "jump_pause.new"
+  },
+  "book_m60": {
+   "bid": 0.68,
+   "ask": 0.69,
+   "mid": 0.685,
+   "age_s": 0.87,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.7,
+   "ask": 0.71,
+   "mid": 0.705,
+   "age_s": 23.6,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0
+  },
+  "quote_before_age_s": 15.11,
+  "h": {
+   "5": {
+    "markout": 0.005,
+    "late_s": 1.67,
+    "bid": 0.64,
+    "ask": 0.67
+   },
+   "30": {
+    "markout": 0.025,
+    "late_s": 3.15,
+    "bid": 0.67,
+    "ask": 0.68
+   },
+   "120": {
+    "markout": -0.025,
+    "late_s": 4.5,
+    "bid": 0.62,
+    "ask": 0.63
+   },
+   "300": {
+    "markout": -0.025,
+    "late_s": 1.28,
+    "bid": 0.62,
+    "ask": 0.63
+   }
+  },
+  "settle_yes": null
+ },
+ {
+  "order_id": "DX97R1MG13ZK",
+  "slug": "aec-atp-karpol-benwei-2026-11-23",
+  "side": "NO",
+  "px": "0.3100",
+  "qty": "1",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-1",
+  "fill_t": "2026-11-23T17:34:35.708187+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.67,
+   "ask": 0.68,
+   "mid": 0.675,
+   "age_s": 8.33,
+   "source": "FILL_MARKOUT.h30(DX97JPX0144P)"
+  },
+  "book_m30": {
+   "bid": 0.67,
+   "ask": 0.68,
+   "mid": 0.675,
+   "age_s": 2.22,
+   "source": "jump_pause.new"
+  },
+  "book_m60": {
+   "bid": 0.66,
+   "ask": 0.67,
+   "mid": 0.665,
+   "age_s": 2.33,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.67,
+   "ask": 0.68,
+   "mid": 0.675,
+   "age_s": 0.17,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "1",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0.6500",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0027
+  },
+  "quote_before_age_s": 14.06,
+  "h": {
+   "5": {
+    "markout": -0.005,
+    "late_s": 2.46,
+    "bid": 0.69,
+    "ask": 0.7
+   },
+   "30": {
+    "markout": 0.015,
+    "late_s": 2.94,
+    "bid": 0.67,
+    "ask": 0.68
+   },
+   "120": {
+    "markout": 0.065,
+    "late_s": 3.82,
+    "bid": 0.62,
+    "ask": 0.63
+   },
+   "300": {
+    "markout": 0.065,
+    "late_s": 1.3,
+    "bid": 0.62,
+    "ask": 0.63
+   }
+  },
+  "settle_yes": null
+ },
+ {
+  "order_id": "DX9GJ87G33YB",
+  "slug": "aec-atp-gabdeb-sankop-2026-11-23",
+  "side": "YES",
+  "px": "0.6600",
+  "qty": "2",
+  "role": "open",
+  "phase": "live",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-23T17:54:10.296235+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.67,
+   "ask": 0.68,
+   "mid": 0.675,
+   "age_s": 7.75,
+   "source": "FILL_MARKOUT.book_before(DX9GJ87G33YB)"
+  },
+  "book_m30": {
+   "bid": 0.67,
+   "ask": 0.68,
+   "mid": 0.675,
+   "age_s": 12.01,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.66,
+   "ask": 0.67,
+   "mid": 0.665,
+   "age_s": 4.21,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.64,
+   "ask": 0.65,
+   "mid": 0.645,
+   "age_s": 5.43,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.1576
+  },
+  "quote_before_age_s": 17.65,
+  "h": {
+   "5": {
+    "markout": -0.005,
+    "late_s": 7.63,
+    "bid": 0.65,
+    "ask": 0.66
+   },
+   "30": {
+    "markout": 0.025,
+    "late_s": 2.42,
+    "bid": 0.68,
+    "ask": 0.69
+   },
+   "120": {
+    "markout": -0.005,
+    "late_s": 2.83,
+    "bid": 0.65,
+    "ask": 0.66
+   },
+   "300": {
+    "markout": -0.075,
+    "late_s": 9.66,
+    "bid": 0.58,
+    "ask": 0.59
+   }
+  },
+  "settle_yes": null
+ },
+ {
+  "order_id": "DX9MBT2013ZD",
+  "slug": "aec-atp-gabdeb-sankop-2026-11-23",
+  "side": "NO",
+  "px": "0.3100",
+  "qty": "2",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-2",
+  "fill_t": "2026-11-23T18:02:32.510270+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.66,
+   "ask": 0.67,
+   "mid": 0.665,
+   "age_s": 0.71,
+   "source": "FILL_MARKOUT.book_before(DX9MBT2013ZD)"
+  },
+  "book_m30": {
+   "bid": 0.66,
+   "ask": 0.67,
+   "mid": 0.665,
+   "age_s": 3.52,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.66,
+   "ask": 0.67,
+   "mid": 0.665,
+   "age_s": 5.5,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.58,
+   "ask": 0.6,
+   "mid": 0.59,
+   "age_s": 1.67,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "2",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "1.3200",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0007
+  },
+  "quote_before_age_s": 33.52,
+  "h": {
+   "5": {
+    "markout": -0.005,
+    "late_s": 0.72,
+    "bid": 0.69,
+    "ask": 0.7
+   },
+   "30": {
+    "markout": -0.015,
+    "late_s": 1.11,
+    "bid": 0.7,
+    "ask": 0.71
+   },
+   "120": {
+    "markout": 0.045,
+    "late_s": 5.58,
+    "bid": 0.64,
+    "ask": 0.65
+   },
+   "300": {
+    "markout": 0.035,
+    "late_s": 4.87,
+    "bid": 0.65,
+    "ask": 0.66
+   }
+  },
+  "settle_yes": null
+ },
+ {
+  "order_id": "DX9R2PXG34F0",
+  "slug": "aec-atp-gabdeb-sankop-2026-11-23",
+  "side": "YES",
+  "px": "0.6100",
+  "qty": "2",
+  "role": "extend",
+  "phase": "live",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-23T18:10:02.417767+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.62,
+   "ask": 0.63,
+   "mid": 0.625,
+   "age_s": 10.59,
+   "source": "FILL_MARKOUT.book_before(DX9R2PXG34F0)"
+  },
+  "book_m30": {
+   "bid": 0.63,
+   "ask": 0.64,
+   "mid": 0.635,
+   "age_s": 2.82,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.65,
+   "ask": 0.66,
+   "mid": 0.655,
+   "age_s": 20.65,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.63,
+   "ask": 0.64,
+   "mid": 0.635,
+   "age_s": 0.05,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "2",
+   "NO": "2"
+  },
+  "cost_before": {
+   "YES": "1.3200",
+   "NO": "0.6200"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0002
+  },
+  "quote_before_age_s": 16.75,
+  "h": {
+   "5": {
+    "markout": -0.005,
+    "late_s": 2.23,
+    "bid": 0.6,
+    "ask": 0.61
+   },
+   "30": {
+    "markout": -0.015,
+    "late_s": 0.23,
+    "bid": 0.59,
+    "ask": 0.6
+   },
+   "120": {
+    "markout": -0.165,
+    "late_s": 4.64,
+    "bid": 0.44,
+    "ask": 0.45
+   },
+   "300": {
+    "markout": -0.145,
+    "late_s": 3.3,
+    "bid": 0.46,
+    "ask": 0.47
+   }
+  },
+  "settle_yes": null
+ },
+ {
+  "order_id": "DX9ZYWW014F0",
+  "slug": "aec-atp-gabdeb-sankop-2026-11-23",
+  "side": "NO",
+  "px": "0.3300",
+  "qty": "1",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-2",
+  "fill_t": "2026-11-23T18:27:25.950044+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.65,
+   "ask": 0.66,
+   "mid": 0.655,
+   "age_s": 7.64,
+   "source": "RN1_QUOTE"
+  },
+  "book_m30": {
+   "bid": 0.65,
+   "ask": 0.66,
+   "mid": 0.655,
+   "age_s": 8.6,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.62,
+   "ask": 0.63,
+   "mid": 0.625,
+   "age_s": 2.59,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.63,
+   "ask": 0.66,
+   "mid": 0.645,
+   "age_s": 0.23,
+   "source": "jump_pause.new"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "4",
+   "NO": "2"
+  },
+  "cost_before": {
+   "YES": "2.5400",
+   "NO": "0.6200"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0036
+  },
+  "quote_before_age_s": 7.64,
+  "h": {
+   "5": {
+    "markout": -0.015,
+    "late_s": 2.43,
+    "bid": 0.68,
+    "ask": 0.69
+   },
+   "30": {
+    "markout": -0.015,
+    "late_s": 4.55,
+    "bid": 0.68,
+    "ask": 0.69
+   },
+   "120": {
+    "markout": -0.015,
+    "late_s": 3.29,
+    "bid": 0.68,
+    "ask": 0.69
+   },
+   "300": {
+    "markout": -0.025,
+    "late_s": 5.94,
+    "bid": 0.69,
+    "ask": 0.7
+   }
+  },
+  "settle_yes": null
+ },
+ {
+  "order_id": "DXA21X0G54EX",
+  "slug": "aec-atp-gabdeb-sankop-2026-11-23",
+  "side": "NO",
+  "px": "0.3200",
+  "qty": "1",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-1",
+  "fill_t": "2026-11-23T18:31:48.013067+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.66,
+   "ask": 0.67,
+   "mid": 0.665,
+   "age_s": 7.92,
+   "source": "FILL_MARKOUT.book_before(DXA21X0G54EX)"
+  },
+  "book_m30": {
+   "bid": 0.65,
+   "ask": 0.66,
+   "mid": 0.655,
+   "age_s": 9.61,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.63,
+   "ask": 0.64,
+   "mid": 0.635,
+   "age_s": 1.73,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.68,
+   "ask": 0.69,
+   "mid": 0.685,
+   "age_s": 18.77,
+   "source": "FILL_MARKOUT.h120(DX9ZYWW014F0)"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "4",
+   "NO": "3"
+  },
+  "cost_before": {
+   "YES": "2.5400",
+   "NO": "0.9500"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0035
+  },
+  "quote_before_age_s": 18.4,
+  "h": {
+   "5": {
+    "markout": -0.015,
+    "late_s": 1.8,
+    "bid": 0.69,
+    "ask": 0.7
+   },
+   "30": {
+    "markout": -0.015,
+    "late_s": 5.49,
+    "bid": 0.69,
+    "ask": 0.7
+   },
+   "120": {
+    "markout": -0.085,
+    "late_s": 1.27,
+    "bid": 0.76,
+    "ask": 0.77
+   },
+   "300": {
+    "markout": 0.035,
+    "late_s": 3.32,
+    "bid": 0.64,
+    "ask": 0.65
+   }
+  },
+  "settle_yes": null
+ },
+ {
+  "order_id": "DXGNJVFG15P4",
+  "slug": "aec-atp-cescru-joagui-2026-11-23",
+  "side": "YES",
+  "px": "0.3100",
+  "qty": "1",
+  "role": "open",
+  "phase": "live",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-24T02:14:08.328810+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.32,
+   "ask": 0.33,
+   "mid": 0.325,
+   "age_s": 3.64,
+   "source": "FILL_MARKOUT.book_before(DXGNJVFG15P4)"
+  },
+  "book_m30": {
+   "bid": 0.32,
+   "ask": 0.33,
+   "mid": 0.325,
+   "age_s": 6.66,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": null,
+  "book_m120": null,
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0
+  },
+  "quote_before_age_s": 21.27,
+  "h": {
+   "5": {
+    "markout": -0.015,
+    "late_s": 1.88,
+    "bid": 0.29,
+    "ask": 0.3
+   },
+   "30": {
+    "markout": 0.015,
+    "late_s": 5.4,
+    "bid": 0.32,
+    "ask": 0.33
+   },
+   "120": {
+    "markout": -0.005,
+    "late_s": 4.3,
+    "bid": 0.3,
+    "ask": 0.31
+   },
+   "300": {
+    "markout": 0.045,
+    "late_s": 3.71,
+    "bid": 0.35,
+    "ask": 0.36
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DXGP1XMG15P4",
+  "slug": "aec-atp-cescru-joagui-2026-11-23",
+  "side": "NO",
+  "px": "0.6600",
+  "qty": "1",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-1",
+  "fill_t": "2026-11-24T02:14:53.817943+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.32,
+   "ask": 0.33,
+   "mid": 0.325,
+   "age_s": 4.96,
+   "source": "RN1_QUOTE"
+  },
+  "book_m30": {
+   "bid": 0.29,
+   "ask": 0.3,
+   "mid": 0.295,
+   "age_s": 3.49,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.32,
+   "ask": 0.33,
+   "mid": 0.325,
+   "age_s": 6.76,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": null,
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "1",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0.3100",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0
+  },
+  "quote_before_age_s": 4.96,
+  "h": {
+   "5": {
+    "markout": 0.0,
+    "late_s": 1.36,
+    "bid": 0.33,
+    "ask": 0.35
+   },
+   "30": {
+    "markout": 0.055,
+    "late_s": 2.05,
+    "bid": 0.28,
+    "ask": 0.29
+   },
+   "120": {
+    "markout": 0.05,
+    "late_s": 1.14,
+    "bid": 0.27,
+    "ask": 0.31
+   },
+   "300": {
+    "markout": 0.005,
+    "late_s": 4.48,
+    "bid": 0.33,
+    "ask": 0.34
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DXXCEHN015P9",
+  "slug": "aec-atp-matsca-wisabd-2026-11-24",
+  "side": "YES",
+  "px": "0.5500",
+  "qty": "1",
+  "role": "open",
+  "phase": "live",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-24T17:02:39.301515+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.56,
+   "ask": 0.57,
+   "mid": 0.565,
+   "age_s": 5.45,
+   "source": "RN1_QUOTE"
+  },
+  "book_m30": {
+   "bid": 0.54,
+   "ask": 0.55,
+   "mid": 0.545,
+   "age_s": 0.5,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.56,
+   "ask": 0.57,
+   "mid": 0.565,
+   "age_s": 9.16,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.56,
+   "ask": 0.57,
+   "mid": 0.565,
+   "age_s": 5.39,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0779
+  },
+  "quote_before_age_s": 5.45,
+  "h": {
+   "5": {
+    "markout": -0.005,
+    "late_s": 5.02,
+    "bid": 0.54,
+    "ask": 0.55
+   },
+   "30": {
+    "markout": -0.005,
+    "late_s": 0.81,
+    "bid": 0.54,
+    "ask": 0.55
+   },
+   "120": {
+    "markout": 0.035,
+    "late_s": 0.02,
+    "bid": 0.58,
+    "ask": 0.59
+   },
+   "300": {
+    "markout": 0.035,
+    "late_s": 5.29,
+    "bid": 0.58,
+    "ask": 0.59
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DXXFP0J015P4",
+  "slug": "aec-atp-matsca-wisabd-2026-11-24",
+  "side": "NO",
+  "px": "0.3900",
+  "qty": "1",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-1",
+  "fill_t": "2026-11-24T17:09:40.316948+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.59,
+   "ask": 0.6,
+   "mid": 0.595,
+   "age_s": 1.6,
+   "source": "FILL_MARKOUT.book_before(DXXFP0J015P4)"
+  },
+  "book_m30": {
+   "bid": 0.61,
+   "ask": 0.67,
+   "mid": 0.64,
+   "age_s": 1.97,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.62,
+   "ask": 0.63,
+   "mid": 0.625,
+   "age_s": 9.63,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.58,
+   "ask": 0.59,
+   "mid": 0.585,
+   "age_s": 7.63,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "1",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0.5500",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.057
+  },
+  "quote_before_age_s": 7.6,
+  "h": {
+   "5": {
+    "markout": 0.015,
+    "late_s": 1.6,
+    "bid": 0.59,
+    "ask": 0.6
+   },
+   "30": {
+    "markout": -0.005,
+    "late_s": 5.4,
+    "bid": 0.6,
+    "ask": 0.63
+   },
+   "120": {
+    "markout": -0.015,
+    "late_s": 9.77,
+    "bid": 0.62,
+    "ask": 0.63
+   },
+   "300": {
+    "markout": -0.005,
+    "late_s": 2.16,
+    "bid": 0.61,
+    "ask": 0.62
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DXXGJ81G15PA",
+  "slug": "aec-atp-juaoso-olibon-2026-11-23",
+  "side": "YES",
+  "px": "0.5700",
+  "qty": "1",
+  "role": "open",
+  "phase": "live",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-24T17:11:42.488493+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.58,
+   "ask": 0.59,
+   "mid": 0.585,
+   "age_s": 7.38,
+   "source": "RN1_QUOTE"
+  },
+  "book_m30": {
+   "bid": 0.58,
+   "ask": 0.61,
+   "mid": 0.595,
+   "age_s": 2.46,
+   "source": "jump_pause.new"
+  },
+  "book_m60": {
+   "bid": 0.6,
+   "ask": 0.61,
+   "mid": 0.605,
+   "age_s": 9.33,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.61,
+   "ask": 0.62,
+   "mid": 0.615,
+   "age_s": 3.97,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0702
+  },
+  "quote_before_age_s": 7.38,
+  "h": {
+   "5": {
+    "markout": -0.035,
+    "late_s": 12.09,
+    "bid": 0.53,
+    "ask": 0.54
+   },
+   "30": {
+    "markout": -0.045,
+    "late_s": 13.23,
+    "bid": 0.52,
+    "ask": 0.53
+   },
+   "120": {
+    "markout": -0.005,
+    "late_s": 9.05,
+    "bid": 0.56,
+    "ask": 0.57
+   },
+   "300": {
+    "markout": -0.015,
+    "late_s": 1.43,
+    "bid": 0.55,
+    "ask": 0.56
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DXXNJ29G15P7",
+  "slug": "aec-atp-juaoso-olibon-2026-11-23",
+  "side": "NO",
+  "px": "0.3900",
+  "qty": "1",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-1",
+  "fill_t": "2026-11-24T17:22:35.434388+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.59,
+   "ask": 0.6,
+   "mid": 0.595,
+   "age_s": 5.56,
+   "source": "RN1_QUOTE"
+  },
+  "book_m30": {
+   "bid": 0.54,
+   "ask": 0.58,
+   "mid": 0.56,
+   "age_s": 5.32,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.58,
+   "ask": 0.59,
+   "mid": 0.585,
+   "age_s": 6.98,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.49,
+   "ask": 0.5,
+   "mid": 0.495,
+   "age_s": 4.31,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "1",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0.5700",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0002
+  },
+  "quote_before_age_s": 5.56,
+  "h": {
+   "5": {
+    "markout": -0.005,
+    "late_s": 2.67,
+    "bid": 0.61,
+    "ask": 0.62
+   },
+   "30": {
+    "markout": 0.045,
+    "late_s": 0.62,
+    "bid": 0.56,
+    "ask": 0.57
+   },
+   "120": {
+    "markout": 0.055,
+    "late_s": 2.14,
+    "bid": 0.55,
+    "ask": 0.56
+   },
+   "300": {
+    "markout": 0.225,
+    "late_s": 4.38,
+    "bid": 0.38,
+    "ask": 0.39
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DXYJJ5A015P6",
+  "slug": "aec-atp-juagom-bengeo-2026-11-23",
+  "side": "NO",
+  "px": "0.4400",
+  "qty": "1",
+  "role": "open",
+  "phase": "live",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-24T18:25:59.005164+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.54,
+   "ask": 0.55,
+   "mid": 0.545,
+   "age_s": 0.26,
+   "source": "FILL_MARKOUT.book_before(DXYJJ5A015P6)"
+  },
+  "book_m30": {
+   "bid": 0.55,
+   "ask": 0.56,
+   "mid": 0.555,
+   "age_s": 9.1,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.57,
+   "ask": 0.58,
+   "mid": 0.575,
+   "age_s": 3.55,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.57,
+   "ask": 0.58,
+   "mid": 0.575,
+   "age_s": 21.0,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0
+  },
+  "quote_before_age_s": 10.64,
+  "h": {
+   "5": {
+    "markout": -0.025,
+    "late_s": 0.17,
+    "bid": 0.58,
+    "ask": 0.59
+   },
+   "30": {
+    "markout": -0.025,
+    "late_s": 0.8,
+    "bid": 0.58,
+    "ask": 0.59
+   },
+   "120": {
+    "markout": -0.085,
+    "late_s": 2.51,
+    "bid": 0.64,
+    "ask": 0.65
+   },
+   "300": {
+    "markout": -0.075,
+    "late_s": 5.85,
+    "bid": 0.63,
+    "ask": 0.64
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DXYM4TT015PB",
+  "slug": "aec-atp-samher-yanale-2026-11-23",
+  "side": "NO",
+  "px": "0.6100",
+  "qty": "1",
+  "role": "open",
+  "phase": "live",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-24T18:29:20.435062+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.37,
+   "ask": 0.38,
+   "mid": 0.375,
+   "age_s": 4.55,
+   "source": "FILL_MARKOUT.book_before(DXYM4TT015PB)"
+  },
+  "book_m30": {
+   "bid": 0.35,
+   "ask": 0.36,
+   "mid": 0.355,
+   "age_s": 11.3,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.35,
+   "ask": 0.36,
+   "mid": 0.355,
+   "age_s": 0.26,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.34,
+   "ask": 0.35,
+   "mid": 0.345,
+   "age_s": 39.43,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0008
+  },
+  "quote_before_age_s": 4.56,
+  "h": {
+   "5": {
+    "markout": -0.005,
+    "late_s": 5.12,
+    "bid": 0.39,
+    "ask": 0.4
+   },
+   "30": {
+    "markout": -0.02,
+    "late_s": 5.44,
+    "bid": 0.4,
+    "ask": 0.42
+   },
+   "120": {
+    "markout": -0.045,
+    "late_s": 4.03,
+    "bid": 0.43,
+    "ask": 0.44
+   },
+   "300": {
+    "markout": -0.045,
+    "late_s": 1.05,
+    "bid": 0.43,
+    "ask": 0.44
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DY1EB3M015P4",
+  "slug": "aec-atp-axenef-alarub-2026-11-24",
+  "side": "NO",
+  "px": "0.4500",
+  "qty": "1",
+  "role": "open",
+  "phase": "live",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-24T21:46:26.718856+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.53,
+   "ask": 0.54,
+   "mid": 0.535,
+   "age_s": 7.2,
+   "source": "RN1_QUOTE"
+  },
+  "book_m30": {
+   "bid": 0.53,
+   "ask": 0.54,
+   "mid": 0.535,
+   "age_s": 5.27,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.51,
+   "ask": 0.52,
+   "mid": 0.515,
+   "age_s": 13.35,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.49,
+   "ask": 0.5,
+   "mid": 0.495,
+   "age_s": 11.0,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0657
+  },
+  "quote_before_age_s": 7.2,
+  "h": {
+   "5": {
+    "markout": -0.005,
+    "late_s": 2.02,
+    "bid": 0.55,
+    "ask": 0.56
+   },
+   "30": {
+    "markout": 0.035,
+    "late_s": 1.26,
+    "bid": 0.51,
+    "ask": 0.52
+   },
+   "120": {
+    "markout": -0.045,
+    "late_s": 0.97,
+    "bid": 0.59,
+    "ask": 0.6
+   },
+   "300": {
+    "markout": -0.135,
+    "late_s": 4.75,
+    "bid": 0.68,
+    "ask": 0.69
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DY1JBRQG15P8",
+  "slug": "aec-atp-jiecui-benhas-2026-11-22",
+  "side": "YES",
+  "px": "0.5100",
+  "qty": "1",
+  "role": "open",
+  "phase": "live",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-24T21:55:45.910983+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.52,
+   "ask": 0.53,
+   "mid": 0.525,
+   "age_s": 1.44,
+   "source": "FILL_MARKOUT.book_before(DY1JBRQG15P8)"
+  },
+  "book_m30": {
+   "bid": 0.52,
+   "ask": 0.53,
+   "mid": 0.525,
+   "age_s": 28.86,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.52,
+   "ask": 0.53,
+   "mid": 0.525,
+   "age_s": 10.98,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.52,
+   "ask": 0.53,
+   "mid": 0.525,
+   "age_s": 238.01,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0009
+  },
+  "quote_before_age_s": 58.86,
+  "h": {
+   "5": {
+    "markout": 0.015,
+    "late_s": 7.71,
+    "bid": 0.52,
+    "ask": 0.53
+   },
+   "30": {
+    "markout": 0.015,
+    "late_s": 5.9,
+    "bid": 0.52,
+    "ask": 0.53
+   },
+   "120": {
+    "markout": 0.015,
+    "late_s": 5.43,
+    "bid": 0.52,
+    "ask": 0.53
+   },
+   "300": {
+    "markout": 0.01,
+    "late_s": 3.86,
+    "bid": 0.51,
+    "ask": 0.53
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DY3TC33G15P6",
+  "slug": "aec-setkameua-korvol-kozden-2026-11-25",
+  "side": "YES",
+  "px": "0.6300",
+  "qty": "1",
+  "role": "open",
+  "phase": "live",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-25T00:32:36.015184+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.64,
+   "ask": 0.65,
+   "mid": 0.645,
+   "age_s": 9.51,
+   "source": "RN1_QUOTE"
+  },
+  "book_m30": null,
+  "book_m60": null,
+  "book_m120": null,
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": null,
+  "quote_before_age_s": 9.51,
+  "h": {
+   "5": {
+    "markout": -0.035,
+    "late_s": 0.28,
+    "bid": 0.59,
+    "ask": 0.6
+   },
+   "30": {
+    "markout": -0.195,
+    "late_s": 1.27,
+    "bid": 0.4,
+    "ask": 0.47
+   },
+   "120": {
+    "markout": -0.185,
+    "late_s": 0.84,
+    "bid": 0.43,
+    "ask": 0.46
+   },
+   "300": {
+    "markout": -0.445,
+    "late_s": 3.34,
+    "bid": 0.12,
+    "ask": 0.25
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DY3ZZCYG15P6",
+  "slug": "aec-utr-traemm-zylame-2026-11-23",
+  "side": "NO",
+  "px": "0.5100",
+  "qty": "1",
+  "role": "open",
+  "phase": "live",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-25T00:45:15.700589+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.47,
+   "ask": 0.48,
+   "mid": 0.475,
+   "age_s": 5.17,
+   "source": "FILL_MARKOUT.book_before(DY3ZZCYG15P6)"
+  },
+  "book_m30": {
+   "bid": 0.47,
+   "ask": 0.48,
+   "mid": 0.475,
+   "age_s": 5.78,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.47,
+   "ask": 0.48,
+   "mid": 0.475,
+   "age_s": 3.23,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.52,
+   "ask": 0.53,
+   "mid": 0.525,
+   "age_s": 6.28,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": null,
+  "quote_before_age_s": 35.78,
+  "h": {
+   "5": {
+    "markout": -0.015,
+    "late_s": 6.34,
+    "bid": 0.5,
+    "ask": 0.51
+   },
+   "30": {
+    "markout": -0.015,
+    "late_s": 3.58,
+    "bid": 0.5,
+    "ask": 0.51
+   },
+   "120": {
+    "markout": 0.025,
+    "late_s": 5.11,
+    "bid": 0.46,
+    "ask": 0.47
+   },
+   "300": {
+    "markout": 0.075,
+    "late_s": 1.0,
+    "bid": 0.41,
+    "ask": 0.42
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DY40PER015PA",
+  "slug": "aec-utr-traemm-zylame-2026-11-23",
+  "side": "YES",
+  "px": "0.4500",
+  "qty": "1",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-1",
+  "fill_t": "2026-11-25T00:48:11.862276+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.46,
+   "ask": 0.47,
+   "mid": 0.465,
+   "age_s": 3.87,
+   "source": "FILL_MARKOUT.book_before(DY40PER015PA)"
+  },
+  "book_m30": {
+   "bid": 0.46,
+   "ask": 0.47,
+   "mid": 0.465,
+   "age_s": 15.19,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.46,
+   "ask": 0.47,
+   "mid": 0.465,
+   "age_s": 49.74,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.46,
+   "ask": 0.47,
+   "mid": 0.465,
+   "age_s": 7.1,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE"
+  ],
+  "pos_before": {
+   "YES": "0",
+   "NO": "1"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0.5100"
+  },
+  "incentive": null,
+  "quote_before_age_s": 45.19,
+  "h": {
+   "5": {
+    "markout": -0.01,
+    "late_s": 2.92,
+    "bid": 0.43,
+    "ask": 0.45
+   },
+   "30": {
+    "markout": -0.015,
+    "late_s": 5.88,
+    "bid": 0.43,
+    "ask": 0.44
+   },
+   "120": {
+    "markout": -0.035,
+    "late_s": 4.82,
+    "bid": 0.41,
+    "ask": 0.42
+   },
+   "300": {
+    "markout": -0.035,
+    "late_s": 3.39,
+    "bid": 0.41,
+    "ask": 0.42
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DY4NKGZG75P5",
+  "slug": "aec-utr-traemm-zylame-2026-11-23",
+  "side": "NO",
+  "px": "0.4400",
+  "qty": "1",
+  "role": "extend",
+  "phase": "live",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-25T01:32:10.030237+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.54,
+   "ask": 0.55,
+   "mid": 0.545,
+   "age_s": 5.79,
+   "source": "FILL_MARKOUT.book_before(DY4NKGZG75P5)"
+  },
+  "book_m30": {
+   "bid": 0.54,
+   "ask": 0.55,
+   "mid": 0.545,
+   "age_s": 49.61,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.54,
+   "ask": 0.55,
+   "mid": 0.545,
+   "age_s": 19.61,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.61,
+   "ask": 0.62,
+   "mid": 0.615,
+   "age_s": 4.47,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "1",
+   "NO": "1"
+  },
+  "cost_before": {
+   "YES": "0.4500",
+   "NO": "0.5100"
+  },
+  "incentive": null,
+  "quote_before_age_s": 15.12,
+  "h": {
+   "5": {
+    "markout": -0.045,
+    "late_s": 4.64,
+    "bid": 0.6,
+    "ask": 0.61
+   },
+   "30": {
+    "markout": -0.045,
+    "late_s": 2.08,
+    "bid": 0.6,
+    "ask": 0.61
+   },
+   "120": {
+    "markout": 0.015,
+    "late_s": 2.83,
+    "bid": 0.54,
+    "ask": 0.55
+   },
+   "300": {
+    "markout": 0.085,
+    "late_s": 2.48,
+    "bid": 0.47,
+    "ask": 0.48
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DY4NSVN015P1",
+  "slug": "aec-utr-traemm-zylame-2026-11-23",
+  "side": "YES",
+  "px": "0.4900",
+  "qty": "1",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-1",
+  "fill_t": "2026-11-25T01:35:47.164723+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.54,
+   "ask": 0.55,
+   "mid": 0.545,
+   "age_s": 6.99,
+   "source": "FILL_MARKOUT.book_before(DY4NSVN015P1)"
+  },
+  "book_m30": {
+   "bid": 0.54,
+   "ask": 0.55,
+   "mid": 0.545,
+   "age_s": 9.01,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.6,
+   "ask": 0.62,
+   "mid": 0.61,
+   "age_s": 20.92,
+   "source": "jump_pause.new"
+  },
+  "book_m120": {
+   "bid": 0.54,
+   "ask": 0.55,
+   "mid": 0.545,
+   "age_s": 16.36,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "1",
+   "NO": "2"
+  },
+  "cost_before": {
+   "YES": "0.4500",
+   "NO": "0.9500"
+  },
+  "incentive": null,
+  "quote_before_age_s": 25.04,
+  "h": {
+   "5": {
+    "markout": -0.01,
+    "late_s": 3.55,
+    "bid": 0.47,
+    "ask": 0.49
+   },
+   "30": {
+    "markout": 0.05,
+    "late_s": 3.7,
+    "bid": 0.53,
+    "ask": 0.55
+   },
+   "120": {
+    "markout": -0.015,
+    "late_s": 1.79,
+    "bid": 0.47,
+    "ask": 0.48
+   },
+   "300": {
+    "markout": -0.015,
+    "late_s": 4.06,
+    "bid": 0.47,
+    "ask": 0.48
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DY4N1SD035P8",
+  "slug": "aec-atp-jiecui-benhas-2026-11-22",
+  "side": "NO",
+  "px": "0.4600",
+  "qty": "1",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-1",
+  "fill_t": "2026-11-25T01:38:31.015668+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.52,
+   "ask": 0.53,
+   "mid": 0.525,
+   "age_s": 0.37,
+   "source": "FILL_MARKOUT.book_before(DY4N1SD035P8)"
+  },
+  "book_m30": {
+   "bid": 0.49,
+   "ask": 0.5,
+   "mid": 0.495,
+   "age_s": 25.91,
+   "source": "jump_pause.new"
+  },
+  "book_m60": {
+   "bid": 0.52,
+   "ask": 0.53,
+   "mid": 0.525,
+   "age_s": 169.14,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.52,
+   "ask": 0.53,
+   "mid": 0.525,
+   "age_s": 109.14,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "1",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0.5100",
+   "NO": "0"
+  },
+  "incentive": null,
+  "quote_before_age_s": 229.14,
+  "h": {
+   "5": {
+    "markout": -0.005,
+    "late_s": 0.31,
+    "bid": 0.54,
+    "ask": 0.55
+   },
+   "30": {
+    "markout": -0.005,
+    "late_s": 5.47,
+    "bid": 0.54,
+    "ask": 0.55
+   },
+   "120": {
+    "markout": -0.035,
+    "late_s": 2.9,
+    "bid": 0.57,
+    "ask": 0.58
+   },
+   "300": {
+    "markout": 0.015,
+    "late_s": 3.4,
+    "bid": 0.52,
+    "ask": 0.53
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DY4V74YG15PB",
+  "slug": "aec-utr-traemm-zylame-2026-11-23",
+  "side": "YES",
+  "px": "0.3900",
+  "qty": "1",
+  "role": "extend",
+  "phase": "live",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-25T01:44:29.221936+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.4,
+   "ask": 0.42,
+   "mid": 0.41,
+   "age_s": 3.68,
+   "source": "FILL_MARKOUT.book_before(DY4V74YG15PB)"
+  },
+  "book_m30": {
+   "bid": 0.4,
+   "ask": 0.42,
+   "mid": 0.41,
+   "age_s": 60.58,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.4,
+   "ask": 0.42,
+   "mid": 0.41,
+   "age_s": 30.58,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.47,
+   "ask": 0.48,
+   "mid": 0.475,
+   "age_s": 22.26,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "2",
+   "NO": "2"
+  },
+  "cost_before": {
+   "YES": "0.9400",
+   "NO": "0.9500"
+  },
+  "incentive": null,
+  "quote_before_age_s": 19.55,
+  "h": {
+   "5": {
+    "markout": -0.03,
+    "late_s": 1.9,
+    "bid": 0.35,
+    "ask": 0.37
+   },
+   "30": {
+    "markout": 0.015,
+    "late_s": 3.31,
+    "bid": 0.4,
+    "ask": 0.41
+   },
+   "120": {
+    "markout": 0.125,
+    "late_s": 1.68,
+    "bid": 0.51,
+    "ask": 0.52
+   },
+   "300": {
+    "markout": -0.05,
+    "late_s": 1.97,
+    "bid": 0.33,
+    "ask": 0.35
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DY4VDN8015P2",
+  "slug": "aec-utr-traemm-zylame-2026-11-23",
+  "side": "NO",
+  "px": "0.5200",
+  "qty": "1",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-1",
+  "fill_t": "2026-11-25T01:46:20.622456+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.46,
+   "ask": 0.47,
+   "mid": 0.465,
+   "age_s": 0.95,
+   "source": "FILL_MARKOUT.book_before(DY4VDN8015P2)"
+  },
+  "book_m30": {
+   "bid": 0.45,
+   "ask": 0.47,
+   "mid": 0.46,
+   "age_s": 15.06,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.4,
+   "ask": 0.41,
+   "mid": 0.405,
+   "age_s": 12.02,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.4,
+   "ask": 0.42,
+   "mid": 0.41,
+   "age_s": 10.95,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "3",
+   "NO": "2"
+  },
+  "cost_before": {
+   "YES": "1.3300",
+   "NO": "0.9500"
+  },
+  "incentive": null,
+  "quote_before_age_s": 25.25,
+  "h": {
+   "5": {
+    "markout": -0.035,
+    "late_s": 5.33,
+    "bid": 0.51,
+    "ask": 0.52
+   },
+   "30": {
+    "markout": 0.0,
+    "late_s": 3.92,
+    "bid": 0.47,
+    "ask": 0.49
+   },
+   "120": {
+    "markout": 0.005,
+    "late_s": 1.24,
+    "bid": 0.47,
+    "ask": 0.48
+   },
+   "300": {
+    "markout": 0.215,
+    "late_s": 2.72,
+    "bid": 0.26,
+    "ask": 0.27
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DY58VCXG15PA",
+  "slug": "aec-utr-traemm-zylame-2026-11-23",
+  "side": "NO",
+  "px": "0.4100",
+  "qty": "1",
+  "role": "extend",
+  "phase": "live",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-25T02:14:00.814646+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.56,
+   "ask": 0.58,
+   "mid": 0.57,
+   "age_s": 3.44,
+   "source": "RN1_QUOTE"
+  },
+  "book_m30": {
+   "bid": 0.56,
+   "ask": 0.58,
+   "mid": 0.57,
+   "age_s": 1.85,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.54,
+   "ask": 0.56,
+   "mid": 0.55,
+   "age_s": 5.66,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.49,
+   "ask": 0.53,
+   "mid": 0.51,
+   "age_s": 2.69,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "3",
+   "NO": "3"
+  },
+  "cost_before": {
+   "YES": "1.3300",
+   "NO": "1.4700"
+  },
+  "incentive": null,
+  "quote_before_age_s": 3.44,
+  "h": {
+   "5": {
+    "markout": 0.005,
+    "late_s": 4.0,
+    "bid": 0.57,
+    "ask": 0.6
+   },
+   "30": {
+    "markout": 0.005,
+    "late_s": 5.26,
+    "bid": 0.58,
+    "ask": 0.59
+   },
+   "120": {
+    "markout": -0.005,
+    "late_s": 0.78,
+    "bid": 0.59,
+    "ask": 0.6
+   },
+   "300": {
+    "markout": -0.06,
+    "late_s": 3.43,
+    "bid": 0.64,
+    "ask": 0.66
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DY59MY5G15PB",
+  "slug": "aec-utr-traemm-zylame-2026-11-23",
+  "side": "NO",
+  "px": "0.3900",
+  "qty": "1",
+  "role": "extend",
+  "phase": "live",
+  "unpaired_before": "1",
+  "fill_t": "2026-11-25T02:16:49.043958+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.59,
+   "ask": 0.6,
+   "mid": 0.595,
+   "age_s": 1.27,
+   "source": "FILL_MARKOUT.book_before(DY59MY5G15PB)"
+  },
+  "book_m30": {
+   "bid": 0.59,
+   "ask": 0.6,
+   "mid": 0.595,
+   "age_s": 17.45,
+   "source": "FILL_MARKOUT.h120(DY58VCXG15PA)"
+  },
+  "book_m60": {
+   "bid": 0.59,
+   "ask": 0.6,
+   "mid": 0.595,
+   "age_s": 7.73,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.59,
+   "ask": 0.61,
+   "mid": 0.6,
+   "age_s": 7.27,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "3",
+   "NO": "4"
+  },
+  "cost_before": {
+   "YES": "1.3300",
+   "NO": "1.8800"
+  },
+  "incentive": null,
+  "quote_before_age_s": 67.73,
+  "h": {
+   "5": {
+    "markout": -0.07,
+    "late_s": 8.45,
+    "bid": 0.65,
+    "ask": 0.71
+   },
+   "30": {
+    "markout": -0.07,
+    "late_s": 2.24,
+    "bid": 0.65,
+    "ask": 0.71
+   },
+   "120": {
+    "markout": -0.035,
+    "late_s": 1.61,
+    "bid": 0.64,
+    "ask": 0.65
+   },
+   "300": {
+    "markout": 0.045,
+    "late_s": 0.56,
+    "bid": 0.51,
+    "ask": 0.62
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DY5CKF5055P9",
+  "slug": "aec-utr-traemm-zylame-2026-11-23",
+  "side": "YES",
+  "px": "0.5100",
+  "qty": "1",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-2",
+  "fill_t": "2026-11-25T02:22:33.157664+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.55,
+   "ask": 0.76,
+   "mid": 0.655,
+   "age_s": 0.08,
+   "source": "jump_pause.new"
+  },
+  "book_m30": {
+   "bid": 0.52,
+   "ask": 0.61,
+   "mid": 0.565,
+   "age_s": 1.81,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.51,
+   "ask": 0.71,
+   "mid": 0.61,
+   "age_s": 11.38,
+   "source": "jump_pause.new"
+  },
+  "book_m120": {
+   "bid": 0.51,
+   "ask": 0.73,
+   "mid": 0.62,
+   "age_s": 2.02,
+   "source": "jump_pause.new"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "3",
+   "NO": "5"
+  },
+  "cost_before": {
+   "YES": "1.3300",
+   "NO": "2.2700"
+  },
+  "incentive": null,
+  "quote_before_age_s": 31.81,
+  "h": {
+   "5": {
+    "markout": 0.11,
+    "late_s": 0.36,
+    "bid": 0.53,
+    "ask": 0.71
+   },
+   "30": {
+    "markout": 0.165,
+    "late_s": 6.12,
+    "bid": 0.59,
+    "ask": 0.76
+   },
+   "120": {
+    "markout": 0.2,
+    "late_s": 4.23,
+    "bid": 0.66,
+    "ask": 0.76
+   },
+   "300": {
+    "markout": 0.055,
+    "late_s": 2.86,
+    "bid": 0.56,
+    "ask": 0.57
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DY5CTB4G15P9",
+  "slug": "aec-utr-traemm-zylame-2026-11-23",
+  "side": "YES",
+  "px": "0.5100",
+  "qty": "0.43",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-1.00",
+  "fill_t": "2026-11-25T02:27:46.680251+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.51,
+   "ask": 0.58,
+   "mid": 0.545,
+   "age_s": 0.01,
+   "source": "RN1_QUOTE"
+  },
+  "book_m30": {
+   "bid": 0.63,
+   "ask": 0.64,
+   "mid": 0.635,
+   "age_s": 10.36,
+   "source": "jump_pause.new"
+  },
+  "book_m60": {
+   "bid": 0.62,
+   "ask": 0.76,
+   "mid": 0.69,
+   "age_s": 43.8,
+   "source": "jump_pause.new"
+  },
+  "book_m120": {
+   "bid": 0.66,
+   "ask": 0.76,
+   "mid": 0.71,
+   "age_s": 69.29,
+   "source": "FILL_MARKOUT.h120(DY5CKF5055P9)"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "4",
+   "NO": "5"
+  },
+  "cost_before": {
+   "YES": "1.8400",
+   "NO": "2.2700"
+  },
+  "incentive": null,
+  "quote_before_age_s": 0.01,
+  "h": {
+   "5": {
+    "markout": 0.035,
+    "late_s": 1.58,
+    "bid": 0.52,
+    "ask": 0.57
+   },
+   "30": {
+    "markout": -0.015,
+    "late_s": 7.97,
+    "bid": 0.48,
+    "ask": 0.51
+   },
+   "120": {
+    "markout": -0.04,
+    "late_s": 4.57,
+    "bid": 0.46,
+    "ask": 0.48
+   },
+   "300": {
+    "markout": -0.2,
+    "late_s": 2.28,
+    "bid": 0.3,
+    "ask": 0.32
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DY5F777015P4",
+  "slug": "aec-utr-traemm-zylame-2026-11-23",
+  "side": "YES",
+  "px": "0.5100",
+  "qty": "0.57",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-0.57",
+  "fill_t": "2026-11-25T02:27:54.869658+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.52,
+   "ask": 0.57,
+   "mid": 0.545,
+   "age_s": 1.54,
+   "source": "RN1_QUOTE"
+  },
+  "book_m30": {
+   "bid": 0.63,
+   "ask": 0.64,
+   "mid": 0.635,
+   "age_s": 18.55,
+   "source": "jump_pause.new"
+  },
+  "book_m60": {
+   "bid": 0.62,
+   "ask": 0.76,
+   "mid": 0.69,
+   "age_s": 51.99,
+   "source": "jump_pause.new"
+  },
+  "book_m120": {
+   "bid": 0.66,
+   "ask": 0.76,
+   "mid": 0.71,
+   "age_s": 77.48,
+   "source": "FILL_MARKOUT.h120(DY5CKF5055P9)"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "4.43",
+   "NO": "5"
+  },
+  "cost_before": {
+   "YES": "2.059300",
+   "NO": "2.2700"
+  },
+  "incentive": null,
+  "quote_before_age_s": 1.54,
+  "h": {
+   "5": {
+    "markout": -0.01,
+    "late_s": 0.79,
+    "bid": 0.49,
+    "ask": 0.51
+   },
+   "30": {
+    "markout": -0.025,
+    "late_s": 5.06,
+    "bid": 0.48,
+    "ask": 0.49
+   },
+   "120": {
+    "markout": -0.03,
+    "late_s": 1.66,
+    "bid": 0.47,
+    "ask": 0.49
+   },
+   "300": {
+    "markout": -0.195,
+    "late_s": 4.66,
+    "bid": 0.31,
+    "ask": 0.32
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DY67WT7015P5",
+  "slug": "aec-utr-carjem-caltes-2026-11-23",
+  "side": "NO",
+  "px": "0.4500",
+  "qty": "1",
+  "role": "open",
+  "phase": "live",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-25T03:22:29.371229+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.53,
+   "ask": 0.54,
+   "mid": 0.535,
+   "age_s": 7.44,
+   "source": "FILL_MARKOUT.book_before(DY67WT7015P5)"
+  },
+  "book_m30": {
+   "bid": 0.53,
+   "ask": 0.54,
+   "mid": 0.535,
+   "age_s": 26.18,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.55,
+   "ask": 0.56,
+   "mid": 0.555,
+   "age_s": 44.25,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.53,
+   "ask": 0.54,
+   "mid": 0.535,
+   "age_s": 62.33,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": null,
+  "quote_before_age_s": 56.18,
+  "h": {
+   "5": {
+    "markout": -0.01,
+    "late_s": 7.75,
+    "bid": 0.55,
+    "ask": 0.57
+   },
+   "30": {
+    "markout": -0.005,
+    "late_s": 5.31,
+    "bid": 0.55,
+    "ask": 0.56
+   },
+   "120": {
+    "markout": -0.005,
+    "late_s": 10.82,
+    "bid": 0.55,
+    "ask": 0.56
+   },
+   "300": {
+    "markout": -0.015,
+    "late_s": 2.97,
+    "bid": 0.56,
+    "ask": 0.57
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DY69Y2N015P2",
+  "slug": "aec-utr-carjem-caltes-2026-11-23",
+  "side": "NO",
+  "px": "0.4500",
+  "qty": "1",
+  "role": "extend",
+  "phase": "live",
+  "unpaired_before": "1",
+  "fill_t": "2026-11-25T03:26:37.160221+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.52,
+   "ask": 0.54,
+   "mid": 0.53,
+   "age_s": 6.11,
+   "source": "FILL_MARKOUT.book_before(DY69Y2N015P2)"
+  },
+  "book_m30": {
+   "bid": 0.52,
+   "ask": 0.54,
+   "mid": 0.53,
+   "age_s": 9.71,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.55,
+   "ask": 0.56,
+   "mid": 0.555,
+   "age_s": 17.42,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.55,
+   "ask": 0.56,
+   "mid": 0.555,
+   "age_s": 15.37,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "0",
+   "NO": "1"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0.4500"
+  },
+  "incentive": null,
+  "quote_before_age_s": 22.28,
+  "h": {
+   "5": {
+    "markout": -0.015,
+    "late_s": 2.51,
+    "bid": 0.56,
+    "ask": 0.57
+   },
+   "30": {
+    "markout": -0.015,
+    "late_s": 1.29,
+    "bid": 0.56,
+    "ask": 0.57
+   },
+   "120": {
+    "markout": -0.045,
+    "late_s": 0.21,
+    "bid": 0.59,
+    "ask": 0.6
+   },
+   "300": {
+    "markout": -0.045,
+    "late_s": 3.97,
+    "bid": 0.59,
+    "ask": 0.6
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DYFE7HB015PA",
+  "slug": "aec-utr-gubtri-mcdcia-2026-11-23",
+  "side": "NO",
+  "px": "0.3000",
+  "qty": "1",
+  "role": "open",
+  "phase": "live",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-25T14:06:23.409212+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.68,
+   "ask": 0.69,
+   "mid": 0.685,
+   "age_s": 9.19,
+   "source": "FILL_MARKOUT.book_before(DYFE7HB015PA)"
+  },
+  "book_m30": {
+   "bid": 0.68,
+   "ask": 0.69,
+   "mid": 0.685,
+   "age_s": 51.55,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.68,
+   "ask": 0.69,
+   "mid": 0.685,
+   "age_s": 21.55,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.68,
+   "ask": 0.69,
+   "mid": 0.685,
+   "age_s": 1.41,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.1125
+  },
+  "quote_before_age_s": 25.33,
+  "h": {
+   "5": {
+    "markout": -0.01,
+    "late_s": 4.65,
+    "bid": 0.7,
+    "ask": 0.72
+   },
+   "30": {
+    "markout": -0.03,
+    "late_s": 2.75,
+    "bid": 0.72,
+    "ask": 0.74
+   },
+   "120": {
+    "markout": -0.045,
+    "late_s": 10.67,
+    "bid": 0.74,
+    "ask": 0.75
+   },
+   "300": {
+    "markout": 0.0,
+    "late_s": 1.46,
+    "bid": 0.69,
+    "ask": 0.71
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DYFK7VCG15P9",
+  "slug": "aec-setkameua-shyole-tymole-2026-11-25",
+  "side": "NO",
+  "px": "0.3600",
+  "qty": "1",
+  "role": "open",
+  "phase": "live",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-25T14:15:46.238951+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.62,
+   "ask": 0.63,
+   "mid": 0.625,
+   "age_s": 5.11,
+   "source": "RN1_QUOTE"
+  },
+  "book_m30": {
+   "bid": 0.48,
+   "ask": 0.49,
+   "mid": 0.485,
+   "age_s": 153.21,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.48,
+   "ask": 0.49,
+   "mid": 0.485,
+   "age_s": 123.21,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.48,
+   "ask": 0.49,
+   "mid": 0.485,
+   "age_s": 63.21,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0979
+  },
+  "quote_before_age_s": 5.11,
+  "h": {
+   "5": {
+    "markout": 0.065,
+    "late_s": 8.48,
+    "bid": 0.52,
+    "ask": 0.63
+   },
+   "30": {
+    "markout": 0.015,
+    "late_s": 3.46,
+    "bid": 0.62,
+    "ask": 0.63
+   },
+   "120": {
+    "markout": 0.015,
+    "late_s": 2.03,
+    "bid": 0.58,
+    "ask": 0.67
+   },
+   "300": {
+    "markout": -0.115,
+    "late_s": 6.5,
+    "bid": 0.71,
+    "ask": 0.8
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DYFGD9E015P2",
+  "slug": "aec-utr-gubtri-mcdcia-2026-11-23",
+  "side": "YES",
+  "px": "0.6700",
+  "qty": "0.97",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-1.00",
+  "fill_t": "2026-11-25T14:16:06.853445+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.69,
+   "ask": 0.7,
+   "mid": 0.695,
+   "age_s": 8.6,
+   "source": "RN1_QUOTE"
+  },
+  "book_m30": {
+   "bid": 0.69,
+   "ask": 0.7,
+   "mid": 0.695,
+   "age_s": 9.73,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.71,
+   "ask": 0.73,
+   "mid": 0.72,
+   "age_s": 19.26,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.75,
+   "ask": 0.77,
+   "mid": 0.76,
+   "age_s": 9.25,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "0",
+   "NO": "1"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0.3000"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.1405
+  },
+  "quote_before_age_s": 8.6,
+  "h": {
+   "5": {
+    "markout": 0.015,
+    "late_s": 20.85,
+    "bid": 0.68,
+    "ask": 0.69
+   },
+   "30": {
+    "markout": 0.015,
+    "late_s": 10.97,
+    "bid": 0.68,
+    "ask": 0.69
+   },
+   "120": {
+    "markout": 0.07,
+    "late_s": 0.14,
+    "bid": 0.73,
+    "ask": 0.75
+   },
+   "300": {
+    "markout": 0.14,
+    "late_s": 0.64,
+    "bid": 0.8,
+    "ask": 0.82
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DYFKMPB015P8",
+  "slug": "aec-utr-gubtri-mcdcia-2026-11-23",
+  "side": "NO",
+  "px": "0.3000",
+  "qty": "1",
+  "role": "extend",
+  "phase": "live",
+  "unpaired_before": "0.03",
+  "fill_t": "2026-11-25T14:17:15.690453+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.68,
+   "ask": 0.69,
+   "mid": 0.685,
+   "age_s": 4.59,
+   "source": "FILL_MARKOUT.book_before(DYFKMPB015P8)"
+  },
+  "book_m30": {
+   "bid": 0.68,
+   "ask": 0.69,
+   "mid": 0.685,
+   "age_s": 12.91,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.67,
+   "ask": 0.69,
+   "mid": 0.68,
+   "age_s": 5.22,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.69,
+   "ask": 0.7,
+   "mid": 0.695,
+   "age_s": 0.13,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "0.97",
+   "NO": "1"
+  },
+  "cost_before": {
+   "YES": "0.649900",
+   "NO": "0.3000"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.1017
+  },
+  "quote_before_age_s": 42.91,
+  "h": {
+   "5": {
+    "markout": -0.015,
+    "late_s": 5.34,
+    "bid": 0.71,
+    "ask": 0.72
+   },
+   "30": {
+    "markout": -0.015,
+    "late_s": 1.26,
+    "bid": 0.71,
+    "ask": 0.72
+   },
+   "120": {
+    "markout": -0.045,
+    "late_s": 3.86,
+    "bid": 0.74,
+    "ask": 0.75
+   },
+   "300": {
+    "markout": -0.185,
+    "late_s": 0.22,
+    "bid": 0.88,
+    "ask": 0.89
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DYFPPS0G15P8",
+  "slug": "aec-utr-viebru-jarnic-2026-11-24",
+  "side": "NO",
+  "px": "0.6200",
+  "qty": "1",
+  "role": "open",
+  "phase": "live",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-25T14:23:38.163918+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.36,
+   "ask": 0.37,
+   "mid": 0.365,
+   "age_s": 6.3,
+   "source": "FILL_MARKOUT.book_before(DYFPPS0G15P8)"
+  },
+  "book_m30": null,
+  "book_m60": null,
+  "book_m120": null,
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.1004
+  },
+  "quote_before_age_s": 20.48,
+  "h": {
+   "5": {
+    "markout": 0.09,
+    "late_s": 6.64,
+    "bid": 0.28,
+    "ask": 0.3
+   },
+   "30": {
+    "markout": 0.09,
+    "late_s": 3.52,
+    "bid": 0.28,
+    "ask": 0.3
+   },
+   "120": {
+    "markout": 0.025,
+    "late_s": 8.31,
+    "bid": 0.35,
+    "ask": 0.36
+   },
+   "300": {
+    "markout": 0.02,
+    "late_s": 0.95,
+    "bid": 0.35,
+    "ask": 0.37
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DYFPVN0G15P2",
+  "slug": "aec-utr-dolhey-monmic-2026-11-24",
+  "side": "YES",
+  "px": "0.2800",
+  "qty": "1",
+  "role": "open",
+  "phase": "live",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-25T14:24:01.583080+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.29,
+   "ask": 0.3,
+   "mid": 0.295,
+   "age_s": 5.54,
+   "source": "FILL_MARKOUT.book_before(DYFPVN0G15P2)"
+  },
+  "book_m30": {
+   "bid": 0.29,
+   "ask": 0.3,
+   "mid": 0.295,
+   "age_s": 61.17,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.29,
+   "ask": 0.3,
+   "mid": 0.295,
+   "age_s": 31.17,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.36,
+   "ask": 0.37,
+   "mid": 0.365,
+   "age_s": 0.84,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.1053
+  },
+  "quote_before_age_s": 24.0,
+  "h": {
+   "5": {
+    "markout": -0.015,
+    "late_s": 0.48,
+    "bid": 0.26,
+    "ask": 0.27
+   },
+   "30": {
+    "markout": -0.015,
+    "late_s": 0.56,
+    "bid": 0.26,
+    "ask": 0.27
+   },
+   "120": {
+    "markout": 0.025,
+    "late_s": 5.33,
+    "bid": 0.3,
+    "ask": 0.31
+   },
+   "300": {
+    "markout": 0.085,
+    "late_s": 4.32,
+    "bid": 0.36,
+    "ask": 0.37
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DYFQKA8015P5",
+  "slug": "aec-utr-viebru-jarnic-2026-11-24",
+  "side": "YES",
+  "px": "0.3400",
+  "qty": "1",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-1",
+  "fill_t": "2026-11-25T14:26:05.931707+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.35,
+   "ask": 0.36,
+   "mid": 0.355,
+   "age_s": 5.59,
+   "source": "FILL_MARKOUT.book_before(DYFQKA8015P5)"
+  },
+  "book_m30": {
+   "bid": 0.35,
+   "ask": 0.37,
+   "mid": 0.36,
+   "age_s": 31.19,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.35,
+   "ask": 0.37,
+   "mid": 0.36,
+   "age_s": 1.19,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.28,
+   "ask": 0.3,
+   "mid": 0.29,
+   "age_s": 16.12,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "0",
+   "NO": "1"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0.6200"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0961
+  },
+  "quote_before_age_s": 61.19,
+  "h": {
+   "5": {
+    "markout": -0.05,
+    "late_s": 4.45,
+    "bid": 0.28,
+    "ask": 0.3
+   },
+   "30": {
+    "markout": -0.055,
+    "late_s": 11.27,
+    "bid": 0.28,
+    "ask": 0.29
+   },
+   "120": {
+    "markout": 0.02,
+    "late_s": 0.84,
+    "bid": 0.35,
+    "ask": 0.37
+   },
+   "300": {
+    "markout": 0.095,
+    "late_s": 1.28,
+    "bid": 0.43,
+    "ask": 0.44
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DYFR8QS015P7",
+  "slug": "aec-utr-dolhey-monmic-2026-11-24",
+  "side": "NO",
+  "px": "0.6800",
+  "qty": "1",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-1",
+  "fill_t": "2026-11-25T14:26:58.956936+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.3,
+   "ask": 0.31,
+   "mid": 0.305,
+   "age_s": 6.0,
+   "source": "FILL_MARKOUT.book_before(DYFR8QS015P7)"
+  },
+  "book_m30": {
+   "bid": 0.3,
+   "ask": 0.31,
+   "mid": 0.305,
+   "age_s": 7.87,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.26,
+   "ask": 0.27,
+   "mid": 0.265,
+   "age_s": 23.31,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.23,
+   "ask": 0.24,
+   "mid": 0.235,
+   "age_s": 8.23,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "1",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0.2800",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0838
+  },
+  "quote_before_age_s": 37.87,
+  "h": {
+   "5": {
+    "markout": -0.03,
+    "late_s": 2.99,
+    "bid": 0.34,
+    "ask": 0.36
+   },
+   "30": {
+    "markout": -0.075,
+    "late_s": 8.78,
+    "bid": 0.39,
+    "ask": 0.4
+   },
+   "120": {
+    "markout": -0.045,
+    "late_s": 0.74,
+    "bid": 0.36,
+    "ask": 0.37
+   },
+   "300": {
+    "markout": 0.005,
+    "late_s": 4.74,
+    "bid": 0.31,
+    "ask": 0.32
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DYFTYW9G15P9",
+  "slug": "aec-utr-dolhey-monmic-2026-11-24",
+  "side": "YES",
+  "px": "0.3000",
+  "qty": "1",
+  "role": "open",
+  "phase": "live",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-25T14:32:42.265692+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.31,
+   "ask": 0.32,
+   "mid": 0.315,
+   "age_s": 7.09,
+   "source": "RN1_QUOTE"
+  },
+  "book_m30": {
+   "bid": 0.31,
+   "ask": 0.32,
+   "mid": 0.315,
+   "age_s": 8.57,
+   "source": "FILL_MARKOUT.h300(DYFR8QS015P7)"
+  },
+  "book_m60": {
+   "bid": 0.31,
+   "ask": 0.32,
+   "mid": 0.315,
+   "age_s": 29.49,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.36,
+   "ask": 0.37,
+   "mid": 0.365,
+   "age_s": 5.99,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "1",
+   "NO": "1"
+  },
+  "cost_before": {
+   "YES": "0.2800",
+   "NO": "0.6800"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.1131
+  },
+  "quote_before_age_s": 7.09,
+  "h": {
+   "5": {
+    "markout": -0.005,
+    "late_s": 6.88,
+    "bid": 0.29,
+    "ask": 0.3
+   },
+   "30": {
+    "markout": -0.005,
+    "late_s": 1.57,
+    "bid": 0.29,
+    "ask": 0.3
+   },
+   "120": {
+    "markout": -0.005,
+    "late_s": 4.32,
+    "bid": 0.29,
+    "ask": 0.3
+   },
+   "300": {
+    "markout": -0.11,
+    "late_s": 10.87,
+    "bid": 0.18,
+    "ask": 0.2
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DYHHZ50G15P9",
+  "slug": "aec-atp-joagui-lucamb-2026-11-25",
+  "side": "YES",
+  "px": "0.4200",
+  "qty": "2",
+  "role": "open",
+  "phase": "live",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-25T16:32:50.780996+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.43,
+   "ask": 0.44,
+   "mid": 0.435,
+   "age_s": 5.76,
+   "source": "FILL_MARKOUT.book_before(DYHHZ50G15P9)"
+  },
+  "book_m30": null,
+  "book_m60": null,
+  "book_m120": null,
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0992
+  },
+  "quote_before_age_s": 14.62,
+  "h": {
+   "5": {
+    "markout": -0.025,
+    "late_s": 5.44,
+    "bid": 0.39,
+    "ask": 0.4
+   },
+   "30": {
+    "markout": -0.045,
+    "late_s": 2.67,
+    "bid": 0.37,
+    "ask": 0.38
+   },
+   "120": {
+    "markout": -0.055,
+    "late_s": 7.25,
+    "bid": 0.36,
+    "ask": 0.37
+   },
+   "300": {
+    "markout": -0.105,
+    "late_s": 2.24,
+    "bid": 0.31,
+    "ask": 0.32
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DYHM0YFG15P4",
+  "slug": "aec-atp-matalm-carzar-2026-11-22",
+  "side": "NO",
+  "px": "0.3900",
+  "qty": "1",
+  "role": "open",
+  "phase": "live",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-25T16:37:21.457562+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.59,
+   "ask": 0.6,
+   "mid": 0.595,
+   "age_s": 1.22,
+   "source": "RN1_QUOTE"
+  },
+  "book_m30": {
+   "bid": 0.58,
+   "ask": 0.59,
+   "mid": 0.585,
+   "age_s": 0.81,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.57,
+   "ask": 0.58,
+   "mid": 0.575,
+   "age_s": 0.21,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.56,
+   "ask": 0.58,
+   "mid": 0.57,
+   "age_s": 0.11,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.1043
+  },
+  "quote_before_age_s": 1.22,
+  "h": {
+   "5": {
+    "markout": -0.005,
+    "late_s": 3.79,
+    "bid": 0.61,
+    "ask": 0.62
+   },
+   "30": {
+    "markout": -0.005,
+    "late_s": 1.7,
+    "bid": 0.61,
+    "ask": 0.62
+   },
+   "120": {
+    "markout": 0.03,
+    "late_s": 1.81,
+    "bid": 0.56,
+    "ask": 0.6
+   },
+   "300": {
+    "markout": -0.065,
+    "late_s": 1.09,
+    "bid": 0.67,
+    "ask": 0.68
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DYHM5FKG15P7",
+  "slug": "aec-atp-matalm-carzar-2026-11-22",
+  "side": "YES",
+  "px": "0.5800",
+  "qty": "1",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-1",
+  "fill_t": "2026-11-25T16:39:15.963413+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.58,
+   "ask": 0.59,
+   "mid": 0.585,
+   "age_s": 8.94,
+   "source": "jump_pause.new"
+  },
+  "book_m30": {
+   "bid": 0.61,
+   "ask": 0.62,
+   "mid": 0.615,
+   "age_s": 52.81,
+   "source": "FILL_MARKOUT.h30(DYHM0YFG15P4)"
+  },
+  "book_m60": {
+   "bid": 0.61,
+   "ask": 0.62,
+   "mid": 0.615,
+   "age_s": 22.81,
+   "source": "FILL_MARKOUT.h30(DYHM0YFG15P4)"
+  },
+  "book_m120": {
+   "bid": 0.59,
+   "ask": 0.6,
+   "mid": 0.595,
+   "age_s": 5.37,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "0",
+   "NO": "1"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0.3900"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.1043
+  },
+  "quote_before_age_s": 17.87,
+  "h": {
+   "5": {
+    "markout": 0.0,
+    "late_s": 2.3,
+    "bid": 0.56,
+    "ask": 0.6
+   },
+   "30": {
+    "markout": 0.025,
+    "late_s": 5.83,
+    "bid": 0.6,
+    "ask": 0.61
+   },
+   "120": {
+    "markout": 0.035,
+    "late_s": 0.7,
+    "bid": 0.61,
+    "ask": 0.62
+   },
+   "300": {
+    "markout": 0.215,
+    "late_s": 7.92,
+    "bid": 0.79,
+    "ask": 0.8
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DYK8Q54G15PB",
+  "slug": "aec-utr-ciugab-mentad-2026-11-24",
+  "side": "NO",
+  "px": "0.8900",
+  "qty": "2",
+  "role": "open",
+  "phase": "live",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-25T18:32:59.330131+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.09,
+   "ask": 0.1,
+   "mid": 0.095,
+   "age_s": 4.6,
+   "source": "FILL_MARKOUT.book_before(DYK8Q54G15PB)"
+  },
+  "book_m30": {
+   "bid": 0.09,
+   "ask": 0.1,
+   "mid": 0.095,
+   "age_s": 8.0,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.09,
+   "ask": 0.1,
+   "mid": 0.095,
+   "age_s": 11.8,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.09,
+   "ask": 0.11,
+   "mid": 0.1,
+   "age_s": 0.98,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0
+  },
+  "quote_before_age_s": 38.0,
+  "h": {
+   "5": {
+    "markout": 0.015,
+    "late_s": 3.95,
+    "bid": 0.09,
+    "ask": 0.1
+   },
+   "30": {
+    "markout": 0.0,
+    "late_s": 17.78,
+    "bid": 0.1,
+    "ask": 0.12
+   },
+   "120": {
+    "markout": 0.005,
+    "late_s": 5.23,
+    "bid": 0.1,
+    "ask": 0.11
+   },
+   "300": {
+    "markout": 0.035,
+    "late_s": 4.83,
+    "bid": 0.07,
+    "ask": 0.08
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DYKAJG9015P4",
+  "slug": "aec-utr-garcar-borvic-2026-11-23",
+  "side": "YES",
+  "px": "0.6600",
+  "qty": "2",
+  "role": "open",
+  "phase": "live",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-25T18:40:56.498479+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.66,
+   "ask": 0.71,
+   "mid": 0.685,
+   "age_s": 1.45,
+   "source": "FILL_MARKOUT.book_before(DYKAJYA055PB)"
+  },
+  "book_m30": {
+   "bid": 0.66,
+   "ask": 0.71,
+   "mid": 0.685,
+   "age_s": 242.0,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.66,
+   "ask": 0.71,
+   "mid": 0.685,
+   "age_s": 212.0,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.66,
+   "ask": 0.71,
+   "mid": 0.685,
+   "age_s": 152.0,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0
+  },
+  "quote_before_age_s": 272.0,
+  "h": {
+   "5": {
+    "markout": -0.01,
+    "late_s": 0.01,
+    "bid": 0.6,
+    "ask": 0.7
+   },
+   "30": {
+    "markout": -0.01,
+    "late_s": 3.17,
+    "bid": 0.6,
+    "ask": 0.7
+   },
+   "120": {
+    "markout": -0.045,
+    "late_s": 8.35,
+    "bid": 0.55,
+    "ask": 0.68
+   },
+   "300": {
+    "markout": -0.06,
+    "late_s": 1.18,
+    "bid": 0.55,
+    "ask": 0.65
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DYKAJYA055PB",
+  "slug": "aec-utr-garcar-borvic-2026-11-23",
+  "side": "YES",
+  "px": "0.6400",
+  "qty": "2",
+  "role": "open",
+  "phase": "live",
+  "unpaired_before": "2",
+  "fill_t": "2026-11-25T18:40:56.498833+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.66,
+   "ask": 0.71,
+   "mid": 0.685,
+   "age_s": 1.45,
+   "source": "FILL_MARKOUT.book_before(DYKAJYA055PB)"
+  },
+  "book_m30": {
+   "bid": 0.66,
+   "ask": 0.71,
+   "mid": 0.685,
+   "age_s": 242.0,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.66,
+   "ask": 0.71,
+   "mid": 0.685,
+   "age_s": 212.0,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.66,
+   "ask": 0.71,
+   "mid": 0.685,
+   "age_s": 152.0,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0
+  },
+  "quote_before_age_s": 272.0,
+  "h": {
+   "5": {
+    "markout": 0.01,
+    "late_s": 0.01,
+    "bid": 0.6,
+    "ask": 0.7
+   },
+   "30": {
+    "markout": 0.01,
+    "late_s": 3.17,
+    "bid": 0.6,
+    "ask": 0.7
+   },
+   "120": {
+    "markout": -0.025,
+    "late_s": 8.35,
+    "bid": 0.55,
+    "ask": 0.68
+   },
+   "300": {
+    "markout": -0.04,
+    "late_s": 1.18,
+    "bid": 0.55,
+    "ask": 0.65
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DYQRHF3015P4",
+  "slug": "aec-utr-quioli-kimeli-2026-11-23",
+  "side": "YES",
+  "px": "0.4600",
+  "qty": "1",
+  "role": "open",
+  "phase": "live",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-25T23:47:05.340279+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.48,
+   "ask": 0.49,
+   "mid": 0.485,
+   "age_s": 4.44,
+   "source": "FILL_MARKOUT.book_before(DYQRRZJG15P8)"
+  },
+  "book_m30": {
+   "bid": 0.47,
+   "ask": 0.49,
+   "mid": 0.48,
+   "age_s": 2.93,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.45,
+   "ask": 0.46,
+   "mid": 0.455,
+   "age_s": 10.09,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.43,
+   "ask": 0.46,
+   "mid": 0.445,
+   "age_s": 0.83,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.055
+  },
+  "quote_before_age_s": 4.46,
+  "h": {
+   "5": {
+    "markout": -0.02,
+    "late_s": 1.84,
+    "bid": 0.43,
+    "ask": 0.45
+   },
+   "30": {
+    "markout": 0.01,
+    "late_s": 2.26,
+    "bid": 0.46,
+    "ask": 0.48
+   },
+   "120": {
+    "markout": -0.07,
+    "late_s": 8.19,
+    "bid": 0.38,
+    "ask": 0.4
+   },
+   "300": {
+    "markout": 0.045,
+    "late_s": 2.06,
+    "bid": 0.5,
+    "ask": 0.51
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DYQRRZJG15P8",
+  "slug": "aec-utr-quioli-kimeli-2026-11-23",
+  "side": "YES",
+  "px": "0.4500",
+  "qty": "1",
+  "role": "open",
+  "phase": "live",
+  "unpaired_before": "1",
+  "fill_t": "2026-11-25T23:47:05.340680+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.48,
+   "ask": 0.49,
+   "mid": 0.485,
+   "age_s": 4.44,
+   "source": "FILL_MARKOUT.book_before(DYQRRZJG15P8)"
+  },
+  "book_m30": {
+   "bid": 0.47,
+   "ask": 0.49,
+   "mid": 0.48,
+   "age_s": 2.93,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.45,
+   "ask": 0.46,
+   "mid": 0.455,
+   "age_s": 10.09,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.43,
+   "ask": 0.46,
+   "mid": 0.445,
+   "age_s": 0.83,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.055
+  },
+  "quote_before_age_s": 4.46,
+  "h": {
+   "5": {
+    "markout": -0.01,
+    "late_s": 1.84,
+    "bid": 0.43,
+    "ask": 0.45
+   },
+   "30": {
+    "markout": 0.02,
+    "late_s": 2.26,
+    "bid": 0.46,
+    "ask": 0.48
+   },
+   "120": {
+    "markout": -0.06,
+    "late_s": 8.19,
+    "bid": 0.38,
+    "ask": 0.4
+   },
+   "300": {
+    "markout": 0.055,
+    "late_s": 2.06,
+    "bid": 0.5,
+    "ask": 0.51
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DYQT8BBG15P2",
+  "slug": "aec-utr-quioli-kimeli-2026-11-23",
+  "side": "NO",
+  "px": "0.4900",
+  "qty": "1",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-2",
+  "fill_t": "2026-11-25T23:50:24.435743+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.48,
+   "ask": 0.5,
+   "mid": 0.49,
+   "age_s": 0.9,
+   "source": "FILL_MARKOUT.book_before(DYQT8BBG15P2)"
+  },
+  "book_m30": {
+   "bid": 0.38,
+   "ask": 0.4,
+   "mid": 0.39,
+   "age_s": 29.5,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.38,
+   "ask": 0.4,
+   "mid": 0.39,
+   "age_s": 10.88,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.39,
+   "ask": 0.41,
+   "mid": 0.4,
+   "age_s": 5.16,
+   "source": "jump_pause.new"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "2",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0.9100",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0
+  },
+  "quote_before_age_s": 7.39,
+  "h": {
+   "5": {
+    "markout": -0.03,
+    "late_s": 5.9,
+    "bid": 0.53,
+    "ask": 0.55
+   },
+   "30": {
+    "markout": -0.015,
+    "late_s": 0.84,
+    "bid": 0.52,
+    "ask": 0.53
+   },
+   "120": {
+    "markout": 0.005,
+    "late_s": 5.82,
+    "bid": 0.5,
+    "ask": 0.51
+   },
+   "300": {
+    "markout": 0.08,
+    "late_s": 4.7,
+    "bid": 0.42,
+    "ask": 0.44
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DYQTHN2015P9",
+  "slug": "aec-utr-quioli-kimeli-2026-11-23",
+  "side": "NO",
+  "px": "0.4600",
+  "qty": "1",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-1",
+  "fill_t": "2026-11-25T23:51:37.128783+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.52,
+   "ask": 0.53,
+   "mid": 0.525,
+   "age_s": 0.71,
+   "source": "FILL_MARKOUT.book_before(DYQTHN2015P9)"
+  },
+  "book_m30": {
+   "bid": 0.52,
+   "ask": 0.53,
+   "mid": 0.525,
+   "age_s": 11.85,
+   "source": "FILL_MARKOUT.h30(DYQT8BBG15P2)"
+  },
+  "book_m60": {
+   "bid": 0.53,
+   "ask": 0.55,
+   "mid": 0.54,
+   "age_s": 1.79,
+   "source": "FILL_MARKOUT.h5(DYQT8BBG15P2)"
+  },
+  "book_m120": {
+   "bid": 0.38,
+   "ask": 0.4,
+   "mid": 0.39,
+   "age_s": 12.2,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "2",
+   "NO": "1"
+  },
+  "cost_before": {
+   "YES": "0.9100",
+   "NO": "0.4900"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0
+  },
+  "quote_before_age_s": 50.77,
+  "h": {
+   "5": {
+    "markout": -0.0,
+    "late_s": 0.38,
+    "bid": 0.53,
+    "ask": 0.55
+   },
+   "30": {
+    "markout": 0.035,
+    "late_s": 0.28,
+    "bid": 0.5,
+    "ask": 0.51
+   },
+   "120": {
+    "markout": 0.09,
+    "late_s": 1.16,
+    "bid": 0.44,
+    "ask": 0.46
+   },
+   "300": {
+    "markout": -0.01,
+    "late_s": 5.23,
+    "bid": 0.54,
+    "ask": 0.56
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DYRH8ZDG15P8",
+  "slug": "aec-setkameua-slomyk-fasiva-2026-11-26",
+  "side": "YES",
+  "px": "0.5000",
+  "qty": "1.68",
+  "role": "open",
+  "phase": "pregame",
+  "unpaired_before": "0.00",
+  "fill_t": "2026-11-26T00:41:02.658827+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.51,
+   "ask": 0.52,
+   "mid": 0.515,
+   "age_s": 2.18,
+   "source": "FILL_MARKOUT.book_before(DYRH8ZDG15P8)"
+  },
+  "book_m30": {
+   "bid": 0.51,
+   "ask": 0.52,
+   "mid": 0.515,
+   "age_s": 0.21,
+   "source": "SELECTED"
+  },
+  "book_m60": null,
+  "book_m120": null,
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0
+  },
+  "quote_before_age_s": 28.28,
+  "h": {
+   "5": {
+    "markout": 0.015,
+    "late_s": 0.8,
+    "bid": 0.51,
+    "ask": 0.52
+   },
+   "30": {
+    "markout": 0.01,
+    "late_s": 0.06,
+    "bid": 0.5,
+    "ask": 0.52
+   },
+   "120": {
+    "markout": 0.01,
+    "late_s": 12.01,
+    "bid": 0.48,
+    "ask": 0.54
+   },
+   "300": {
+    "markout": 0.005,
+    "late_s": 2.63,
+    "bid": 0.5,
+    "ask": 0.51
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DYRHMCJ015P4",
+  "slug": "aec-setkameua-slomyk-fasiva-2026-11-26",
+  "side": "YES",
+  "px": "0.5000",
+  "qty": "1.5",
+  "role": "extend",
+  "phase": "pregame",
+  "unpaired_before": "1.68",
+  "fill_t": "2026-11-26T00:41:31.836121+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.51,
+   "ask": 0.52,
+   "mid": 0.515,
+   "age_s": 4.41,
+   "source": "FILL_MARKOUT.book_before(DYRHMCJ015P4)"
+  },
+  "book_m30": {
+   "bid": 0.51,
+   "ask": 0.52,
+   "mid": 0.515,
+   "age_s": 1.36,
+   "source": "FILL_MARKOUT.book_before(DYRH8ZDG15P8)"
+  },
+  "book_m60": null,
+  "book_m120": null,
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "1.68",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0.840000",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.5878
+  },
+  "quote_before_age_s": 10.68,
+  "h": {
+   "5": {
+    "markout": 0.01,
+    "late_s": 2.82,
+    "bid": 0.5,
+    "ask": 0.52
+   },
+   "30": {
+    "markout": 0.015,
+    "late_s": 4.76,
+    "bid": 0.51,
+    "ask": 0.52
+   },
+   "120": {
+    "markout": 0.015,
+    "late_s": 1.6,
+    "bid": 0.48,
+    "ask": 0.55
+   },
+   "300": {
+    "markout": 0.005,
+    "late_s": 5.1,
+    "bid": 0.5,
+    "ask": 0.51
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DYRWFH8G15P7",
+  "slug": "aec-atp-jaskub-carove-2026-11-25",
+  "side": "YES",
+  "px": "0.4300",
+  "qty": "2",
+  "role": "open",
+  "phase": "live",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-26T01:05:06.868680+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.43,
+   "ask": 0.44,
+   "mid": 0.435,
+   "age_s": 3.7,
+   "source": "FILL_MARKOUT.book_before(DYRWFH8G15P7)"
+  },
+  "book_m30": null,
+  "book_m60": null,
+  "book_m120": null,
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "qualifies",
+   "projected_usd": 1.1118
+  },
+  "quote_before_age_s": 9.14,
+  "h": {
+   "5": {
+    "markout": -0.075,
+    "late_s": 4.61,
+    "bid": 0.35,
+    "ask": 0.36
+   },
+   "30": {
+    "markout": -0.075,
+    "late_s": 4.06,
+    "bid": 0.35,
+    "ask": 0.36
+   },
+   "120": {
+    "markout": -0.115,
+    "late_s": 1.37,
+    "bid": 0.31,
+    "ask": 0.32
+   },
+   "300": {
+    "markout": -0.105,
+    "late_s": 4.65,
+    "bid": 0.32,
+    "ask": 0.33
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DYRWGAF015PB",
+  "slug": "aec-atp-jaskub-carove-2026-11-25",
+  "side": "YES",
+  "px": "0.4100",
+  "qty": "2",
+  "role": "open",
+  "phase": "live",
+  "unpaired_before": "2",
+  "fill_t": "2026-11-26T01:05:06.869056+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.43,
+   "ask": 0.44,
+   "mid": 0.435,
+   "age_s": 3.7,
+   "source": "FILL_MARKOUT.book_before(DYRWFH8G15P7)"
+  },
+  "book_m30": null,
+  "book_m60": null,
+  "book_m120": null,
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "qualifies",
+   "projected_usd": 1.1118
+  },
+  "quote_before_age_s": 9.14,
+  "h": {
+   "5": {
+    "markout": -0.055,
+    "late_s": 4.58,
+    "bid": 0.35,
+    "ask": 0.36
+   },
+   "30": {
+    "markout": -0.055,
+    "late_s": 4.03,
+    "bid": 0.35,
+    "ask": 0.36
+   },
+   "120": {
+    "markout": -0.095,
+    "late_s": 1.35,
+    "bid": 0.31,
+    "ask": 0.32
+   },
+   "300": {
+    "markout": -0.085,
+    "late_s": 4.62,
+    "bid": 0.32,
+    "ask": 0.33
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DYSEEDQ015P4",
+  "slug": "aec-atp-jaskub-carove-2026-11-25",
+  "side": "NO",
+  "px": "0.5500",
+  "qty": "1",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-4",
+  "fill_t": "2026-11-26T01:49:19.229838+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.44,
+   "ask": 0.45,
+   "mid": 0.445,
+   "age_s": 0.01,
+   "source": "jump_pause.new"
+  },
+  "book_m30": {
+   "bid": 0.41,
+   "ask": 0.42,
+   "mid": 0.415,
+   "age_s": 12.13,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.4,
+   "ask": 0.41,
+   "mid": 0.405,
+   "age_s": 50.24,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.39,
+   "ask": 0.4,
+   "mid": 0.395,
+   "age_s": 2.33,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "4",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "1.6800",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "qualifies",
+   "projected_usd": 1.3433
+  },
+  "quote_before_age_s": 7.71,
+  "h": {
+   "5": {
+    "markout": -0.005,
+    "late_s": 5.91,
+    "bid": 0.45,
+    "ask": 0.46
+   },
+   "30": {
+    "markout": 0.015,
+    "late_s": 3.03,
+    "bid": 0.43,
+    "ask": 0.44
+   },
+   "120": {
+    "markout": 0.135,
+    "late_s": 6.37,
+    "bid": 0.31,
+    "ask": 0.32
+   },
+   "300": {
+    "markout": 0.395,
+    "late_s": 2.42,
+    "bid": 0.05,
+    "ask": 0.06
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DYRX9X2015P5",
+  "slug": "aec-atpdb-delanedelane-falcksuarez-2026-11-25",
+  "side": "NO",
+  "px": "0.5400",
+  "qty": "0.34",
+  "role": "open",
+  "phase": "pregame",
+  "unpaired_before": "0.00",
+  "fill_t": "2026-11-26T01:50:02.565763+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.44,
+   "ask": 0.45,
+   "mid": 0.445,
+   "age_s": 4.9,
+   "source": "FILL_MARKOUT.book_before(DYRX9X2015P5)"
+  },
+  "book_m30": null,
+  "book_m60": null,
+  "book_m120": null,
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": null,
+  "cost_before": null,
+  "incentive": null,
+  "quote_before_age_s": null,
+  "h": {
+   "5": {
+    "markout": 0.0,
+    "late_s": 4.67,
+    "bid": 0.44,
+    "ask": 0.48
+   },
+   "30": {
+    "markout": -0.01,
+    "late_s": 1.14,
+    "bid": 0.45,
+    "ask": 0.49
+   },
+   "120": {
+    "markout": 0.0,
+    "late_s": 2.84,
+    "bid": 0.45,
+    "ask": 0.47
+   },
+   "300": {
+    "markout": 0.005,
+    "late_s": 5.17,
+    "bid": 0.45,
+    "ask": 0.46
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DYRQTS0G15P9",
+  "slug": "aec-setkameua-slomyk-fasiva-2026-11-26",
+  "side": "NO",
+  "px": "0.4700",
+  "qty": "1",
+  "role": "complete",
+  "phase": "pregame",
+  "unpaired_before": "-3.18",
+  "fill_t": "2026-11-26T02:12:41.644255+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.5,
+   "ask": 0.51,
+   "mid": 0.505,
+   "age_s": 3.41,
+   "source": "FILL_MARKOUT.book_before(DYRQTS0G15P9)"
+  },
+  "book_m30": {
+   "bid": 0.5,
+   "ask": 0.51,
+   "mid": 0.505,
+   "age_s": 126.54,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.5,
+   "ask": 0.51,
+   "mid": 0.505,
+   "age_s": 96.54,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.5,
+   "ask": 0.51,
+   "mid": 0.505,
+   "age_s": 36.54,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "3.18",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "1.590000",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0366
+  },
+  "quote_before_age_s": 156.54,
+  "h": {
+   "5": {
+    "markout": 0.015,
+    "late_s": 4.71,
+    "bid": 0.51,
+    "ask": 0.52
+   },
+   "30": {
+    "markout": 0.015,
+    "late_s": 3.45,
+    "bid": 0.51,
+    "ask": 0.52
+   },
+   "120": {
+    "markout": 0.015,
+    "late_s": 2.39,
+    "bid": 0.51,
+    "ask": 0.52
+   },
+   "300": {
+    "markout": 0.005,
+    "late_s": 11.84,
+    "bid": 0.52,
+    "ask": 0.53
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DYT3D4VG55P1",
+  "slug": "aec-atpdb-delanedelane-falcksuarez-2026-11-25",
+  "side": "YES",
+  "px": "0.3200",
+  "qty": "0.34",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-0.34",
+  "fill_t": "2026-11-26T02:31:14.655280+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.32,
+   "ask": 0.33,
+   "mid": 0.325,
+   "age_s": 5.29,
+   "source": "FILL_MARKOUT.book_before(DYT3D4VG55P1)"
+  },
+  "book_m30": {
+   "bid": 0.32,
+   "ask": 0.33,
+   "mid": 0.325,
+   "age_s": 39.9,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.32,
+   "ask": 0.33,
+   "mid": 0.325,
+   "age_s": 9.9,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.32,
+   "ask": 0.33,
+   "mid": 0.325,
+   "age_s": 48.26,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0.34"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0.183600"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0
+  },
+  "quote_before_age_s": 69.9,
+  "h": {
+   "5": {
+    "markout": -0.04,
+    "late_s": 1.65,
+    "bid": 0.23,
+    "ask": 0.33
+   },
+   "30": {
+    "markout": -0.04,
+    "late_s": 0.53,
+    "bid": 0.23,
+    "ask": 0.33
+   },
+   "120": {
+    "markout": -0.04,
+    "late_s": 0.1,
+    "bid": 0.23,
+    "ask": 0.33
+   },
+   "300": {
+    "markout": -0.08,
+    "late_s": 4.36,
+    "bid": 0.23,
+    "ask": 0.25
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DZA6TVVG15P1",
+  "slug": "aec-atpdb-alvvalflores-alvesperez-2026-11-26",
+  "side": "NO",
+  "px": "0.3000",
+  "qty": "2",
+  "role": "open",
+  "phase": "live",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-26T21:17:44.140684+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.69,
+   "ask": 0.7,
+   "mid": 0.695,
+   "age_s": 1.17,
+   "source": "FILL_MARKOUT.book_before(DZA6WF5G35P7)"
+  },
+  "book_m30": {
+   "bid": 0.69,
+   "ask": 0.7,
+   "mid": 0.695,
+   "age_s": 71.71,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.69,
+   "ask": 0.7,
+   "mid": 0.695,
+   "age_s": 41.71,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.69,
+   "ask": 0.7,
+   "mid": 0.695,
+   "age_s": 43.95,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0
+  },
+  "quote_before_age_s": 101.71,
+  "h": {
+   "5": {
+    "markout": -0.02,
+    "late_s": 8.04,
+    "bid": 0.69,
+    "ask": 0.75
+   },
+   "30": {
+    "markout": -0.01,
+    "late_s": 2.7,
+    "bid": 0.7,
+    "ask": 0.72
+   },
+   "120": {
+    "markout": -0.005,
+    "late_s": 3.1,
+    "bid": 0.7,
+    "ask": 0.71
+   },
+   "300": {
+    "markout": 0.0,
+    "late_s": 4.67,
+    "bid": 0.69,
+    "ask": 0.71
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DZA6VZFG15P4",
+  "slug": "aec-atpdb-alvvalflores-alvesperez-2026-11-26",
+  "side": "NO",
+  "px": "0.2800",
+  "qty": "2",
+  "role": "open",
+  "phase": "live",
+  "unpaired_before": "2",
+  "fill_t": "2026-11-26T21:17:44.141065+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.69,
+   "ask": 0.7,
+   "mid": 0.695,
+   "age_s": 1.17,
+   "source": "FILL_MARKOUT.book_before(DZA6WF5G35P7)"
+  },
+  "book_m30": {
+   "bid": 0.69,
+   "ask": 0.7,
+   "mid": 0.695,
+   "age_s": 71.71,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.69,
+   "ask": 0.7,
+   "mid": 0.695,
+   "age_s": 41.71,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.69,
+   "ask": 0.7,
+   "mid": 0.695,
+   "age_s": 43.95,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0
+  },
+  "quote_before_age_s": 101.71,
+  "h": {
+   "5": {
+    "markout": 0.0,
+    "late_s": 8.04,
+    "bid": 0.69,
+    "ask": 0.75
+   },
+   "30": {
+    "markout": 0.01,
+    "late_s": 2.7,
+    "bid": 0.7,
+    "ask": 0.72
+   },
+   "120": {
+    "markout": 0.015,
+    "late_s": 3.1,
+    "bid": 0.7,
+    "ask": 0.71
+   },
+   "300": {
+    "markout": 0.02,
+    "late_s": 4.67,
+    "bid": 0.69,
+    "ask": 0.71
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DZA6WF5G35P7",
+  "slug": "aec-atpdb-alvvalflores-alvesperez-2026-11-26",
+  "side": "NO",
+  "px": "0.2600",
+  "qty": "2",
+  "role": "open",
+  "phase": "live",
+  "unpaired_before": "4",
+  "fill_t": "2026-11-26T21:17:44.141186+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.69,
+   "ask": 0.7,
+   "mid": 0.695,
+   "age_s": 1.17,
+   "source": "FILL_MARKOUT.book_before(DZA6WF5G35P7)"
+  },
+  "book_m30": {
+   "bid": 0.69,
+   "ask": 0.7,
+   "mid": 0.695,
+   "age_s": 71.71,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.69,
+   "ask": 0.7,
+   "mid": 0.695,
+   "age_s": 41.71,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.69,
+   "ask": 0.7,
+   "mid": 0.695,
+   "age_s": 43.95,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0
+  },
+  "quote_before_age_s": 101.71,
+  "h": {
+   "5": {
+    "markout": 0.02,
+    "late_s": 8.04,
+    "bid": 0.69,
+    "ask": 0.75
+   },
+   "30": {
+    "markout": 0.03,
+    "late_s": 2.7,
+    "bid": 0.7,
+    "ask": 0.72
+   },
+   "120": {
+    "markout": 0.035,
+    "late_s": 3.1,
+    "bid": 0.7,
+    "ask": 0.71
+   },
+   "300": {
+    "markout": 0.04,
+    "late_s": 4.67,
+    "bid": 0.69,
+    "ask": 0.71
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DZA7RQKG35P4",
+  "slug": "aec-atpdb-alvvalflores-alvesperez-2026-11-26",
+  "side": "YES",
+  "px": "0.6900",
+  "qty": "1",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-6",
+  "fill_t": "2026-11-26T21:23:41.622998+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.7,
+   "ask": 0.71,
+   "mid": 0.705,
+   "age_s": 8.16,
+   "source": "RN1_QUOTE"
+  },
+  "book_m30": {
+   "bid": 0.69,
+   "ask": 0.71,
+   "mid": 0.7,
+   "age_s": 22.81,
+   "source": "FILL_MARKOUT.h300(DZA6WF5G35P7)"
+  },
+  "book_m60": {
+   "bid": 0.7,
+   "ask": 0.71,
+   "mid": 0.705,
+   "age_s": 12.4,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.7,
+   "ask": 0.71,
+   "mid": 0.705,
+   "age_s": 16.31,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "6"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "1.6800"
+  },
+  "incentive": {
+   "why": "qualifies",
+   "projected_usd": 6.1276
+  },
+  "quote_before_age_s": 8.16,
+  "h": {
+   "5": {
+    "markout": -0.01,
+    "late_s": 8.22,
+    "bid": 0.67,
+    "ask": 0.69
+   },
+   "30": {
+    "markout": -0.045,
+    "late_s": 2.29,
+    "bid": 0.63,
+    "ask": 0.66
+   },
+   "120": {
+    "markout": -0.22,
+    "late_s": 2.16,
+    "bid": 0.45,
+    "ask": 0.49
+   },
+   "300": {
+    "markout": 0.1,
+    "late_s": 5.11,
+    "bid": 0.74,
+    "ask": 0.84
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DZAAE8T015P2",
+  "slug": "aec-atpdb-alvvalflores-alvesperez-2026-11-26",
+  "side": "YES",
+  "px": "0.6600",
+  "qty": "1",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-5",
+  "fill_t": "2026-11-26T21:23:57.659659+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.67,
+   "ask": 0.69,
+   "mid": 0.68,
+   "age_s": 2.82,
+   "source": "FILL_MARKOUT.h5(DZA7RQKG35P4)"
+  },
+  "book_m30": {
+   "bid": 0.69,
+   "ask": 0.71,
+   "mid": 0.7,
+   "age_s": 38.85,
+   "source": "FILL_MARKOUT.h300(DZA6WF5G35P7)"
+  },
+  "book_m60": {
+   "bid": 0.69,
+   "ask": 0.71,
+   "mid": 0.7,
+   "age_s": 8.85,
+   "source": "FILL_MARKOUT.h300(DZA6WF5G35P7)"
+  },
+  "book_m120": {
+   "bid": 0.7,
+   "ask": 0.71,
+   "mid": 0.705,
+   "age_s": 32.35,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "1",
+   "NO": "6"
+  },
+  "cost_before": {
+   "YES": "0.6900",
+   "NO": "1.6800"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.9396
+  },
+  "quote_before_age_s": 12.77,
+  "h": {
+   "5": {
+    "markout": -0.015,
+    "late_s": 5.96,
+    "bid": 0.63,
+    "ask": 0.66
+   },
+   "30": {
+    "markout": -0.01,
+    "late_s": 6.33,
+    "bid": 0.64,
+    "ask": 0.66
+   },
+   "120": {
+    "markout": -0.195,
+    "late_s": 2.16,
+    "bid": 0.43,
+    "ask": 0.5
+   },
+   "300": {
+    "markout": 0.14,
+    "late_s": 4.92,
+    "bid": 0.77,
+    "ask": 0.83
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DZAANZMG15P8",
+  "slug": "aec-atpdb-alvvalflores-alvesperez-2026-11-26",
+  "side": "YES",
+  "px": "0.6300",
+  "qty": "1",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-4",
+  "fill_t": "2026-11-26T21:25:17.615104+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.64,
+   "ask": 0.65,
+   "mid": 0.645,
+   "age_s": 0.15,
+   "source": "FILL_MARKOUT.book_before(DZAANZMG15P8)"
+  },
+  "book_m30": {
+   "bid": 0.64,
+   "ask": 0.66,
+   "mid": 0.65,
+   "age_s": 8.4,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.63,
+   "ask": 0.66,
+   "mid": 0.645,
+   "age_s": 3.7,
+   "source": "FILL_MARKOUT.h30(DZA7RQKG35P4)"
+  },
+  "book_m120": {
+   "bid": 0.69,
+   "ask": 0.71,
+   "mid": 0.7,
+   "age_s": 28.8,
+   "source": "FILL_MARKOUT.h300(DZA6WF5G35P7)"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "2",
+   "NO": "6"
+  },
+  "cost_before": {
+   "YES": "1.3500",
+   "NO": "1.6800"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0603
+  },
+  "quote_before_age_s": 38.4,
+  "h": {
+   "5": {
+    "markout": -0.16,
+    "late_s": 0.0,
+    "bid": 0.45,
+    "ask": 0.49
+   },
+   "30": {
+    "markout": -0.16,
+    "late_s": 1.36,
+    "bid": 0.45,
+    "ask": 0.49
+   },
+   "120": {
+    "markout": -0.125,
+    "late_s": 1.76,
+    "bid": 0.48,
+    "ask": 0.53
+   },
+   "300": {
+    "markout": 0.075,
+    "late_s": 5.35,
+    "bid": 0.7,
+    "ask": 0.71
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DZACC1JG15P5",
+  "slug": "aec-atpdb-alvvalflores-alvesperez-2026-11-26",
+  "side": "YES",
+  "px": "0.6900",
+  "qty": "0.65",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-3.00",
+  "fill_t": "2026-11-26T21:30:39.123916+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.69,
+   "ask": 0.74,
+   "mid": 0.715,
+   "age_s": 0.2,
+   "source": "jump_pause.new"
+  },
+  "book_m30": {
+   "bid": 0.77,
+   "ask": 0.83,
+   "mid": 0.8,
+   "age_s": 39.03,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.77,
+   "ask": 0.83,
+   "mid": 0.8,
+   "age_s": 9.03,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.8,
+   "ask": 0.82,
+   "mid": 0.81,
+   "age_s": 0.92,
+   "source": "jump_pause.new"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "3",
+   "NO": "6"
+  },
+  "cost_before": {
+   "YES": "1.9800",
+   "NO": "1.6800"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0
+  },
+  "quote_before_age_s": 0.66,
+  "h": {
+   "5": {
+    "markout": 0.055,
+    "late_s": 5.11,
+    "bid": 0.74,
+    "ask": 0.75
+   },
+   "30": {
+    "markout": 0.135,
+    "late_s": 1.76,
+    "bid": 0.82,
+    "ask": 0.83
+   },
+   "120": {
+    "markout": 0.2,
+    "late_s": 4.36,
+    "bid": 0.88,
+    "ask": 0.9
+   },
+   "300": {
+    "markout": 0.195,
+    "late_s": 1.92,
+    "bid": 0.86,
+    "ask": 0.91
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DZACC1JG15P5",
+  "slug": "aec-atpdb-alvvalflores-alvesperez-2026-11-26",
+  "side": "YES",
+  "px": "0.6900",
+  "qty": "0.35",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-2.35",
+  "fill_t": "2026-11-26T21:35:08.007528+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.71,
+   "ask": 0.75,
+   "mid": 0.73,
+   "age_s": 3.43,
+   "source": "FILL_MARKOUT.book_before(DZACC1JG15P5)"
+  },
+  "book_m30": {
+   "bid": 0.74,
+   "ask": 0.78,
+   "mid": 0.76,
+   "age_s": 0.74,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.79,
+   "ask": 0.9,
+   "mid": 0.845,
+   "age_s": 2.29,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.91,
+   "ask": 0.94,
+   "mid": 0.925,
+   "age_s": 8.43,
+   "source": "jump_pause.new"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "3.65",
+   "NO": "6"
+  },
+  "cost_before": {
+   "YES": "2.428500",
+   "NO": "1.6800"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0
+  },
+  "quote_before_age_s": 30.74,
+  "h": {
+   "5": {
+    "markout": 0.075,
+    "late_s": 2.92,
+    "bid": 0.75,
+    "ask": 0.78
+   },
+   "30": {
+    "markout": 0.195,
+    "late_s": 3.11,
+    "bid": 0.86,
+    "ask": 0.91
+   },
+   "120": {
+    "markout": 0.285,
+    "late_s": 2.97,
+    "bid": 0.97,
+    "ask": 0.98
+   },
+   "300": {
+    "markout": 0.295,
+    "late_s": 3.9,
+    "bid": 0.98,
+    "ask": 0.99
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DZCE2S0015P9",
+  "slug": "aec-setkameua-kobvit-khaser-2026-11-27",
+  "side": "YES",
+  "px": "0.4800",
+  "qty": "1",
+  "role": "open",
+  "phase": "pregame",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-26T23:51:55.541473+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.49,
+   "ask": 0.5,
+   "mid": 0.495,
+   "age_s": 13.75,
+   "source": "RN1_QUOTE"
+  },
+  "book_m30": null,
+  "book_m60": null,
+  "book_m120": null,
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.4533
+  },
+  "quote_before_age_s": 13.75,
+  "h": {
+   "5": {
+    "markout": 0.01,
+    "late_s": 4.77,
+    "bid": 0.48,
+    "ask": 0.5
+   },
+   "30": {
+    "markout": 0.005,
+    "late_s": 2.98,
+    "bid": 0.48,
+    "ask": 0.49
+   },
+   "120": {
+    "markout": -0.02,
+    "late_s": 1.73,
+    "bid": 0.44,
+    "ask": 0.48
+   },
+   "300": {
+    "markout": -0.015,
+    "late_s": 3.19,
+    "bid": 0.45,
+    "ask": 0.48
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DZD7170G15P4",
+  "slug": "aec-setkameua-paryur-stoole-2026-11-27",
+  "side": "NO",
+  "px": "0.4700",
+  "qty": "2",
+  "role": "open",
+  "phase": "pregame",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-27T00:46:33.177582+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.51,
+   "ask": 0.52,
+   "mid": 0.515,
+   "age_s": 6.52,
+   "source": "FILL_MARKOUT.book_before(DZD7170G15P4)"
+  },
+  "book_m30": null,
+  "book_m60": null,
+  "book_m120": null,
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0034
+  },
+  "quote_before_age_s": 21.68,
+  "h": {
+   "5": {
+    "markout": -0.01,
+    "late_s": 26.48,
+    "bid": 0.51,
+    "ask": 0.57
+   },
+   "30": {
+    "markout": -0.01,
+    "late_s": 1.48,
+    "bid": 0.51,
+    "ask": 0.57
+   },
+   "120": {
+    "markout": 0.0,
+    "late_s": 1.92,
+    "bid": 0.51,
+    "ask": 0.55
+   },
+   "300": {
+    "markout": 0.015,
+    "late_s": 3.8,
+    "bid": 0.51,
+    "ask": 0.52
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DZD72MD015P8",
+  "slug": "aec-setkameua-paryur-stoole-2026-11-27",
+  "side": "NO",
+  "px": "0.4500",
+  "qty": "1.72",
+  "role": "open",
+  "phase": "pregame",
+  "unpaired_before": "2.00",
+  "fill_t": "2026-11-27T00:46:33.977944+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.51,
+   "ask": 0.55,
+   "mid": 0.53,
+   "age_s": 0.01,
+   "source": "jump_pause.new"
+  },
+  "book_m30": null,
+  "book_m60": null,
+  "book_m120": null,
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0034
+  },
+  "quote_before_age_s": 22.48,
+  "h": {
+   "5": {
+    "markout": 0.01,
+    "late_s": 25.66,
+    "bid": 0.51,
+    "ask": 0.57
+   },
+   "30": {
+    "markout": 0.01,
+    "late_s": 0.66,
+    "bid": 0.51,
+    "ask": 0.57
+   },
+   "120": {
+    "markout": 0.02,
+    "late_s": 1.1,
+    "bid": 0.51,
+    "ask": 0.55
+   },
+   "300": {
+    "markout": 0.035,
+    "late_s": 2.98,
+    "bid": 0.51,
+    "ask": 0.52
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DZD7AXR015P9",
+  "slug": "aec-atp-timleg-karpol-2026-11-25",
+  "side": "YES",
+  "px": "0.4900",
+  "qty": "2",
+  "role": "open",
+  "phase": "live",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-27T00:47:51.307646+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.52,
+   "ask": 0.54,
+   "mid": 0.53,
+   "age_s": 2.26,
+   "source": "FILL_MARKOUT.book_before(DZD7AXR015P9)"
+  },
+  "book_m30": {
+   "bid": 0.51,
+   "ask": 0.52,
+   "mid": 0.515,
+   "age_s": 20.67,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.52,
+   "ask": 0.53,
+   "mid": 0.525,
+   "age_s": 16.4,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.64,
+   "ask": 0.65,
+   "mid": 0.645,
+   "age_s": 24.94,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.8765
+  },
+  "quote_before_age_s": 14.28,
+  "h": {
+   "5": {
+    "markout": -0.015,
+    "late_s": 0.69,
+    "bid": 0.47,
+    "ask": 0.48
+   },
+   "30": {
+    "markout": 0.025,
+    "late_s": 5.71,
+    "bid": 0.51,
+    "ask": 0.52
+   },
+   "120": {
+    "markout": -0.055,
+    "late_s": 0.55,
+    "bid": 0.43,
+    "ask": 0.44
+   },
+   "300": {
+    "markout": -0.095,
+    "late_s": 3.59,
+    "bid": 0.39,
+    "ask": 0.4
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DZD7FYW015P7",
+  "slug": "aec-atp-timleg-karpol-2026-11-25",
+  "side": "YES",
+  "px": "0.4800",
+  "qty": "2",
+  "role": "open",
+  "phase": "live",
+  "unpaired_before": "2",
+  "fill_t": "2026-11-27T00:47:51.308336+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.52,
+   "ask": 0.54,
+   "mid": 0.53,
+   "age_s": 2.26,
+   "source": "FILL_MARKOUT.book_before(DZD7AXR015P9)"
+  },
+  "book_m30": {
+   "bid": 0.51,
+   "ask": 0.52,
+   "mid": 0.515,
+   "age_s": 20.67,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.52,
+   "ask": 0.53,
+   "mid": 0.525,
+   "age_s": 16.41,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.64,
+   "ask": 0.65,
+   "mid": 0.645,
+   "age_s": 24.94,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.8765
+  },
+  "quote_before_age_s": 14.28,
+  "h": {
+   "5": {
+    "markout": -0.005,
+    "late_s": 0.64,
+    "bid": 0.47,
+    "ask": 0.48
+   },
+   "30": {
+    "markout": 0.035,
+    "late_s": 5.66,
+    "bid": 0.51,
+    "ask": 0.52
+   },
+   "120": {
+    "markout": -0.045,
+    "late_s": 0.5,
+    "bid": 0.43,
+    "ask": 0.44
+   },
+   "300": {
+    "markout": -0.085,
+    "late_s": 3.53,
+    "bid": 0.39,
+    "ask": 0.4
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DZD7VV9G15PA",
+  "slug": "aec-setkameua-paryur-stoole-2026-11-27",
+  "side": "NO",
+  "px": "0.4700",
+  "qty": "1.73",
+  "role": "extend",
+  "phase": "pregame",
+  "unpaired_before": "3.72",
+  "fill_t": "2026-11-27T00:48:03.243687+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.51,
+   "ask": 0.52,
+   "mid": 0.515,
+   "age_s": 4.19,
+   "source": "RN1_QUOTE"
+  },
+  "book_m30": {
+   "bid": 0.51,
+   "ask": 0.53,
+   "mid": 0.52,
+   "age_s": 3.3,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.51,
+   "ask": 0.57,
+   "mid": 0.54,
+   "age_s": 25.68,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": null,
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "0",
+   "NO": "3.72"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "1.714000"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.8633
+  },
+  "quote_before_age_s": 4.19,
+  "h": {
+   "5": {
+    "markout": 0.01,
+    "late_s": 12.87,
+    "bid": 0.51,
+    "ask": 0.53
+   },
+   "30": {
+    "markout": 0.0,
+    "late_s": 1.88,
+    "bid": 0.51,
+    "ask": 0.55
+   },
+   "120": {
+    "markout": 0.015,
+    "late_s": 5.38,
+    "bid": 0.51,
+    "ask": 0.52
+   },
+   "300": {
+    "markout": 0.015,
+    "late_s": 1.61,
+    "bid": 0.51,
+    "ask": 0.52
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DZD7X9TG15P6",
+  "slug": "aec-setkameua-paryur-stoole-2026-11-27",
+  "side": "NO",
+  "px": "0.4500",
+  "qty": "1.75",
+  "role": "extend",
+  "phase": "pregame",
+  "unpaired_before": "5.45",
+  "fill_t": "2026-11-27T00:48:33.248167+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.51,
+   "ask": 0.53,
+   "mid": 0.52,
+   "age_s": 4.63,
+   "source": "FILL_MARKOUT.book_before(DZD7X9TG15P6)"
+  },
+  "book_m30": {
+   "bid": 0.51,
+   "ask": 0.52,
+   "mid": 0.515,
+   "age_s": 4.19,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.51,
+   "ask": 0.53,
+   "mid": 0.52,
+   "age_s": 3.3,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.51,
+   "ask": 0.52,
+   "mid": 0.515,
+   "age_s": 6.59,
+   "source": "FILL_MARKOUT.book_before(DZD7170G15P4)"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "0",
+   "NO": "5.45"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "2.527100"
+  },
+  "incentive": {
+   "why": "qualifies",
+   "projected_usd": 1.964
+  },
+  "quote_before_age_s": 4.65,
+  "h": {
+   "5": {
+    "markout": 0.03,
+    "late_s": 4.51,
+    "bid": 0.51,
+    "ask": 0.53
+   },
+   "30": {
+    "markout": 0.015,
+    "late_s": 2.22,
+    "bid": 0.51,
+    "ask": 0.56
+   },
+   "120": {
+    "markout": 0.035,
+    "late_s": 4.54,
+    "bid": 0.51,
+    "ask": 0.52
+   },
+   "300": {
+    "markout": 0.035,
+    "late_s": 7.63,
+    "bid": 0.51,
+    "ask": 0.52
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DZD827GGD5P2",
+  "slug": "aec-atp-timleg-karpol-2026-11-25",
+  "side": "NO",
+  "px": "0.4700",
+  "qty": "1",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-4",
+  "fill_t": "2026-11-27T00:48:43.310885+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.51,
+   "ask": 0.52,
+   "mid": 0.515,
+   "age_s": 0.65,
+   "source": "FILL_MARKOUT.book_before(DZD827GGD5P2)"
+  },
+  "book_m30": {
+   "bid": 0.47,
+   "ask": 0.48,
+   "mid": 0.475,
+   "age_s": 16.28,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.51,
+   "ask": 0.52,
+   "mid": 0.515,
+   "age_s": 6.28,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.52,
+   "ask": 0.53,
+   "mid": 0.525,
+   "age_s": 8.41,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "4",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "1.9400",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "qualifies",
+   "projected_usd": 1.964
+  },
+  "quote_before_age_s": 8.33,
+  "h": {
+   "5": {
+    "markout": 0.01,
+    "late_s": 6.14,
+    "bid": 0.49,
+    "ask": 0.55
+   },
+   "30": {
+    "markout": 0.055,
+    "late_s": 3.37,
+    "bid": 0.47,
+    "ask": 0.48
+   },
+   "120": {
+    "markout": 0.11,
+    "late_s": 1.17,
+    "bid": 0.41,
+    "ask": 0.43
+   },
+   "300": {
+    "markout": 0.145,
+    "late_s": 3.8,
+    "bid": 0.38,
+    "ask": 0.39
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DZDBVX3G15P6",
+  "slug": "aec-setkameua-savvol-hryevh-2026-11-27",
+  "side": "NO",
+  "px": "0.4900",
+  "qty": "2",
+  "role": "open",
+  "phase": "pregame",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-27T00:57:02.542625+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.49,
+   "ask": 0.5,
+   "mid": 0.495,
+   "age_s": 20.89,
+   "source": "RN1_QUOTE"
+  },
+  "book_m30": {
+   "bid": 0.49,
+   "ask": 0.5,
+   "mid": 0.495,
+   "age_s": 93.77,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.49,
+   "ask": 0.5,
+   "mid": 0.495,
+   "age_s": 63.77,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.49,
+   "ask": 0.5,
+   "mid": 0.495,
+   "age_s": 3.77,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.5709
+  },
+  "quote_before_age_s": 20.89,
+  "h": {
+   "5": {
+    "markout": -0.07,
+    "late_s": 8.82,
+    "bid": 0.49,
+    "ask": 0.67
+   },
+   "30": {
+    "markout": -0.07,
+    "late_s": 8.29,
+    "bid": 0.49,
+    "ask": 0.67
+   },
+   "120": {
+    "markout": -0.07,
+    "late_s": 1.99,
+    "bid": 0.5,
+    "ask": 0.66
+   },
+   "300": {
+    "markout": -0.07,
+    "late_s": 3.03,
+    "bid": 0.5,
+    "ask": 0.66
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DZDBXBR015P9",
+  "slug": "aec-setkameua-savvol-hryevh-2026-11-27",
+  "side": "NO",
+  "px": "0.4700",
+  "qty": "2",
+  "role": "open",
+  "phase": "pregame",
+  "unpaired_before": "2",
+  "fill_t": "2026-11-27T00:57:02.543836+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.49,
+   "ask": 0.5,
+   "mid": 0.495,
+   "age_s": 20.89,
+   "source": "RN1_QUOTE"
+  },
+  "book_m30": {
+   "bid": 0.49,
+   "ask": 0.5,
+   "mid": 0.495,
+   "age_s": 93.77,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.49,
+   "ask": 0.5,
+   "mid": 0.495,
+   "age_s": 63.77,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.49,
+   "ask": 0.5,
+   "mid": 0.495,
+   "age_s": 3.77,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.5709
+  },
+  "quote_before_age_s": 20.89,
+  "h": {
+   "5": {
+    "markout": -0.05,
+    "late_s": 8.82,
+    "bid": 0.49,
+    "ask": 0.67
+   },
+   "30": {
+    "markout": -0.05,
+    "late_s": 8.29,
+    "bid": 0.49,
+    "ask": 0.67
+   },
+   "120": {
+    "markout": -0.05,
+    "late_s": 1.99,
+    "bid": 0.5,
+    "ask": 0.66
+   },
+   "300": {
+    "markout": -0.05,
+    "late_s": 3.03,
+    "bid": 0.5,
+    "ask": 0.66
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DZDBXVE015P2",
+  "slug": "aec-setkameua-savvol-hryevh-2026-11-27",
+  "side": "NO",
+  "px": "0.4500",
+  "qty": "1.19",
+  "role": "open",
+  "phase": "pregame",
+  "unpaired_before": "4.00",
+  "fill_t": "2026-11-27T00:57:03.144775+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.49,
+   "ask": 0.55,
+   "mid": 0.52,
+   "age_s": 0.0,
+   "source": "jump_pause.new"
+  },
+  "book_m30": {
+   "bid": 0.49,
+   "ask": 0.5,
+   "mid": 0.495,
+   "age_s": 94.37,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.49,
+   "ask": 0.5,
+   "mid": 0.495,
+   "age_s": 64.37,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.49,
+   "ask": 0.5,
+   "mid": 0.495,
+   "age_s": 4.37,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.5709
+  },
+  "quote_before_age_s": 21.49,
+  "h": {
+   "5": {
+    "markout": -0.03,
+    "late_s": 8.14,
+    "bid": 0.49,
+    "ask": 0.67
+   },
+   "30": {
+    "markout": -0.03,
+    "late_s": 7.61,
+    "bid": 0.49,
+    "ask": 0.67
+   },
+   "120": {
+    "markout": -0.03,
+    "late_s": 1.31,
+    "bid": 0.5,
+    "ask": 0.66
+   },
+   "300": {
+    "markout": -0.03,
+    "late_s": 2.35,
+    "bid": 0.5,
+    "ask": 0.66
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DZDC1KSG15P9",
+  "slug": "aec-setkameua-kuzdmy-kurole-2026-11-27",
+  "side": "YES",
+  "px": "0.4700",
+  "qty": "1",
+  "role": "open",
+  "phase": "pregame",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-27T00:57:32.852856+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.48,
+   "ask": 0.49,
+   "mid": 0.485,
+   "age_s": 2.64,
+   "source": "FILL_MARKOUT.book_before(DZDC1KSG15P9)"
+  },
+  "book_m30": {
+   "bid": 0.48,
+   "ask": 0.49,
+   "mid": 0.485,
+   "age_s": 0.26,
+   "source": "SELECTED"
+  },
+  "book_m60": {
+   "bid": 0.48,
+   "ask": 0.49,
+   "mid": 0.485,
+   "age_s": 413.33,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.48,
+   "ask": 0.49,
+   "mid": 0.485,
+   "age_s": 353.33,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.5733
+  },
+  "quote_before_age_s": 25.29,
+  "h": {
+   "5": {
+    "markout": 0.005,
+    "late_s": 0.07,
+    "bid": 0.47,
+    "ask": 0.48
+   },
+   "30": {
+    "markout": 0.005,
+    "late_s": 0.24,
+    "bid": 0.47,
+    "ask": 0.48
+   },
+   "120": {
+    "markout": 0.005,
+    "late_s": 2.78,
+    "bid": 0.47,
+    "ask": 0.48
+   },
+   "300": {
+    "markout": -0.015,
+    "late_s": 3.35,
+    "bid": 0.45,
+    "ask": 0.46
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DZDD8CN015P5",
+  "slug": "aec-setkameua-kuzdmy-kurole-2026-11-27",
+  "side": "YES",
+  "px": "0.4600",
+  "qty": "1",
+  "role": "extend",
+  "phase": "pregame",
+  "unpaired_before": "1",
+  "fill_t": "2026-11-27T01:00:02.925708+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.47,
+   "ask": 0.48,
+   "mid": 0.475,
+   "age_s": 1.04,
+   "source": "FILL_MARKOUT.book_before(DZDD8CN015P5)"
+  },
+  "book_m30": {
+   "bid": 0.47,
+   "ask": 0.48,
+   "mid": 0.475,
+   "age_s": 10.19,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.47,
+   "ask": 0.48,
+   "mid": 0.475,
+   "age_s": 59.83,
+   "source": "FILL_MARKOUT.h30(DZDC1KSG15P9)"
+  },
+  "book_m120": {
+   "bid": 0.47,
+   "ask": 0.48,
+   "mid": 0.475,
+   "age_s": 13.12,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "1",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0.4700",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.6725
+  },
+  "quote_before_age_s": 14.7,
+  "h": {
+   "5": {
+    "markout": 0.005,
+    "late_s": 21.17,
+    "bid": 0.45,
+    "ask": 0.48
+   },
+   "30": {
+    "markout": 0.005,
+    "late_s": 7.1,
+    "bid": 0.45,
+    "ask": 0.48
+   },
+   "120": {
+    "markout": -0.005,
+    "late_s": 2.51,
+    "bid": 0.45,
+    "ask": 0.46
+   },
+   "300": {
+    "markout": -0.005,
+    "late_s": 4.4,
+    "bid": 0.45,
+    "ask": 0.46
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DZDCEFA055P9",
+  "slug": "aec-atp-timleg-karpol-2026-11-25",
+  "side": "NO",
+  "px": "0.4800",
+  "qty": "1",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-3",
+  "fill_t": "2026-11-27T01:01:11.619478+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.44,
+   "ask": 0.45,
+   "mid": 0.445,
+   "age_s": 3.43,
+   "source": "FILL_MARKOUT.book_before(DZDCEFA055P9)"
+  },
+  "book_m30": {
+   "bid": 0.44,
+   "ask": 0.45,
+   "mid": 0.445,
+   "age_s": 8.51,
+   "source": "jump_pause.new"
+  },
+  "book_m60": {
+   "bid": 0.38,
+   "ask": 0.39,
+   "mid": 0.385,
+   "age_s": 10.16,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.42,
+   "ask": 0.43,
+   "mid": 0.425,
+   "age_s": 0.3,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "4",
+   "NO": "1"
+  },
+  "cost_before": {
+   "YES": "1.9400",
+   "NO": "0.4700"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.7176
+  },
+  "quote_before_age_s": 12.4,
+  "h": {
+   "5": {
+    "markout": -0.015,
+    "late_s": 6.44,
+    "bid": 0.53,
+    "ask": 0.54
+   },
+   "30": {
+    "markout": -0.04,
+    "late_s": 1.19,
+    "bid": 0.53,
+    "ask": 0.59
+   },
+   "120": {
+    "markout": -0.025,
+    "late_s": 2.99,
+    "bid": 0.5,
+    "ask": 0.59
+   },
+   "300": {
+    "markout": 0.175,
+    "late_s": 0.59,
+    "bid": 0.34,
+    "ask": 0.35
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DZDDXETG15P1",
+  "slug": "aec-atp-timleg-karpol-2026-11-25",
+  "side": "NO",
+  "px": "0.4500",
+  "qty": "1",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-2",
+  "fill_t": "2026-11-27T01:01:40.080002+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.53,
+   "ask": 0.54,
+   "mid": 0.535,
+   "age_s": 3.4,
+   "source": "FILL_MARKOUT.book_before(DZDDXETG15P1)"
+  },
+  "book_m30": {
+   "bid": 0.44,
+   "ask": 0.45,
+   "mid": 0.445,
+   "age_s": 1.89,
+   "source": "FILL_MARKOUT.book_before(DZDCEFA055P9)"
+  },
+  "book_m60": {
+   "bid": 0.44,
+   "ask": 0.45,
+   "mid": 0.445,
+   "age_s": 6.97,
+   "source": "jump_pause.new"
+  },
+  "book_m120": {
+   "bid": 0.42,
+   "ask": 0.43,
+   "mid": 0.425,
+   "age_s": 4.6,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "4",
+   "NO": "2"
+  },
+  "cost_before": {
+   "YES": "1.9400",
+   "NO": "0.9500"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.5743
+  },
+  "quote_before_age_s": 9.6,
+  "h": {
+   "5": {
+    "markout": 0.065,
+    "late_s": 6.46,
+    "bid": 0.48,
+    "ask": 0.49
+   },
+   "30": {
+    "markout": 0.065,
+    "late_s": 0.68,
+    "bid": 0.48,
+    "ask": 0.49
+   },
+   "120": {
+    "markout": 0.095,
+    "late_s": 5.67,
+    "bid": 0.45,
+    "ask": 0.46
+   },
+   "300": {
+    "markout": 0.075,
+    "late_s": 1.45,
+    "bid": 0.47,
+    "ask": 0.48
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DZDE6RBG15P5",
+  "slug": "aec-atp-timleg-karpol-2026-11-25",
+  "side": "NO",
+  "px": "0.4800",
+  "qty": "1",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-1",
+  "fill_t": "2026-11-27T01:02:37.059196+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.48,
+   "ask": 0.49,
+   "mid": 0.485,
+   "age_s": 1.34,
+   "source": "RN1_QUOTE"
+  },
+  "book_m30": {
+   "bid": 0.48,
+   "ask": 0.49,
+   "mid": 0.485,
+   "age_s": 2.1,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.53,
+   "ask": 0.54,
+   "mid": 0.535,
+   "age_s": 0.38,
+   "source": "FILL_MARKOUT.book_before(DZDDXETG15P1)"
+  },
+  "book_m120": {
+   "bid": 0.44,
+   "ask": 0.45,
+   "mid": 0.445,
+   "age_s": 3.95,
+   "source": "jump_pause.new"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "4",
+   "NO": "3"
+  },
+  "cost_before": {
+   "YES": "1.9400",
+   "NO": "1.4000"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.7003
+  },
+  "quote_before_age_s": 1.34,
+  "h": {
+   "5": {
+    "markout": -0.025,
+    "late_s": 2.62,
+    "bid": 0.54,
+    "ask": 0.55
+   },
+   "30": {
+    "markout": -0.015,
+    "late_s": 1.82,
+    "bid": 0.53,
+    "ask": 0.54
+   },
+   "120": {
+    "markout": -0.055,
+    "late_s": 1.76,
+    "bid": 0.57,
+    "ask": 0.58
+   },
+   "300": {
+    "markout": 0.175,
+    "late_s": 4.07,
+    "bid": 0.27,
+    "ask": 0.42
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DZEPN8QG35P4",
+  "slug": "aec-setkameua-sydvik-dunvol-2026-11-27",
+  "side": "YES",
+  "px": "0.4700",
+  "qty": "1",
+  "role": "open",
+  "phase": "pregame",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-27T02:30:35.368308+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.48,
+   "ask": 0.49,
+   "mid": 0.485,
+   "age_s": 23.16,
+   "source": "RN1_QUOTE"
+  },
+  "book_m30": {
+   "bid": 0.48,
+   "ask": 0.49,
+   "mid": 0.485,
+   "age_s": 116.44,
+   "source": "SELECTED"
+  },
+  "book_m60": {
+   "bid": 0.48,
+   "ask": 0.49,
+   "mid": 0.485,
+   "age_s": 86.44,
+   "source": "SELECTED"
+  },
+  "book_m120": {
+   "bid": 0.48,
+   "ask": 0.49,
+   "mid": 0.485,
+   "age_s": 26.44,
+   "source": "SELECTED"
+  },
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0451
+  },
+  "quote_before_age_s": 23.16,
+  "h": {
+   "5": {
+    "markout": -0.055,
+    "late_s": 14.67,
+    "bid": 0.39,
+    "ask": 0.44
+   },
+   "30": {
+    "markout": -0.055,
+    "late_s": 1.51,
+    "bid": 0.39,
+    "ask": 0.44
+   },
+   "120": {
+    "markout": -0.055,
+    "late_s": 2.48,
+    "bid": 0.4,
+    "ask": 0.43
+   },
+   "300": {
+    "markout": -0.045,
+    "late_s": 5.87,
+    "bid": 0.42,
+    "ask": 0.43
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DZEPP74015P5",
+  "slug": "aec-setkameua-sydvik-dunvol-2026-11-27",
+  "side": "YES",
+  "px": "0.4500",
+  "qty": "1",
+  "role": "open",
+  "phase": "pregame",
+  "unpaired_before": "1",
+  "fill_t": "2026-11-27T02:30:35.369435+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.48,
+   "ask": 0.49,
+   "mid": 0.485,
+   "age_s": 23.16,
+   "source": "RN1_QUOTE"
+  },
+  "book_m30": {
+   "bid": 0.48,
+   "ask": 0.49,
+   "mid": 0.485,
+   "age_s": 116.44,
+   "source": "SELECTED"
+  },
+  "book_m60": {
+   "bid": 0.48,
+   "ask": 0.49,
+   "mid": 0.485,
+   "age_s": 86.44,
+   "source": "SELECTED"
+  },
+  "book_m120": {
+   "bid": 0.48,
+   "ask": 0.49,
+   "mid": 0.485,
+   "age_s": 26.44,
+   "source": "SELECTED"
+  },
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0451
+  },
+  "quote_before_age_s": 23.16,
+  "h": {
+   "5": {
+    "markout": -0.035,
+    "late_s": 14.67,
+    "bid": 0.39,
+    "ask": 0.44
+   },
+   "30": {
+    "markout": -0.035,
+    "late_s": 1.51,
+    "bid": 0.39,
+    "ask": 0.44
+   },
+   "120": {
+    "markout": -0.035,
+    "late_s": 2.48,
+    "bid": 0.4,
+    "ask": 0.43
+   },
+   "300": {
+    "markout": -0.025,
+    "late_s": 5.87,
+    "bid": 0.42,
+    "ask": 0.43
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DZEPPPT015P9",
+  "slug": "aec-setkameua-sydvik-dunvol-2026-11-27",
+  "side": "YES",
+  "px": "0.4300",
+  "qty": "0.45",
+  "role": "open",
+  "phase": "pregame",
+  "unpaired_before": "2.00",
+  "fill_t": "2026-11-27T02:30:36.769639+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.48,
+   "ask": 0.49,
+   "mid": 0.485,
+   "age_s": 24.56,
+   "source": "RN1_QUOTE"
+  },
+  "book_m30": {
+   "bid": 0.48,
+   "ask": 0.49,
+   "mid": 0.485,
+   "age_s": 117.84,
+   "source": "SELECTED"
+  },
+  "book_m60": {
+   "bid": 0.48,
+   "ask": 0.49,
+   "mid": 0.485,
+   "age_s": 87.84,
+   "source": "SELECTED"
+  },
+  "book_m120": {
+   "bid": 0.48,
+   "ask": 0.49,
+   "mid": 0.485,
+   "age_s": 27.84,
+   "source": "SELECTED"
+  },
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0451
+  },
+  "quote_before_age_s": 24.56,
+  "h": {
+   "5": {
+    "markout": -0.015,
+    "late_s": 13.2,
+    "bid": 0.39,
+    "ask": 0.44
+   },
+   "30": {
+    "markout": -0.015,
+    "late_s": 0.04,
+    "bid": 0.39,
+    "ask": 0.44
+   },
+   "120": {
+    "markout": -0.015,
+    "late_s": 1.01,
+    "bid": 0.4,
+    "ask": 0.43
+   },
+   "300": {
+    "markout": -0.005,
+    "late_s": 4.4,
+    "bid": 0.42,
+    "ask": 0.43
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DZEQ5DT015PB",
+  "slug": "aec-setkameua-paryur-stoole-2026-11-27",
+  "side": "NO",
+  "px": "0.4700",
+  "qty": "1",
+  "role": "extend",
+  "phase": "pregame",
+  "unpaired_before": "7.20",
+  "fill_t": "2026-11-27T02:31:35.037085+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.51,
+   "ask": 0.52,
+   "mid": 0.515,
+   "age_s": 13.89,
+   "source": "RN1_QUOTE"
+  },
+  "book_m30": {
+   "bid": 0.51,
+   "ask": 0.52,
+   "mid": 0.515,
+   "age_s": 10.92,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.51,
+   "ask": 0.52,
+   "mid": 0.515,
+   "age_s": 26.38,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.51,
+   "ask": 0.52,
+   "mid": 0.515,
+   "age_s": 5387.32,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "7.20"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "3.314600"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0569
+  },
+  "quote_before_age_s": 13.89,
+  "h": {
+   "5": {
+    "markout": -0.015,
+    "late_s": 0.24,
+    "bid": 0.54,
+    "ask": 0.55
+   },
+   "30": {
+    "markout": -0.02,
+    "late_s": 2.52,
+    "bid": 0.54,
+    "ask": 0.56
+   },
+   "120": {
+    "markout": -0.02,
+    "late_s": 2.21,
+    "bid": 0.54,
+    "ask": 0.56
+   },
+   "300": {
+    "markout": -0.02,
+    "late_s": 1.52,
+    "bid": 0.54,
+    "ask": 0.56
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DZEQ6H2G15P2",
+  "slug": "aec-setkameua-paryur-stoole-2026-11-27",
+  "side": "NO",
+  "px": "0.4500",
+  "qty": "0.75",
+  "role": "extend",
+  "phase": "pregame",
+  "unpaired_before": "8.20",
+  "fill_t": "2026-11-27T02:31:35.052870+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.51,
+   "ask": 0.52,
+   "mid": 0.515,
+   "age_s": 13.91,
+   "source": "RN1_QUOTE"
+  },
+  "book_m30": {
+   "bid": 0.51,
+   "ask": 0.52,
+   "mid": 0.515,
+   "age_s": 10.94,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.51,
+   "ask": 0.52,
+   "mid": 0.515,
+   "age_s": 26.39,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.51,
+   "ask": 0.52,
+   "mid": 0.515,
+   "age_s": 5387.34,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "7.20"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "3.314600"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0569
+  },
+  "quote_before_age_s": 13.91,
+  "h": {
+   "5": {
+    "markout": 0.005,
+    "late_s": 0.24,
+    "bid": 0.54,
+    "ask": 0.55
+   },
+   "30": {
+    "markout": -0.0,
+    "late_s": 2.52,
+    "bid": 0.54,
+    "ask": 0.56
+   },
+   "120": {
+    "markout": -0.0,
+    "late_s": 2.21,
+    "bid": 0.54,
+    "ask": 0.56
+   },
+   "300": {
+    "markout": -0.0,
+    "late_s": 1.52,
+    "bid": 0.54,
+    "ask": 0.56
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DZESZWK015PB",
+  "slug": "aec-setkameua-kobvit-khaser-2026-11-27",
+  "side": "NO",
+  "px": "0.2400",
+  "qty": "1",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-1",
+  "fill_t": "2026-11-27T02:38:35.169156+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.74,
+   "ask": 0.75,
+   "mid": 0.745,
+   "age_s": 2.53,
+   "source": "FILL_MARKOUT.book_before(DZESZWK015PB)"
+  },
+  "book_m30": {
+   "bid": 0.74,
+   "ask": 0.75,
+   "mid": 0.745,
+   "age_s": 0.64,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.73,
+   "ask": 0.75,
+   "mid": 0.74,
+   "age_s": 14.05,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.6,
+   "ask": 0.66,
+   "mid": 0.63,
+   "age_s": 3.91,
+   "source": "jump_pause.new"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "1",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0.4800",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0778
+  },
+  "quote_before_age_s": 30.64,
+  "h": {
+   "5": {
+    "markout": -0.02,
+    "late_s": 5.83,
+    "bid": 0.77,
+    "ask": 0.79
+   },
+   "30": {
+    "markout": -0.015,
+    "late_s": 2.43,
+    "bid": 0.76,
+    "ask": 0.79
+   },
+   "120": {
+    "markout": 0.035,
+    "late_s": 0.84,
+    "bid": 0.69,
+    "ask": 0.76
+   },
+   "300": {
+    "markout": 0.18,
+    "late_s": 1.62,
+    "bid": 0.54,
+    "ask": 0.62
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DZFDXMR055P9",
+  "slug": "aec-setkameua-sydvik-dunvol-2026-11-27",
+  "side": "YES",
+  "px": "0.4100",
+  "qty": "1",
+  "role": "extend",
+  "phase": "pregame",
+  "unpaired_before": "2.45",
+  "fill_t": "2026-11-27T03:55:04.547842+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.42,
+   "ask": 0.43,
+   "mid": 0.425,
+   "age_s": 5.21,
+   "source": "FILL_MARKOUT.book_before(DZFDXMR055P9)"
+  },
+  "book_m30": {
+   "bid": 0.42,
+   "ask": 0.43,
+   "mid": 0.425,
+   "age_s": 4554.94,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.42,
+   "ask": 0.43,
+   "mid": 0.425,
+   "age_s": 4524.94,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.42,
+   "ask": 0.43,
+   "mid": 0.425,
+   "age_s": 4464.94,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "2.45",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "1.113500",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0604
+  },
+  "quote_before_age_s": 4584.94,
+  "h": {
+   "5": {
+    "markout": -0.01,
+    "late_s": 21.14,
+    "bid": 0.39,
+    "ask": 0.41
+   },
+   "30": {
+    "markout": -0.01,
+    "late_s": 3.17,
+    "bid": 0.39,
+    "ask": 0.41
+   },
+   "120": {
+    "markout": -0.005,
+    "late_s": 4.02,
+    "bid": 0.4,
+    "ask": 0.41
+   },
+   "300": {
+    "markout": -0.005,
+    "late_s": 4.9,
+    "bid": 0.4,
+    "ask": 0.41
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DZFXJ0RG15P9",
+  "slug": "aec-setkameua-savvol-hryevh-2026-11-27",
+  "side": "NO",
+  "px": "0.4000",
+  "qty": "0.5",
+  "role": "extend",
+  "phase": "pregame",
+  "unpaired_before": "5.19",
+  "fill_t": "2026-11-27T03:55:35.618870+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.58,
+   "ask": 0.59,
+   "mid": 0.585,
+   "age_s": 3.26,
+   "source": "FILL_MARKOUT.book_before(DZFXJ0RG15P9)"
+  },
+  "book_m30": {
+   "bid": 0.58,
+   "ask": 0.59,
+   "mid": 0.585,
+   "age_s": 10273.34,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.58,
+   "ask": 0.59,
+   "mid": 0.585,
+   "age_s": 10243.34,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.58,
+   "ask": 0.59,
+   "mid": 0.585,
+   "age_s": 10183.34,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "5.19"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "2.455500"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0257
+  },
+  "quote_before_age_s": 24.57,
+  "h": {
+   "5": {
+    "markout": 0.015,
+    "late_s": 7.91,
+    "bid": 0.58,
+    "ask": 0.59
+   },
+   "30": {
+    "markout": 0.005,
+    "late_s": 9.11,
+    "bid": 0.59,
+    "ask": 0.6
+   },
+   "120": {
+    "markout": 0.005,
+    "late_s": 3.93,
+    "bid": 0.59,
+    "ask": 0.6
+   },
+   "300": {
+    "markout": 0.005,
+    "late_s": 5.59,
+    "bid": 0.59,
+    "ask": 0.6
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DZFY5F7G15PA",
+  "slug": "aec-setkameua-kolval-volyur-2026-11-27",
+  "side": "YES",
+  "px": "0.4700",
+  "qty": "1",
+  "role": "open",
+  "phase": "pregame",
+  "unpaired_before": "0",
+  "fill_t": "2026-11-27T04:01:46.430568+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.48,
+   "ask": 0.49,
+   "mid": 0.485,
+   "age_s": 1.33,
+   "source": "FILL_MARKOUT.book_before(DZFY5F7G15PA)"
+  },
+  "book_m30": {
+   "bid": 0.48,
+   "ask": 0.49,
+   "mid": 0.485,
+   "age_s": 283.37,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.48,
+   "ask": 0.49,
+   "mid": 0.485,
+   "age_s": 253.37,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.48,
+   "ask": 0.49,
+   "mid": 0.485,
+   "age_s": 193.37,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.04
+  },
+  "quote_before_age_s": 313.37,
+  "h": {
+   "5": {
+    "markout": -0.065,
+    "late_s": 0.01,
+    "bid": 0.32,
+    "ask": 0.49
+   },
+   "30": {
+    "markout": -0.065,
+    "late_s": 1.65,
+    "bid": 0.32,
+    "ask": 0.49
+   },
+   "120": {
+    "markout": -0.03,
+    "late_s": 3.6,
+    "bid": 0.43,
+    "ask": 0.45
+   },
+   "300": {
+    "markout": -0.03,
+    "late_s": 2.69,
+    "bid": 0.43,
+    "ask": 0.45
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DZH9WGQG15P8",
+  "slug": "aec-setkameua-kolval-volyur-2026-11-27",
+  "side": "NO",
+  "px": "0.5000",
+  "qty": "1",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-1",
+  "fill_t": "2026-11-27T05:32:33.856079+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.47,
+   "ask": 0.48,
+   "mid": 0.475,
+   "age_s": 5.04,
+   "source": "FILL_MARKOUT.book_before(DZH9WGQG15P8)"
+  },
+  "book_m30": {
+   "bid": 0.38,
+   "ask": 0.4,
+   "mid": 0.39,
+   "age_s": 0.46,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.43,
+   "ask": 0.45,
+   "mid": 0.44,
+   "age_s": 5084.74,
+   "source": "FILL_MARKOUT.h300(DZFY5F7G15PA)"
+  },
+  "book_m120": {
+   "bid": 0.43,
+   "ask": 0.45,
+   "mid": 0.44,
+   "age_s": 5024.74,
+   "source": "FILL_MARKOUT.h300(DZFY5F7G15PA)"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "1",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0.4700",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0316
+  },
+  "quote_before_age_s": 30.46,
+  "h": {
+   "5": {
+    "markout": -0.025,
+    "late_s": 5.06,
+    "bid": 0.52,
+    "ask": 0.53
+   },
+   "30": {
+    "markout": 0.055,
+    "late_s": 5.37,
+    "bid": 0.44,
+    "ask": 0.45
+   },
+   "120": {
+    "markout": -0.1,
+    "late_s": 2.26,
+    "bid": 0.59,
+    "ask": 0.61
+   },
+   "300": {
+    "markout": -0.24,
+    "late_s": 3.77,
+    "bid": 0.73,
+    "ask": 0.75
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DZG0R4E015P8",
+  "slug": "aec-setkameua-sydvik-dunvol-2026-11-27",
+  "side": "NO",
+  "px": "0.5200",
+  "qty": "1",
+  "role": "complete",
+  "phase": "pregame",
+  "unpaired_before": "-3.45",
+  "fill_t": "2026-11-27T05:42:00.834812+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.4,
+   "ask": 0.41,
+   "mid": 0.405,
+   "age_s": 0.05,
+   "source": "FILL_MARKOUT.book_before(DZG2XTBG15P1)"
+  },
+  "book_m30": {
+   "bid": 0.4,
+   "ask": 0.41,
+   "mid": 0.405,
+   "age_s": 536.05,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.4,
+   "ask": 0.41,
+   "mid": 0.405,
+   "age_s": 506.05,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.4,
+   "ask": 0.41,
+   "mid": 0.405,
+   "age_s": 446.05,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "3.45",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "1.523500",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0316
+  },
+  "quote_before_age_s": 566.05,
+  "h": {
+   "5": {
+    "markout": 0.035,
+    "late_s": 2.05,
+    "bid": 0.43,
+    "ask": 0.46
+   },
+   "30": {
+    "markout": 0.035,
+    "late_s": 12.27,
+    "bid": 0.44,
+    "ask": 0.45
+   },
+   "120": {
+    "markout": 0.035,
+    "late_s": 3.15,
+    "bid": 0.44,
+    "ask": 0.45
+   },
+   "300": {
+    "markout": 0.035,
+    "late_s": 0.29,
+    "bid": 0.44,
+    "ask": 0.45
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DZG2XTBG15P1",
+  "slug": "aec-setkameua-sydvik-dunvol-2026-11-27",
+  "side": "NO",
+  "px": "0.5000",
+  "qty": "0.1",
+  "role": "open",
+  "phase": "pregame",
+  "unpaired_before": "-2.45",
+  "fill_t": "2026-11-27T05:42:00.876030+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.4,
+   "ask": 0.41,
+   "mid": 0.405,
+   "age_s": 0.09,
+   "source": "FILL_MARKOUT.book_before(DZG2XTBG15P1)"
+  },
+  "book_m30": {
+   "bid": 0.4,
+   "ask": 0.41,
+   "mid": 0.405,
+   "age_s": 536.09,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.4,
+   "ask": 0.41,
+   "mid": 0.405,
+   "age_s": 506.09,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.4,
+   "ask": 0.41,
+   "mid": 0.405,
+   "age_s": 446.09,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "3.45",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "1.523500",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0316
+  },
+  "quote_before_age_s": 566.09,
+  "h": {
+   "5": {
+    "markout": 0.055,
+    "late_s": 2.05,
+    "bid": 0.43,
+    "ask": 0.46
+   },
+   "30": {
+    "markout": 0.055,
+    "late_s": 12.27,
+    "bid": 0.44,
+    "ask": 0.45
+   },
+   "120": {
+    "markout": 0.055,
+    "late_s": 3.15,
+    "bid": 0.44,
+    "ask": 0.45
+   },
+   "300": {
+    "markout": 0.055,
+    "late_s": 0.29,
+    "bid": 0.44,
+    "ask": 0.45
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DZHEP2JG15P4",
+  "slug": "aec-setkameua-savvol-hryevh-2026-11-27",
+  "side": "NO",
+  "px": "0.3900",
+  "qty": "1",
+  "role": "extend",
+  "phase": "pregame",
+  "unpaired_before": "5.69",
+  "fill_t": "2026-11-27T05:42:34.926513+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.59,
+   "ask": 0.6,
+   "mid": 0.595,
+   "age_s": 4.39,
+   "source": "RN1_QUOTE"
+  },
+  "book_m30": {
+   "bid": 0.59,
+   "ask": 0.6,
+   "mid": 0.595,
+   "age_s": 6006.71,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.59,
+   "ask": 0.6,
+   "mid": 0.595,
+   "age_s": 5976.71,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.59,
+   "ask": 0.6,
+   "mid": 0.595,
+   "age_s": 5916.71,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "0",
+   "NO": "5.69"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "2.655500"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0272
+  },
+  "quote_before_age_s": 4.39,
+  "h": {
+   "5": {
+    "markout": -0.015,
+    "late_s": 4.23,
+    "bid": 0.6,
+    "ask": 0.65
+   },
+   "30": {
+    "markout": -0.015,
+    "late_s": 3.51,
+    "bid": 0.62,
+    "ask": 0.63
+   },
+   "120": {
+    "markout": -0.015,
+    "late_s": 1.91,
+    "bid": 0.62,
+    "ask": 0.63
+   },
+   "300": {
+    "markout": -0.015,
+    "late_s": 3.38,
+    "bid": 0.62,
+    "ask": 0.63
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DZHEMGBG15P8",
+  "slug": "aec-setkameua-sydvik-dunvol-2026-11-27",
+  "side": "NO",
+  "px": "0.5200",
+  "qty": "2",
+  "role": "complete",
+  "phase": "pregame",
+  "unpaired_before": "-2.35",
+  "fill_t": "2026-11-27T05:45:14.606052+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.44,
+   "ask": 0.45,
+   "mid": 0.445,
+   "age_s": 6.39,
+   "source": "FILL_MARKOUT.book_before(DZHEMGBG15P8)"
+  },
+  "book_m30": {
+   "bid": 0.44,
+   "ask": 0.45,
+   "mid": 0.445,
+   "age_s": 40.58,
+   "source": "FILL_MARKOUT.h120(DZG2XTBG15P1)"
+  },
+  "book_m60": {
+   "bid": 0.44,
+   "ask": 0.45,
+   "mid": 0.445,
+   "age_s": 10.58,
+   "source": "FILL_MARKOUT.h120(DZG2XTBG15P1)"
+  },
+  "book_m120": {
+   "bid": 0.44,
+   "ask": 0.45,
+   "mid": 0.445,
+   "age_s": 18.66,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": false,
+  "pause_kinds_prior_120s": [],
+  "pos_before": {
+   "YES": "3.45",
+   "NO": "1.1"
+  },
+  "cost_before": {
+   "YES": "1.523500",
+   "NO": "0.57000"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.4524
+  },
+  "quote_before_age_s": 6.4,
+  "h": {
+   "5": {
+    "markout": 0.01,
+    "late_s": 0.84,
+    "bid": 0.44,
+    "ask": 0.5
+   },
+   "30": {
+    "markout": 0.03,
+    "late_s": 5.02,
+    "bid": 0.44,
+    "ask": 0.46
+   },
+   "120": {
+    "markout": 0.035,
+    "late_s": 2.86,
+    "bid": 0.44,
+    "ask": 0.45
+   },
+   "300": {
+    "markout": 0.025,
+    "late_s": 2.64,
+    "bid": 0.45,
+    "ask": 0.46
+   }
+  },
+  "settle_yes": 0
+ },
+ {
+  "order_id": "DZJ9EJY015P7",
+  "slug": "aec-setkameua-kuzdmy-kurole-2026-11-27",
+  "side": "NO",
+  "px": "0.4700",
+  "qty": "1",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-2",
+  "fill_t": "2026-11-27T06:41:07.558809+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.51,
+   "ask": 0.52,
+   "mid": 0.515,
+   "age_s": 0.2,
+   "source": "FILL_MARKOUT.book_before(DZJ9EJY015P7)"
+  },
+  "book_m30": {
+   "bid": 0.48,
+   "ask": 0.56,
+   "mid": 0.52,
+   "age_s": 2.5,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.49,
+   "ask": 0.5,
+   "mid": 0.495,
+   "age_s": 0.16,
+   "source": "RN1_QUOTE"
+  },
+  "book_m120": {
+   "bid": 0.4,
+   "ask": 0.42,
+   "mid": 0.41,
+   "age_s": 34.65,
+   "source": "jump_pause.new"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "2",
+   "NO": "0"
+  },
+  "cost_before": {
+   "YES": "0.9300",
+   "NO": "0"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0
+  },
+  "quote_before_age_s": 18.1,
+  "h": {
+   "5": {
+    "markout": -0.03,
+    "late_s": 0.68,
+    "bid": 0.54,
+    "ask": 0.58
+   },
+   "30": {
+    "markout": -0.165,
+    "late_s": 3.91,
+    "bid": 0.69,
+    "ask": 0.7
+   },
+   "120": {
+    "markout": -0.175,
+    "late_s": 3.29,
+    "bid": 0.66,
+    "ask": 0.75
+   },
+   "300": {
+    "markout": -0.45,
+    "late_s": 0.37,
+    "bid": 0.97,
+    "ask": 0.99
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DZJ9HNXG15P5",
+  "slug": "aec-setkameua-kuzdmy-kurole-2026-11-27",
+  "side": "NO",
+  "px": "0.4100",
+  "qty": "1",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-1",
+  "fill_t": "2026-11-27T06:41:15.669451+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.54,
+   "ask": 0.58,
+   "mid": 0.56,
+   "age_s": 2.4,
+   "source": "RN1_QUOTE"
+  },
+  "book_m30": {
+   "bid": 0.48,
+   "ask": 0.49,
+   "mid": 0.485,
+   "age_s": 1.56,
+   "source": "RN1_QUOTE"
+  },
+  "book_m60": {
+   "bid": 0.51,
+   "ask": 0.52,
+   "mid": 0.515,
+   "age_s": 4.63,
+   "source": "jump_pause.new"
+  },
+  "book_m120": {
+   "bid": 0.4,
+   "ask": 0.42,
+   "mid": 0.41,
+   "age_s": 42.76,
+   "source": "jump_pause.new"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "2",
+   "NO": "1"
+  },
+  "cost_before": {
+   "YES": "0.9300",
+   "NO": "0.4700"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0
+  },
+  "quote_before_age_s": 2.4,
+  "h": {
+   "5": {
+    "markout": -0.035,
+    "late_s": 4.52,
+    "bid": 0.62,
+    "ask": 0.63
+   },
+   "30": {
+    "markout": -0.095,
+    "late_s": 1.14,
+    "bid": 0.68,
+    "ask": 0.69
+   },
+   "120": {
+    "markout": -0.165,
+    "late_s": 0.55,
+    "bid": 0.75,
+    "ask": 0.76
+   },
+   "300": {
+    "markout": -0.365,
+    "late_s": 3.22,
+    "bid": 0.92,
+    "ask": 0.99
+   }
+  },
+  "settle_yes": 1
+ },
+ {
+  "order_id": "DZJEG5D015PB",
+  "slug": "aec-setkameua-savvol-hryevh-2026-11-27",
+  "side": "YES",
+  "px": "0.5100",
+  "qty": "1",
+  "role": "complete",
+  "phase": "live",
+  "unpaired_before": "-6.69",
+  "fill_t": "2026-11-27T07:06:24.701270+00:00",
+  "fill_t_source": "FILL.t - FILL.seen_late_s",
+  "book_at_fill": {
+   "bid": 0.51,
+   "ask": 0.6,
+   "mid": 0.555,
+   "age_s": 0.57,
+   "source": "jump_pause.new"
+  },
+  "book_m30": {
+   "bid": 0.6,
+   "ask": 0.61,
+   "mid": 0.605,
+   "age_s": 60.15,
+   "source": "RN1_JOIN_TOUCH"
+  },
+  "book_m60": {
+   "bid": 0.6,
+   "ask": 0.61,
+   "mid": 0.605,
+   "age_s": 30.15,
+   "source": "RN1_JOIN_TOUCH"
+  },
+  "book_m120": {
+   "bid": 0.61,
+   "ask": 0.62,
+   "mid": 0.615,
+   "age_s": 4.0,
+   "source": "RN1_QUOTE"
+  },
+  "pause_in_prior_120s": true,
+  "pause_kinds_prior_120s": [
+   "VOL_PAUSE",
+   "jump_pause"
+  ],
+  "pos_before": {
+   "YES": "0",
+   "NO": "6.69"
+  },
+  "cost_before": {
+   "YES": "0",
+   "NO": "3.045500"
+  },
+  "incentive": {
+   "why": "below_minimum_payout",
+   "projected_usd": 0.0
+  },
+  "quote_before_age_s": 24.13,
+  "h": {
+   "5": {
+    "markout": 0.075,
+    "late_s": 3.75,
+    "bid": 0.58,
+    "ask": 0.59
+   },
+   "30": {
+    "markout": 0.085,
+    "late_s": 0.23,
+    "bid": 0.59,
+    "ask": 0.6
+   },
+   "120": {
+    "markout": 0.185,
+    "late_s": 5.37,
+    "bid": 0.69,
+    "ask": 0.7
+   },
+   "300": {
+    "markout": 0.385,
+    "late_s": 2.1,
+    "bid": 0.89,
+    "ask": 0.9
+   }
+  },
+  "settle_yes": 1
+ }
+]

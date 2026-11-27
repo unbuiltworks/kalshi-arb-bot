@@ -143,6 +143,38 @@ def main():
     report("ALL opening/addition fills, settlement return by group", out)
     report("STAGE 1 only (from 26 Nov 23:45)", [x for x in out if x["stage1"]])
     report("EXTENSIONS only", [x for x in out if x["role"] == "extend"])
+    clustered(out)
+
+
+def clustered(out):
+    """Market-clustered means (one qty-weighted value per market) of the
+    settlement return and the 300 s markout, per contract."""
+    def cl(rows, key):
+        by = defaultdict(lambda: [0.0, 0.0])
+        for r in rows:
+            if r[key] is None:
+                continue
+            by[r["slug"]][0] += r["qty"] * float(r[key])
+            by[r["slug"]][1] += r["qty"]
+        return mean_se([a / b for a, b in by.values() if b])
+    print("\nMARKET-CLUSTERED (per contract): settlement return | 300 s markout")
+    groups = [
+        ("all", out),
+        ("favourite (side mid > 0.5)", [x for x in out if x["fav"] == "fav"]),
+        ("underdog (side mid < 0.5)", [x for x in out if x["fav"] == "dog"]),
+        ("weakening before fill", [x for x in out if x["trend"] == "weakening"]),
+        ("flat before fill", [x for x in out if x["trend"] == "flat"]),
+        ("strengthening before fill",
+         [x for x in out if x["trend"] == "strengthening"]),
+        ("opening", [x for x in out if x["role"] == "open"]),
+        ("extension", [x for x in out if x["role"] == "extend"]),
+        ("stage 1", [x for x in out if x["stage1"]]),
+    ]
+    for name, rows in groups:
+        a, b = cl(rows, "settle_ret"), cl(rows, "m300")
+        f = lambda m: "n/a" if m[0] is None else "%+.3f +/- %s (mkts %d)" % (
+            m[0], "%.3f" % m[1] if m[1] is not None else "-", m[2])
+        print("%-28s %4d fills | %s | %s" % (name, len(rows), f(a), f(b)))
 
 
 if __name__ == "__main__":
