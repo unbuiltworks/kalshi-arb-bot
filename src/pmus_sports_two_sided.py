@@ -1791,6 +1791,29 @@ RN1_TOUCH_EV = os.getenv("PMUS_RN1_TOUCH_EV", "0").strip() == "1"
 # raced a cancel still stops the whole pass (inventory changed).
 RN1_SIDE_INDEPENDENT = os.getenv("PMUS_RN1_SIDE_INDEPENDENT",
                                  "0").strip() == "1"
+# INVENTORY MARKETS EXTEND THROUGH FULL SLOTS (owner 2026-11-27, default
+# OFF; Stage 1 audit: `max_markets` removed the heavier side's extensions in
+# markets already holding inventory). Effective only with
+# PMUS_RN1_SLOTS_COUNT_INVENTORY=0 and PMUS_RN1_MARGINAL_EV=1 (per-bid
+# economics). When every slot is held by other markets, a market carrying
+# an unpaired leg still rests its heavier side's EXTENSION bids (and its
+# completions); its openings on the lighter side, and every bid of a flat
+# market, wait for a slot as before. Such extension bids do not make the
+# market a slot holder. Each extension still passes marginal EV, the
+# residual / unpaired / spend caps, the concentration charge, every hard
+# block and the final gate.
+RN1_EXTEND_THROUGH_SLOTS = os.getenv("PMUS_RN1_EXTEND_THROUGH_SLOTS",
+                                     "0").strip() == "1"
+# REPOST HYSTERESIS (owner 2026-11-27, default 0 = off; Stage 1 audit: a
+# market whose net estimate oscillated around 0 placed 5 bids and cancelled
+# them about 5 minutes later, four times). With RN1_NET_REPOST_MIN_S > 0
+# (net ranking on), once a market has been `net_not_positive`, its
+# openings/extensions are re-posted only after the market has stayed
+# unblocked (positive) for RN1_NET_REPOST_MIN_S; meanwhile it stays
+# `net_not_positive` (completions continue; RN1_NET_HOLD_S keeps whatever
+# it already keeps).
+RN1_NET_REPOST_MIN_S = float(os.getenv("PMUS_RN1_NET_REPOST_MIN_S")
+                             or "0")
 RN1_TOUCH_EV_MAX_DEPTH = max(1, int(os.getenv("PMUS_RN1_TOUCH_EV_MAX_DEPTH")
                                     or "2"))
 # REWARD CALIBRATION (owner 2026-11-27, default OFF). Every theoretical
@@ -5476,7 +5499,18 @@ class Engine:
         MAX_TRACKED."""
         if RN1_SLOTS_COUNT_INVENTORY:
             return self._rn1_exposed(mk)
+        heavy = None
+        if RN1_EXTEND_THROUGH_SLOTS and RN1_MARGINAL_EV:
+            # an inventory market's extensions are inventory management,
+            # not a quoting slot (see RN1_EXTEND_THROUGH_SLOTS)
+            try:
+                y_, n_ = D(str(mk["pos"]["YES"])), D(str(mk["pos"]["NO"]))
+                heavy = "YES" if y_ > n_ else ("NO" if n_ > y_ else None)
+            except Exception:                             # noqa: BLE001
+                heavy = None
         return any(o.get("open") and not is_completion_stage(o.get("stage"))
+                   and not (heavy is not None and o.get("side") == heavy
+                            and o.get("stage") == "rn1_extend")
                    for o in (mk.get("orders") or {}).values())
 
     def rn1_quote_qualifies(self, slug: str, mk: Dict[str, Any]) -> bool:
@@ -6417,8 +6451,14 @@ class Engine:
                       "pulled until it is calm")
         if not new_block and now < vp:
             new_block = "vol_pause"
+        slot_soft = False
         if not new_block and self.rn1_market_slots_full(slug, mk):
-            new_block = "max_markets"
+            if RN1_EXTEND_THROUGH_SLOTS and RN1_MARGINAL_EV and \
+                    not RN1_SLOTS_COUNT_INVENTORY and \
+                    D(str(mk["pos"]["YES"])) != D(str(mk["pos"]["NO"])):
+                slot_soft = True      # heavier-side extensions only, below
+            else:
+                new_block = "max_markets"
         net_neg = False
         if not new_block and RN1_NET_RANK and \
                 not self.rn1_quote_qualifies(slug, mk):
@@ -6501,6 +6541,14 @@ class Engine:
                     q["why_" + side] = "intl_guard:" + str(gv.get("why"))
                     tg = None
             want[side] = tg
+        if slot_soft:
+            # RN1_EXTEND_THROUGH_SLOTS: only extensions and completions
+            for side in ("YES", "NO"):
+                tg = want.get(side)
+                if tg is not None and tg["role"] not in ("complete",
+                                                         "extend"):
+                    want[side] = None
+                    q["why_" + side] = "max_markets"
         self._gap_hold(slug, mk, q, want, bbo, new_block, now)
         mev_on = RN1_MARGINAL_EV and not new_block
         mev_pass = False
@@ -6518,6 +6566,9 @@ class Engine:
         ladder = self.rn1_ladder(slug, mk, want, tick,
                                  clip=qcfg.get("qty", RN1.QTY),
                                  min_qty=spec["min_qty"])
+        if slot_soft:
+            ladder = [l_ for l_ in ladder
+                      if l_.get("role") in ("complete", "extend")]
         mev_log = None
         if mev_on:
             # MARGINAL NET EV PER BID (finding 1): level-0 targets and every
@@ -6569,6 +6620,25 @@ class Engine:
                     if want.get(sd) is not None and \
                             want[sd]["role"] != "complete":
                         want[sd] = None
+        if RN1_NET_REPOST_MIN_S > 0 and RN1_NET_RANK and \
+                new_block in (None, "net_not_positive"):
+            # REPOST HYSTERESIS (see RN1_NET_REPOST_MIN_S)
+            if new_block == "net_not_positive":
+                mk["net_repost_neg_t"] = now
+                mk.pop("net_repost_pos_since", None)
+            elif mk.get("net_repost_neg_t") is not None:
+                ps_ = float(mk.setdefault("net_repost_pos_since", now))
+                if now - ps_ < RN1_NET_REPOST_MIN_S:
+                    new_block = "net_not_positive"
+                    q["net_repost_wait_s"] = round(
+                        RN1_NET_REPOST_MIN_S - (now - ps_), 1)
+                    for sd in ("YES", "NO"):
+                        if want.get(sd) is not None and \
+                                want[sd]["role"] != "complete":
+                            want[sd] = None
+                else:
+                    mk.pop("net_repost_neg_t", None)
+                    mk.pop("net_repost_pos_since", None)
         if new_block:
             # A block stops every opening and extension. The levels behind
             # a completing bid are openings (see rn1_ladder), so they stop
