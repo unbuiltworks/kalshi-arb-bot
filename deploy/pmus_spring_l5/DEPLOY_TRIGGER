@@ -303,3 +303,4 @@ release candidate for 2e7dd4bdf (integrated hybrid: qualification scope, feasibl
 release candidate for f4dfe9226 (integrated hybrid v2: program_period qualification, feasible ladder, allocator, pause options; all flags default off; not approved, not deployed)
 release candidate for 87e348730 (integrated hybrid v3: contract_period qualification, unknown programme terms fail closed, feasible ladder, allocator, pause options; all flags default off; not approved, not deployed)
 release candidate for 52bec8021 (reward economics: paid_fraction rule, pregame fill rate, release balanced; on hybrid v3; all flags default off; not approved, not deployed)
+release candidate for e3ef7eb79 (reward economics v2: paid_fraction, per-sport pregame fill rates, rank by net per slot, release balanced; all flags default off; not approved, not deployed)
