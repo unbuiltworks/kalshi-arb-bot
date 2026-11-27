@@ -2184,3 +2184,31 @@ additional strategy research, shadow campaigns or unrelated functionality."
 - Order: (1) ledger sports-settlement release, separately authorized,
   deployed and verified; (2) the unified sports release for an exact
   three-hour live window.
+
+### 71d. Stage 1 hourly report, 02:50 UTC
+
+- **Account-risk block** (unresolved `timleg-karpol`) cleared at 02:06:52.
+  The sibling form restated it to +0.18; ACCOUNT_RISK ok at 02:06:56. It
+  lasted 01:47–02:07.
+- **Fills 01:50–02:50:**
+  - `sydvik-dunvol`: YES 1 @ 0.47, 1 @ 0.45, 0.45 @ 0.43 (pregame sweep at
+    02:30);
+  - `paryur-stoole`: NO 1 @ 0.47, 0.75 @ 0.45 (same-side extension);
+  - `kobvit-khaser`: NO 1 @ 0.24 (live completion).
+  - Orders: rn1_open 14, rn1_extend 9, two_sided_complete 10.
+- **Realized (PILOT_PNL 02:45): +$0.46.**
+  - `timleg-karpol` 4 pairs at 0.955 → +0.18 (settled);
+  - `kobvit-khaser` 1 pair at 0.72 → +0.28 (pair locked; market not yet
+    settled).
+- **Cash:** 303.7024; explained −8.1611; unexplained 0.
+- **Unpaired inventory** ($8.62 against the $10 campaign cap):
+  - `paryur` NO 8.95 (4.12, average 0.461; near the $5 per-market cap);
+  - `savvol` NO 5.19 (2.46);
+  - `sydvik` YES 2.45 (1.11);
+  - `kuzdmy` YES 2 (0.93).
+  - Completion bids rest on each; 9 open orders (reconcile 02:45 ok).
+- **Short `ACCOUNT_DRAWDOWN_UNREADABLE` blips:** 02:30:54–02:31:21 and
+  02:36:21–02:36:36. This is the order-uncertain path described in the
+  ledger release note.
+- **Rewards:** PAID unchanged.
+- No action needed.
