@@ -2383,3 +2383,20 @@ the exact three-hour live authorization packet for sports release
   - Fresh reconcile, watchdog, lock and ledger checks were clean as of
     12:12–12:21.
 - **Proposed window:** 12:45–15:45 UTC, grace to 17:45.
+
+## 75. 1c1d546b6 deployment and one three-hour campaign authorized — 27 Nov 2026, about 12:27 UTC
+
+**Owner (verbatim):** "I explicitly authorize deployment of sports release 1c1d546b6d80ccb3eb5c98bf295b7e84e8195e7a to pmus-spring-l5-probe with the submission lock held. Use the activation settings in Revision 1 of SPORTS_1C1D546B6_LIVE_AUTHORIZATION_PACKET_20261127.md, including PMUS_RN1_PILOT_LOSS_USD=8. After successful deployment, fresh venue reconciliation, account-risk verification and independent watchdog verification, authorize one three-hour live campaign beginning at the next quarter hour after verification, followed by two hours of completions-only grace. Record the exact UTC start, end and grace-period end before arming. Maintain: Two simultaneous accumulation markets. Maker-only execution. All existing capital limits and hard protections. The $75 lifetime loss ceiling. Esports and cricket disabled. Crypto unchanged and disarmed. No automatic repeat. Before arming, confirm that worst-case campaign exposure remains within the fresh remaining lifetime loss allowance, including resting and in-flight orders and uncertain submissions. If this cannot be established, remain locked."
+
+- **Scope:** one window only. No repeat. Window times are recorded in 75a
+  before arming.
+- **Worst-case basis (code, release `1c1d546b6`):**
+  - The final gate before submission (`campaign_loss_stop_with_resting`)
+    refuses any opening or extension when the book worst case since the
+    campaign start, minus `own_resting_worst(extra=this order)`, is at or
+    below −$8.
+  - `own_resting_worst` includes open orders and every reservation,
+    `in_flight` and `uncertain`. An unknown figure counts as infinite, so
+    the order is refused.
+  - So the campaign worst case is above −$8, against fresh lifetime room of
+    $8.1431. The fresh figure is re-read before arming (75a).
