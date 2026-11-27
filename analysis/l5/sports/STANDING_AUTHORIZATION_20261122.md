@@ -2651,3 +2651,29 @@ the exact three-hour live authorization packet for sports release
   this campaign's markets; the campaign's own settled result is +$0.2275.
 - **No further live window is authorized.** The next candidate (section 80)
   awaits an owner decision.
+
+## 81. Close-out accepted; release candidate 8373069fe prepared; not authorized — 27 Nov 2026, about 20:05 UTC
+
+**Owner (verbatim):** "Accept the campaign close-out. Keep production
+locked. Proceed immediately with final release preparation for the
+integrated RN1/Bonereaper controller. [...] Return the exact authorization
+packet for approval. Do not deploy or arm until explicitly authorized."
+
+- **Production:** `a51cfdbd2`, locked (`why: locked`); watchdog 19:59 with 0
+  open orders.
+- **Candidate:** `8373069fe532a4f4f7075805d8c97e7210645e7e` on
+  `release/pmus-sports-hybrid-integrated-8373069fe`. It supersedes
+  `d595c47d0` (section 80).
+- **Reward scope:**
+  - adds `contract_period`;
+  - the venue payloads show one programme id spanning many contracts, so
+    `program_period` pooled other matches' accrual and is not to be
+    activated;
+  - unknown programme terms (a possible cap or minimum volume) fail closed;
+  - the CFTC text remains unreadable here (network).
+- **Loss bound:** maximum feasible campaign loss is $8.00 (the campaign
+  stop counts resting, in-flight and uncertain orders). Lifetime room is
+  $8.3706 (ceiling $75.00), and drawdown room is $13.8177.
+- **Packet:** `analysis/l5/sports/RELEASE_PACKET_8373069fe_20261127.md`.
+  Report tool: `analysis/l5/sports/campaign_report.py`.
+- **Not deployed or armed.**
