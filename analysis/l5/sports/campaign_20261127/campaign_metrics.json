@@ -1,0 +1,259 @@
+{
+ "window": {
+  "start": "2026-11-27T13:45:00Z",
+  "end_used": "2026-11-27T16:45:00+00:00",
+  "counts_by_kind": {
+   "ACCOUNT_AUDIT": 3,
+   "ACCOUNT_RISK": 2,
+   "CAMPAIGN_ECONOMICS": 3,
+   "CRICKET_LEARNED": 2,
+   "FILL": 8,
+   "FILL_MARKOUT": 8,
+   "INVENTORY_RECONCILE": 3,
+   "MANUAL_FILL_STUDY": 3,
+   "ORDER": 38,
+   "ORDER_NOT_SENT": 13,
+   "PILOT_PNL": 3,
+   "RESELECTED": 39,
+   "REWARD_CALIBRATION": 3,
+   "REWARD_CHECK": 3,
+   "RN1_QUOTE": 554,
+   "RN1_SELECT_NO_CHURN": 16,
+   "RN1_TOUCH_EV": 413,
+   "SELECTED": 61,
+   "SHARP_STATUS": 18,
+   "XV_PAPER_ENTRY": 101,
+   "account_read_error": 2,
+   "fill_list_row_keys": 1,
+   "heartbeat": 172
+  }
+ },
+ "1_qualifying": {
+  "live.qualifying_contract_s": 497.464,
+  "live.qualifying_contract_s.decreases": 0,
+  "live.resting_contract_s": 778.765,
+  "live.resting_contract_s.decreases": 0,
+  "live.orders": 38.0,
+  "live.orders.decreases": 0,
+  "live.fills": 8.0,
+  "live.fills.decreases": 0,
+  "pregame.qualifying_contract_s": 0.0,
+  "pregame.qualifying_contract_s.decreases": 0,
+  "pregame.resting_contract_s": 0.0,
+  "pregame.resting_contract_s.decreases": 0,
+  "pregame.orders": 0.0,
+  "pregame.orders.decreases": 0,
+  "pregame.fills": 0.0,
+  "pregame.fills.decreases": 0,
+  "window_minutes": 180,
+  "minutes_with_heartbeat": 172,
+  "pct_minutes_resting_orders_gt0": 6.7,
+  "pct_minutes_qualifying_increased": 7.8,
+  "heartbeats": 172,
+  "first_hb": "2026-11-27T13:45:25.962486+00:00",
+  "last_hb": "2026-11-27T16:44:23.721414+00:00"
+ },
+ "2_capital": {
+  "time_weighted_mean_usd": 1.3016,
+  "max_usd": 3.47,
+  "mean_pct_of_60_cap": 2.17,
+  "max_pct_of_60_cap": 5.78,
+  "mean_pct_of_20_at_risk": 6.51,
+  "max_pct_of_20_at_risk": 17.35,
+  "minutes_zero_capital": 58.1,
+  "heartbeats_zero_capital": 56,
+  "max_resting_orders_usd": 1.54,
+  "max_unpaired_usd": 0.8,
+  "max_paired_awaiting_usd": 1.93,
+  "capacity_usd_min": 12.1477,
+  "capacity_usd_max": 13.8177,
+  "capacity_null_heartbeats": 1,
+  "account_limit_reasons": {
+   "None": 171,
+   "ACCOUNT_DRAWDOWN_UNREADABLE": 1
+  },
+  "submission_lock_states": {
+   "{\"completions_locked\": false, \"new_exposure_locked\": false, \"why\": null, \"window_end\": \"2026-11-27T16:45:00Z\"}": 172
+  },
+  "safety_latch_states": {
+   "null": 172
+  },
+  "active_len_dist": {
+   "2": 117,
+   "1": 41,
+   "0": 14
+  }
+ },
+ "3_gates": {
+  "touch_ev_events": 413,
+  "touch_ev_eligible_net_gt0": 233,
+  "eligible_distinct_slugs": 18,
+  "side_outcomes_by_gate_events": {
+   "block:jump_pause": 211,
+   "block:vol_pause": 162,
+   "block:net_not_positive": 37,
+   "why:marginal_ev:marginal_ev_not_positive": 21,
+   "rested": 18,
+   "block:late:set_S3": 16,
+   "block:account_risk": 1
+  },
+  "side_outcomes_by_gate_distinct_slugs": {
+   "block:vol_pause": 11,
+   "block:jump_pause": 13,
+   "why:marginal_ev:marginal_ev_not_positive": 11,
+   "block:net_not_positive": 9,
+   "rested": 6,
+   "block:account_risk": 1,
+   "block:late:set_S3": 1
+  },
+  "marginal_ev_rejections": 21,
+  "marginal_ev_rej_with_quote_reward0_while_touch_reward_gt0": 21,
+  "marginal_ev_rej_incentive_why": {
+   "below_minimum_payout": 21
+  },
+  "marginal_ev_rej_projected_usd_max": 0.0526,
+  "marginal_ev_rej_projected_usd_mean": 0.005,
+  "touch_ev_by_hard": {
+   "price_moving": 173,
+   "recent_jump": 150,
+   "None": 90
+  },
+  "touch_ev_by_side_why": {
+   "NO:no_positive_placement": 272,
+   "YES:no_positive_placement": 260,
+   "YES:None": 144,
+   "NO:None": 130,
+   "NO:completion_keeps_placement": 11,
+   "YES:completion_keeps_placement": 9
+  },
+  "all_quotes_block_counts": {
+   "jump_pause": 234,
+   "vol_pause": 179,
+   "net_not_positive": 89,
+   "None": 41,
+   "account_risk": 5,
+   "late:set_S4": 4,
+   "late:set_S3": 2
+  },
+  "all_quotes_why_counts": {
+   "YES:None": 418,
+   "NO:None": 394,
+   "YES:marginal_ev:marginal_ev_not_positive": 108,
+   "NO:marginal_ev:marginal_ev_not_positive": 102,
+   "NO:price_band": 55,
+   "YES:price_band": 24,
+   "NO:refill_cooldown": 3,
+   "YES:refill_cooldown": 3,
+   "YES:intl_guard:intl_says_not_cheap": 1
+  },
+  "quotes_with_want": 57
+ },
+ "4_reward_qual": {
+  "by_count": {
+   "below_minimum_payout": 544,
+   "qualifies": 10
+  },
+  "by_time_s": {
+   "below_minimum_payout": 18456,
+   "qualifies": 284
+  },
+  "by_time_pct": {
+   "below_minimum_payout": 98.5,
+   "qualifies": 1.5
+  },
+  "max_projected_usd": 5.5428,
+  "max_projected_slug": "aec-atpdb-fominkrutyk-ovcharwhiteh-2026-11-27",
+  "min_payout_usd_values": [
+   "1.0"
+  ]
+ },
+ "5_payments": {
+  "reward_check_t": "2026-11-27T16:39:06.542807+00:00",
+  "credited_usd": "24.0900000000000001",
+  "accrued_not_credited_usd": "4.8600000000000001",
+  "by_status": {
+   "PAID": {
+    "n": 122,
+    "usd": "24.0900000000000001"
+   },
+   "PENDING": {
+    "n": 10,
+    "usd": "0.8600000000000001"
+   },
+   "SKIPPED": {
+    "n": 65,
+    "usd": "4.00"
+   }
+  },
+  "rows_brief_n": 50,
+  "rows_dated_2026_11_27": [],
+  "reward_check_count_in_window": 3,
+  "campaign_economics_t": "2026-11-27T16:40:47.239575+00:00",
+  "campaign": {
+   "since": "2026-11-27T13:45:00+00:00",
+   "until": "2026-11-27T16:45:00+00:00",
+   "markets": 6,
+   "fills": 8,
+   "contracts": "8.00",
+   "spend_usd": "3.772500",
+   "completed_pairs": "4.00",
+   "pair_edge_usd": "0.2275000",
+   "residual_contracts": "0.00",
+   "fees_charged_usd": "0",
+   "rewards_paid_usd": "0",
+   "rewards_pending_usd": "0",
+   "rewards_skipped_usd": "0",
+   "net_realized_usd": "0",
+   "realized_cash_basis_usd": "0.2275000"
+  },
+  "pilot_pnl_t": "2026-11-27T16:40:47.200938+00:00",
+  "pilot_realized_net_usd": "0.2275000",
+  "pilot_status": {
+   "no_fills": 4,
+   "paired_flat": 2
+  },
+  "pilot_execution": {
+   "fills": 8,
+   "contracts": "8.00",
+   "spent_usd": "3.772500",
+   "completed_pairs": "4.00",
+   "avg_pair_cost": "0.943125",
+   "locked_pair_edge_usd": "0.2275000",
+   "residual_contracts": "0.00",
+   "residual_cost_usd": "0",
+   "label": "venue-reconciled fills only; a completed pair's edge is realized cash at pairing (venue nets and pays $1); residual legs realize at settlement"
+  },
+  "reward_calibration_t": "2026-11-27T16:39:06.542380+00:00",
+  "reward_calibration_brief": "{\"kind\": \"REWARD_CALIBRATION\", \"t\": \"2026-11-27T16:39:06.542380+00:00\", \"ok\": true, \"by_competition\": {\"atp\": {\"rows\": 28, \"rows_matched\": 0, \"paid_usd\": \"2.84\", \"pending_usd\": \"0.01\", \"skipped_usd\": \"0.11\", \"other_usd\": \"0\", \"theo_paid_usd\": \"0\", \"theo_pending_usd\": \"0\", \"theo_skipped_usd\": \"0\", \"n_paid\": 0, \"n_pending\": 0, \"n_skipped\": 0, \"theo_no_row_usd\": \"0\", \"n_no_row\": 0, \"paid_matched_usd\": \"0\", \"pending_matched_usd\": \"0\", \"ratio_paid\": null, \"ratio_pending\": null, \"ratio_no_row_as_zero\": null, \"ratio\": null, \"basis\": null}, \"atpcq\": {\"rows\": 3, \"rows_matched\": 0, \"paid_usd\": \"0\", \"pen"
+ },
+ "6_orders_fills": {
+  "orders": 38,
+  "fills": 8,
+  "orders_by_slug": {
+   "aec-setkameua-kohboh-zendmy-2026-11-27": 17,
+   "aec-atpdb-sakamosarsan-zeballzorman-2026-11-27": 1,
+   "aec-atpdb-cadenavasami-kravchsanqui-2026-11-27": 4,
+   "aec-atpdb-fominkrutyk-ovcharwhiteh-2026-11-27": 11,
+   "aec-atpdb-barcamforapa-mansouneuchr-2026-11-27": 1,
+   "aec-atpdb-kalendpereir-martinnedunc-2026-11-27": 4
+  },
+  "fills_by_slug": {
+   "aec-setkameua-kohboh-zendmy-2026-11-27": 4,
+   "aec-atpdb-fominkrutyk-ovcharwhiteh-2026-11-27": 4
+  },
+  "order_stage": {
+   "rn1_open": 17,
+   "two_sided_complete": 21
+  },
+  "fill_contracts": 8.0,
+  "order_not_sent": 13,
+  "order_not_sent_by_stage_why": {
+   "two_sided_complete:deferred_by_request_budget": 9,
+   "two_sided_complete:failed_before_the_order_was_sent": 3,
+   "rn1_open:failed_before_the_order_was_sent": 1
+  },
+  "selected": 61,
+  "reselected": 39,
+  "fill_markout": 8
+ }
+}

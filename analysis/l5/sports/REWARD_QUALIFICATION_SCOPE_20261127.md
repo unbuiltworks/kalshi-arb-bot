@@ -101,3 +101,47 @@ qualifies = projected >= RN1_REWARD_MIN_DAY_USD   ($1, unchanged)
     and the activation flags;
   - the engine boots with RN1 on and the lock at `1`;
   - 75 s with no loop error, latch or market error.
+
+## Campaign 13:45–16:45 UTC, 27 Nov: measured (production logs; `campaign_20261127/`)
+
+| Measure | Value |
+|---|---|
+| Window minutes with any resting order | **6.7%** |
+| Window minutes with qualifying time accruing | **7.8%** |
+| Contract-seconds, live (qualifying / resting) | 497 / 779; pregame 0 / 0 |
+| Capital deployed (resting + unpaired + paired awaiting settlement) | mean **$1.30**, max $3.47 |
+| As a share of the caps | 2.2% of the $60 campaign spend cap; 6.5% (max 17%) of the $20 at-risk budget |
+| Minutes with zero capital deployed | 58 |
+| Active markets per heartbeat | 2: 117 · 1: 41 · 0: 14 |
+| RN1_QUOTE time in `below_minimum_payout` | **98.5%** |
+| RN1_QUOTE time in `qualifies` | 1.5% |
+| Orders / fills | 38 / 8 |
+| Pair edge | +$0.2275 |
+| Rewards credited for the campaign | **$0** (PAID $24.09 unchanged; no 27 Nov rows in the sampled 50 of 197) |
+
+**What blocked bids that TOUCH_EV scored positive** (233 eligible TOUCH_EV
+events across 18 markets; counted per side, two per event):
+
+| Outcome | Sides | Markets |
+|---|---|---|
+| `jump_pause` | 211 | 13 |
+| `vol_pause` | 162 | 11 |
+| `net_not_positive` | 37 | 9 |
+| `marginal_ev_not_positive` | 21 | 11 |
+| **rested** | **18** | 6 |
+| `late:set_S3` | 16 | 1 |
+| `account_risk` | 1 | 1 |
+
+- **Marginal-EV refusals:** all 21 had reward credited as $0 while TOUCH_EV's
+  reward was above $0, and all were `below_minimum_payout`. The mean
+  account projection was $0.005 (max $0.05). This is the scope
+  inconsistency above.
+- **The larger loss of eligible quoting time:** the price-movement pauses
+  (`jump_pause`, `vol_pause`, 373 of 466 side-outcomes). These are
+  adverse-selection protections, and the live-fill markout study supports
+  them (−4.5c/contract at 300 s). They are not changed here.
+- **Caveats:**
+  - RN1_QUOTE is logged only when it changes, so matching each TOUCH_EV to
+    a quote can pick up an older state, and the time shares are approximate.
+  - 172 heartbeats cover 180 minutes; a minute with no heartbeat counts as
+    not resting.
