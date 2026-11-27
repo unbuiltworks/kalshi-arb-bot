@@ -1528,6 +1528,37 @@ RN1_DURATION_HORIZON_S = float(os.getenv("PMUS_RN1_DURATION_HORIZON_S")
 RN1_DURATION_UNKNOWN_FACTOR = float(os.getenv(
     "PMUS_RN1_DURATION_UNKNOWN_FACTOR") or "0.5")
 RN1_DURATION_MIN = os.getenv("PMUS_RN1_DURATION_MIN", "")
+# LIVE-FIRST SLOTS (owner 2026-11-27, default OFF). LIVE 26-27 Nov, two
+# slots: both went to table-tennis pre-game markets starting hours later
+# (theoretical +$0.04-0.41/h), while the capital they tie up stays tied
+# until settlement. With RN1_LIVE_FIRST on (src/pmus_duration_rank.py):
+#   - each candidate is classed live / near (start within
+#     RN1_NEAR_START_S) / distant / unknown (no start on record);
+#   - the share/net ranking (RN1_RANK_SHARE) orders positive estimates by
+#     per_dollar_hour x (H/3600) x min(1, H/R), R = remaining quoting time
+#     (time-to-settlement proxy), H = RN1_DURATION_HORIZON_S, unknown R ->
+#     RN1_DURATION_UNKNOWN_FACTOR; this replaces the duration factor when
+#     RN1_DURATION_RANK is also on (never applied twice);
+#   - at most RN1_DISTANT_MAX_SLOTS slots may be claimed by distant
+#     markets at selection;
+#   - when every slot is claimed and a live/near candidate has a fresh
+#     positive estimate, ONE flat distant market (no contracts, no
+#     completion bid) yields: its resting openings are cancelled through
+#     the normal cancel path and it is released flat (reselectable as any
+#     flat release). A market holding contracts is never preempted.
+# Selection only: every bid still passes every gate and cap.
+RN1_LIVE_FIRST = os.getenv("PMUS_RN1_LIVE_FIRST", "0").strip() == "1"
+RN1_NEAR_START_S = float(os.getenv("PMUS_RN1_NEAR_START_S") or "1800")
+RN1_DISTANT_MAX_SLOTS = int(os.getenv("PMUS_RN1_DISTANT_MAX_SLOTS") or "1")
+# NO SELECT/RELEASE LOOP (owner 2026-11-27, default OFF). LIVE: with every
+# slot held (one by a market carrying inventory) a third market was
+# selected, blocked `max_markets`, released flat after 2 minutes and
+# re-selected, again and again. With RN1_SELECT_NO_CHURN on, a market is
+# not selected while the slot claimants (slot holders, see _rn1_slot_holder,
+# plus selected markets with no unpaired leg still waiting to quote) already
+# number MAX_MARKETS. Logged once per change.
+RN1_SELECT_NO_CHURN = os.getenv("PMUS_RN1_SELECT_NO_CHURN",
+                                "0").strip() == "1"
 # MARGINAL NET EV PER BID (external review of 1b496656c, findings 1, 2, 4).
 # The market-level net estimate (RN1_NET_RANK) stops every opening and
 # extension in a market whose estimated reward does not exceed a fixed
@@ -7025,6 +7056,173 @@ class Engine:
                                     RN1_DURATION_UNKNOWN_FACTOR),
                 "excluded": DR.excluded(rem, RN1_MIN_REMAINING_S)}
 
+    def live_first_class(self, slug: str,
+                         now: Optional[float] = None) -> str:
+        """See RN1_LIVE_FIRST: live / near / distant / unknown."""
+        from src import pmus_duration_rank as DR
+        states = getattr(self.v, "states", {}) or {}
+        gs = (self.b.d["markets"].get(slug) or {}).get("game_start")
+        if gs is None:
+            gs = self._game_start.get(slug)
+        return DR.start_class(time.time() if now is None else now, gs,
+                              slug in states, RN1_NEAR_START_S)
+
+    def live_first_info(self, slug: str, per_dollar_hour: float,
+                        now: Optional[float] = None) -> Dict[str, Any]:
+        """See RN1_LIVE_FIRST: class, remaining time, turnover factor and
+        the ranking score for one per-dollar-hour estimate."""
+        from src import pmus_duration_rank as DR
+        di = self.duration_info(slug, now)
+        cls_ = self.live_first_class(slug, now)
+        rem = di["remaining_s"]
+        return {"class": cls_, "rank": DR.CLASS_RANK.get(cls_, 2),
+                "remaining_s": None if rem is None else int(rem),
+                "turnover": round(DR.turnover(
+                    rem, RN1_DURATION_HORIZON_S,
+                    RN1_DURATION_UNKNOWN_FACTOR), 4),
+                "score": round(DR.live_first_score(
+                    per_dollar_hour, rem, RN1_DURATION_HORIZON_S,
+                    RN1_DURATION_UNKNOWN_FACTOR), 8)}
+
+    def slot_claimants(self) -> list:
+        """Markets that hold, or are waiting for, a quoting slot: every
+        slot holder (_rn1_slot_holder, so RN1_SLOTS_COUNT_INVENTORY decides
+        whether a market carrying an unpaired leg counts), plus each active
+        market with no unpaired leg (it will try to open). With
+        RN1_SLOTS_COUNT_INVENTORY=0 a market carrying an unpaired leg and no
+        resting opening/extension bid is not a claimant; it stays tracked,
+        completed, audited and counted in every limit as before."""
+        out = []
+        for s_, m_ in (self.b.d.get("markets") or {}).items():
+            if m_.get("done"):
+                continue
+            try:
+                bal = D(str(m_["pos"]["YES"])) == D(str(m_["pos"]["NO"]))
+            except Exception:                             # noqa: BLE001
+                bal = False
+            if self._rn1_slot_holder(m_) or bal:
+                out.append(s_)
+        return out
+
+    def _lf_positive(self, slug: str) -> bool:
+        hit = (getattr(self, "_share_cache", None) or {}).get(slug)
+        if not hit or time.monotonic() - hit[0] > RANK_SHARE_TTL_S:
+            return False
+        o = hit[1]
+        v = o.get("net_usd_per_hour") if RN1_NET_RANK else \
+            o.get("usd_per_hour")
+        return float(v or 0.0) > 0 and \
+            float(o.get("per_dollar_hour") or 0.0) > 0
+
+    def _lf_note(self, kind: str, key: Any, **kw: Any) -> None:
+        seen = getattr(self, "_lf_logged", None)
+        if seen is None:
+            seen = self._lf_logged = {}
+        k = json.dumps(key, sort_keys=True, default=str)
+        if seen.get(kind) != k:
+            seen[kind] = k
+            log(kind, **kw)
+
+    def _lf_could_select(self, slug: str, acct: Mapping[str, Any]) -> bool:
+        """The side-effect-free preconditions of _try_select, so a market
+        is never released for a candidate that could not take its slot."""
+        if self.foreign_exposure(slug, acct):
+            return False
+        ek = event_key(slug)
+        if any(s_ != slug and event_key(s_) == ek for s_ in self.active()):
+            return False
+        spec = self.v.spec(slug)
+        bbo = self.v.bbo(slug) if spec else None
+        return bool(spec and bbo and open_prices(
+            bbo["bid"], bbo["ask"], spec["tick"]) is not None)
+
+    def _lf_yield_one(self, cand: str) -> Optional[str]:
+        """Release ONE flat distant market for a live/near candidate (see
+        RN1_LIVE_FIRST). Flat = no contracts on either side and no
+        completion bid resting. Its opening/extension bids are cancelled
+        through _cancel_legs; it is released only if it is still flat with
+        nothing open afterwards (a fill that raced the cancel keeps it,
+        managed as any market holding inventory). Returns the slug
+        released, or None."""
+        now = time.time()
+        pool = []
+        for s_, m_ in (self.b.d.get("markets") or {}).items():
+            if m_.get("done") or self.live_first_class(s_, now) != "distant":
+                continue
+            try:
+                if D(str(m_["pos"]["YES"])) != 0 or \
+                        D(str(m_["pos"]["NO"])) != 0:
+                    continue
+            except Exception:                             # noqa: BLE001
+                continue
+            opn = [(oid, o) for oid, o in (m_.get("orders") or {}).items()
+                   if o.get("open")]
+            if any(is_completion_stage(o.get("stage")) for _i, o in opn):
+                continue
+            hit = (getattr(self, "_share_cache", None) or {}).get(s_)
+            pdh = float(((hit or (0, {}))[1]).get("per_dollar_hour") or 0.0)
+            sc = self.live_first_info(s_, pdh, now)["score"] if pdh > 0 \
+                else pdh
+            pool.append((sc, s_, opn))
+        if not pool:
+            return None
+        pool.sort(key=lambda x: (x[0], x[1]))
+        _sc, slug, opn = pool[0]
+        mk = self.b.m(slug)
+        try:
+            self._cancel_legs(slug, opn)
+        except Exception as exc:                          # noqa: BLE001
+            log("live_first_yield_error", slug=slug, for_slug=cand,
+                err=str(exc)[:160])
+            return None
+        if D(str(mk["pos"]["YES"])) != 0 or D(str(mk["pos"]["NO"])) != 0 \
+                or any(o.get("open") for o in mk["orders"].values()):
+            log("live_first_yield_kept", slug=slug, for_slug=cand,
+                pos=mk["pos"], label="a fill raced the cancel or an order "
+                                     "is still open: market kept")
+            return None
+        mk["done"] = True
+        mk["released_flat"] = now
+        mk.pop("idle_since", None)
+        self.b.save()
+        log("released_flat_market", slug=slug, pos=mk["pos"], mode="rn1",
+            why="live_first_yield", for_slug=cand,
+            cancelled=len(opn), reselectable=RN1_RESELECT,
+            label="flat distant pre-game market yields its slot to a "
+                  "live/near-start market with a positive estimate")
+        return slug
+
+    def slot_gate(self, slug: str, acct: Mapping[str, Any]) -> bool:
+        """RN1_LIVE_FIRST / RN1_SELECT_NO_CHURN: may `slug` be selected
+        now? Off (both flags) this is never called."""
+        claim = self.slot_claimants()
+        cls_ = self.live_first_class(slug) if RN1_LIVE_FIRST else None
+        if RN1_LIVE_FIRST and cls_ == "distant":
+            dist = [s_ for s_ in claim
+                    if self.live_first_class(s_) == "distant"]
+            if len(dist) >= max(0, RN1_DISTANT_MAX_SLOTS):
+                self._lf_note("RN1_LIVE_FIRST_DISTANT_CAP", sorted(dist),
+                              distant=sorted(dist),
+                              max_slots=RN1_DISTANT_MAX_SLOTS,
+                              label="distant pre-game markets already "
+                                    "claim their maximum slots")
+                return False
+        if len(claim) < MAX_MARKETS:
+            return True
+        if RN1_LIVE_FIRST and cls_ in ("live", "near") and \
+                self._lf_positive(slug) and \
+                self._lf_could_select(slug, acct):
+            if self._lf_yield_one(slug) is not None and \
+                    len(self.slot_claimants()) < MAX_MARKETS:
+                return True
+        if RN1_SELECT_NO_CHURN:
+            self._lf_note("RN1_SELECT_NO_CHURN", sorted(claim),
+                          claimants=sorted(claim), max_markets=MAX_MARKETS,
+                          label="every slot is held by a market that "
+                                "cannot be released: nothing selected")
+            return False
+        return True
+
     def rank_by_reward_share(self, scored: list,
                              rn1_rw: Mapping[str, Any]) -> list:
         """See RN1_RANK_SHARE. Order: programme markets with a positive
@@ -7069,6 +7267,9 @@ class Engine:
             if not hit or nowm - hit[0] > RANK_SHARE_TTL_S:
                 return (1, -float(rn1_rw[slug]["pool_rate_usd_s"]))
             v = float(hit[1].get("per_dollar_hour") or 0.0)
+            if RN1_LIVE_FIRST and v > 0:
+                lf = self.live_first_info(slug, v)
+                return (0, -lf["score"], lf["rank"])
             if RN1_DURATION_RANK and v > 0:
                 v *= dur(slug)
             return (0, -v) if v > 0 else (2, 0.0)
@@ -7095,7 +7296,10 @@ class Engine:
                         "capital_usd": o.get("capital_usd"),
                         "why": o.get("why"),
                         **({"duration_factor": round(dur(s_), 4)}
-                           if RN1_DURATION_RANK else {})}
+                           if RN1_DURATION_RANK else {}),
+                        **({"live_first": self.live_first_info(
+                            s_, float(o.get("per_dollar_hour") or 0.0))}
+                           if RN1_LIVE_FIRST else {})}
                        for s_, o in top],
                 label="THEORETICAL reward of our own quote per dollar "
                       "committed; ranking only, not a payment")
@@ -7217,7 +7421,10 @@ class Engine:
             return
         if self.b.total_unmatched() >= TOTAL_CAP:
             return
-        if self.full():
+        if self.full() and not (RN1.ON and RN1_LIVE_FIRST and
+                                len(self.active()) < MAX_TRACKED):
+            # RN1_LIVE_FIRST: full slots may still yield to a live or
+            # near-start candidate (slot_gate); the tracked bound holds
             return
         try:
             targets = self.slate_targets()
@@ -7384,7 +7591,16 @@ class Engine:
             return                     # no rewarded market in band right now
         for _sp, _c, slug in scored:
             if self.full():
-                break
+                if not (RN1.ON and RN1_LIVE_FIRST) or \
+                        len(self.active()) >= MAX_TRACKED:
+                    break
+                # RN1_LIVE_FIRST: only a yield can make room
+                if self.slot_gate(slug, acct) and not self.full():
+                    self._try_select(slug, acct, rewarded.get(slug))
+                continue
+            if RN1.ON and (RN1_LIVE_FIRST or RN1_SELECT_NO_CHURN) and \
+                    not self.slot_gate(slug, acct):
+                continue
             self._try_select(slug, acct, rewarded.get(slug))
 
     def rewarded_active(self) -> int:

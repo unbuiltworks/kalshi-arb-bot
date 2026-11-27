@@ -127,3 +127,69 @@ def factor(rem: Optional[float], horizon_s: float,
 def excluded(rem: Optional[float], min_remaining_s: float) -> bool:
     """Only a KNOWN remaining time below the minimum excludes."""
     return rem is not None and min_remaining_s > 0 and rem < min_remaining_s
+
+
+# ------------------------------------------- live-first slots (2026-11-27)
+# Used only with PMUS_RN1_LIVE_FIRST=1 (default off). Pure.
+
+LIVE, NEAR, DISTANT, UNKNOWN = "live", "near", "distant", "unknown"
+#: tie-break order when two candidates score the same
+CLASS_RANK = {LIVE: 0, NEAR: 1, UNKNOWN: 2, DISTANT: 3}
+
+
+def start_class(now: float, game_start: Optional[float], listed_live: bool,
+                near_s: float) -> str:
+    """live     the venue lists the market live, or its start has passed
+                (the same answer the bot's event_live gives a market with a
+                start time);
+       near     scheduled start within `near_s` seconds;
+       distant  scheduled start further away;
+       unknown  no scheduled start on record (never capped as distant,
+                never preempts)."""
+    if listed_live:
+        return LIVE
+    if game_start is None:
+        return UNKNOWN
+    gs = float(game_start)
+    if now >= gs:
+        return LIVE
+    return NEAR if gs - now <= float(near_s) else DISTANT
+
+
+def turnover(rem: Optional[float], horizon_s: float,
+             unknown_factor: float) -> float:
+    """Capital-turnover factor min(1, horizon / time_to_settlement), with
+    the remaining quoting time to the late cut-off standing in for the time
+    to settlement (capital committed here is tied until then). Unknown ->
+    the fixed conservative factor; ended (0) -> 0."""
+    if rem is None:
+        return max(0.0, min(1.0, float(unknown_factor)))
+    if rem <= 0:
+        return 0.0
+    if horizon_s <= 0:
+        return 1.0
+    return min(1.0, float(horizon_s) / float(rem))
+
+
+def live_first_score(per_dollar_hour: float, rem: Optional[float],
+                     horizon_s: float, unknown_factor: float) -> float:
+    """Expected net value per dollar of capital-time over the horizon:
+
+        value         = net_usd_per_hour * min(R, H) / 3600
+        capital_time  = C * R / H     (capital tied until settlement, in
+                                       horizons)
+        score         = value / capital_time
+                      = (net / C) * (H / 3600) * min(1, H / R)
+
+    i.e. per_dollar_hour x hours in the horizon x turnover(R). R = remaining
+    quoting time (proxy for time to settlement), H = horizon, C = capital
+    at the quote. A market that settles within the horizon frees its
+    capital for reuse, so its short life is not penalised (the minimum-
+    remaining exclusion handles markets about to end); one that settles
+    later is divided by the extra capital-time it ties up. Non-positive
+    estimates are returned unchanged (never boosted)."""
+    if per_dollar_hour <= 0:
+        return float(per_dollar_hour)
+    hours = (float(horizon_s) / 3600.0) if horizon_s > 0 else 1.0
+    return float(per_dollar_hour) * hours * turnover(rem, horizon_s,
+                                                     unknown_factor)
