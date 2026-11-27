@@ -2505,3 +2505,19 @@ the exact three-hour live authorization packet for sports release
   and the bot fails closed until it does (`stale_blocks_new`).
 - **Reports scheduled:** 14:46, 15:46, 16:47 (window close) and 18:47
   (close-out, lock back to `1`).
+
+## 77. Directional allocation release candidate prepared; not authorized — 27 Nov 2026, about 14:15 UTC
+
+- **Branches:**
+  - `dev/pmus-directional-allocation` (`f185c712b`);
+  - disarmed release candidate `release/pmus-sports-directional-996f45a9a`
+    (`996f45a9a9ce233f8b74f5df011a765ac9384404`), built on the deployed
+    `a51cfdbd2`.
+- **Flag:** `PMUS_RN1_DIRECTIONAL` defaults to `0`. With it off, behaviour is
+  that of `a51cfdbd2`. Regression failure names are identical (26
+  pre-existing); 28 new tests pass.
+- **Not deployed.** The running campaign on `a51cfdbd2` was not touched.
+- **Evidence and economics:**
+  `analysis/l5/sports/directional/DIRECTIONAL_ALLOCATION_20261127.md` on the
+  dev branch; the live-fill study is in `analysis/l5/sports/adverse/`.
+- Activation needs separate owner authorization.
