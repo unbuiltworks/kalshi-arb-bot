@@ -2447,3 +2447,45 @@ the exact three-hour live authorization packet for sports release
 ## 76. Corrected release a51cfdbd2 authorized; latch acknowledgment conditional — 27 Nov 2026, about 12:58 UTC
 
 **Owner (verbatim):** "I explicitly authorize deployment of corrected sports release a51cfdbd2c1b0a16dacce93e9b089c8caf4c9183 under the existing Revision 1 authorization terms. Keep the submission lock held throughout deployment and verification. I authorize acknowledgment of safety latch 2026-11-27T12:48:22.780628+00:00 only after confirming: The actual deployed image contains all required modules. All activated controller paths initialize successfully. At least five minutes of healthy runtime without loop or import errors. Fresh venue reconciliation with zero open orders and positions. Account risk is readable and the remaining lifetime allowance supports the $8 campaign stop. The independent watchdog is healthy. After verification, record the exact UTC timestamps and arm one three-hour campaign beginning at the next quarter hour, followed by two hours of completions-only grace. All existing Revision 1 limits and protections remain unchanged. Maker-only, two accumulation markets, $8 campaign loss stop, crypto disarmed and no automatic repeat. If verification fails, remain locked and roll back. Add actual Docker image import and startup verification to the permanent release checklist. Proceed immediately. No additional strategy changes or unrelated development."
+
+### 76a. a51cfdbd2 verified; latch acknowledged; window recorded before arming — 27 Nov 2026, 13:35 UTC
+
+- **Deployment:** `6f8b81ce` (`a51cfdbd2`), live 13:27:57; boot 13:28:02
+  with lock `locked`. Boot shows `rn1_duration_rank`, `economics_report`,
+  fill rate 4.0/1.5, fill loss 0.089 and `0.042,atp:0.063,atpdb:0.06,wtadb:0.06`,
+  and max markets 2.
+- **Modules in the image:**
+  - Built locally from `a51cfdbd2`. Local build only: a CA and proxy were
+    added for pip; the COPY set is identical.
+  - All 61 `src` modules import inside the image with the activated flags,
+    with no failures. `pmus_duration_rank`, `pmus_reward_calibration` and
+    `pmus_campaign_economics` are all present.
+  - In production, the same call site that raised ImportError on every
+    `1c1d546b6` pass ran cleanly from 13:28.
+- **Controller paths:**
+  - `REWARD_CALIBRATION` 13:30:05 ok.
+  - `CAMPAIGN_ECONOMICS` 13:31:44 ok.
+  - Selection with live-first and duration rank ran each pass, active 2.
+  - `PILOT_PNL` 13:31:44 shows `loss_stop_usd` 8.
+  - `ACCOUNT_AUDIT` complete.
+  - No `loop_error`, ImportError, Traceback, `gate_error` or
+    `market_error` from 13:28:02 to 13:35. That is over five minutes, the
+    loop was never stalled, and there was no new latch. The combo maker is
+    shadow only (`mode_shadow`, nothing sent).
+- **Venue reconcile 13:31:43:** ok, 0 positions, 0 open orders, 0
+  mismatches.
+- **Account risk 13:28:05:** readable. Lifetime −66.8569, ceiling 75,
+  `loss_room_usd` 8.1431, which is at least the $8 campaign stop with
+  resting, in-flight and uncertain orders counted (§75). Drawdown 6.4098 of
+  20.
+- **Ledger 13:34:06:** unresolved 0, unattributed 0, cash 306.0004.
+- **Watchdog 13:34:33:** 0 open orders, cancel enabled, all registries OK.
+- **Latch:** acknowledged per §76:
+  `PMUS_TWO_SIDED_SAFETY_LATCH_ACK=2026-11-27T12:48:22.780628+00:00`.
+- **Campaign window (one only, no repeat):**
+  - start **2026-11-27T13:45:00Z**;
+  - end **2026-11-27T16:45:00Z**;
+  - completions-only grace end **2026-11-27T18:45:00Z** (7,200 s).
+  - Lock value: `window:2026-11-27T13:45:00Z/2026-11-27T16:45:00Z`.
+- **Limits:** Revision 1 unchanged: two markets, maker-only, $8 campaign
+  stop, $75 lifetime ceiling, esports and cricket off, crypto disarmed.
