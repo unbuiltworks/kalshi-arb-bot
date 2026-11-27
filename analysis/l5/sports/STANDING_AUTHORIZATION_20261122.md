@@ -2677,3 +2677,39 @@ packet for approval. Do not deploy or arm until explicitly authorized."
 - **Packet:** `analysis/l5/sports/RELEASE_PACKET_8373069fe_20261127.md`.
   Report tool: `analysis/l5/sports/campaign_report.py`.
 - **Not deployed or armed.**
+
+## 82. Next campaign on a51cfdbd2 prepared; awaiting authorization — 27 Nov 2026, about 20:10 UTC
+
+**Owner (verbatim, excerpt):** "Prepare the next three-hour live sports
+campaign using deployed SHA a51cfdbd2. [...] Present the exact live
+authorization packet. Once explicitly approved, execute the campaign and
+reconcile venue-confirmed fills, settlements, fees, liquidity rewards and
+rebates."
+
+**Verified independently (20:06Z):**
+- deployment `0c3d98b6` = `a51cfdbd2`, lock `why: locked`;
+- latch null; loop healthy; WS connected;
+- watchdog 19:59 with 0 open orders, all registries OK;
+- INVENTORY_RECONCILE 19:27: ok, 0 positions, 0 mismatches, open unmatched
+  $0;
+- ACCOUNT_RISK: lifetime −$66.6294 against a $75.00 ceiling, so room
+  **$8.3706**;
+- drawdown capacity $13.8177; account daily halt $50 (day −$5.6356).
+
+**The binding figure is the lifetime room, not the drawdown capacity.** The
+$8 campaign stop (counting resting, in-flight and uncertain orders) fits
+with $0.37 to spare.
+
+**Only change at arming:**
+`PMUS_TWO_SIDED_SUBMISSION_LOCK=window:<START>/<START+3h>`, with the
+existing 7,200 s completion grace.
+
+**Known a51 limitations, not fixable without new code:**
+- the reward minimum is tested per market (98.5% below the minimum last
+  campaign);
+- touch EV credits reward without the minimum.
+
+`8373069fe` corrects these and remains available, but is not part of this
+campaign.
+
+Not armed.
