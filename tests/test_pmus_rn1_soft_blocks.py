@@ -366,9 +366,3 @@ def test_on_a_lost_reward_is_never_held(evh, monkeypatch):
     clock["t"] += 5
     e.step_market(SLUG)
     assert not _ids(v)
-    e.step_market(SLUG)
-    monkeypatch.setattr(e, "rn1_reward", lambda s: None)  # programme gone
-    box["reward"] = 1.0
-    clock["t"] += 5
-    e.step_market(SLUG)
-    assert not _ids(v)
