@@ -439,3 +439,217 @@ pre-game). Elsewhere it rests behind, as today.
 - Enabled-mode failures of pre-existing tests are classified above; none is
   a safety failure. Their fixtures encode the old placement or the 0.5
   credit.
+
+## 10. Final test verification under the full activation config (27 Nov)
+
+Tests and read-only log reads only. `src/` unchanged (`git diff a17a9c978 8e6366786 -- src` is empty).
+Test changes: branch `dev/pmus-next-final-tests`, commit `8e6366786` (on the
+release candidate `a17a9c978`).
+
+"Activation config" below = section 7 exactly: `PMUS_RN1_MARGINAL_EV=1`
+`_MARGINAL_EV_NO_FAIR=1` `_FIT_ALL_LEVELS=1` `_EDGE_GATE=0`
+`_SLOTS_COUNT_INVENTORY=0` `_LIVE_FIRST=1` `_SELECT_NO_CHURN=1`
+`_DURATION_RANK=1` `PMUS_ECONOMICS_REPORT=1` `_TOUCH_EV=1`
+`_REWARD_CALIBRATION=1` `_REWARD_CALIBRATION_TABLE=*:0.4`
+`_SIDE_INDEPENDENT=1` `_EV_HOLD=1` `_NET_REPOST_MIN_S=120`
+`_FILL_LOSS_TOUCH=0.089`
+`_FILL_LOSS_BEHIND=0.042,atp:0.063,atpdb:0.06,wtadb:0.06`
+`_FILL_RATE_TOUCH=4.0` `_FILL_RATE_BEHIND=1.5`.
+
+### 10.1 Enabled-mode safety fixture
+
+**Why it failed.** On `a17a9c978` with the activation config,
+`tests/test_pmus_enabled_mode_safety.py` gave 43 failed / 13 passed (not
+35: section 5's run did not include the fill-loss and fill-rate settings).
+The calibration (0.4 instead of 0.5) is only part of the cause. The bigger
+part is the fill cost. At qty 2 a bid 1–3 ticks behind costs
+1.5 × 2 × (0.042 + concentration charge) = $0.126 / 0.156 / 0.186 per hour.
+The "doubles" programme credits each bid $0.02–0.03/h after 0.4, so no bid
+rests. Scaling the pool by 0.5/0.4 still leaves 43 failures.
+
+**Fix (tests only).** New default profile `doubles_live` in
+`tests/pmus_enabled_mode.py`:
+
+- **Programme:** the venue's published live doubles programme
+  (`doubles_moneyline_live_20261018`: $70 over the 3 h live period,
+  i.e. $23.3/h for the market, the same pool, period and period_s as the
+  `reward_program` log lines).
+- **Book:** thin, 3 contracts a level. The distance factor (0.8) and target
+  (100) are the fixture's own.
+- **Magnitudes (THEORETICAL), all inside what was observed live:**
+  - a qty-2 bid each side one tick behind: $2.25/h two-sided;
+  - 10 contracts at each touch: $9.3/h;
+  - the full 6-bid ladder: $4.8/h;
+  - observed for comparison: $9.43/h for `atpdb-alvvalflores-alvesperez`
+    (26 Nov, qty 2, one behind) and $0.74–0.97/h for delanedelane.
+
+  A new test pins these bounds.
+- **Per bid, after 0.4:** $0.34 / 0.27 / 0.21 per hour for levels 1–3, each
+  above its own fill cost and under the module's existing "< $0.5/h per
+  bid" realism assertion.
+- **Why the programme's own distance factor is not used:** with 0.3 (or any
+  factor up to the highest published, 0.5), a bid three ticks behind cannot
+  clear $0.186/h unless the one-behind bid is credited above $0.5/h. That
+  breaks the module's realism assertion. A full 3-level ladder at these fill
+  costs needs a distance factor of about 0.61 or more. So in reality, under
+  the activation config, deep levels in df ≤ 0.5 programmes will mostly be
+  refused per bid. This is expected economics, not a defect.
+- **One test changed: the standing-start "projects only what would rest"
+  test.** It now sizes its pool from the engine's own multiplier, so the
+  one-level ladder projects below $1 and the full ladder projects at or
+  above $1 in both modes. It also asserts the second half. The precondition
+  uses the engine's own projection formula: ×1.0 with calibration off, the
+  same as before.
+- **The profile documentation test** now accepts the new profile. No
+  assertion was weakened.
+
+**Result.**
+
+| Run | Result |
+|---|---|
+| Safety module, activation config | **57 passed** (was 43 failed / 13 passed) |
+| Safety module, flags off | **57 passed** |
+
+Every scenario placed real orders under the activation config, counted with
+a `FakeVenue.place` probe. The 11 tests with no opening placement are the
+ones that must place nothing:
+
+- the flag check;
+- no programme;
+- the two profile-magnitude checks;
+- thin below the minimum payout, ×2;
+- the standing start ×2 that must not credit;
+- not paying;
+- the documentation test;
+- the two direct final-gate loss-stop tests. These call `place()` and assert
+  the refusal, and their completion is placed.
+
+Scenarios covered under the activation config:
+
+- loss stops: campaign, daily and the resting worst case;
+- simultaneous fills, on several levels and on both ladders;
+- every cap: per market, residual, campaign unmatched and spend, account
+  lane, at-risk, the fit-all-levels size-down;
+- replenishment: cooldown, re-pricing, reward still needed, stop at the
+  unpaired cap;
+- window and locks: before the window, the deadline, completions-only grace,
+  lock=1;
+- latch, run-loop latch, operator halt, stale watchdog;
+- reward feed loss: programme gone, period ended, projection, book read and
+  refresh read failing, stale cache, a completion surviving;
+- restart: fills booked once, latch survives, late fill latches;
+- fill-list reconciliation and the cancel race.
+
+Inventory-only markets with `SLOTS_COUNT_INVENTORY=0` and uncertain
+submissions are covered in `test_pmus_rn1_aggregate_limits.py`, which
+passes under the activation config.
+
+### 10.2 Targeted suites (`tests/test_pmus_*.py`)
+
+| Run | Result |
+|---|---|
+| Flags off, `8e6366786` | 6 failed, 2,703 passed, 1 skipped. The 6 are the pre-existing `test_pmus_spring_probe_readiness.py` failures; 2,703 = 2,702 + 1 new test. Parity holds. |
+| Activation config, `a17a9c978` (old fixture) | 212 failed, 2,489 passed, 7 errors |
+| Activation config, `8e6366786` | **57 failed**, 2,651 passed, 1 skipped |
+
+**No safety failure.** Where a failing test involved a cap, the resting book
+was checked directly: the cap held. The 57 failures by cause:
+
+| n | Cause | Tests | Why it is not a safety failure |
+|---|---|---|---|
+| 6 | Pre-existing (they also fail with flags off) | `spring_probe_readiness` ×6 | Date-based evidence gate |
+| 15 | Flag-state assertions: the test asserts the flags-off default or the old flag value | `campaign_economics` off-by-default; `duration_rank` off ×3; `live_first_slots` default-off, off-churn, off-gate; `accumulation` by-default slot (`SLOTS_COUNT_INVENTORY=0`); `live_first_slots` no-churn ×2 (inventory-only markets free their slots, by design); `marginal_ev` default-drops-dearest, off-non-positive, off-unqualified-release; `mev_no_fair` off-not-judged; `marginal_ev` skips-a-level (first assert expects `FIT_ALL_LEVELS` off) | Each asserts behaviour that a flag in the activation config deliberately changes |
+| 4 | `FIT_ALL_LEVELS` sizes a level down inside the cap instead of dropping it | `marginal_ev` keeps-dearest, fit-sizes-down; `mev_no_fair` campaign-cap-unchanged; `accumulation` campaign-unmatched-cap (new with the new fixture) | Unmatched worst case 1.88 ≤ 1.90 (NO sized 4→3); in accumulation, a 1-contract opening per side gives a campaign unmatched worst case of 5.92 ≤ 6.00 |
+| 18 | Deeper levels refused at the activation fill costs (fewer bids), or legacy one-decision touch/join placement under touch EV | `rn1_ladder` ×12 (incl. the worst-case/loss-stop and threatened-pull tests, which stop at their 6-bid precondition, "4 == 6"); `marginal_ev` each-level/size-down ×2; `mev_no_fair` deeper-levels; `continuous_controller` join-at-touch, share-score one-behind; `net_rank` prefers-one-behind | Fewer or deeper bids only. The same protections pass on a full ladder in the enabled-mode safety module |
+| 7 | Per-bid marginal EV takes over from the market-level net/qualification block or release, as designed (`mev_pass` skips the unqualified release; section 4b.1) | `rn1_ladder` stops-qualifying-released; `ladder_score` without-hold, after-hold; `net_rank` flat-no-positive-net, holding-inventory-stops-replenishing (the first and the flat-no-positive-net test are new with the new fixture: before, the reward was too small for any bid to pass, so the legacy block appeared to act) | A bid stays only when its own qualifying reward beats its fill cost. Losing the reward itself withdraws bids at once (safety module, reward feed loss, 7 tests pass) |
+| 2 | Calibration 0.4 | `profit_first` credit-only-when-projected (projection × 0.4 below $1); `net_rank` smallest-size | Smaller credit |
+| 1 | Repost hysteresis 120 s | `mev_no_fair` market-level block when nothing passes | Delays reposting a positive bid only |
+| 3 | Pregame market with a live programme (no paying period, so no reward, so nothing rests; with the old daily fixture the reward was below the fill cost, with the same result) | `continuous_controller` pregame-size, by-phase counters ×2 | Fails closed: fewer orders |
+| 1 | Test double: the fake `IA.earnings` lambda does not accept `detail_max`, which `reward_check` passes when `ECONOMICS_REPORT` or `REWARD_CALIBRATION` is on | `two_sided` reward-check | Read-only report; it logs `ok: false` and returns |
+
+Total 57.
+
+**Release candidate rebuild.** The test changes are tests only
+(`tests/pmus_enabled_mode.py`, `tests/conftest.py`,
+`tests/test_pmus_enabled_mode_safety.py`); `src/` is byte-identical.
+The deployed behaviour of `a17a9c978` does not change. Rebuilding is
+recommended only so that the release's own enabled-mode safety evidence
+runs green under the activation config: `a17a9c978` + `8e6366786`, tests
+only. It is not required for runtime safety.
+
+### 10.3 Reward pool scope ("is the pool per market?")
+
+Read-only: REWARD_CHECK `rows_brief` (89 unique market-day rows recovered,
+14–25 Nov), `reward_program` log lines (pool, period, period_s, targetSize,
+program_id), the order/fill archive
+`analysis/l5/rewards/sports_orders_fills_20261114_20261118.json.gz`, and
+the programme definitions `pmus_liquidity_programs_20261121.json`. The
+venue's page (docs.polymarket.us/incentives/liquidity.md) does not say
+whether `rewardPool` is per market. It says each period's pool is spread
+over every second of the period, each side normalised to 1.0 per snapshot,
+and that "Live" runs "from event start until settlement" (a per-event
+window).
+
+**18 Nov table tennis** (programme `table_tennis_moneyline_live`, $17 live
+pool on the 21 Nov schedule, about 100 markets). Venue rows, all PAID,
+against our quoting time (first to last order, qty 5, most orders filled
+within the window):
+
+| Market | Quoting window | Row | Implied rate |
+|---|---|---|---|
+| setkameua-khevse-helval | ≤ 4.0 min (4 orders, 3 filled) | $3.40 | ≥ $51/h |
+| setkamemd-ciumir-melvla | ≤ 2.7 min | $1.88 | ≥ $42/h |
+| setkameua-zhavit-sukiho | 1.4 min | $0.74 | |
+| setkameua-kotand-lipole | 0.3 min | $0.47 | |
+| setkameua-stemak-yakste | 1.4 min | $0.37 | |
+
+Six more markets paid $0.01–0.25 (11 rows, $7.42 in total). About 20
+other Setka markets we quoted that day have no row.
+
+- **Shared pool reading.** If the $17 pool were shared by the programme's
+  markets and spread over its live seconds (every match of the day, many
+  hours), the whole programme pays at most a few dollars an hour. One
+  market could not pay us ≥ $51/h, and five markets could not pay us $6.86
+  in under 10 minutes in total.
+- **Per-market reading.** A $17 pool per market over a short Setka live
+  window (about 20–40 min, so $25–50/h), with us as the dominant qualifying
+  maker in a thin book, fits these amounts.
+- **Programme-day totals** never exceed one programme pool ($7.42 < $17).
+  So the "capped by one pool" form of the shared hypothesis is not directly
+  violated: the test is the per-second rate, not the daily sum.
+
+**25 Nov doubles** (`atpdb-delanedelane-falcksuarez`, PENDING $0.59 against
+$1.24 per-market theory, ratio 0.48).
+
+- Logged programme: `doubles_moneyline_day_of`, $10 over 6 h, 23 markets.
+  Shared across those markets, theory would be about $0.05, and the venue
+  would have paid about 11 times the theoretical maximum.
+- With the other 25 Nov rows (0.42 overall), the measured ratio is only
+  consistent with a per-market pool.
+
+**Not usable.** The 21 Nov esports rows (valorant ele-tse / w7m-man $0.02
+SKIPPED against est_share about 0.3 of an $80 pool). The logs show every
+placement in that window refused by the submission lock
+(`place_refused_submission_lock`), so those estimates are for quotes that
+never rested.
+
+**Conclusion: the pool is per market (each market has its own `rewardPool`
+for each of its periods). Medium-high confidence.**
+
+- Two independent sources agree: the Setka per-second rates and the
+  doubles ratio.
+- Caveats: the 18 Nov pools are taken from the 21 Nov schedule; the
+  resting time is bounded by order timestamps (no cancel records in the
+  archive); every 25 Nov row is still PENDING.
+
+**Implication for the setting:**
+
+- Keep `PMUS_RN1_REWARD_POOL_SCOPE=market` (the default; divisor 1).
+  `program` (or `event`) would divide every credit by about 20–100 against
+  this evidence, and on top of the measured 0.4 it would count the scope
+  twice.
+- Side observation, no change made: for short events, `period_s` = 3 h
+  (`LIVE_HOURS_DEFAULT`) understates the per-second rate of a live pool,
+  because the venue spreads it over the event's actual live window. That
+  biases theoretical rewards low for short matches, and the calibration
+  ratio partly absorbs it.
