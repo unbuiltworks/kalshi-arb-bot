@@ -5,10 +5,12 @@ heavier side's extensions were removed by a market-level block.
 * net_not_positive: with PMUS_RN1_MARGINAL_EV(=1, _NO_FAIR=1) the block is
   decided per bid -- a same-side extension that passes its own marginal EV
   rests while the market estimate is <= 0.
-* max_markets: PMUS_RN1_EXTEND_THROUGH_SLOTS=1 (with
-  PMUS_RN1_SLOTS_COUNT_INVENTORY=0 and marginal EV) lets a market that
-  holds inventory keep extending its heavier side when every slot is held
-  elsewhere; openings still wait for a slot.
+* max_markets: an inventory-only market frees its slot with
+  PMUS_RN1_SLOTS_COUNT_INVENTORY=0 and must hold one again to add
+  same-side inventory (owner 2026-11-27: no bypass of quoting limits).
+* PMUS_RN1_EV_HOLD: a resting bid is kept through a brief dip only if
+  its EV over the bounded hold plus the saved cancel/replace cost is >= 0;
+  a new bid with EV <= 0 is never posted.
 * NET_HOLD flip churn: PMUS_RN1_NET_REPOST_MIN_S hysteresis.
 * Slot counting (max_markets anomaly): what counts, from code.
 Hard blocks still strip everything except completions.
@@ -34,7 +36,7 @@ def sb(eng, monkeypatch):
     for name in ("RN1_TOUCH_EV", "RN1_REWARD_CALIBRATION", "RN1_MARGINAL_EV",
                  "RN1_MARGINAL_EV_NO_FAIR", "RN1_FIT_ALL_LEVELS",
                  "RN1_NET_RANK", "RN1_JOIN_TOUCH", "RN1_SIDE_INDEPENDENT",
-                 "RN1_EXTEND_THROUGH_SLOTS"):
+                 "RN1_EV_HOLD"):
         monkeypatch.setattr(M, name, False)
     monkeypatch.setattr(M, "RN1_NET_REPOST_MIN_S", 0.0)
     monkeypatch.setattr(M, "RN1_NET_HOLD_S", 0.0)
@@ -120,87 +122,153 @@ def test_with_marginal_ev_an_extension_failing_its_ev_does_not(
     assert [r for r in resting(v) if r[0] == "NO"]          # completion
 
 
-# ---------------------------------------------------------- max_markets
+# ------------------------------------------- max_markets (owner 2026-11-27)
+# An inventory-only market (completion bid only) frees its slot with
+# PMUS_RN1_SLOTS_COUNT_INVENTORY=0; the moment it wants to add same-side
+# inventory it must hold a slot again, counted against MAX_MARKETS like any
+# opening. Unchanged code; these tests pin it.
 @pytest.fixture
 def slots(sb, monkeypatch):
     e, v = sb
     monkeypatch.setattr(M, "MAX_MARKETS", 1)
     monkeypatch.setattr(M, "RN1_SLOTS_COUNT_INVENTORY", False)
     _economics_on(e, monkeypatch)
-    _slot_holder_elsewhere(e)
     return e, v
 
 
-def test_off_full_slots_strip_a_held_markets_extension(slots):
+def test_an_inventory_only_market_frees_its_slot(slots):
     e, v = slots
+    mk = _hold_yes(e)
+    mk["orders"]["c1"] = {"side": "NO", "px": "0.49", "qty": "2",
+                          "filled": "0", "open": True,
+                          "stage": "two_sided_complete",
+                          "placed_at": time.time()}
+    assert not e._rn1_slot_holder(mk)
+    assert e.rn1_market_slots_full(OTHER, e.b.m(OTHER)) is False
+
+
+def test_an_extension_needs_a_slot_when_slots_are_full(slots):
+    e, v = slots
+    _slot_holder_elsewhere(e)
     _hold_yes(e)
     e.step_market(SLUG)
-    assert [r for r in resting(v) if r[0] == "YES"] == []
+    assert [r for r in resting(v) if r[0] == "YES"] == []   # no slot
     assert [r for r in resting(v) if r[0] == "NO"]          # completion
 
 
-def test_on_a_held_market_extends_its_heavier_side_through_full_slots(
-        slots, monkeypatch):
+def test_an_extension_takes_a_free_slot_and_then_holds_it(slots):
     e, v = slots
-    monkeypatch.setattr(M, "RN1_EXTEND_THROUGH_SLOTS", True)
     mk = _hold_yes(e)
     e.step_market(SLUG)
-    assert ("YES", "0.47", "2") in resting(v)
-    assert [r for r in resting(v) if r[0] == "NO"]          # completion
-    stages = {o["stage"] for o in mk["orders"].values() if o.get("open")}
-    assert stages == {"rn1_extend", "two_sided_complete"}
-    # its extension is inventory management, not a slot
-    assert not e._rn1_slot_holder(mk)
-    assert e._rn1_slot_holder(e.b.m(OTHER))
+    assert ("YES", "0.47", "2") in resting(v)               # slot taken
+    assert e._rn1_slot_holder(mk)
+    # a flat market now finds the only slot held and rests nothing
+    e.b.m(OTHER)
+    e.step_market(OTHER)
+    assert [o for o in v.orders.values()
+            if o["slug"] == OTHER and o["open"]] == []
 
 
-def test_on_lighter_side_openings_behind_a_completion_still_wait(
-        slots, monkeypatch):
+def test_two_inventory_markets_cannot_both_extend_into_one_slot(slots):
     e, v = slots
-    monkeypatch.setattr(M, "RN1_EXTEND_THROUGH_SLOTS", True)
-    monkeypatch.setattr(M, "RN1_LADDER_LEVELS", 3)
-    monkeypatch.setattr(M, "RN1_LADDER_STEP_TICKS", 2)
-    mk = _hold_yes(e)
+    _hold_yes(e)
+    _hold_yes(e, OTHER)
     e.step_market(SLUG)
-    for o in mk["orders"].values():
-        if o.get("open") and o["side"] == "NO":
-            assert o["stage"] == "two_sided_complete"
-    assert any(o.get("open") and o["side"] == "YES" and
-               o["stage"] == "rn1_extend" for o in mk["orders"].values())
+    e.step_market(OTHER)
+    ext = {o["slug"] for o in v.orders.values()
+           if o["open"] and o["side"] == "YES"}
+    assert ext == {SLUG}
+    assert [o for o in v.orders.values() if o["open"] and
+            o["slug"] == OTHER and o["side"] == "NO"]        # completes
 
 
-def test_on_a_flat_market_still_waits_for_a_slot(slots, monkeypatch):
+def test_a_hard_block_strips_the_extension(slots):
     e, v = slots
-    monkeypatch.setattr(M, "RN1_EXTEND_THROUGH_SLOTS", True)
-    e.b.m(SLUG)
-    e.step_market(SLUG)
-    assert resting(v) == []
-
-
-def test_on_the_residual_cap_still_bounds_the_extension(slots, monkeypatch):
-    e, v = slots
-    monkeypatch.setattr(M, "RN1_EXTEND_THROUGH_SLOTS", True)
-    _hold_yes(e, q="6", c="2.70")                 # one more clip > $3
-    e.step_market(SLUG)
-    assert [r for r in resting(v) if r[0] == "YES"] == []
-
-
-def test_on_a_hard_block_still_strips_the_extension(slots, monkeypatch):
-    e, v = slots
-    monkeypatch.setattr(M, "RN1_EXTEND_THROUGH_SLOTS", True)
     mk = _hold_yes(e)
     mk["vol_pause_until"] = time.time() + 60
     e.step_market(SLUG)
     assert [r for r in resting(v) if r[0] == "YES"] == []
+    assert [r for r in resting(v) if r[0] == "NO"]
 
 
-def test_the_flag_needs_slots_count_inventory_off(slots, monkeypatch):
-    e, v = slots
-    monkeypatch.setattr(M, "RN1_EXTEND_THROUGH_SLOTS", True)
-    monkeypatch.setattr(M, "RN1_SLOTS_COUNT_INVENTORY", True)
-    _hold_yes(e)
+# ------------------------------------------ EV hold (owner 2026-11-27)
+@pytest.fixture
+def evh(sb, monkeypatch):
+    e, v = sb
+    box = {"reward": 1.0}
+    _economics_on(e, monkeypatch)
+    monkeypatch.setattr(RW, "marginal_ladder_reward", lambda *a: {
+        "incremental_reward_usd_per_hour": box["reward"]})
+    monkeypatch.setattr(M, "RN1_FILL_RATE", {0: {"": 1.0}, 1: {"": 1.0}})
+    monkeypatch.setattr(M, "RN1_FILL_LOSS", {0: {"": 0.05}, 1: {"": 0.05}})
+    monkeypatch.setattr(M, "RN1_EV_HOLD_MAX_S", 60.0)
+    monkeypatch.setattr(M, "RN1_REPLACE_COST_USD", 0.002)
+    clock = {"t": 4_000_000.0}
+    monkeypatch.setattr(M.time, "time", lambda: clock["t"])
+    e.b.m(SLUG)
+    return e, v, box, clock
+
+
+def _ids(v, side="YES"):
+    return {k for k, o in v.orders.items() if o["open"] and o["side"] == side}
+
+
+def test_off_a_bid_turning_negative_is_cancelled(evh):
+    e, v, box, clock = evh
     e.step_market(SLUG)
-    assert [r for r in resting(v) if r[0] == "YES"] == []
+    assert _ids(v)
+    box["reward"] = 0.05          # EV = 0.4 x 0.05 - 1 x 2 x 0.05 < 0
+    clock["t"] += 5
+    e.step_market(SLUG)
+    assert not _ids(v)
+
+
+def test_on_a_brief_shallow_dip_keeps_the_resting_bid(evh, monkeypatch):
+    """EV -0.08/h over 60 s = -0.0013 + 0.002 saved >= 0: kept, same order;
+    after the bounded window it is cancelled."""
+    e, v, box, clock = evh
+    monkeypatch.setattr(M, "RN1_EV_HOLD", True)
+    e.step_market(SLUG)
+    ids = _ids(v)
+    box["reward"] = 0.05          # 0.5 x 0.05 - 0.1 = -0.075/h
+    clock["t"] += 5
+    e.step_market(SLUG)
+    assert _ids(v) == ids                                   # kept
+    clock["t"] += 61
+    e.step_market(SLUG)
+    assert not (_ids(v) & ids)                              # bounded
+
+
+def test_on_a_deep_dip_is_cancelled_at_once(evh, monkeypatch):
+    e, v, box, clock = evh
+    monkeypatch.setattr(M, "RN1_EV_HOLD", True)
+    monkeypatch.setattr(M, "RN1_FILL_LOSS", {0: {"": 0.5}, 1: {"": 0.5}})
+    box["reward"] = 5.0
+    e.step_market(SLUG)
+    assert _ids(v)
+    box["reward"] = 0.0           # EV -1/h x 60 s = -0.0167 + 0.002 < 0
+    clock["t"] += 5
+    e.step_market(SLUG)
+    assert not _ids(v)
+
+
+def test_on_a_new_bid_with_negative_ev_is_never_posted(evh, monkeypatch):
+    e, v, box, clock = evh
+    monkeypatch.setattr(M, "RN1_EV_HOLD", True)
+    box["reward"] = 0.05
+    e.step_market(SLUG)
+    assert not _ids(v) and not _ids(v, "NO")
+
+
+def test_on_a_hard_block_still_pulls_a_held_bid(evh, monkeypatch):
+    e, v, box, clock = evh
+    monkeypatch.setattr(M, "RN1_EV_HOLD", True)
+    e.step_market(SLUG)
+    box["reward"] = 0.05
+    e.b.m(SLUG)["vol_pause_until"] = clock["t"] + 60
+    clock["t"] += 5
+    e.step_market(SLUG)
+    assert not _ids(v) and not _ids(v, "NO")
 
 
 # --------------------------------------------------- repost hysteresis
