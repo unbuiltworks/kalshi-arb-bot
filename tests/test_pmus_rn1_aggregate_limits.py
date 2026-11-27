@@ -44,6 +44,15 @@ def _doc(used, mx=str(LIMIT)):
 @pytest.fixture(params=[True, False], ids=["slots_count_inv_1",
                                            "slots_count_inv_0"])
 def z(request, tmp_path, monkeypatch):
+    # explicit: these tests hold whatever the import-time flags are
+    for name in ("RN1_TOUCH_EV", "RN1_REWARD_CALIBRATION", "RN1_MARGINAL_EV",
+                 "RN1_MARGINAL_EV_NO_FAIR", "RN1_FIT_ALL_LEVELS",
+                 "RN1_NET_RANK", "RN1_JOIN_TOUCH", "RN1_LIVE_FIRST",
+                 "RN1_DURATION_RANK", "RN1_SELECT_NO_CHURN"):
+        monkeypatch.setattr(M, name, False)
+    monkeypatch.setattr(M, "RN1_REWARD_CAL_TABLE", "")
+    monkeypatch.setattr(M, "RN1_JOIN_MAX_RANGE",
+                        {"": M.RN1_JOIN_MAX_RANGE_USD})
     monkeypatch.setattr(M, "RN1_SLOTS_COUNT_INVENTORY", request.param)
     monkeypatch.setattr(M, "RN1_TOUCH_EV", True)
     monkeypatch.setattr(R, "ON", True)
