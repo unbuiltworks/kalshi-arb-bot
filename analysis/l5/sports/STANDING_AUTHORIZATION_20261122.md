@@ -2124,3 +2124,47 @@ $24.09; PENDING 10 / $0.86.
 - account risk ok: day 0 (new UTC day), lifetime −60.99, loss room 14.01.
 
 No action needed.
+
+### 71c. Stage 1 hourly report, 01:50 UTC
+
+**Fills 00:50–01:50 (venue-reported):**
+- `setkameua-savvol-hryevh`: NO 2 @ 0.49, 2 @ 0.47, 1.19 @ 0.45 (one
+  three-level sweep at 00:57).
+- `setkameua-kuzdmy-kurole`: YES 1 @ 0.47, 1 @ 0.46.
+- `atp-timleg-karpol` (live): NO 1 @ 0.48, 1 @ 0.45, 1 @ 0.48 → 4/4 paired
+  at 0.955.
+
+**Settled:** `timleg-karpol` closed 01:44 and settled YES = 1 at 01:48.
+- Pair edge **+$0.18 realized** (4 × (1 − 0.955)); no residual.
+- PILOT_PNL realized_net +0.18.
+- Cash 311.8635 → 304.8634, explained −7.0001 (purchases), unexplained 0.
+
+**Inventory (unpaired, all Setka pregame):**
+
+| Market | Side | Contracts | Cost | Average |
+|---|---|---|---|---|
+| `kobvit` | YES | 1 | 0.48 | 0.48 |
+| `kuzdmy` | YES | 2 | 0.93 | 0.465 |
+| `paryur` | NO | 7.20 | 3.31 | 0.460 |
+| `savvol` | NO | 5.19 | 2.46 | 0.473 |
+
+Total $7.18 against the $10 campaign cap. Completion bids rest on each.
+
+**Capital:** resting $2.97; at-risk about $10.15 against $20; account
+drawdown 7.55 against $20 (unpaired counted at 0).
+
+**Reward-qualifying (pregame, cumulative):** 244,792 contract-seconds
+qualifying out of 340,141 resting. **Rewards:** PAID unchanged at
+122 / $24.09.
+
+**Block since 01:47: `ACCOUNT_RISK_SAYS_UNREADABLE`.**
+- Cause: the ledger retired the bot's settled `timleg-karpol` (venue net 0
+  after YES 4 / NO 4) at the $1 bound and lists it under
+  `unresolved_cost_basis` (count 1). As designed, the account-risk record is
+  then `readable: false`, so new openings are refused while completions
+  continue.
+- It is a fail-closed block, not a reconciliation failure:
+  - venue reconcile 01:44 ok (4 positions, matching the book);
+  - watchdog clean; drawdown readable at 7.55 / 20.
+- Expected to clear when the ledger's round-trip attestation restates it
+  from the venue's trades (about 20–30 minutes). Re-checked at about 02:20.
