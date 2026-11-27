@@ -294,3 +294,4 @@
 release candidate for 9b28e6bfe (RN1 marginal EV and fit-every-level, both off by default)
 release candidate for f956b2d6a (final-gate loss stops; in-flight orders across markets)
 release candidate for cf19ef86a (RN1 marginal EV without a fair value; off by default)
+release candidate for 15e2cc943 (integrated: live-first, touch EV, calibration, marginal EV no-fair, duration, economics report; all off by default)
