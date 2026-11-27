@@ -2247,3 +2247,23 @@ the exact three-hour live authorization packet for sports release
   foreign; 3 registries OK.
 - **Venue reconcile:** last ok 02:45; next due about 03:45.
 - **Pending:** the first bot settlement under the new form.
+
+### 71e. Stage 1 hourly report, 03:50 UTC
+
+- **Fills 02:50–03:50:** none. Orders: rn1_open 7, rn1_extend 4,
+  two_sided_complete 2.
+- **Settlement:** `setkameua-kobvit-khaser` closed 02:55:50 and settled
+  YES = 0 at 02:57:23 (pair YES 1 @ 0.48 + NO 1 @ 0.24 = 0.72, pair edge
+  +0.28).
+  - This was on the **old** ledger: it caused another
+    `ACCOUNT_RISK_SAYS_UNREADABLE` block, 02:55:50 → 03:13:46 (about 18
+    minutes), cleared by the slower correction.
+  - The new ledger (03:20) has not yet seen a bot settlement.
+- **Realized (PILOT_PNL 03:45): +$0.46** (`timleg` +0.18, `kobvit` +0.28).
+  Cash 303.7024; unexplained 0.
+- **Unpaired:** $8.62, unchanged (`paryur` NO 8.95, `savvol` NO 5.19,
+  `sydvik` YES 2.45, `kuzdmy` YES 2), all pregame Setka with completion bids.
+- **Venue reconcile 03:45:** ok, 4 positions, no mismatch.
+- **Account risk:** ok since 03:21:03; loss room 14.02, drawdown capacity
+  11.29.
+- **Rewards:** PAID unchanged.
