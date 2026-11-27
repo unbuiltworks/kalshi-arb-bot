@@ -2489,3 +2489,19 @@ the exact three-hour live authorization packet for sports release
   - Lock value: `window:2026-11-27T13:45:00Z/2026-11-27T16:45:00Z`.
 - **Limits:** Revision 1 unchanged: two markets, maker-only, $8 campaign
   stop, $75 lifetime ceiling, esports and cricket off, crypto disarmed.
+
+### 76b. Armed — 27 Nov 2026, 13:36:56 UTC
+
+- **Deployment `5f31e8a3`** (`a51cfdbd2`, restart for the variables) booted
+  at 13:36:56.
+  - `SAFETY_LATCH_CLEARED` for id `2026-11-27T12:48:22.780628+00:00`
+    ("owner acknowledged this latch by its id").
+  - `SUBMISSION_LOCK_STATE`: `window_not_started`, window
+    13:45:00Z–16:45:00Z, grace 7,200 s.
+  - `campaign_since` 1795787100 (13:45:00Z), so the new campaign meter
+    starts from zero.
+- **13:37:05:** account risk ok (room 8.1431), heartbeat `safety_latch`
+  null, loop healthy. The account audit had not yet completed since boot,
+  and the bot fails closed until it does (`stale_blocks_new`).
+- **Reports scheduled:** 14:46, 15:46, 16:47 (window close) and 18:47
+  (close-out, lock back to `1`).
