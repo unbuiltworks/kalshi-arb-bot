@@ -2713,3 +2713,29 @@ existing 7,200 s completion grace.
 campaign.
 
 Not armed.
+
+### 82a. Authorized and armed — 27 Nov 2026
+
+**Owner (verbatim):** "I authorize one three-hour live sports campaign on
+deployed a51cfdbd2 beginning at the next quarter hour, followed by two hours
+of completions-only grace, with only the submission-lock window changed. All
+existing limits unchanged: $8 campaign loss stop, maker-only, two markets,
+2-contract orders, crypto disarmed, no automatic repeat."
+
+- **Preflight (20:20–20:21Z):**
+  - ledger lifetime −$66.6294 against a $75.00 ceiling, room $8.3706
+    (≥ $8.00);
+  - drawdown room $13.8177; unresolved 0; unattributed 0;
+  - watchdog 20:20: 0 open orders, no halt.
+- **Set:** `PMUS_TWO_SIDED_SUBMISSION_LOCK=window:2026-11-27T20:30:00Z/2026-11-27T23:30:00Z`.
+  That is the only change.
+- **Late start:** this session's worker restarted during the call, and the
+  restart deployment `9f22fd1c` (`a51cfdbd2`) was only created at 20:46:01Z.
+  Its first SUBMISSION_LOCK_STATE was at 20:46:58Z: window
+  20:30–23:30Z, grace 7,200 s, campaign marker 20:30Z, new exposure
+  unlocked. Trading time is therefore about 2 h 43 min. The authorized end is
+  kept and not extended.
+- **First minutes:** quoting at the touch (Setka MD, two markets); no loop
+  error and no latch.
+- **Scheduled:** mid-checks 21:50 and 22:50; window report 23:32; close-out
+  and relock to `1` at 01:32Z (28 Nov).
