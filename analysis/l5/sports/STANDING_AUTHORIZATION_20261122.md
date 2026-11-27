@@ -2212,3 +2212,17 @@ additional strategy research, shadow campaigns or unrelated functionality."
   ledger release note.
 - **Rewards:** PAID unchanged.
 - No action needed.
+
+## 73. Ledger 9b5f4995a with L5_SPORTS_SETTLE_FROM_FEED=1 authorized — 27 Nov 2026
+
+Owner, typed: "I explicitly authorize deployment of ledger release
+9b5f4995ad4f1a58574ffce3862bc4061997d678 to l5-pmus-live with
+L5_SPORTS_SETTLE_FROM_FEED=1. All other settings, capital limits, loss stops
+and safety protections remain unchanged. Preserve the existing Stage 1
+authorization without extending its duration or scope. Verify production
+reconciliation, account-risk readability, daily and lifetime P&L, drawdown
+and watchdog health immediately after deployment. Verify the next sports
+settlement is accounted for correctly without interrupting new openings.
+Roll back and relock sports if reconciliation fails. Once verified, present
+the exact three-hour live authorization packet for sports release
+1c1d546b6."
