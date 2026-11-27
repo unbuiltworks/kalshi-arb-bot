@@ -2806,3 +2806,34 @@ not increase capital or deploy without explicit authorization."
   $24.09 lifetime is unchanged.
 - **Ledger 23:32:** day −$5.5756; lifetime −$66.5694 (room $8.4306);
   drawdown $6.1223 of $20; unresolved 0.
+
+### 82c. Close-out and explicit relock — 27 Nov 2026, about 23:55 UTC
+
+**Owner (verbatim, excerpt):** "Complete the current campaign
+reconciliation and explicitly relock production."
+
+- **Before the relock (23:48–23:49):**
+  - nothing resting, unpaired or awaiting completion;
+  - the WTA doubles pair had settled ($1.94 released);
+  - no fills or orders after 23:25.
+- **Relock:** `PMUS_TWO_SIDED_SUBMISSION_LOCK=1` set at about 23:53Z.
+  Deployment `6fb57e27` (`a51cfdbd2`) booted at 23:54:26 with
+  `SUBMISSION_LOCK_STATE why: locked` (new exposure and completions
+  locked). The 01:32 close-out task was cancelled, since this replaces it.
+  No automatic repeat.
+- **INVENTORY_RECONCILE 23:50:52:** ok; 0 venue positions; 0 mismatches;
+  open unmatched $0; 1,479 markets settled flat.
+- **PILOT_PNL 23:50:53:**
+  - realized net **+$0.0600** (one market paired-flat, one no-fill);
+  - fees $0; rebates $0; outstanding 0;
+  - cash change +$0.0600, fully explained (unexplained $0).
+- **CAMPAIGN_ECONOMICS:**
+  - 3 fills, 4 contracts, spend $1.94;
+  - pair edge +$0.06; settled trading $0 (pair cash realized at pairing);
+  - rewards paid / pending / skipped for the campaign: $0 / $0 / $0.
+- **REWARD_CHECK 23:56:** PAID $24.09 lifetime, unchanged; no 27 Nov rows
+  yet.
+- **ACCOUNT_AUDIT:** settled realized lifetime −$46.56; fees $4.36; rebates
+  $0; unmatched open $0.
+- **Ledger 23:32:** day −$5.5756; lifetime −$66.5694 (room $8.4306);
+  drawdown $6.1223 of $20; unresolved 0; unattributed 0.
