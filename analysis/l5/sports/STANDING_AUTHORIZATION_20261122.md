@@ -2625,3 +2625,29 @@ the exact three-hour live authorization packet for sports release
   - suites pass in all three scopes;
   - clean Docker build boots with every flag on.
 - **Not deployed or armed.**
+
+## 76f. Campaign close-out (a51cfdbd2, window 13:45–16:45 UTC) — 27 Nov 2026, about 19:25 UTC
+
+- **Lock:** set `PMUS_TWO_SIDED_SUBMISSION_LOCK=1` at 18:48 (no automatic
+  repeat). New deployment `0c3d98b6` (same `a51cfdbd2`) booted at 19:23:35
+  with `SUBMISSION_LOCK_STATE why: "locked"`: new exposure and completions
+  both locked. Before that, the window end had held the lock (`window_ended`)
+  from 16:45.
+- **Orders:** watchdog 19:22: 0 open orders, all registries OK. Heartbeat:
+  resting $0, unpaired $0, paired awaiting settlement $0.
+- **Venue reconcile (18:40:49):** ok; 0 positions; 0 mismatches.
+- **Fills / inventory:** 8 fills, 38 orders; 4 pairs at average pair cost
+  0.943; no residual.
+- **Settled trading P&L (PILOT_PNL 18:40:50):** +$0.2275 realized
+  (paired_flat 2, no_fills 4); outstanding 0; unexplained 0.
+- **Reward qualification:** RN1_QUOTE in `below_minimum_payout` 98.5% of the
+  window; qualifying time accruing in 7.8% of window minutes.
+- **Confirmed incentive payments for the campaign:** $0 (REWARD_CHECK 18:39:
+  PAID $24.09 lifetime unchanged, PENDING $0.86, SKIPPED $4.00; no 27 Nov
+  rows).
+- **Ledger (19:22):** day −$5.6356; lifetime −$66.6294 (room $8.37);
+  drawdown $6.1823 of $20; unresolved 0; unattributed 0; sibling feed
+  CONFIRMED 5 / CONTRADICTED 0. The day figure includes activity outside
+  this campaign's markets; the campaign's own settled result is +$0.2275.
+- **No further live window is authorized.** The next candidate (section 80)
+  awaits an owner decision.
