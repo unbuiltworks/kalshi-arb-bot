@@ -91,7 +91,7 @@ The existing sibling form should restate it once its full walk ends. The expecte
 
 The existing ledger, settlement, attestation, unresolved and runner-settlement modules all pass: 790 tests in the related set.
 
-Full-suite parity (`PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider --continue-on-collection-errors -rfE`, run sequentially from clean worktrees): see PARITY below.
+Full-suite parity was run sequentially from clean worktrees with `PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider --continue-on-collection-errors -rfE`. Results are in PARITY below.
 
 ## Risks
 
@@ -118,4 +118,9 @@ Full-suite parity (`PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cachepro
 
 ## PARITY
 
-(filled below)
+| Worktree | Failed | Errors | Passed |
+|---|---|---|---|
+| `c111abd67` | 72 | 26 | 21785 |
+| `37afdff9a` | 72 | 26 | 21821 |
+
+The branch has 36 more passes, which are the new tests. The 98 failing and erroring test names are identical in both runs.
