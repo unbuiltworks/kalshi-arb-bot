@@ -2226,3 +2226,24 @@ settlement is accounted for correctly without interrupting new openings.
 Roll back and relock sports if reconciliation fails. Once verified, present
 the exact three-hour live authorization packet for sports release
 1c1d546b6."
+
+### 73a. Ledger 9b5f4995a deployed and verified (03:19–03:24 UTC)
+
+- **03:16** set `L5_SPORTS_SETTLE_FROM_FEED=1` (deploy skipped), then source
+  `9b5f4995a`. Deployment `307dff04`, SUCCESS 03:20:20.
+- **Before (HB 03:14:30) and after (HB 03:23:16), all identical:**
+  - day +0.46; lifetime −60.5338; `reconciled` true;
+  - unresolved 0;
+  - drawdown 8.7078 against $20 (room 11.29);
+  - cash 303.7024;
+  - new heartbeat field `sibling_feed_settlements` {switch_on: true,
+    PENDING 0, CONFIRMED 0, CONTRADICTED 0}.
+- **Sports bot during the restart:**
+  - `ACCOUNT_RISK_SNAPSHOT_STALE` 03:20:39 (age 32.8 s), then
+    `ACCOUNT_DRAWDOWN_UNREADABLE` 03:20:52, then **ok at 03:21:03**: loss
+    room 14.02, drawdown capacity 11.29.
+  - Openings paused about 24 s; completions continued.
+- **Watchdog 03:24:** 10 open orders, all ours and managed, none overdue or
+  foreign; 3 registries OK.
+- **Venue reconcile:** last ok 02:45; next due about 03:45.
+- **Pending:** the first bot settlement under the new form.
