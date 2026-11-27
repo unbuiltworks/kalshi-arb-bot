@@ -109,6 +109,43 @@ MAX_SIBLING_ATTEMPTS = 3
 QTY_REASON = "VENUE_QTY_NE_LEDGER_QTY"
 
 
+#: THE SPORTS SETTLEMENT FORM (2026-11-27). OFF unless exactly "1". With it
+#: on, a market in the sports controller's registered series that this
+#: ledger holds at the $1 bound is SETTLED from that controller's own fill
+#: feed, confirmed order by order by our own venue reads and by the venue's
+#: net position (`InventoryStore.settle_from_sibling_feed`), instead of being
+#: booked at the bound and published as unresolved. It is a separate switch
+#: on purpose: the sibling switch above is a post-settlement restatement that
+#: is already on in production, and turning it on must not, by being
+#: deployed, change how a settlement is booked. It also requires the sports
+#: scope (`sibling_in_scope`: the feed configured and the owner's floor day).
+#: Any miss falls back to the bound exactly as before. The pass below then
+#: CONFIRMS each such row trade by trade from the activity walk, whatever
+#: the switch says now; it never re-applies one.
+SPORTS_SETTLE_ENV = "L5_SPORTS_SETTLE_FROM_FEED"
+SPORTS_SETTLE_TOKEN = "1"
+FEED_SETTLEMENT = "SIBLING_FEED_ATTESTED_AT_SETTLEMENT"
+MAX_CONFIRM_ATTEMPTS = 3
+
+
+def sports_settle_enabled() -> bool:
+    return (os.environ.get(SPORTS_SETTLE_ENV) or "").strip() == \
+        SPORTS_SETTLE_TOKEN
+
+
+def feed_confirm_pending(row: Mapping[str, Any],
+                         rec: Mapping[str, Any]) -> bool:
+    """A row settled from the sports feed that the venue walk has not yet
+    confirmed or contradicted, with confirmation attempts left."""
+    if not isinstance(row, Mapping) or \
+            row.get("pnl_provenance") != FEED_SETTLEMENT:
+        return False
+    ev = row.get("sibling_feed_settlement") or {}
+    if ev.get("venue_confirmation") in ("CONFIRMED", "CONTRADICTED"):
+        return False
+    return int(rec.get("confirm_attempts") or 0) < MAX_CONFIRM_ATTEMPTS
+
+
 def sibling_enabled() -> bool:
     return (os.environ.get(SIBLING_ENV) or "").strip() == SIBLING_TOKEN
 
@@ -285,14 +322,23 @@ def candidates(store: Any, *, now: Optional[dt.datetime] = None
     for m, row in (st.get("retired_markets") or {}).items():
         if not isinstance(row, Mapping):
             continue
+        rec = book.get(m) or {}
+        t = str(row.get("t") or "")
+        if feed_confirm_pending(row, rec):
+            rt = parse_time(t)
+            last = parse_time(rec.get("t")) if rec.get(
+                "confirm_attempts") else None
+            if rt is not None and (now - rt).total_seconds() >= SETTLE_AGE_S \
+                    and (last is None
+                         or (now - last).total_seconds() >= RETRY_S):
+                out.append((t, str(m)))
+            continue
         if row.get("pnl_provenance") != UPPER_BOUND:
             continue
         if row.get("cost_superseded") or row.get("venue_cost_attested"):
             continue
-        t = str(row.get("t") or "")
         if not t or t[:10] < floor:
             continue
-        rec = book.get(m) or {}
         if rec.get("status") == "CORRECTED":
             continue
         if rec.get("status") == "UPPER_BOUND_KEPT" and not sibling_retry(
@@ -622,6 +668,19 @@ def round_trip_retry(rec: Mapping[str, Any]) -> bool:
     return not final and n < MAX_ROUND_TRIP_ATTEMPTS
 
 
+def _feed_counts(st: Mapping[str, Any]) -> Dict[str, Any]:
+    out = {"switch_on": sports_settle_enabled(), "PENDING": 0,
+           "CONFIRMED": 0, "CONTRADICTED": 0}
+    for row in (st.get("retired_markets") or {}).values():
+        if isinstance(row, Mapping) and \
+                row.get("pnl_provenance") == FEED_SETTLEMENT:
+            k = str((row.get("sibling_feed_settlement") or {}).get(
+                "venue_confirmation") or "PENDING")
+            k = k if k in ("CONFIRMED", "CONTRADICTED") else "PENDING"
+            out[k] += 1
+    return out
+
+
 class Attestor:
     """The paced pass. Holds only the in-flight walk in memory; everything
     that must survive a restart is in the store's durable record."""
@@ -691,6 +750,17 @@ class Attestor:
         return {"evaluated": out}
 
     def _refuse(self, store: Any, market: str, reason: str) -> Dict[str, Any]:
+        row = (((getattr(store, "state", {}) or {}).get("retired_markets")
+                or {}).get(market))
+        if isinstance(row, Mapping) and \
+                row.get("pnl_provenance") == FEED_SETTLEMENT:
+            # a feed-settled row is never put back at the bound by a walk
+            # that proved nothing: one confirmation attempt is spent
+            got = store.note_sibling_feed_confirm_attempt(
+                market, reason="CONFIRM:%s" % reason)
+            return {"market": market, "confirmed": False,
+                    "reason": "CONFIRM:%s" % reason,
+                    "confirm_attempts": got.get("confirm_attempts")}
         rec = (((getattr(store, "state", {}) or {}).get(STATE_KEY) or {})
                .get("markets") or {}).get(market) or {}
         final = int(rec.get("attempts") or 0) + 1 >= MAX_ATTEMPTS
@@ -701,8 +771,10 @@ class Attestor:
     def _evaluate(self, store: Any, w: Walk, market: str) -> Dict[str, Any]:
         try:
             row = ((store.state.get("retired_markets") or {}).get(market))
-            if not isinstance(row, Mapping) or \
-                    row.get("pnl_provenance") != UPPER_BOUND:
+            is_feed = isinstance(row, Mapping) and \
+                row.get("pnl_provenance") == FEED_SETTLEMENT
+            if not isinstance(row, Mapping) or (
+                    row.get("pnl_provenance") != UPPER_BOUND and not is_feed):
                 return {"market": market, "skipped": "NO_LONGER_AT_BOUND"}
             rt = parse_time(row.get("t"))
             if rt is None:
@@ -711,6 +783,8 @@ class Attestor:
                 # retired after the walk began: its fills may be newer than
                 # the first page. Not an attempt; the next walk covers it.
                 return {"market": market, "skipped": "RETIRED_AFTER_WALK"}
+            if is_feed:
+                return self._confirm_feed(store, w, market)
             rt = round_trip_from_rows(w.rows, market)
             if rt.get("sells"):
                 return self._evaluate_round_trip(store, w, market, rt)
@@ -751,6 +825,34 @@ class Attestor:
             except BaseException:                              # noqa: BLE001
                 return {"market": market, "attested": False,
                         "reason": "EXCEPTION:%s" % type(exc).__name__}
+
+    def _confirm_feed(self, store: Any, w: Walk, market: str
+                      ) -> Dict[str, Any]:
+        """A row settled from the sports feed, read against the venue's own
+        trades. Confirms (consuming the trade ids once) or contradicts (the
+        row becomes unresolved: fail closed). Never re-applies the row and
+        moves no money. Unreadable walk rows spend one bounded attempt."""
+        rt = round_trip_from_rows(w.rows, market)
+        if rt.get("sells"):
+            # the sports controller only buys: a sale in its market is not
+            # in its feed
+            return self._contradict(store, w, market,
+                                    "VENUE_SALE_IN_MARKET")
+        got = legs_from_rows(w.rows, market)
+        if not got.get("ok"):
+            if got.get("reason") == "NO_VENUE_FILLS_FOUND":
+                return self._contradict(store, w, market,
+                                        "NO_VENUE_FILLS_FOUND")
+            return self._refuse(store, market, str(got.get("reason")))
+        out = store.confirm_sibling_feed_settlement(
+            market, venue_legs=got["legs"], walk=w.proof())
+        return dict(out, form=FEED_SETTLEMENT)
+
+    def _contradict(self, store: Any, w: Walk, market: str,
+                    reason: str) -> Dict[str, Any]:
+        out = store.confirm_sibling_feed_settlement(
+            market, venue_legs={}, walk=w.proof(), contradiction=reason)
+        return dict(out, form=FEED_SETTLEMENT)
 
     def _evaluate_round_trip(self, store: Any, w: Walk, market: str,
                              rt: Mapping[str, Any]) -> Dict[str, Any]:
@@ -856,6 +958,8 @@ class Attestor:
                                   "kept_after_max_attempts": kept,
                                   "reasons": reasons},
             "upper_bound_before_floor_not_in_scope": before_floor,
+            # rows settled from the sports feed, by venue-walk outcome
+            "sibling_feed_settlements": _feed_counts(st),
             "retro_floor_utc_day": floor,
             "walk": None if self.walk is None else self.walk.proof(),
             "last_error": self.last_error,

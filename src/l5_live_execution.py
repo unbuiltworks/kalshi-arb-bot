@@ -2731,7 +2731,10 @@ class InventoryStore:
         the account-wide loss figures must REFUSE while any remains -- a loss
         limit fed a bound is not a limit, in either direction. A row clears
         when the venue's own fills restate it (any attestation form), or when
-        the owner lists the market in L5_ACCEPT_BOUND_MARKETS. Rows settled
+        the owner lists the market in L5_ACCEPT_BOUND_MARKETS. A row settled
+        from the sports feed (SIBLING_FEED_ATTESTED_AT_SETTLEMENT) is not at
+        the bound and is not listed -- unless the venue's activity walk later
+        CONTRADICTS it, when it is listed again. Rows settled
         before the re-anchor are inside the anchoring cash read and are not
         listed. None when a row or the re-anchor cannot be read."""
         try:
@@ -2748,7 +2751,10 @@ class InventoryStore:
             for mkt, row in (self.state.get("retired_markets") or {}).items():
                 if not isinstance(row, Mapping):
                     return None
-                if row.get("pnl_provenance") != "UNKNOWN_COST_UPPER_BOUND":
+                if row.get("pnl_provenance") != "UNKNOWN_COST_UPPER_BOUND" \
+                        and not row.get("venue_contradicted"):
+                    # a row settled from the sports feed whose venue walk
+                    # later CONTRADICTED it is unresolved again (fail closed)
                     continue
                 at = dt.datetime.fromisoformat(
                     str(row["t"]).replace("Z", "+00:00"))
@@ -6131,6 +6137,442 @@ class InventoryStore:
             dict(rec, side="BOTH"))
         self.save()
         return dict(rec, attested=True)
+
+    #: THE SPORTS FEED SETTLEMENT FORM (2026-11-27). See
+    #: `settle_from_sibling_feed`.
+    SIBLING_FEED_SETTLEMENT = "SIBLING_FEED_ATTESTED_AT_SETTLEMENT"
+    #: the sports feed is rebuilt on every GET; a document older than this
+    #: (or stamped in the future by more than the skew) is not "now"
+    SIBLING_FEED_MAX_AGE_S = 60.0
+    SIBLING_FEED_MAX_SKEW_S = 5.0
+    #: how far the venue's average price may sit from the feed's own price
+    #: per share (the same tolerance the pre-settlement check uses)
+    SIBLING_FEED_PX_TOL = D("0.0001")
+
+    def settle_from_sibling_feed(self, market: str, *, yes_value: Any,
+                                 resolution: Optional[Mapping[str, Any]],
+                                 feed: Any, venue_orders: Any,
+                                 venue_net: Any,
+                                 now: Optional[dt.datetime] = None
+                                 ) -> Dict[str, Any]:
+        """Settle a SPORTS-controller market, held here at the $1 bound, on
+        the controller's own filled orders -- BEFORE it is booked at the
+        bound and becomes an unresolved row. Every check below is required;
+        any miss returns `{"retired": False, "fallback": True, ...}` and
+        writes NOTHING, so the caller settles exactly as before (bound,
+        unresolved, fail closed) and the venue pass restates it later.
+
+        THE CASE (live 2026-11-27 01:47Z, aec-atp-timleg-karpol-2026-11-25).
+        The sports bot bought YES 4 and NO 4 (four pairs). This ledger had
+        adopted one stale venue snapshot (UP 3) at the $1 bound; the venue's
+        net was already 0. The pre-settlement check needs the feed to equal
+        what this ledger HELD (4 != 3) and refused; the row was booked at the
+        bound and the published account-risk record went unreadable until the
+        paced activity walk (no time floor exists for a sports slug) could
+        restate it -- every bot settlement paused the bot.
+
+        THE EVIDENCE, independent sources that must all agree:
+          `feed`          the sports controller's published order ledger:
+                          readable, strategy SPORTS, stamped within
+                          SIBLING_FEED_MAX_AGE_S, every order of this market
+                          CLOSED (no fill can still arrive), ids unique;
+          `venue_orders`  OUR OWN `/v1/order/{id}` read of each of those
+                          ids: same market, terminal (nothing left to work),
+                          cumQuantity EQUAL to the feed's filled quantity,
+                          an average price equal to the feed's own price,
+                          and a readable commission;
+          `venue_net`     the venue's own net position for the market, from
+                          OUR OWN positions read at settlement (UP - DOWN,
+                          the venue nets the outcomes): it must EQUAL the
+                          feed's UP - DOWN. A manual or foreign fill in the
+                          market that is not a perfect self-hedge moves it;
+          the settlement  the venue's binary settlement and resolution,
+                          checked exactly as `retire_settled_market` does.
+        Also required: the market is in the sports controller's registered
+        series; this ledger holds it at the bound with NO side whose basis it
+        knew, no live or pending order of its own and no fill provenance of
+        its own there.
+
+        WHAT IT WRITES. The book of the market is replaced by the feed's
+        gross per-side quantities at the venue-confirmed cost plus the
+        venue's positive commission (a negative commission is a venue credit
+        and is recorded beside the row, never inside it), and the ONE
+        ordinary writer, `retire_settled_market`, settles it: redemption at
+        the venue's settlement minus that cost, pairs at $1. The row is
+        tagged SIBLING_FEED_ATTESTED_AT_SETTLEMENT with the evidence; the
+        venue pass later CONFIRMS it trade by trade against the activity feed
+        (it never re-applies it) and a contradiction there makes the row
+        unresolved again (fail closed). If retirement itself refuses, the
+        book is restored exactly as it was."""
+        def no(reason: str, **kw: Any) -> Dict[str, Any]:
+            return dict(kw, retired=False, fallback=True, market=market,
+                        reason=reason)
+
+        now = now or dt.datetime.now(dt.timezone.utc)
+        try:
+            market = canonical_market(market, doing="settling from a feed")
+        except UnknownMarket:
+            return no("MARKET_UNREADABLE")
+        owner = ORIGIN.ledger_owner_of_market(market)
+        if owner != ORIGIN.SPORTS:
+            return no("NOT_A_SPORTS_SERIES_MARKET")
+        if (self.state.get("retired_markets") or {}).get(market):
+            return no("ALREADY_RETIRED")
+        unknown = sorted(str(k) for k in
+                         (self.state.get("leg_cost_basis_unknown") or [])
+                         if str(k).rsplit("|", 1)[0] == market)
+        if not unknown:
+            return no("NOT_HELD_AT_THE_BOUND")
+        if any(str(o.get("market")) == market for o in
+               (self.state.get("live_orders") or {}).values()
+               if isinstance(o, Mapping)) or any(
+                   str(o.get("market")) == market for o in
+                   (self.state.get("pending_terminal") or {}).values()
+                   if isinstance(o, Mapping)):
+            return no("OWN_ORDERS_IN_MARKET")
+        if ((self.state.get("fill_provenance") or {}).get(market) or {}
+                ).get("entries"):
+            return no("OWN_FILLS_IN_MARKET")
+        pos = self.state.get("positions") or {}
+        for k, q in pos.items():
+            if str(k).rsplit("|", 1)[0] != market:
+                continue
+            fq = finite_decimal(q)
+            if fq is None:
+                return no("LEDGER_QTY_UNREADABLE", key=str(k))
+            if fq != 0 and str(k) not in unknown:
+                return no("KNOWN_SIDE_HELD", key=str(k))
+        verdict = binary_settlement(yes_value)
+        if verdict.get("reason"):
+            return no("SETTLEMENT:%s" % verdict["reason"])
+        v = verdict["value"]
+        if resolution is None:
+            return no("RESOLUTION_ABSENT")
+        bad = resolution_refusal(market, resolution, v)
+        if bad:
+            return no("RESOLUTION:%s" % bad.get("reason"))
+        # ---- the feed
+        if not isinstance(feed, Mapping) or feed.get("readable") is not True:
+            return no("FEED_NOT_READABLE")
+        if str(feed.get("strategy") or "") != ORIGIN.SPORTS:
+            return no("FEED_IS_ANOTHER_STRATEGYS")
+        try:
+            as_of = dt.datetime.fromisoformat(
+                str(feed.get("as_of_utc") or "").replace("Z", "+00:00"))
+            if as_of.tzinfo is None:
+                raise ValueError("naive")
+        except (TypeError, ValueError):
+            return no("FEED_TIME_UNREADABLE")
+        age = (now - as_of).total_seconds()
+        if age > self.SIBLING_FEED_MAX_AGE_S \
+                or age < -self.SIBLING_FEED_MAX_SKEW_S:
+            return no("FEED_STALE", age_s=round(age, 3))
+        mine: Dict[str, Dict[str, Any]] = {}
+        for o in feed.get("orders") or ():
+            if not isinstance(o, Mapping):
+                return no("FEED_ORDER_UNREADABLE")
+            if str(o.get("market") or "") != market:
+                continue
+            vid = str(o.get("venue_order_id") or "").strip()
+            if not vid or vid in mine:
+                return no("FEED_ORDER_ID_MISSING_OR_REPEATED")
+            try:
+                side = canonical_side(o.get("side"),
+                                      doing="settling from a feed")
+            except UnknownSide:
+                return no("FEED_SIDE_UNREADABLE", venue_order_id=vid)
+            q = finite_decimal(o.get("filled_qty"))
+            c = finite_decimal(o.get("filled_cost"))
+            if q is None or c is None or q <= 0 or c < 0:
+                return no("FEED_NUMBERS_UNREADABLE", venue_order_id=vid)
+            if str(o.get("state") or "").strip().upper() != "CLOSED":
+                # a resting order can still fill: a fill not yet in either
+                # record is exactly what this form cannot see
+                return no("FEED_ORDER_STILL_OPEN", venue_order_id=vid)
+            mine[vid] = {"side": side, "qty": q, "cost": c}
+        if not mine:
+            return no("FEED_HAS_NO_FILLS_IN_MARKET")
+        # ---- our own venue reads, one per feed order
+        if not isinstance(venue_orders, Mapping):
+            return no("VENUE_ORDERS_UNREADABLE")
+        legs = {UP: {"qty": D(0), "cost": D(0), "fees": D(0),
+                     "credit": D(0)},
+                DOWN: {"qty": D(0), "cost": D(0), "fees": D(0),
+                       "credit": D(0)}}
+        reads: Dict[str, Any] = {}
+        for vid, f in sorted(mine.items()):
+            row = venue_orders.get(vid)
+            if not isinstance(row, Mapping):
+                return no("VENUE_ORDER_NOT_READ", venue_order_id=vid)
+            vm = row.get("marketSlug") or row.get("market_slug") \
+                or row.get("market")
+            if vm is None or str(vm) != market:
+                return no("VENUE_ORDER_NOT_IN_MARKET", venue_order_id=vid)
+            try:
+                prog = order_progress(row)
+            except IncoherentOrderRow:
+                return no("VENUE_ORDER_INCOHERENT", venue_order_id=vid)
+            if not prog["terminal"] or row.get("leavesQuantity") is None \
+                    or prog["leaves_qty"] != 0:
+                return no("VENUE_ORDER_NOT_TERMINAL", venue_order_id=vid)
+            cum = venue_decimal(row.get("cumQuantity"))
+            if cum is None or cum != f["qty"]:
+                # MORE at the venue than in the feed is a delayed fill the
+                # feed has not caught up with; less is a feed error
+                return no("VENUE_QTY_NE_FEED_QTY", venue_order_id=vid,
+                          venue_cum=None if cum is None else str(cum),
+                          feed_qty=str(f["qty"]))
+            avg = venue_order_avg_price(row)
+            if avg is None:
+                return no("VENUE_PRICE_UNSTATED", venue_order_id=vid)
+            own = own_outcome_price(f["side"], avg, basis=WIRE)
+            if abs(own * f["qty"] - f["cost"]) > \
+                    self.SIBLING_FEED_PX_TOL * f["qty"]:
+                return no("VENUE_PRICE_NE_FEED_PRICE", venue_order_id=vid,
+                          venue_own_price=str(own),
+                          feed_cost=str(f["cost"]))
+            comm = prog["commission"]
+            if comm is None or not comm.is_finite():
+                return no("VENUE_FEE_UNREADABLE", venue_order_id=vid)
+            leg = legs[f["side"]]
+            leg["qty"] += f["qty"]
+            leg["cost"] += own * f["qty"]
+            if comm >= 0:
+                leg["fees"] += comm
+            else:
+                leg["credit"] += -comm
+            reads[vid] = {"side": f["side"], "qty": str(f["qty"]),
+                          "venue_own_price": str(own),
+                          "feed_cost": str(f["cost"]),
+                          "commission": str(comm),
+                          "venue_state": prog["state"]}
+        net = finite_decimal(venue_net)
+        if net is None:
+            return no("VENUE_NET_UNREADABLE")
+        if legs[UP]["qty"] - legs[DOWN]["qty"] != net:
+            # a fill in this market that is not in the feed (manual,
+            # foreign or late) moves the venue's net away from the feed's
+            return no("VENUE_NET_NE_FEED_NET", venue_net=str(net),
+                      feed_up=str(legs[UP]["qty"]),
+                      feed_down=str(legs[DOWN]["qty"]))
+        # ---- the evidence holds. Rewrite the book, settle, or restore.
+        keep = ("positions", "leg_cost", "leg_cost_basis_unknown",
+                "adopted_unattributed", "risk_floor_usd",
+                "other_strategy_cost_attested", "fill_count",
+                "venue_side_raw", "committed")
+        snapshot = {k: json.loads(json.dumps(self.state[k], default=str))
+                    for k in keep if k in self.state}
+        held_before = {k: str(v) for k, v in pos.items()
+                       if str(k).rsplit("|", 1)[0] == market}
+        cost_before = {k: str(v) for k, v in
+                       (self.state.get("leg_cost") or {}).items()
+                       if str(k).rsplit("|", 1)[0] == market}
+
+        def restore() -> None:
+            for k in keep:
+                if k in snapshot:
+                    self.state[k] = snapshot[k]
+                else:
+                    self.state.pop(k, None)
+
+        try:
+            pos_w = self.state.setdefault("positions", {})
+            lc_w = self.state.setdefault("leg_cost", {})
+            for k in [k for k in list(pos_w)
+                      if str(k).rsplit("|", 1)[0] == market]:
+                pos_w.pop(k, None)
+            for k in [k for k in list(lc_w)
+                      if str(k).rsplit("|", 1)[0] == market]:
+                lc_w.pop(k, None)
+            for side in (UP, DOWN):
+                if legs[side]["qty"] > 0:
+                    key = "%s|%s" % (market, side)
+                    pos_w[key] = str(legs[side]["qty"])
+                    lc_w[key] = str(legs[side]["cost"] + legs[side]["fees"])
+            self.state["leg_cost_basis_unknown"] = [
+                k for k in (self.state.get("leg_cost_basis_unknown") or [])
+                if str(k).rsplit("|", 1)[0] != market]
+            for k in list(self.state.get("adopted_unattributed") or {}):
+                if str(k).rsplit("|", 1)[0] == market:
+                    self.state["adopted_unattributed"].pop(k, None)
+            (self.state.get("risk_floor_usd") or {}).pop(market, None)
+            self.state.setdefault("other_strategy_cost_attested", {})[
+                market] = {"t": now.isoformat(), "market": market,
+                           "origin": ORIGIN.SPORTS,
+                           "source": self.SIBLING_FEED_SETTLEMENT,
+                           "orders": sorted(mine)}
+            out = self.retire_settled_market(market, yes_value=v,
+                                             resolution=resolution)
+        except BaseException:
+            restore()
+            raise
+        if not out.get("retired"):
+            restore()
+            self.save()
+            return dict(out, fallback=True,
+                        reason="RETIRE_REFUSED:%s" % out.get("reason"))
+        row = (self.state.get("retired_markets") or {})[market]
+        fees_total = legs[UP]["fees"] + legs[DOWN]["fees"]
+        evidence = {
+            "form": self.SIBLING_FEED_SETTLEMENT,
+            "strategy": ORIGIN.SPORTS,
+            "feed_as_of_utc": str(feed.get("as_of_utc")),
+            "feed_age_s": round(age, 3),
+            "venue_order_ids": sorted(mine),
+            "venue_order_reads": reads,
+            "venue_net": str(net),
+            "legs": {s: {k: str(x) for k, x in legs[s].items()}
+                     for s in (UP, DOWN) if legs[s]["qty"] > 0},
+            "fees_usd_in_pnl": str(fees_total),
+            "venue_credit_usd_not_in_pnl": str(
+                legs[UP]["credit"] + legs[DOWN]["credit"]),
+            "ledger_held_before": held_before,
+            "ledger_cost_before": cost_before,
+            "unknown_basis_keys_cleared": unknown,
+            "resolution_source": (dict(resolution).get("source")
+                                  if isinstance(resolution, Mapping)
+                                  else None),
+            "trade_ids": None,
+            "venue_confirmation": "PENDING_ACTIVITY_WALK",
+        }
+        row["pnl_provenance"] = self.SIBLING_FEED_SETTLEMENT
+        row["cost_provenance"] = self.SIBLING_FEED_SETTLEMENT
+        row["origin"] = ORIGIN.SPORTS
+        row["origin_cost_basis"] = ORIGIN.BASIS_AUTHENTICATED
+        row["origin_evidence"] = ORIGIN.EVIDENCE_SIBLING_LEDGER
+        row["fees_usd"] = str(fees_total)
+        row["sibling_feed_settlement"] = evidence
+        book = self.state.setdefault(self.VENUE_ATTEST_STATE_KEY, {})
+        book.setdefault("markets", {})[market] = {
+            "status": "FEED_ATTESTED_AT_SETTLEMENT", "t": now.isoformat(),
+            "confirm_attempts": 0}
+        self.save()
+        return dict(out, settlement_pnl=row["settlement_pnl"],
+                    pnl_provenance=row["pnl_provenance"],
+                    sibling_feed_settlement=evidence, fallback=False)
+
+    def confirm_sibling_feed_settlement(self, market: str, *,
+                                        venue_legs: Mapping[str, Any],
+                                        walk: Mapping[str, Any],
+                                        contradiction: Optional[str] = None
+                                        ) -> Dict[str, Any]:
+        """The venue pass's check of a row settled from the sports feed,
+        trade by trade, once the activity walk has read it. MOVES NO MONEY.
+
+        CONFIRMED: every venue fill of the market names one of the attested
+        orders and, order by order and side by side, the quantities are
+        equal; its trade ids are then recorded (consumed) once, in a zero-
+        delta record in `cost_basis_corrections`, so no later correction can
+        spend them. CONTRADICTED: anything else the walk proves -- a fill of
+        an order the feed did not name (manual or foreign), a quantity that
+        differs, a trade id already consumed. The row is then flagged and
+        `unresolved_bound` lists it, so every account-wide loss reader
+        refuses (fail closed) until the owner looks at it."""
+        row = (self.state.get("retired_markets") or {}).get(market)
+        if not isinstance(row, Mapping) or \
+                row.get("pnl_provenance") != self.SIBLING_FEED_SETTLEMENT:
+            return {"market": market, "confirmed": False,
+                    "reason": "NOT_A_FEED_SETTLEMENT"}
+        ev = row.get("sibling_feed_settlement") or {}
+        if ev.get("venue_confirmation") in ("CONFIRMED", "CONTRADICTED"):
+            return {"market": market, "confirmed": False,
+                    "reason": "ALREADY_%s" % ev.get("venue_confirmation")}
+        if not isinstance(walk, Mapping) or walk.get("sufficient") is not True:
+            return {"market": market, "confirmed": False,
+                    "reason": "VENUE_WALK_NOT_SUFFICIENT"}
+        reads = ev.get("venue_order_reads") or {}
+        # `contradiction`: what the walk already proved before any fill was
+        # compared (a sale in the market, no fills at all)
+        why: Optional[str] = (str(contradiction) if contradiction else None)
+        ids: List[str] = []
+        by_order: Dict[str, D] = {}
+        side_qty = {UP: D(0), DOWN: D(0)}
+        for side in (UP, DOWN):
+            if why is not None:
+                break
+            for f in ((venue_legs or {}).get(side) or {}).get("fills") or ():
+                vid = str(f.get("venue_order_id") or "").strip()
+                tid = str(f.get("trade_id") or "").strip()
+                q = finite_decimal(f.get("qty"))
+                if why is None:
+                    if not tid or q is None or q <= 0:
+                        why = "VENUE_FILL_UNREADABLE"
+                    elif tid in ids:
+                        why = "TRADE_ID_REPEATED"
+                    elif vid not in reads:
+                        why = "VENUE_FILL_OF_AN_ORDER_NOT_IN_THE_FEED"
+                    elif str(reads[vid].get("side")) != side:
+                        why = "VENUE_FILL_SIDE_DIFFERS:%s" % vid
+                if why is not None:
+                    break
+                ids.append(tid)
+                by_order[vid] = by_order.get(vid, D(0)) + q
+                side_qty[side] += q
+        if why is None:
+            for vid, r in reads.items():
+                if by_order.get(vid, D(0)) != finite_decimal(r.get("qty")):
+                    why = "ORDER_QTY_DIFFERS:%s" % vid
+                    break
+        if why is None:
+            spent = set()
+            for rec in (self.state.get("cost_basis_corrections") or []):
+                if isinstance(rec, Mapping):
+                    spent.update(str(t) for t in (rec.get("trade_ids") or ()))
+            if set(ids) & spent:
+                why = "TRADE_ID_ALREADY_CONSUMED"
+        now_iso = dt.datetime.now(dt.timezone.utc).isoformat()
+        book = self.state.setdefault(self.VENUE_ATTEST_STATE_KEY, {})
+        brec = dict((book.setdefault("markets", {})).get(market) or {})
+        if why is not None:
+            ev = dict(ev, venue_confirmation="CONTRADICTED",
+                      contradicted_at=now_iso, contradiction=why)
+            row["sibling_feed_settlement"] = ev
+            row["venue_contradicted"] = {"t": now_iso, "reason": why}
+            brec.update(status="FEED_SETTLEMENT_CONTRADICTED", t=now_iso,
+                        last_reason=why)
+            book["markets"][market] = brec
+            self.save()
+            return {"market": market, "confirmed": False,
+                    "contradicted": True, "reason": why}
+        cid = "sports-feed-confirm|%s" % market
+        self.state.setdefault("cost_basis_corrections", []).append({
+            "id": cid, "kind": "SIBLING_FEED_SETTLEMENT_VENUE_CONFIRMED",
+            "key": "%s|MARKET" % market, "market": market, "side": "BOTH",
+            "t": now_iso, "settled_at": str(row.get("t") or ""),
+            "settlement_utc_day": str(row.get("t") or "")[:10],
+            "delta": "0", "old_pnl": str(row.get("settlement_pnl")),
+            "new_pnl": str(row.get("settlement_pnl")),
+            "trade_ids": list(ids),
+            "venue_order_ids": sorted(by_order),
+            "venue_qty": {s: str(q) for s, q in side_qty.items()},
+            "activity_walk": {k: walk.get(k) for k in
+                              ("pages", "ended", "sufficient", "by",
+                               "started_at")},
+            "labels": ("confirmation only: no figure moved. Records the "
+                       "trade ids so no later correction can spend them.")})
+        row["sibling_feed_settlement"] = dict(
+            ev, venue_confirmation="CONFIRMED", confirmed_at=now_iso,
+            trade_ids=list(ids))
+        brec.update(status="FEED_SETTLEMENT_CONFIRMED", t=now_iso,
+                    correction_id=cid)
+        book["markets"][market] = brec
+        self.save()
+        return {"market": market, "confirmed": True, "trade_ids": ids}
+
+    def note_sibling_feed_confirm_attempt(self, market: str, *,
+                                          reason: str) -> Dict[str, Any]:
+        """One confirmation attempt that proved nothing either way (an
+        unreadable walk row, a short walk). Writes no money field; bounded
+        by the caller."""
+        book = self.state.setdefault(self.VENUE_ATTEST_STATE_KEY, {})
+        rows = book.setdefault("markets", {})
+        rec = dict(rows.get(market) or {})
+        rec["confirm_attempts"] = int(rec.get("confirm_attempts") or 0) + 1
+        rec["t"] = dt.datetime.now(dt.timezone.utc).isoformat()
+        rec["last_reason"] = str(reason)[:200]
+        rows[market] = rec
+        self.save()
+        return dict(rec)
 
     def reconstruct_cost_basis(self, market: str, side: str, *, qty: D,
                                cost: D, source: str) -> Dict[str, Any]:

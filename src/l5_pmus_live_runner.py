@@ -2911,9 +2911,15 @@ class Runner:
             # failure leaves the bound and the ordinary settlement runs.
             self.attest_other_strategy_cost(market, t)
             try:
-                out = self.store.retire_settled_market(
-                    market, yes_value=rep["settlement_px"],
-                    resolution=rep.get("resolution"))
+                # A SPORTS-CONTROLLER MARKET STILL AT THE BOUND: settle it on
+                # that controller's own feed, confirmed by our venue reads.
+                # Off unless L5_SPORTS_SETTLE_FROM_FEED=1; None (any miss)
+                # settles exactly as before.
+                out = self.settle_sports_from_feed(market, t, rep)
+                if out is None:
+                    out = self.store.retire_settled_market(
+                        market, yes_value=rep["settlement_px"],
+                        resolution=rep.get("resolution"))
             except LX.IncoherentBook as exc:
                 # the book cannot be settled because it is not a book a
                 # trade could have produced -- quantity with no cost, or
@@ -6827,6 +6833,73 @@ class Runner:
             "attested=False leaves the position at the $1 bound; the "
             "settlement below is unchanged by a refusal")))
         return out
+
+    def settle_sports_from_feed(self, market: str, t: Any,
+                                rep: Mapping[str, Any]
+                                ) -> Optional[Dict[str, Any]]:
+        """Settle a sports-controller market held here at the $1 bound from
+        that controller's own fill feed -- see `InventoryStore.settle_from_
+        sibling_feed` for every check. Returns the retirement record when it
+        settled, None when anything is missing: the caller then settles
+        exactly as before (bound, unresolved, fail closed). READS ONLY from
+        the venue: one /v1/order per feed order and one positions read.
+        Never raises into the settlement sweep except IncoherentBook, which
+        the sweep already handles."""
+        from src import l5_venue_cost_attestation as _VCA
+        if not _VCA.sports_settle_enabled():
+            return None
+        if LX.ORIGIN.ledger_owner_of_market(market) != LX.ORIGIN.SPORTS:
+            return None
+        if not any(str(k).rsplit("|", 1)[0] == market for k in
+                   (self.store.state.get("leg_cost_basis_unknown") or [])):
+            return None
+        now = dt.datetime.now(dt.timezone.utc)
+        if not _VCA.sibling_in_scope(market, now.isoformat()):
+            return None
+        url = str(os.getenv(_VCA.SIBLING_FEED_ENVS["SPORTS"], "")).strip()
+        try:
+            import urllib.request as _ur
+            with _ur.urlopen(url, timeout=3.0) as r:           # noqa: S310
+                doc = json.loads(r.read().decode("utf-8"))
+            reads: Dict[str, Any] = {}
+            if isinstance(doc, Mapping) and doc.get("readable") is True:
+                for o in doc.get("orders") or ():
+                    if isinstance(o, Mapping) and o.get("market") == market:
+                        vid = str(o.get("venue_order_id") or "").strip()
+                        if vid and vid not in reads:
+                            reads[vid] = t.order(vid)
+            rows = t.positions()
+            net = D(0)
+            for p in rows or ():
+                pm = LX._first_key(p, LX.VENUE_POSITION_MARKET_KEYS) \
+                    if isinstance(p, Mapping) else None
+                if pm is None or str(pm) != market:
+                    continue
+                net += D(LX.position_row(p)["signed_net"])
+            out = self.store.settle_from_sibling_feed(
+                market, yes_value=rep.get("settlement_px"),
+                resolution=rep.get("resolution"), feed=doc,
+                venue_orders=reads, venue_net=net, now=now)
+        except LX.IncoherentBook:
+            raise
+        except BaseException as exc:                           # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            out = {"retired": False, "fallback": True, "market": market,
+                   "reason": "FEED_SETTLE_FAILED:%s" % type(exc).__name__}
+        line = {k: v for k, v in dict(out).items()
+                if k in ("retired", "fallback", "market", "reason",
+                         "settlement_pnl", "pnl_provenance",
+                         "venue_order_id", "venue_net", "feed_up",
+                         "feed_down", "age_s", "venue_cum", "feed_qty")}
+        emit("L5_SPORTS_FEED_SETTLEMENT", dict(line, labels=(
+                "retired=True: settled from the sports feed with venue-"
+                "confirmed orders and net. fallback=True: nothing written; "
+                "the ordinary settlement below books the $1 bound as "
+                "before.")))
+        if out.get("retired"):
+            return out
+        return None
 
     def account_risk_line(self) -> Dict[str, Any]:
         """The account-wide loss state, for ANOTHER strategy on this account.
