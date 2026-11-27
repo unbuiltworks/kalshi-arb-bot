@@ -1,0 +1,293 @@
+{
+ "window": {
+  "start": "2026-11-27T20:47:00Z",
+  "end_used": "2026-11-27T23:30:00+00:00",
+  "counts_by_kind": {
+   "ACCOUNT_AUDIT": 3,
+   "CAMPAIGN_ECONOMICS": 3,
+   "CRICKET_LEARNED": 3,
+   "FILL": 3,
+   "FILL_MARKOUT": 3,
+   "INVENTORY_RECONCILE": 3,
+   "ORDER": 11,
+   "ORDER_NOT_SENT": 4,
+   "PILOT_PNL": 3,
+   "RESELECTED": 24,
+   "REWARD_CHECK": 3,
+   "RN1_QUOTE": 296,
+   "RN1_SELECT_NO_CHURN": 9,
+   "RN1_TOUCH_EV": 219,
+   "SELECTED": 32,
+   "heartbeat": 156,
+   "released_flat_market": 29
+  }
+ },
+ "1_qualifying": {
+  "live.qualifying_contract_s": 361.07,
+  "live.qualifying_contract_s.decreases": 0,
+  "live.resting_contract_s": 1220.155,
+  "live.resting_contract_s.decreases": 0,
+  "live.orders": 11.0,
+  "live.orders.decreases": 0,
+  "live.fills": 3.0,
+  "live.fills.decreases": 0,
+  "pregame.qualifying_contract_s": 0.0,
+  "pregame.qualifying_contract_s.decreases": 0,
+  "pregame.resting_contract_s": 0.0,
+  "pregame.resting_contract_s.decreases": 0,
+  "pregame.orders": 0.0,
+  "pregame.orders.decreases": 0,
+  "pregame.fills": 0.0,
+  "pregame.fills.decreases": 0,
+  "window_minutes": 163,
+  "minutes_with_heartbeat": 156,
+  "pct_minutes_resting_orders_gt0": 11.7,
+  "pct_minutes_qualifying_increased": 5.5,
+  "heartbeats": 156,
+  "first_hb": "2026-11-27T20:47:08.052513+00:00",
+  "last_hb": "2026-11-27T23:29:56.639122+00:00"
+ },
+ "2_capital": {
+  "time_weighted_mean_usd": 1.1349,
+  "max_usd": 3.2,
+  "mean_pct_of_60_cap": 1.89,
+  "max_pct_of_60_cap": 5.33,
+  "mean_pct_of_20_at_risk": 5.67,
+  "max_pct_of_20_at_risk": 16.0,
+  "minutes_zero_capital": 64.0,
+  "heartbeats_zero_capital": 62,
+  "max_resting_orders_usd": 1.94,
+  "max_unpaired_usd": 0.72,
+  "max_paired_awaiting_usd": 1.94,
+  "capacity_usd_min": 12.3777,
+  "capacity_usd_max": 13.8777,
+  "capacity_null_heartbeats": 0,
+  "account_limit_reasons": {
+   "None": 156
+  },
+  "submission_lock_states": {
+   "{\"completions_locked\": false, \"new_exposure_locked\": false, \"why\": null, \"window_end\": \"2026-11-27T23:30:00Z\"}": 156
+  },
+  "safety_latch_states": {
+   "null": 156
+  },
+  "active_len_dist": {
+   "2": 53,
+   "1": 83,
+   "0": 20
+  }
+ },
+ "3_gates": {
+  "touch_ev_events": 219,
+  "touch_ev_eligible_net_gt0": 81,
+  "eligible_distinct_slugs": 8,
+  "side_outcomes_by_gate_events": {
+   "block:vol_pause": 69,
+   "block:jump_pause": 56,
+   "block:net_not_positive": 15,
+   "rested": 13,
+   "why:marginal_ev:marginal_ev_not_positive": 6,
+   "block:account_risk": 1,
+   "no_quote_found": 1
+  },
+  "side_outcomes_by_gate_distinct_slugs": {
+   "rested": 2,
+   "block:vol_pause": 5,
+   "block:account_risk": 1,
+   "no_quote_found": 1,
+   "block:jump_pause": 3,
+   "block:net_not_positive": 3,
+   "why:marginal_ev:marginal_ev_not_positive": 3
+  },
+  "marginal_ev_rejections": 6,
+  "marginal_ev_rej_with_quote_reward0_while_touch_reward_gt0": 6,
+  "marginal_ev_rej_incentive_why": {
+   "below_minimum_payout": 6
+  },
+  "marginal_ev_rej_projected_usd_max": 0.0,
+  "marginal_ev_rej_projected_usd_mean": 0.0,
+  "touch_ev_by_hard": {
+   "recent_jump": 88,
+   "price_moving": 86,
+   "None": 45
+  },
+  "touch_ev_by_side_why": {
+   "NO:no_positive_placement": 170,
+   "YES:no_positive_placement": 140,
+   "YES:None": 49,
+   "NO:None": 49,
+   "YES:completion_keeps_placement": 30
+  },
+  "all_quotes_block_counts": {
+   "jump_pause": 130,
+   "vol_pause": 82,
+   "net_not_positive": 69,
+   "None": 11,
+   "pilot_meter_unavailable": 2,
+   "account_risk": 1,
+   "late:set_S3": 1
+  },
+  "all_quotes_why_counts": {
+   "YES:None": 218,
+   "NO:None": 144,
+   "NO:price_band": 109,
+   "YES:marginal_ev:marginal_ev_not_positive": 59,
+   "NO:marginal_ev:marginal_ev_not_positive": 42,
+   "YES:price_band": 18,
+   "NO:refill_cooldown": 1,
+   "YES:refill_cooldown": 1
+  },
+  "quotes_with_want": 47
+ },
+ "4_reward_qual": {
+  "by_count": {
+   "below_minimum_payout": 292,
+   "qualifies": 4
+  },
+  "by_time_s": {
+   "below_minimum_payout": 10016,
+   "qualifies": 123
+  },
+  "by_time_pct": {
+   "below_minimum_payout": 98.8,
+   "qualifies": 1.2
+  },
+  "max_projected_usd": 6.2221,
+  "max_projected_slug": "aec-wtadb-brancaoz-mcgiffosborn-2026-11-27",
+  "min_payout_usd_values": [
+   "1.0"
+  ]
+ },
+ "5_payments": {
+  "reward_check_t": "2026-11-27T22:49:10.925452+00:00",
+  "credited_usd": "24.0900000000000001",
+  "accrued_not_credited_usd": "4.8600000000000001",
+  "by_status": {
+   "PAID": {
+    "n": 122,
+    "usd": "24.0900000000000001"
+   },
+   "PENDING": {
+    "n": 10,
+    "usd": "0.8600000000000001"
+   },
+   "SKIPPED": {
+    "n": 65,
+    "usd": "4.00"
+   }
+  },
+  "rows_brief_n": 50,
+  "rows_dated_campaign_day": [],
+  "reward_check_count_in_window": 3,
+  "campaign_economics_t": "2026-11-27T22:50:51.007722+00:00",
+  "campaign": {
+   "since": "2026-11-27T20:30:00+00:00",
+   "until": "2026-11-27T23:30:00+00:00",
+   "markets": 2,
+   "fills": 3,
+   "contracts": "4",
+   "spend_usd": "1.9400",
+   "completed_pairs": "2",
+   "pair_edge_usd": "0.0600",
+   "residual_contracts": "0",
+   "fees_charged_usd": "0",
+   "rewards_paid_usd": "0",
+   "rewards_pending_usd": "0",
+   "rewards_skipped_usd": "0",
+   "net_realized_usd": "0",
+   "realized_cash_basis_usd": "0.0600"
+  },
+  "pilot_pnl_t": "2026-11-27T22:50:50.965590+00:00",
+  "pilot_realized_net_usd": "0.0600",
+  "pilot_status": {
+   "no_fills": 1,
+   "paired_flat": 1
+  },
+  "pilot_execution": {
+   "fills": 3,
+   "contracts": "4",
+   "spent_usd": "1.9400",
+   "completed_pairs": "2",
+   "avg_pair_cost": "0.9700",
+   "locked_pair_edge_usd": "0.0600",
+   "residual_contracts": "0",
+   "residual_cost_usd": "0",
+   "label": "venue-reconciled fills only; a completed pair's edge is realized cash at pairing (venue nets and pays $1); residual legs realize at settlement"
+  }
+ },
+ "6_orders_fills": {
+  "orders": 11,
+  "fills": 3,
+  "orders_by_slug": {
+   "aec-wtadb-brancaoz-mcgiffosborn-2026-11-27": 6,
+   "aec-atpdb-alvvalflores-covatovoelzk-2026-11-27": 5
+  },
+  "fills_by_slug": {
+   "aec-wtadb-brancaoz-mcgiffosborn-2026-11-27": 3
+  },
+  "order_stage": {
+   "rn1_open": 7,
+   "two_sided_complete": 4
+  },
+  "fill_contracts": 4.0,
+  "order_not_sent": 4,
+  "order_not_sent_by_stage_why": {
+   "two_sided_complete:deferred_by_request_budget": 1,
+   "two_sided_complete:failed_before_the_order_was_sent": 2,
+   "rn1_open:deferred_by_request_budget": 1
+  },
+  "selected": 32,
+  "reselected": 24,
+  "fill_markout": 3
+ },
+ "7_accumulation": {
+  "by_class": {
+   "opening": {
+    "fills": 1,
+    "contracts": 2.0,
+    "cost_usd": 0.72,
+    "avg_px": 0.36
+   },
+   "completion": {
+    "fills": 2,
+    "contracts": 2.0,
+    "cost_usd": 1.22,
+    "avg_px": 0.61
+   }
+  },
+  "fills": [
+   {
+    "t": "2026-11-27T21:14:52.854854+00:00",
+    "slug": "aec-wtadb-brancaoz-mcgiffosborn-2026-11-27",
+    "side": "NO",
+    "px": "0.3600",
+    "qty": "2",
+    "class": "opening",
+    "stage": "rn1_open",
+    "phase": "live"
+   },
+   {
+    "t": "2026-11-27T21:29:56.072375+00:00",
+    "slug": "aec-wtadb-brancaoz-mcgiffosborn-2026-11-27",
+    "side": "YES",
+    "px": "0.6100",
+    "qty": "1",
+    "class": "completion",
+    "stage": "two_sided_complete",
+    "phase": "live"
+   },
+   {
+    "t": "2026-11-27T21:32:28.646891+00:00",
+    "slug": "aec-wtadb-brancaoz-mcgiffosborn-2026-11-27",
+    "side": "YES",
+    "px": "0.6100",
+    "qty": "1",
+    "class": "completion",
+    "stage": "two_sided_complete",
+    "phase": "live"
+   }
+  ],
+  "markout_events": 3,
+  "label": "acquisition cost = venue fill price; markout is a mark, not profit"
+ }
+}

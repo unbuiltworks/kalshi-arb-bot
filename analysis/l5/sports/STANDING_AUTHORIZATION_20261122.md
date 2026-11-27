@@ -2782,3 +2782,27 @@ not increase capital or deploy without explicit authorization."
 - **Checks and capacity:**
   `analysis/l5/sports/PRE_ACTIVATION_CHECKS_20261127.md`.
 - **The running campaign is untouched.** Not deployed or armed.
+
+### 82b. Window-end report (20:30–23:30Z; trading 20:47–23:30) — 27 Nov 2026, 23:35 UTC
+
+- **Lock:** 23:30:01 `window_completions_only` (new exposure locked).
+  Watchdog 23:33: 0 open orders, all registries OK.
+- **Orders and fills:** 11 orders (7 openings, 4 completions); 3 fills, 4
+  contracts:
+  - opening NO 2 @ 0.36;
+  - completions YES 2 @ 0.61 (pair cost 0.97);
+  - **same-side additions: 0**.
+- **Realized:** PILOT_PNL +$0.06 (one paired-flat market); residual 0;
+  nothing awaiting completion. $1.94 is paired, awaiting settlement.
+- **Capital:** time-weighted mean $1.13 (max $3.20), 1.9% of $60, 5.7% of
+  the $20 at-risk budget; 64 minutes with zero capital deployed.
+- **Qualifying time:** resting in 11.7% of minutes, qualifying accruing in
+  5.5%. Live 361 / 1,220 qualifying / resting contract-seconds; **pregame
+  0 / 0**. RN1_QUOTE in `below_minimum_payout` 98.8% of the time.
+- **Blocks:** jump pause 130, volatility pause 82, `net_not_positive` 69 (of
+  them pregame Setka 6, with reward credited $0 and fill cost at live
+  rates). 29 flat releases (rotation working).
+- **Rewards:** none confirmed for the campaign (rows post later). PAID
+  $24.09 lifetime is unchanged.
+- **Ledger 23:32:** day −$5.5756; lifetime −$66.5694 (room $8.4306);
+  drawdown $6.1223 of $20; unresolved 0.
