@@ -2400,3 +2400,46 @@ the exact three-hour live authorization packet for sports release
     the order is refused.
   - So the campaign worst case is above −$8, against fresh lifetime room of
     $8.1431. The fresh figure is re-read before arming (75a).
+
+### 75a. Deployment failed verification; rolled back; not armed — 27 Nov 2026, 12:53 UTC
+
+- **12:46–12:47:** the activation variables from packet Revision 1, including
+  `PMUS_RN1_PILOT_LOSS_USD=8`, were set with lock `1`. The source was pinned
+  to `1c1d546b6`; deployment `82ef7365` booted at 12:47:32 with lock
+  `locked`.
+- **Failure:** from 12:47:33 the loop raised
+  `ImportError: cannot import name 'pmus_duration_rank' from 'src'` every
+  pass.
+  - At 12:48:22 the safety latch tripped (`loop_errors`, 10 consecutive,
+    id `2026-11-27T12:48:22.780628+00:00`).
+  - No order was possible: lock held, latch on, 0 open orders throughout.
+- **Root cause:** the image copies `src/` files one by one, and its
+  Dockerfile has no COPY line for three lazily imported modules:
+  `pmus_duration_rank`, `pmus_reward_calibration` and
+  `pmus_campaign_economics`. The tests run against the repository, so they
+  passed.
+- **Rollback (packet rule):** source back to `31ddf1b06`, lock still `1`.
+  Deployment `0ad38815` was live at 12:51:51.
+  - No loop errors.
+  - Account risk ok: lifetime −66.8569, room 8.1431, drawdown 6.4098 of 20.
+  - Watchdog 12:52:02: 0 open orders, all registries OK.
+  - The latch persists in the book and stays in force until the owner sets
+    `PMUS_TWO_SIDED_SAFETY_LATCH_ACK`. It has not been acknowledged.
+- **The campaign was not armed and no window was set.** The authorization
+  in 75 covered SHA `1c1d546b6` only, so it does not extend to a fixed
+  build.
+- **Fix candidate, not deployed:**
+  - SHA `a51cfdbd2c1b0a16dacce93e9b089c8caf4c9183`, branch
+    `release/pmus-sports-next-imagefix-a51cfdbd2`.
+  - Contents: `1c1d546b6` plus three Dockerfile COPY lines, a trigger line,
+    and a test that every src module referenced by a copied src file is
+    itself copied. The test fails on `1c1d546b6` and passes on the fix.
+  - `src/` is unchanged.
+  - Verification:
+    - simulated image contents import all six entry modules with the flags
+      on;
+    - the targeted suites pass (enabled-mode safety, duration rank,
+      live-first slots, reward calibration: 106).
+- **Note:** the new activation variables remain set on the service. They
+  are inert under `31ddf1b06` apart from the fill-rate and fill-loss values
+  shown in boot, and the service stays locked.
