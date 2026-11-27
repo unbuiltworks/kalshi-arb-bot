@@ -352,3 +352,23 @@ def test_slot_counting_with_inventory_counted(sb, monkeypatch):
     assert e.rn1_market_slots_full(SLUG, me) is False      # only m2 counts
     e.b.m("aec-z-m0")["done"] = False
     assert e.rn1_market_slots_full(SLUG, me) is True       # m0 and m2
+
+
+def test_on_a_lost_reward_is_never_held(evh, monkeypatch):
+    """Reward gone (programme withdrawn, feed lost): EV -0.10/h would pass
+    the hold arithmetic (-0.0017 + 0.002), but a lost reward withdraws at
+    once -- the bid was priced by the reward."""
+    e, v, box, clock = evh
+    monkeypatch.setattr(M, "RN1_EV_HOLD", True)
+    e.step_market(SLUG)
+    assert _ids(v)
+    box["reward"] = 0.0
+    clock["t"] += 5
+    e.step_market(SLUG)
+    assert not _ids(v)
+    e.step_market(SLUG)
+    monkeypatch.setattr(e, "rn1_reward", lambda s: None)  # programme gone
+    box["reward"] = 1.0
+    clock["t"] += 5
+    e.step_market(SLUG)
+    assert not _ids(v)

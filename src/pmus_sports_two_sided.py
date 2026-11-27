@@ -1797,7 +1797,9 @@ RN1_SIDE_INDEPENDENT = os.getenv("PMUS_RN1_SIDE_INDEPENDENT",
 #   EV/h x RN1_EV_HOLD_MAX_S/3600 + RN1_REPLACE_COST_USD >= 0
 # (its expected value over the bounded hold window plus the saved cost of
 # cancelling and re-placing it: two signed requests and the queue position)
-# and for at most RN1_EV_HOLD_MAX_S since it first failed. A NEW bid with
+# and for at most RN1_EV_HOLD_MAX_S since it first failed, and only while
+# its reward is still credited this pass (a lost, unread or unqualified
+# reward withdraws at once). A NEW bid with
 # marginal EV <= 0 is never posted. With this flag on, RN1_NET_HOLD_S no
 # longer keeps openings regardless of their EV. Hard blocks still pull.
 RN1_EV_HOLD = os.getenv("PMUS_RN1_EV_HOLD", "0").strip() == "1"
@@ -6012,6 +6014,13 @@ class Engine:
                 abs(D(str(o["px"])) - px) < RN1.REPRICE_TICKS * D(str(tick))
                 for o in (mk.get("orders") or {}).values())
             if not resting:
+                return False
+            # only a dip in an economics that is still being read: never
+            # when the reward is lost, unread or unqualified (programme
+            # withdrawn or ended, feed or book read failing, projection
+            # below the minimum payout) -- those withdraw at once
+            if r.get("reward_why") is not None or \
+                    float(r.get("reward_usd_per_hour") or 0.0) <= 0.0:
                 return False
             ev = float(r.get("ev_usd_per_hour"))
             key = "%s|%s" % (c["side"], px)
