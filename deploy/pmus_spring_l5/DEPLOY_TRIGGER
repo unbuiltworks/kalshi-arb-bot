@@ -299,3 +299,4 @@ release candidate for 8e6366786 (integrated release a17a9c978 + enabled-mode saf
 release candidate for 1c1d546b6 + image fix (Dockerfile COPY for duration_rank, reward_calibration, campaign_economics; src unchanged)
 release candidate for f185c712b (directional allocation, PMUS_RN1_DIRECTIONAL default off; not approved, not deployed)
 release candidate for 495e139b5 (hybrid allocator v2; all flags default off; not approved, not deployed)
+release candidate for 2e7dd4bdf (integrated hybrid: qualification scope, feasible ladder, allocator, pause options; all flags default off; not approved, not deployed)
