@@ -2739,3 +2739,28 @@ existing limits unchanged: $8 campaign loss stop, maker-only, two markets,
   error and no latch.
 - **Scheduled:** mid-checks 21:50 and 22:50; window report 23:32; close-out
   and relock to `1` at 01:32Z (28 Nov).
+
+## 83. Reward economics bottleneck corrected on dev; release candidate c6fdc12b1 prepared; not authorized — 27 Nov 2026, about 22:20 UTC
+
+**Owner (verbatim, excerpt):** "PRIORITY: Make L5 a profitable reward-aware
+inventory accumulation system. [...] Do not modify the running campaign,
+weaken safety gates, increase capital or deploy without authorization."
+
+- **Running campaign untouched:** `9f22fd1c`, `a51cfdbd2`, window to 23:30Z.
+- **Bottleneck:**
+  - the $1 minimum is applied as a per-market projection, so every reward
+    is credited $0 at a 2-contract clip, contradicted by our rows (34/39
+    groups paid under $1; paid fraction 0.858);
+  - pregame markets are charged live fill rates (measured pregame 0.20 vs
+    live 3.0 fills per contract-hour);
+  - a completed pair holds a quoting slot.
+- **Candidate:** `c6fdc12b1efd859364931ddd2c0a7985853afffa` on
+  `release/pmus-sports-reward-economics-c6fdc12b1`, built on `8373069fe`.
+  New flags, default off:
+  - `PMUS_RN1_REWARD_MIN_RULE=paid_fraction`;
+  - `PMUS_RN1_FILL_RATE_PREGAME_MULT=0.25`;
+  - `PMUS_RN1_RELEASE_BALANCED=1`.
+- **Evidence:** `analysis/l5/sports/REWARD_ECONOMICS_BOTTLENECK_20261127.md`
+  and `reward_economics_20261127/`.
+- **Regression:** 6,090 passed; the 26 failure names are identical to a51.
+- **Not deployed or armed.**
