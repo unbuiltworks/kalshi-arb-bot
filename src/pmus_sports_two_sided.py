@@ -1535,6 +1535,16 @@ _lq = os.getenv("PMUS_RN1_LADDER_QTY", "").strip()
 RN1_LADDER_QTY = D(_lq) if _lq else None
 RN1_RELEASE_UNQUALIFIED_S = float(os.getenv(
     "PMUS_RN1_RELEASE_UNQUALIFIED_S", "0") or 0)
+# RELEASE BALANCED INVENTORY (27 Nov, default OFF). LIVE 27 Nov 21:32Z: a
+# market whose pair completed (2 YES / 2 NO, no unpaired leg) wanted no bid
+# for the rest of the match but kept one of the two quoting slots, because
+# the idle release only applied to a FLAT (0/0) market. With
+# PMUS_RN1_RELEASE_BALANCED=1 a balanced market (YES = NO > 0) with no bid
+# wanted and no order open is released after the same idle time as a flat
+# one. Its inventory stays in the book and in every limit, the meter and
+# the audit (accounting reads all markets); only the slot is freed.
+RN1_RELEASE_BALANCED = os.getenv("PMUS_RN1_RELEASE_BALANCED",
+                                 "0").strip() == "1"
 RN1_PULL_THREATENED_ONLY = os.getenv(
     "PMUS_RN1_PULL_THREATENED_ONLY", "0").strip() == "1"
 # NET-PROFIT RANKING (owner 2026-11-25: "Rank markets by expected net
@@ -1769,11 +1779,82 @@ RN1_DIR_SHARP_MAX_AGE_S = float(os.getenv("PMUS_RN1_DIR_SHARP_MAX_AGE_S",
 RN1_DIR_SHARP_DRIFT = os.getenv("PMUS_RN1_DIR_SHARP_DRIFT", "0.00002")
 
 
+# PREGAME FILL RATE (27 Nov, default 1.0 = unchanged). The fill rates above
+# were measured on live play. Lifetime heartbeat phases (27 Nov 19:20Z):
+# live 85 fills over 28.2 resting contract-hours (3.0 / contract-hour),
+# pregame 26 fills over 127.7 (0.20 / contract-hour), 15x lower. With
+# PMUS_RN1_FILL_RATE_PREGAME_MULT < 1 a market the engine has seen as NOT
+# live (pregame) uses rate x mult; a market whose phase is unknown keeps the
+# live rate (conservative). The fill LOSS per contract is unchanged.
+RN1_FILL_RATE_PREGAME_MULT = max(0.0, min(1.0, float(os.getenv(
+    "PMUS_RN1_FILL_RATE_PREGAME_MULT") or "1")))
+#: slug -> "live" / "pregame", recorded by Engine.event_live
+RN1_PHASE: Dict[str, str] = {}
+
+
 def rn1_fill_param(table: Mapping[int, Mapping[str, float]], depth: int,
                    slug: str) -> float:
     t = table[min(1, max(0, int(depth)))]
     comp = slug.split("-")[1].lower() if slug.count("-") >= 1 else ""
-    return float(t.get(comp, t[""]))
+    v = float(t.get(comp, t[""]))
+    if table is RN1_FILL_RATE and RN1_FILL_RATE_PREGAME_MULT < 1.0 and \
+            RN1_PHASE.get(slug) == "pregame":
+        v *= RN1_FILL_RATE_PREGAME_MULT
+    return v
+
+
+# REWARD PAYOUT RULE (27 Nov, default "projection" = unchanged). The venue
+# says "Rewards under $1.00 are not paid out" without a scope. Our own
+# reward rows contradict a per-market or per-competition-day $1 test: 34 of
+# 39 (competition, day) groups were PAID with totals under $1, rows of $0.01
+# are paid, and no group mixed PAID and SKIPPED (data/pmus/..., analysis/l5/
+# rewards/REWARD_PAYOUT_THRESHOLD_20261122.md). "projection" credits nothing
+# until the projected total reaches $1, so at our clip size every reward was
+# credited as $0. "paid_fraction" instead credits each theoretical reward
+# (after calibration) times the share of the venue's resolved reward value
+# that was actually PAID: PAID / (PAID + SKIPPED) from the latest
+# REWARD_CHECK (pending rows excluded; at least RN1_PAID_FRACTION_MIN_USD
+# resolved, at most RN1_PAID_FRACTION_MAX_AGE_S old). Unknown or stale ->
+# no reward is credited at all (fail closed). Rewards are still never
+# realized P&L, and never rescue a negative trading edge beyond their value.
+RN1_REWARD_MIN_RULE = os.getenv("PMUS_RN1_REWARD_MIN_RULE",
+                                "projection").strip().lower()
+RN1_PAID_FRACTION_MIN_USD = float(os.getenv(
+    "PMUS_RN1_PAID_FRACTION_MIN_USD") or "5")
+RN1_PAID_FRACTION_MAX_AGE_S = float(os.getenv(
+    "PMUS_RN1_PAID_FRACTION_MAX_AGE_S") or "14400")
+_PAID_FRACTION: Dict[str, Any] = {"v": None, "t": 0.0}
+
+
+def rn1_set_paid_fraction(by_status: Any, now: Optional[float] = None
+                          ) -> Optional[float]:
+    """Record PAID / (PAID + SKIPPED) from a REWARD_CHECK's by_status."""
+    v = None
+    try:
+        paid = float(((by_status or {}).get("PAID") or {}).get("usd") or 0)
+        skip = float(((by_status or {}).get("SKIPPED") or {}).get("usd")
+                     or 0)
+        if paid >= 0 and skip >= 0 and paid + skip >= \
+                RN1_PAID_FRACTION_MIN_USD:
+            v = max(0.0, min(1.0, paid / (paid + skip)))
+    except Exception:                                     # noqa: BLE001
+        v = None
+    _PAID_FRACTION.update(v=v, t=time.time() if now is None else now)
+    return v
+
+
+def rn1_paid_fraction(now: Optional[float] = None) -> Optional[float]:
+    """The fresh paid fraction, or None (unknown, stale or unreadable)."""
+    now = time.time() if now is None else now
+    v = _PAID_FRACTION.get("v")
+    if v is None or now - float(_PAID_FRACTION.get("t") or 0) > \
+            RN1_PAID_FRACTION_MAX_AGE_S:
+        return None
+    return float(v)
+
+
+def rn1_paid_rule() -> bool:
+    return RN1_REWARD_MIN_RULE == "paid_fraction"
 
 
 def rn1_comp_value(table: Mapping[str, float], slug: str) -> float:
@@ -1814,6 +1895,8 @@ def rn1_reward_mult(slug: str, per: Optional[Mapping[str, Any]] = None
     RANK_REWARD_HAIRCUT, exactly what the haircut sites applied."""
     hc = max(0.0, min(1.0, RANK_REWARD_HAIRCUT))
     if not RN1_REWARD_CALIBRATION:
+        if rn1_paid_rule():
+            return hc * (rn1_paid_fraction() or 0.0)
         return hc
     tab = rn1_reward_cal_table()
     comp = slug.split("-")[1].lower() if slug.count("-") >= 1 else ""
@@ -1829,7 +1912,10 @@ def rn1_reward_mult(slug: str, per: Optional[Mapping[str, Any]] = None
         div = float((per or {}).get("M_event") or 1)
     elif RN1_REWARD_POOL_SCOPE == "program":
         div = float((per or {}).get("M_program") or 1)
-    return m / max(1.0, div)
+    m = m / max(1.0, div)
+    if rn1_paid_rule():
+        m *= rn1_paid_fraction() or 0.0            # unknown: nothing credited
+    return m
 
 
 def rn1_pool_key(per: Optional[Mapping[str, Any]],
@@ -3384,7 +3470,13 @@ class Engine:
         paying. A market with no start time on record came from the live
         slate. One with a start time is live once the venue lists it as
         live or the start has passed. PMUS_TWO_SIDED_SLATE=live keeps the
-        earlier answer (every market on the slate is live)."""
+        earlier answer (every market on the slate is live). The answer is
+        recorded in RN1_PHASE (pregame fill rate)."""
+        live = self._event_live(slug)
+        RN1_PHASE[slug] = "live" if live else "pregame"
+        return live
+
+    def _event_live(self, slug: str) -> bool:
         if slate() == "live":
             return True
         gs = (self.b.d["markets"].get(slug) or {}).get("game_start")
@@ -6745,6 +6837,11 @@ class Engine:
         pj["min_payout_usd"] = RN1_REWARD_MIN_DAY_USD
         pj["qualifies"] = pj["projected_usd"] + 1e-9 >= \
             RN1_REWARD_MIN_DAY_USD
+        if rn1_paid_rule():
+            pf = rn1_paid_fraction()
+            pj.update(rule="paid_fraction", paid_fraction=pf,
+                      qualifies=bool(pf) and bool(
+                          slug and self.rn1_reward(slug)))
         return pj
 
     def rn1_incentive(self, slug: str, mk: Optional[Dict[str, Any]] = None,
@@ -6762,6 +6859,16 @@ class Engine:
             mk = self.b.m(slug) if mk is None else mk
             if tick is not None:
                 self._rn1_reward_estimate(slug, mk, per, D(str(tick)))
+            if rn1_paid_rule():
+                pf = rn1_paid_fraction()
+                out.update(rule="paid_fraction", paid_fraction=pf,
+                           label="THEORETICAL reward x venue paid fraction; "
+                                 "not a payment")
+                if not pf:
+                    out["why"] = "paid_fraction_unavailable"
+                    return out
+                out.update(ticks=RN1_REWARD_CREDIT_TICKS, why="qualifies")
+                return out
             if RN1_REWARD_QUAL_SCOPE in RN1_QUAL_UNIFIED:
                 pj = self.rn1_reward_qualifies(slug)
                 out.update(projected_usd=pj["projected_usd"],
@@ -7370,7 +7477,9 @@ class Engine:
                                              if o.get("open")])
                     self.b.save()
                     return
-        if flat and not any(want.values()) and not account_block:
+        balanced = RN1_RELEASE_BALANCED and y == n and y > 0
+        if (flat or balanced) and not any(want.values()) and \
+                not account_block:
             idle = mk.setdefault("idle_since", now)
             # only paused: the price is moving, or the international price
             # is missing this pass. Anything else (late, out of scope, no
@@ -9656,6 +9765,10 @@ class Engine:
             log("REWARD_CHECK", ok=False,
                 err=f"{type(exc).__name__}:{str(exc)[:160]}")
             return False
+        if e.get("ok"):
+            rn1_set_paid_fraction(e.get("by_status"))
+        else:
+            rn1_set_paid_fraction(None)               # unreadable: unknown
         if RN1_REWARD_CALIBRATION and e.get("ok"):
             self.reward_calibration(list(e.get("rows_detail") or []))
         if ECONOMICS_REPORT:
