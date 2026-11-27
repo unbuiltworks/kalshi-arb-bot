@@ -2267,3 +2267,30 @@ the exact three-hour live authorization packet for sports release
 - **Account risk:** ok since 03:21:03; loss room 14.02, drawdown capacity
   11.29.
 - **Rewards:** PAID unchanged.
+
+### 71f. Stage 1 hourly report, 04:50 UTC
+
+- **Fills 03:50–04:50:**
+  - `sydvik-dunvol`: YES 1 @ 0.41 (extension);
+  - `savvol-hryevh`: NO 0.5 @ 0.40 (extension);
+  - `kolval-volyur`: YES 1 @ 0.47 (opening).
+  - Orders: rn1_open 12, rn1_extend 2, two_sided_complete 7.
+- **No settlement this hour.** The new ledger form is still untested live.
+- **Realized:** +$0.46, unchanged. Cash 302.6224; unexplained 0.
+- **Unpaired** ($9.70 against the $10 campaign cap, now nearly binding):
+
+  | Market | Side | Contracts | Cost | Average |
+  |---|---|---|---|---|
+  | `paryur` | NO | 8.95 | 4.12 | |
+  | `savvol` | NO | 5.69 | 2.66 | 0.467 |
+  | `sydvik` | YES | 3.45 | 1.52 | 0.442 |
+  | `kuzdmy` | YES | 2 | 0.93 | |
+  | `kolval` | YES | 1 | 0.47 | |
+
+  All pregame Setka, with completion bids.
+- **Safety:**
+  - venue reconcile 04:45 ok (5 positions, no mismatch);
+  - two drawdown-unreadable blips: 25 s at 03:56, 15 s at 04:06; one
+    opening refused;
+  - account risk otherwise ok.
+- **Rewards:** PAID unchanged.
