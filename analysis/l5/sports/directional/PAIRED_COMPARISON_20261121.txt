@@ -1,0 +1,11 @@
+Paired per-market difference vs baseline (same recorded markets; THEORETICAL)
+touch   directional_l0.005         n=22 mean +0.122 se 0.379 t=+0.32  total +2.68 (matched -2.47, residual +5.15)  better 8 worse 11
+touch   adds_only_l0.005           n=22 mean +0.185 se 0.197 t=+0.94  total +4.07 (matched -1.66, residual +5.73)  better 5 worse 10
+touch   adds_only_l0.01_fl_lead    n=22 mean +0.114 se 0.175 t=+0.65  total +2.50 (matched -1.07, residual +3.56)  better 5 worse 6
+touch   adds_only_l0.005_fl_lead   n=22 mean +0.120 se 0.175 t=+0.69  total +2.65 (matched -0.92, residual +3.56)  better 5 worse 6
+touch   full_l0.005_fl_lead        n=22 mean +0.056 se 0.306 t=+0.18  total +1.22 (matched -2.03, residual +3.25)  better 8 worse 7
+through directional_l0.005         n=17 mean +0.421 se 0.379 t=+1.11  total +7.16 (matched -1.69, residual +8.85)  better 9 worse 5
+through adds_only_l0.005           n=17 mean +0.633 se 0.289 t=+2.19  total +10.75 (matched -0.28, residual +11.04)  better 8 worse 4
+through adds_only_l0.01_fl_lead    n=17 mean +0.615 se 0.288 t=+2.14  total +10.46 (matched +0.20, residual +10.26)  better 7 worse 2
+through adds_only_l0.005_fl_lead   n=17 mean +0.587 se 0.290 t=+2.02  total +9.97 (matched +1.02, residual +8.95)  better 7 worse 2
+through full_l0.005_fl_lead        n=17 mean +0.327 se 0.344 t=+0.95  total +5.57 (matched -1.19, residual +6.76)  better 8 worse 4

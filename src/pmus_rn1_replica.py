@@ -405,8 +405,10 @@ def quotes(*, yes_bid: Any, yes_ask: Any, tick: Any,
                 qty = mq                        # venue minimum; tiny overfill
         else:
             # OPEN (flat) or EXTEND (heavier / equal side): accumulate,
-            # bounded by unmatched cost; replenish after a cool-down
-            qty = qty0
+            # bounded by unmatched cost; replenish after a cool-down.
+            # `qty_side` (engine directional sizing): this side's clip
+            # before the caps below; absent = the common clip.
+            qty = D(str((k.get("qty_side") or {}).get(s, qty0)))
             fresh = p[s] == 0 or (p[s] == p[o] and bool(
                 k.get("balanced_is_open", BALANCED_IS_OPEN)))
             role = "open" if fresh else "extend"
@@ -418,7 +420,11 @@ def quotes(*, yes_bid: Any, yes_ask: Any, tick: Any,
             # Without that gate, retain the legacy average-cost ceiling.
             independent = bool(k.get("edge_gate")) and bool(k.get(
                 "independent_adds", os.getenv("PMUS_RN1_INDEPENDENT_ADDS", "0") == "1"))
-            if p[s] > 0 and not fresh and not independent:
+            # `adds_priced_externally` (engine directional allocation with
+            # a settled probability): the addition is priced by its marginal
+            # EV against that probability instead of the average-cost cap.
+            priced = bool(k.get("adds_priced_externally"))
+            if p[s] > 0 and not fresh and not independent and not priced:
                 avg_s = cs[s] / p[s]
                 if px > avg_s + up:
                     px = _floor(avg_s + up, t)  # don't chase it up

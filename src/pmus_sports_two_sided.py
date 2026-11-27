@@ -1681,6 +1681,47 @@ RN1_FILL_RATE = {0: _comp_rates("PMUS_RN1_FILL_RATE_TOUCH", "0.5"),
 RN1_FILL_LOSS = {0: _comp_rates("PMUS_RN1_FILL_LOSS_TOUCH", "0.05"),
                  1: _comp_rates("PMUS_RN1_FILL_LOSS_BEHIND", "0.035")}
 
+# DIRECTIONAL INVENTORY ALLOCATION (2026-11-27, default OFF; see
+# src/pmus_directional_alloc.py). With PMUS_RN1_DIRECTIONAL=1 every opening
+# and same-side addition bid the quoting rule wants is judged on the
+# international fair value (intl_fair_band: the mid and its range over
+# RN1_FAIR_STABLE_S, only once settled): it is kept, resized or refused by its
+# marginal EV per contract after the competition's fill loss and an
+# inventory-concentration charge, the side the fair value does not favour
+# rests a tick further back, and ladder levels are judged on the inventory
+# they would add. Without a settled fair value nothing changes. Completions,
+# pair-cost limits, caps, loss stops, the guard and every other gate are
+# untouched; it can only remove, shrink or deepen a bid, never add one.
+RN1_DIRECTIONAL = os.getenv("PMUS_RN1_DIRECTIONAL", "0").strip() == "1"
+RN1_DIR_CFG = {
+    "risk_aversion": os.getenv("PMUS_RN1_DIR_RISK_AVERSION", "0.005"),
+    "min_ev": os.getenv("PMUS_RN1_DIR_MIN_EV", "0"),
+    "hysteresis": os.getenv("PMUS_RN1_DIR_HYSTERESIS", "0.01"),
+    "depth_unfavoured_ticks": int(os.getenv(
+        "PMUS_RN1_DIR_DEPTH_UNFAVOURED_TICKS", "1")),
+    "touch_edge": os.getenv("PMUS_RN1_DIR_TOUCH_EDGE", "0.02"),
+    # 0 (default): openings on a flat side pass unchanged so both sides
+    # still open and pair; only same-side additions (and ladder levels
+    # behind a bid) are judged. Backtest 2026-11-27 (recorded two-venue
+    # books, 21 Nov): judging openings too made inventory one-sided.
+    "judge_openings": os.getenv("PMUS_RN1_DIR_JUDGE_OPENINGS",
+                                "0").strip() == "1",
+    "up_mult": os.getenv("PMUS_RN1_DIR_UP_MULT", "1"),
+    "extra_levels": int(os.getenv("PMUS_RN1_DIR_EXTRA_LEVELS", "0")),
+    "upsize_edge": os.getenv("PMUS_RN1_DIR_UPSIZE_EDGE", "0.03"),
+}
+# Same-side additions priced by their marginal EV against the probability
+# instead of the average-cost "don't chase" cap (only while a probability
+# is in force; the residual, per-market, campaign and account caps apply).
+RN1_DIR_PRICE_ADDS = os.getenv("PMUS_RN1_DIR_PRICE_ADDS", "0").strip() == "1"
+# Sportsbook probability (the sharp shadow feed's de-vigged fair value) when
+# no international fair value is settled. Refused past MAX_AGE_S; younger
+# readings widen the band by DRIFT per second of age.
+RN1_DIR_SHARP = os.getenv("PMUS_RN1_DIR_SHARP", "0").strip() == "1"
+RN1_DIR_SHARP_MAX_AGE_S = float(os.getenv("PMUS_RN1_DIR_SHARP_MAX_AGE_S",
+                                          "900"))
+RN1_DIR_SHARP_DRIFT = os.getenv("PMUS_RN1_DIR_SHARP_DRIFT", "0.00002")
+
 
 def rn1_fill_param(table: Mapping[int, Mapping[str, float]], depth: int,
                    slug: str) -> float:
@@ -4790,6 +4831,8 @@ class Engine:
                     label="SHADOW: would-quote only; nothing placed")
                 rows += 1
                 state[slug] = {"t": now, "fair_yes": str(fy["fair_yes"]),
+                               "odds_age_s": fy.get("age_s"),
+                               "source": fy.get("source"),
                                "q": {"YES": None if q["YES"] is None
                                      else str(q["YES"]),
                                      "NO": None if q["NO"] is None
@@ -5553,10 +5596,120 @@ class Engine:
         except Exception:                                 # noqa: BLE001
             return not RN1_NET_RANK
 
+    def rn1_directional_prob(self, slug: str) -> Optional[Dict[str, Any]]:
+        """The probability band for RN1_DIRECTIONAL, or None (= no change):
+        the international fair band once settled; otherwise, with
+        RN1_DIR_SHARP, the sportsbook fair value from the sharp shadow
+        state, refused past RN1_DIR_SHARP_MAX_AGE_S and widened by its age.
+        Never the traded market's own price."""
+        from src import pmus_directional_alloc as DA
+        try:
+            band = self.intl_fair_band(slug)
+            if band.get("settled") and band.get("mid") is not None:
+                return DA.probability(band["mid"], band.get("lo"),
+                                      band.get("hi"), source="intl")
+            if RN1_DIR_SHARP:
+                st = ((self.b.d.get("sharp_shadow") or {}).get(slug) or {})
+                if st.get("fair_yes") is not None and st.get("t"):
+                    age = max(0.0, time.time() - float(st["t"])) + \
+                        float(st.get("odds_age_s") or 0.0)
+                    return DA.probability(
+                        st["fair_yes"], source="sportsbook:%s" % (
+                            st.get("source") or "odds"),
+                        age_s=round(age, 1),
+                        max_age_s=RN1_DIR_SHARP_MAX_AGE_S,
+                        drift_per_s=RN1_DIR_SHARP_DRIFT)
+        except Exception:                                 # noqa: BLE001
+            return None
+        return None
+
+    def rn1_directional_inputs(self, slug: str, want: Mapping[str, Any],
+                               bbo: Mapping[str, Any]) -> tuple:
+        """(touch prices, fill loss per side): the competition's
+        RN1_FILL_LOSS for each bid's placement (at the best bid = touch,
+        behind it = behind)."""
+        touch = {"YES": D(str(bbo["bid"])), "NO": ONE - D(str(bbo["ask"]))}
+        fl = {}
+        for sd in ("YES", "NO"):
+            tg = want.get(sd)
+            depth = 0 if tg is not None and D(str(tg["px"])) >= touch[sd] \
+                else 1
+            fl[sd] = rn1_fill_param(RN1_FILL_LOSS, depth, slug)
+        return touch, fl
+
+    def rn1_directional(self, slug: str, mk: Dict[str, Any],
+                        q: Dict[str, Any], want: Dict[str, Any],
+                        bbo: Mapping[str, Any], tick: Any, min_qty: Any,
+                        prob: Optional[Mapping[str, Any]] = None,
+                        priced: bool = False
+                        ) -> Optional[Dict[str, Any]]:
+        """See RN1_DIRECTIONAL. Changes `want` in place (remove, resize or
+        deepen opening/extension bids only) and records the decision in
+        q["directional"]. Returns the probability used (None = no change).
+        Any error leaves `want` as it was -- except that additions priced
+        without the average-cost cap (`priced`) are then withdrawn, since
+        nothing judged them (fail closed)."""
+        try:
+            from src import pmus_directional_alloc as DA
+            touch, fl = self.rn1_directional_inputs(slug, want, bbo)
+            res = DA.allocate(prob=prob, want=want, pos=mk["pos"], tick=tick,
+                              min_qty=min_qty, touch=touch, fill_loss=fl,
+                              prev_favoured=mk.get("dir_favoured"),
+                              cfg=RN1_DIR_CFG)
+            rec = res.get("directional") or {}
+            q["directional"] = rec
+            if prob is None:
+                return None
+            if rec.get("favoured"):
+                mk["dir_favoured"] = rec["favoured"]
+            for sd in ("YES", "NO"):
+                if want.get(sd) is None:
+                    continue
+                if res.get(sd) is None:
+                    want[sd] = None
+                    q["why_" + sd] = res.get("why_" + sd) or "directional"
+                else:
+                    want[sd] = res[sd]
+            return prob
+        except Exception as exc:                          # noqa: BLE001
+            q["directional"] = {"active": False,
+                                "why": "error:%s" % type(exc).__name__}
+            if priced:
+                for sd in ("YES", "NO"):
+                    tg = want.get(sd)
+                    if tg is not None and tg.get("role") == "extend":
+                        want[sd] = None
+                        q["why_" + sd] = "directional_error_unpriced_add"
+            return None
+
+    def rn1_directional_ladder(self, slug: str, mk: Dict[str, Any],
+                               q: Dict[str, Any], want: Mapping[str, Any],
+                               ladder: list, bbo: Mapping[str, Any],
+                               tick: Any, min_qty: Any,
+                               prob: Mapping[str, Any]) -> list:
+        """Deeper ladder levels judged on the inventory they would add (see
+        RN1_DIRECTIONAL). Any error keeps the ladder unchanged."""
+        try:
+            from src import pmus_directional_alloc as DA
+            fl = {sd: rn1_fill_param(RN1_FILL_LOSS, 1, slug)
+                  for sd in ("YES", "NO")}       # deeper = behind the touch
+            kept, refused = DA.allocate_ladder(
+                prob=prob, ladder=ladder, front=want, pos=mk["pos"],
+                min_qty=min_qty, fill_loss=fl, cfg=RN1_DIR_CFG)
+            if refused:
+                rec = q.setdefault("directional", {})
+                rec["ladder_refused"] = refused
+            return kept
+        except Exception:                                 # noqa: BLE001
+            return ladder
+
     def rn1_ladder(self, slug: str, mk: Dict[str, Any],
                    want: Mapping[str, Any], tick: Any,
-                   clip: Any = None, min_qty: Any = 1) -> list:
-        """Deeper bids behind each side's target (see RN1_LADDER_LEVELS):
+                   clip: Any = None, min_qty: Any = 1,
+                   extra_levels: Optional[Mapping[str, int]] = None) -> list:
+        """Deeper bids behind each side's target (see RN1_LADDER_LEVELS;
+        `extra_levels` adds levels to one side for RN1_DIRECTIONAL, under
+        exactly the same per-level caps):
         [{"side","px","qty","role","level"}]. A level is added only while
         this market's worst case with EVERY planned bid filled stays inside
         the per-market and campaign caps; the first level that would not
@@ -5568,7 +5721,9 @@ class Engine:
         completing bid, so neither side could keep accumulating). They are
         cheaper than the completion, so each still pairs inside the
         pair-cost limit with what the other side holds."""
-        if RN1_LADDER_LEVELS <= 1:
+        xl = {sd: max(0, int((extra_levels or {}).get(sd) or 0))
+              for sd in ("YES", "NO")}
+        if RN1_LADDER_LEVELS <= 1 and not any(xl.values()):
             return []
         t = D(str(tick))
         out: list = []
@@ -5586,7 +5741,7 @@ class Engine:
             if RN1_LADDER_QTY is not None and RN1_LADDER_QTY > 0:
                 qty = min(qty, RN1_LADDER_QTY)
             role = "open" if behind_completion else tg["role"]
-            for k in range(1, RN1_LADDER_LEVELS):
+            for k in range(1, RN1_LADDER_LEVELS + xl[side]):
                 px = D(str(tg["px"])) - k * RN1_LADDER_STEP_TICKS * t
                 if px < D(str(RN1.PX_MIN)) or px <= 0:
                     break
@@ -6696,6 +6851,29 @@ class Engine:
             qcfg["keep_px"] = {o["side"]: o["px"]
                                for o in mk["orders"].values()
                                if o.get("open")}
+        dir_prob = None
+        if RN1_DIRECTIONAL:
+            dir_prob = self.rn1_directional_prob(slug)
+            if dir_prob is not None:
+                try:
+                    from src import pmus_directional_alloc as DA
+                    touch0 = {"YES": D(str(bbo["bid"])),
+                              "NO": ONE - D(str(bbo["ask"]))}
+                    fl0 = {sd: rn1_fill_param(RN1_FILL_LOSS, 0, slug)
+                           for sd in ("YES", "NO")}
+                    qcfg["qty_side"] = DA.size_hint(
+                        prob=dir_prob, touch=touch0,
+                        clip=qcfg.get("qty", RN1.QTY), fill_loss=fl0,
+                        prev_favoured=mk.get("dir_favoured"),
+                        cfg=RN1_DIR_CFG, max_qty=rn1_max_clip())
+                    mk["_dir_levels"] = DA.ladder_hint(
+                        prob=dir_prob, touch=touch0, fill_loss=fl0,
+                        prev_favoured=mk.get("dir_favoured"),
+                        cfg=RN1_DIR_CFG)
+                    if RN1_DIR_PRICE_ADDS:
+                        qcfg["adds_priced_externally"] = True
+                except Exception:                         # noqa: BLE001
+                    dir_prob = None
         q = RN1.quotes(yes_bid=bbo["bid"], yes_ask=bbo["ask"], tick=tick,
                        pos=mk["pos"], cost=mk["cost"],
                        last_fill_t=mk.get("last_fill_t"), now=now,
@@ -6735,6 +6913,11 @@ class Engine:
                     q["why_" + side] = "intl_guard:" + str(gv.get("why"))
                     tg = None
             want[side] = tg
+        if RN1_DIRECTIONAL:
+            dir_prob = self.rn1_directional(slug, mk, q, want, bbo, tick,
+                                            spec["min_qty"], dir_prob,
+                                            priced=bool(qcfg.get(
+                                                "adds_priced_externally")))
         self._gap_hold(slug, mk, q, want, bbo, new_block, now)
         mev_on = RN1_MARGINAL_EV and not new_block
         mev_pass = False
@@ -6751,7 +6934,14 @@ class Engine:
         self.rn1_campaign_caps(slug, mk, want, q, min_qty=spec["min_qty"])
         ladder = self.rn1_ladder(slug, mk, want, tick,
                                  clip=qcfg.get("qty", RN1.QTY),
-                                 min_qty=spec["min_qty"])
+                                 min_qty=spec["min_qty"],
+                                 extra_levels=(mk.pop("_dir_levels", None)
+                                               if dir_prob is not None
+                                               else None))
+        if RN1_DIRECTIONAL and dir_prob is not None and ladder:
+            ladder = self.rn1_directional_ladder(slug, mk, q, want, ladder,
+                                                 bbo, tick, spec["min_qty"],
+                                                 dir_prob)
         mev_log = None
         if mev_on:
             # MARGINAL NET EV PER BID (finding 1): level-0 targets and every
@@ -6863,6 +7053,7 @@ class Engine:
                 extend_ev=q.get("extend_ev"),
                 edge=q.get("edge"),
                 marginal_ev=mev_log,
+                directional=q.get("directional"),
                 fair=(getattr(self, "_rn1_fair", {}) or {}).get(slug),
                 incentive=(getattr(self, "_rn1_inc", {}) or {}).get(slug),
                 reward=bool(self.rn1_reward(slug)),
