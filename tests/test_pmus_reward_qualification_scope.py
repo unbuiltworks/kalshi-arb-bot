@@ -269,3 +269,43 @@ def test_contract_period_incentive_uses_it(e, monkeypatch):
     monkeypatch.setattr(e, "_rn1_reward_estimate", lambda *a, **k: None)
     _plan(e, B, 5.0)                     # another match's large plan
     assert e.rn1_incentive(A)["why"] == "below_minimum_payout"
+
+
+# --------------------------------------------- pool identity, no double count
+def test_each_accrual_is_counted_once_per_scope(e, monkeypatch):
+    """Both keys are stored per market, but each scope sums exactly one of
+    them, and every market's accrual at most once."""
+    live = {"programId": "atp_wta_moneyline_live_20261018", "period": "live",
+            "start": "2026-10-18T18:00:00Z"}
+    pk = "atp_wta_moneyline_live_20261018|live"
+    for s_, amt in ((A, 1.0), (B, 2.0)):
+        e.b.m(s_)["reward_theo_pool"] = {
+            pk: amt, M.rn1_pool_key(live, s_): amt}
+    _cp(e, monkeypatch, {A: dict(live), B: dict(live)})
+    assert e.rn1_reward_pool_projection(A)["accrued_pool_usd"] == \
+        pytest.approx(1.0 * 0.4)                   # A's own contract only
+    assert e.rn1_reward_pool_projection(B)["accrued_pool_usd"] == \
+        pytest.approx(2.0 * 0.4)
+    monkeypatch.setattr(M, "RN1_REWARD_QUAL_SCOPE", "program_period")
+    assert e.rn1_reward_pool_projection(A)["accrued_pool_usd"] == \
+        pytest.approx(3.0 * 0.4)                   # A + B, each once
+
+
+def test_contract_keys_never_collide_across_matches_or_periods():
+    a = {"programId": "p", "period": "live", "start": "s"}
+    keys = {M.rn1_pool_key(a, "m1"), M.rn1_pool_key(a, "m2"),
+            M.rn1_pool_key(dict(a, period="day_of"), "m1"),
+            M.rn1_pool_key(dict(a, start="s2"), "m1")}
+    assert len(keys) == 4
+
+
+def test_accrual_writes_each_key_once_per_pass(e, monkeypatch):
+    live = {"programId": "tt", "period": "live", "start": "s"}
+    _cp(e, monkeypatch, {A: dict(live), B: None})
+    mk = e.b.m(A)
+    mk["rn1_reward_est"] = {"t": time.time(), "est_usd_per_hour": 3.6}
+    mk["reward_theo_t"] = time.time() - 100
+    e._rn1_theo_accrue(A, mk, time.time())
+    vals = list(mk["reward_theo_pool"].values())
+    assert len(vals) == 2 and vals[0] == pytest.approx(vals[1])
+    assert vals[0] == pytest.approx(0.1, abs=0.002)    # 3.6/h x 100 s, once

@@ -156,3 +156,37 @@ def test_e2e_below_projection_rests_only_under_paid_fraction(en,
     M.rn1_set_paid_fraction(BY)
     e.step_market(SLUG)
     assert resting(v), "reward-carried bids must rest at the paid share"
+
+
+def test_pregame_multiplier_per_competition(monkeypatch):
+    monkeypatch.setattr(M, "RN1_FILL_RATE_PREGAME_MULT", 0.25)
+    monkeypatch.setattr(M, "RN1_FILL_RATE_PREGAME_MULT_T",
+                        {"": 0.25, "setkameua": 0.35, "atp": 0.1})
+    t = "aec-atp-a-b-2026-11-28"
+    for slug in (S, t, "aec-nba-x-y-2026-11-28"):
+        M.RN1_PHASE[slug] = "pregame"
+    live = {x: M.RN1_FILL_RATE[1].get(x.split("-")[1],
+                                      M.RN1_FILL_RATE[1][""])
+            for x in (S, t, "aec-nba-x-y-2026-11-28")}
+    assert M.rn1_fill_param(M.RN1_FILL_RATE, 1, S) == \
+        pytest.approx(live[S] * 0.35)
+    assert M.rn1_fill_param(M.RN1_FILL_RATE, 1, t) == \
+        pytest.approx(live[t] * 0.1)
+    nba = "aec-nba-x-y-2026-11-28"
+    assert M.rn1_fill_param(M.RN1_FILL_RATE, 1, nba) == \
+        pytest.approx(live[nba] * 0.25)
+
+
+def test_pregame_multiplier_env_parse():
+    import os
+    import subprocess
+    import sys
+    env = dict(os.environ, PMUS_RN1_FILL_RATE_PREGAME_MULT=
+               "0.25,setkameua:0.35,atp:0.1,bad:x,utr:7")
+    out = subprocess.run([sys.executable, "-c",
+                          "import src.pmus_sports_two_sided as M;"
+                          "print(sorted(M.RN1_FILL_RATE_PREGAME_MULT_T"
+                          ".items()))"], env=env, capture_output=True,
+                         text=True, check=True)
+    assert out.stdout.strip() == str(sorted({"": 0.25, "setkameua": 0.35,
+                                             "atp": 0.1, "utr": 1.0}.items()))

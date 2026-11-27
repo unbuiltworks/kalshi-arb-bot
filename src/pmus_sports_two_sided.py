@@ -1626,6 +1626,18 @@ RN1_DURATION_MIN = os.getenv("PMUS_RN1_DURATION_MIN", "")
 #     flat release). A market holding contracts is never preempted.
 # Selection only: every bid still passes every gate and cap.
 RN1_LIVE_FIRST = os.getenv("PMUS_RN1_LIVE_FIRST", "0").strip() == "1"
+# RANK BY NET PER SLOT (27 Nov, default "per_dollar" = unchanged). LIVE 27
+# Nov: with RN1_LIVE_FIRST / RN1_DURATION_RANK the share ranking orders
+# positive estimates by net per dollar x turnover (min(1, H / time to
+# settlement)), so a pregame programme market starting in 3 h is scored at
+# about 0.29 of its value, while capital is not binding (mean $1.30 used of
+# $60) and the two quoting SLOTS are. With PMUS_RN1_RANK_BY=net_per_hour
+# positive markets are ordered by the slot's absolute reward-adjusted net
+# per hour (the touch-EV / net estimate), with no turnover, duration or
+# live-first factor; a non-positive estimate is never selected ahead of a
+# positive one. Use with PMUS_RN1_LIVE_FIRST=0 (its distant-slot cap and
+# pre-emption are slot rules of their own).
+RN1_RANK_BY = os.getenv("PMUS_RN1_RANK_BY", "per_dollar").strip().lower()
 RN1_NEAR_START_S = float(os.getenv("PMUS_RN1_NEAR_START_S") or "1800")
 RN1_DISTANT_MAX_SLOTS = int(os.getenv("PMUS_RN1_DISTANT_MAX_SLOTS") or "1")
 # NO SELECT/RELEASE LOOP (owner 2026-11-27, default OFF). LIVE: with every
@@ -1786,8 +1798,16 @@ RN1_DIR_SHARP_DRIFT = os.getenv("PMUS_RN1_DIR_SHARP_DRIFT", "0.00002")
 # PMUS_RN1_FILL_RATE_PREGAME_MULT < 1 a market the engine has seen as NOT
 # live (pregame) uses rate x mult; a market whose phase is unknown keeps the
 # live rate (conservative). The fill LOSS per contract is unchanged.
-RN1_FILL_RATE_PREGAME_MULT = max(0.0, min(1.0, float(os.getenv(
-    "PMUS_RN1_FILL_RATE_PREGAME_MULT") or "1")))
+# Per competition, like the other fill settings: "0.25,setkameua:0.35,
+# atp:0.1" (unlisted competitions use the first value). Measured 22-27 Nov
+# (ORDER/FILL logs): 25 of 26 pregame fills were setkameua (8.6% of ordered
+# quantity, as often per order as ATP live); atp/atpdb/utr/wta pregame
+# filled 0.34 of ~250 contracts. Pregame 300 s markouts: setka openings
+# -1.35c (n 13), additions +0.17c (n 9), vs live openings -2.5c (n 29).
+RN1_FILL_RATE_PREGAME_MULT_T = {k: max(0.0, min(1.0, v)) for k, v in
+                                _comp_rates("PMUS_RN1_FILL_RATE_PREGAME_MULT",
+                                            "1").items()}
+RN1_FILL_RATE_PREGAME_MULT = RN1_FILL_RATE_PREGAME_MULT_T[""]
 #: slug -> "live" / "pregame", recorded by Engine.event_live
 RN1_PHASE: Dict[str, str] = {}
 
@@ -1797,9 +1817,12 @@ def rn1_fill_param(table: Mapping[int, Mapping[str, float]], depth: int,
     t = table[min(1, max(0, int(depth)))]
     comp = slug.split("-")[1].lower() if slug.count("-") >= 1 else ""
     v = float(t.get(comp, t[""]))
-    if table is RN1_FILL_RATE and RN1_FILL_RATE_PREGAME_MULT < 1.0 and \
-            RN1_PHASE.get(slug) == "pregame":
-        v *= RN1_FILL_RATE_PREGAME_MULT
+    if table is RN1_FILL_RATE and RN1_PHASE.get(slug) == "pregame":
+        tab = dict(RN1_FILL_RATE_PREGAME_MULT_T)
+        tab[""] = RN1_FILL_RATE_PREGAME_MULT
+        m = float(tab.get(comp, tab[""]))
+        if m < 1.0:
+            v *= m
     return v
 
 
@@ -8744,6 +8767,12 @@ class Engine:
             if not hit or nowm - hit[0] > RANK_SHARE_TTL_S:
                 return (1, -float(rn1_rw[slug]["pool_rate_usd_s"]))
             v = float(hit[1].get("per_dollar_hour") or 0.0)
+            if RN1_RANK_BY == "net_per_hour":
+                # slots, not capital, bind: the absolute reward-adjusted
+                # net of the slot, no turnover / duration / live preference
+                nv = hit[1].get("net_usd_per_hour")
+                nv = float(nv if nv is not None else 0.0) if v > 0 else 0.0
+                return (0, -nv) if nv > 0 else (2, 0.0)
             if RN1_LIVE_FIRST and v > 0:
                 lf = self.live_first_info(slug, v)
                 return (0, -lf["score"], lf["rank"])
