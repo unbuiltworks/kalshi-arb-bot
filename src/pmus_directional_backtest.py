@@ -290,6 +290,8 @@ class Market:
                                     pause_ticks)
             qc["depth_ticks_side"] = {"YES": qc["depth_ticks"],
                                       "NO": qc["depth_ticks"]}
+            if self.policy.get("pause_min_size"):
+                qc["qty"] = str(self.sim["min_qty"])
         q = RN1.quotes(yes_bid=f["yes_bid"], yes_ask=f["yes_ask"], tick=tick,
                        pos=self.pos, cost=self.cost,
                        last_fill_t=self.last_fill_t, now=t,

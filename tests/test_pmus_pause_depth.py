@@ -87,3 +87,13 @@ def test_paused_flat_market_without_rotation_holds_its_slot(en,
     mk["idle_since"] = time.time() - 25
     e.step_market(SLUG)
     assert not mk.get("done")
+
+
+def test_pause_depth_rests_the_minimum_size(en, monkeypatch, capsys):
+    e, v, _ = en
+    monkeypatch.setattr(M, "RN1_PAUSE_DEPTH", True)
+    monkeypatch.setattr(M, "RN1_PAUSE_MIN_SIZE", True)
+    _vol_pause(e, monkeypatch)
+    e.step_market(SLUG)
+    rs = resting(v)
+    assert rs and all(D(q) <= D(1) for _s, _p, q in rs)

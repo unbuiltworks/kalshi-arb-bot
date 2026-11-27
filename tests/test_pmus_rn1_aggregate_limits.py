@@ -312,7 +312,7 @@ def test_controller_at_the_touch_respects_campaign_caps(z, monkeypatch):
     e.guard = Guard(None)
     monkeypatch.setattr(e, "rn1_reward", lambda s: {
         "df": 0.3, "targetSize": 10, "pool_rate_usd_s": 0.01,
-        "programId": "P", "maxSpread": None})
+        "programId": "P", "period": "live", "maxSpread": None})
     monkeypatch.setattr(e, "_reward_get",
                         lambda: (lambda p: {"marketData": {"x": 1}}))
     monkeypatch.setattr(RW, "marginal_ladder_reward", lambda *a: {

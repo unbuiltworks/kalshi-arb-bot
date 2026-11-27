@@ -503,8 +503,24 @@ RN1_REWARD_PROJECT_H = float(os.getenv("PMUS_RN1_REWARD_PROJECT_H", "3"))
 # the venue's reward day), must reach RN1_REWARD_MIN_DAY_USD. RN1_TOUCH_EV
 # then credits a reward only when that qualification holds, so selection,
 # placement and the order gate agree. The minimum itself is unchanged.
+# "program_period" (27 Nov, correction): the venue's liquidity programme
+# documentation (data/pmus/sports_incentives_2026-09-10/doc_incentives_
+# liquidity.md) defines each Time Period -- early pre-game (listing to 6 h
+# before), day-of pre-game (6 h to start), live (start to settlement) -- as
+# its own reward pool, calculated when that period ends, and says "Rewards
+# under $1.00 are not paid out" without stating the scope. External research
+# (Grok, 27 Nov) reports the minimum is applied per programme and period.
+# With this scope each pool is tested on ITS OWN total: accrual keyed by
+# (programId, period), plus the calibrated rate of active markets in the SAME
+# pool and the candidate, over min(3 h, window left, period left). An
+# expired period's accrual, another programme or another period never
+# counts toward a bid, and a market with no paying pool qualifies nothing.
+# "account_day" stays available but is NOT recommended: no source supports
+# account-wide daily aggregation.
 RN1_REWARD_QUAL_SCOPE = os.getenv("PMUS_RN1_REWARD_QUAL_SCOPE",
                                   "market").strip().lower()
+#: the scopes that use the one unified qualification at every site
+RN1_QUAL_UNIFIED = ("account_day", "program_period")
 #: a planned (not yet resting) market's rate is used for this long
 RN1_REWARD_PLAN_TTL_S = float(os.getenv("PMUS_RN1_REWARD_PLAN_TTL_S", "120"))
 
@@ -1398,6 +1414,8 @@ RN1_PAUSED_RELEASE_S = float(os.getenv("PMUS_RN1_PAUSED_RELEASE_S", "120"))
 RN1_PAUSE_DEPTH = os.getenv("PMUS_RN1_PAUSE_DEPTH", "0").strip() == "1"
 RN1_PAUSE_DEPTH_EXTRA_TICKS = int(os.getenv(
     "PMUS_RN1_PAUSE_DEPTH_EXTRA_TICKS", "1"))
+#: with RN1_PAUSE_DEPTH, rest the venue minimum size while paused (1 = on)
+RN1_PAUSE_MIN_SIZE = os.getenv("PMUS_RN1_PAUSE_MIN_SIZE", "1").strip() == "1"
 # PAUSED-MARKET ROTATION (default 0 = as before). A flat market with nothing
 # resting that is only paused (jump/vol) releases its slot after this many
 # seconds instead of max(120, RN1_PAUSED_RELEASE_S), so another eligible
@@ -1802,6 +1820,17 @@ def rn1_reward_mult(slug: str, per: Optional[Mapping[str, Any]] = None
     elif RN1_REWARD_POOL_SCOPE == "program":
         div = float((per or {}).get("M_program") or 1)
     return m / max(1.0, div)
+
+
+def rn1_pool_key(per: Optional[Mapping[str, Any]]) -> Optional[str]:
+    """The reward pool a paying period belongs to: "programId|period"
+    (the programme id carries its date), or None without both."""
+    if not per:
+        return None
+    pid, prd = per.get("programId"), per.get("period")
+    if not pid or not prd:
+        return None
+    return "%s|%s" % (pid, prd)
 
 
 def rn1_reward_cal(slug: str, per: Optional[Mapping[str, Any]] = None
@@ -6162,7 +6191,7 @@ class Engine:
         if no_fair and per is None and \
                 inc.get("why") == "below_minimum_payout" and (
                     float(inc.get("projected_usd") or 0.0) <= 0.0 or
-                    RN1_REWARD_QUAL_SCOPE == "account_day"):
+                    RN1_REWARD_QUAL_SCOPE in RN1_QUAL_UNIFIED):
             # account_day: the planned ladder is projected together with
             # everything else (accrued today, the other active markets),
             # so it is tested whenever the total is still short
@@ -6199,7 +6228,7 @@ class Engine:
                                                  slug)
                 # Judge only the surviving ladder. Rejected candidates
                 # must not contribute reward or concentration to survivors.
-                if RN1_REWARD_QUAL_SCOPE == "account_day":
+                if RN1_REWARD_QUAL_SCOPE in RN1_QUAL_UNIFIED:
                     candidate_ids = {id(c) for c in cands}
                     feasible = [c for c in cands if id(c) in alive]
                     feasible_planned = [
@@ -6228,7 +6257,7 @@ class Engine:
                 if ok == alive:
                     return out
                 alive = ok
-        if RN1_REWARD_QUAL_SCOPE == "account_day" and not boot:
+        if RN1_REWARD_QUAL_SCOPE in RN1_QUAL_UNIFIED and not boot:
             # the same surviving-ladder rule outside a standing start: a
             # bid refused on its own economics is taken out of the plan and
             # every survivor is judged again without it (its reward share
@@ -6327,10 +6356,10 @@ class Engine:
                                            own_y, own_n)
             rate = max(0.0, float(est.get("est_usd_per_hour") or 0.0)) * \
                 rn1_reward_cal(slug, per)
-            if RN1_REWARD_QUAL_SCOPE == "account_day":
-                # the same account/day total as every other site: this
-                # market's planned ladder plus every other active market
-                return float(self.rn1_reward_day_projection(
+            if RN1_REWARD_QUAL_SCOPE in RN1_QUAL_UNIFIED:
+                # the same total as every other site (scope-dependent):
+                # this market's planned ladder plus what the scope adds
+                return float(self.rn1_reward_qualifies(
                     slug, extra_usd_h=rate)["projected_usd"])
             return rate * RN1_REWARD_PROJECT_H
         except Exception:                                 # noqa: BLE001
@@ -6456,6 +6485,15 @@ class Engine:
             th = mk.setdefault("reward_theo", {})
             th[day] = round(float(th.get(day) or 0.0) + rate * dt / 3600.0,
                             6)
+            # the pool this accrual belongs to (RN1_REWARD_QUAL_SCOPE
+            # "program_period"): programme id + period, never pooled with
+            # another programme or another period of the same market
+            per_ = self.rn1_reward(slug) or {}
+            pk = rn1_pool_key(per_)
+            if pk:
+                tp = mk.setdefault("reward_theo_pool", {})
+                tp[pk] = round(float(tp.get(pk) or 0.0) +
+                               rate * dt / 3600.0, 6)
         except Exception:                                 # noqa: BLE001
             return
 
@@ -6578,10 +6616,103 @@ class Engine:
             pass
         return out
 
+    def rn1_reward_pool_projection(self, slug: Optional[str],
+                                   extra_usd_h: float = 0.0,
+                                   now: Optional[float] = None
+                                   ) -> Dict[str, Any]:
+        """RN1_REWARD_QUAL_SCOPE "program_period": the THEORETICAL,
+        calibrated total of `slug`'s own reward pool (programId|period):
+        what this bot has accrued in that pool, plus the calibrated rate of
+        every active market currently paying from the SAME pool (resting
+        estimate, or fresh planned rate when nothing rests) and `extra_usd_h`
+        for `slug`, over min(RN1_REWARD_PROJECT_H, window left, period
+        left). No paying pool for `slug` = 0. Never raises."""
+        now = time.time() if now is None else now
+        out = {"scope": "program_period", "pool": None,
+               "accrued_pool_usd": 0.0, "rate_usd_per_hour": 0.0,
+               "horizon_h": 0.0, "projected_usd": 0.0, "markets": 0,
+               "label": "THEORETICAL reward projection; not a payment"}
+        try:
+            per = self.rn1_reward(slug) if slug else None
+            pk = rn1_pool_key(per)
+            if not pk:
+                out["why"] = "no_paying_pool"
+                return out
+            out["pool"] = pk
+            acc = 0.0
+            for s_, m_ in (self.b.d.get("markets") or {}).items():
+                v_ = (m_.get("reward_theo_pool") or {}).get(pk)
+                if v_:
+                    acc += float(v_) * rn1_reward_cal(s_, per)
+            rate, seen = 0.0, 0
+            plan = getattr(self, "_net_choice", None) or {}
+            for s_ in self.active():
+                if s_ == slug and extra_usd_h:
+                    continue
+                per_s = self.rn1_reward(s_)
+                if rn1_pool_key(per_s) != pk:
+                    continue                 # another programme or period
+                est = (self.b.m(s_).get("rn1_reward_est") or {})
+                r_ = 0.0
+                if now - float(est.get("t") or 0) <= \
+                        4 * REWARD_WALK_CHECK_S:
+                    r_ = float(est.get("est_usd_per_hour") or 0.0) * \
+                        rn1_reward_cal(s_, per_s)
+                pl = plan.get(s_) or {}
+                if r_ <= 0.0 and now - float(pl.get("t") or 0) <= \
+                        RN1_REWARD_PLAN_TTL_S:
+                    r_ = float(pl.get("reward_usd_per_hour") or 0.0)
+                rate += max(0.0, r_)
+                seen += 1
+            rate += max(0.0, float(extra_usd_h or 0.0))
+            h = max(0.0, RN1_REWARD_PROJECT_H)
+            w = lock_window()
+            if w is not None and float(w[1]) > now:
+                h = min(h, (float(w[1]) - now) / 3600.0)
+            left = self.rn1_period_left_s(slug, per, now)
+            if left is not None:
+                h = min(h, max(0.0, left) / 3600.0)
+            out.update(accrued_pool_usd=round(acc, 4),
+                       rate_usd_per_hour=round(rate, 6),
+                       horizon_h=round(h, 4), markets=seen,
+                       projected_usd=round(acc + rate * h, 4))
+        except Exception:                                 # noqa: BLE001
+            pass
+        return out
+
+    def rn1_period_left_s(self, slug: Optional[str],
+                          per: Optional[Mapping[str, Any]],
+                          now: float) -> Optional[float]:
+        """Seconds left in the paying period, where its end is known: the
+        event start for day-of pre-game, event start - 6 h for early
+        pre-game. Live runs to settlement (unknown): None."""
+        try:
+            prd = str((per or {}).get("period") or "")
+            gs = (self.b.d["markets"].get(slug) or {}).get("game_start") \
+                if slug else None
+            if gs is None and slug:
+                gs = (getattr(self, "_game_start", {}) or {}).get(slug)
+            if gs is None:
+                return None
+            gs = float(gs) if not isinstance(gs, str) else \
+                datetime.fromisoformat(gs.replace("Z", "+00:00")).timestamp()
+            if prd == "day_of":
+                return gs - now
+            if prd == "early":
+                return gs - 6 * 3600.0 - now
+        except Exception:                                 # noqa: BLE001
+            return None
+        return None
+
     def rn1_reward_qualifies(self, slug: Optional[str] = None,
                              extra_usd_h: float = 0.0) -> Dict[str, Any]:
-        """The one account/day qualification (see RN1_REWARD_QUAL_SCOPE)."""
-        pj = self.rn1_reward_day_projection(slug, extra_usd_h)
+        """The one qualification every site uses (see RN1_REWARD_QUAL_SCOPE):
+        "program_period" tests `slug`'s own pool; "account_day" the
+        account's day total."""
+        if RN1_REWARD_QUAL_SCOPE == "program_period":
+            pj = self.rn1_reward_pool_projection(slug, extra_usd_h)
+        else:
+            pj = self.rn1_reward_day_projection(slug, extra_usd_h)
         pj["min_payout_usd"] = RN1_REWARD_MIN_DAY_USD
         pj["qualifies"] = pj["projected_usd"] + 1e-9 >= \
             RN1_REWARD_MIN_DAY_USD
@@ -6602,12 +6733,14 @@ class Engine:
             mk = self.b.m(slug) if mk is None else mk
             if tick is not None:
                 self._rn1_reward_estimate(slug, mk, per, D(str(tick)))
-            if RN1_REWARD_QUAL_SCOPE == "account_day":
-                pj = self.rn1_reward_qualifies()
+            if RN1_REWARD_QUAL_SCOPE in RN1_QUAL_UNIFIED:
+                pj = self.rn1_reward_qualifies(slug)
                 out.update(projected_usd=pj["projected_usd"],
                            min_payout_usd=RN1_REWARD_MIN_DAY_USD,
-                           scope="account_day",
-                           accrued_today_usd=pj["accrued_today_usd"],
+                           scope=RN1_REWARD_QUAL_SCOPE,
+                           pool=pj.get("pool"),
+                           accrued_usd=pj.get("accrued_pool_usd",
+                                              pj.get("accrued_today_usd")),
                            horizon_h=pj["horizon_h"],
                            label="THEORETICAL reward projection; not a "
                                  "payment")
@@ -6892,6 +7025,10 @@ class Engine:
                 sd: max(int(base.get(sd, dflt)), pdep)
                 for sd in ("YES", "NO")}
             qcfg["depth_ticks"] = max(dflt, pdep)
+            if RN1_PAUSE_MIN_SIZE:
+                # volatility-adaptive size: the venue minimum while paused
+                qcfg["qty"] = min(D(str(qcfg.get("qty", RN1.QTY))),
+                                  max(D(1), D(str(spec["min_qty"]))))
         if RN1_KEEP_TOL_USD > 0 and not new_block:
             qcfg["keep_tol_usd"] = RN1_KEEP_TOL_USD
             qcfg["keep_px"] = {o["side"]: o["px"]
@@ -8164,7 +8301,7 @@ class Engine:
         counts only when the account/day qualification holds with this
         market's scored bids added; otherwise the same scoring with no
         reward (`unrewarded()`). Scope "market": unchanged."""
-        if RN1_REWARD_QUAL_SCOPE != "account_day" or \
+        if RN1_REWARD_QUAL_SCOPE not in RN1_QUAL_UNIFIED or \
                 float(out.get("reward_usd_per_hour") or 0.0) <= 0.0:
             return out
         try:
@@ -8610,7 +8747,7 @@ class Engine:
                          for s in self.active())
             pays = (active + usd_h) * RN1_REWARD_PROJECT_H + 1e-9 >= \
                 RN1_REWARD_MIN_DAY_USD
-            if RN1_REWARD_QUAL_SCOPE == "account_day":
+            if RN1_REWARD_QUAL_SCOPE in RN1_QUAL_UNIFIED:
                 pays = self.rn1_reward_qualifies(
                     slug, extra_usd_h=usd_h * rn1_reward_cal(slug, per)
                 )["qualifies"]

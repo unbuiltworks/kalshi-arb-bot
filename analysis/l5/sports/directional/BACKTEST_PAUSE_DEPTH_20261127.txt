@@ -9,3 +9,7 @@ through production pauses                    traded 14 fills  92 spend   63.61 t
 through pauses + pause depth                 traded 15 fills  98 spend   70.82 trading   -4.95 (matched  +5.91 resid  -10.86) deployed tw $187.44 resting tw $155.85 paused 16.0 mkt-h | paired vs production pauses +0.186±0.330 (n 15)
 through pauses + allocator (adds only)       traded 14 fills  61 spend   44.59 trading   -2.12 (matched  +3.40 resid   -5.51) deployed tw $86.55 resting tw $68.83 paused 16.0 mkt-h | paired vs production pauses +0.402±0.315 (n 14)
 through pauses + pause depth + allocator     traded 15 fills  71 spend   51.82 trading   -4.35 (matched  +4.36 resid   -8.71) deployed tw $114.15 resting tw $89.86 paused 16.0 mkt-h | paired vs production pauses +0.226±0.377 (n 15)
+
+-- addendum: pause depth with the minimum size while paused (THEORETICAL)
+touch   pauses + pause depth + min size  trading  -11.58 (matched  +7.82 resid  -19.40) deployed tw $196.53 | paired vs production pauses -0.260±0.124 (n 22)
+through pauses + pause depth + min size  trading   -8.35 (matched  +5.49 resid  -13.84) deployed tw $172.34 | paired vs production pauses -0.041±0.346 (n 15)

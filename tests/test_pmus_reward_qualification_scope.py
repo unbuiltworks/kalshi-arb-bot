@@ -12,7 +12,7 @@ import pytest
 from src import pmus_sports_two_sided as M
 from tests.test_pmus_sports_two_sided import FakeVenue
 
-PER = {"programId": "p1", "pool": 10}
+PER = {"programId": "p1", "pool": 10, "period": "live"}
 A, B = "aec-setkamemd-copmih-dumvit-2026-11-27", \
     "aec-setkamemd-mocdav-ghifio-2026-11-27"
 
@@ -27,6 +27,7 @@ def e(tmp_path, monkeypatch):
     monkeypatch.setattr(M, "rn1_reward_cal", lambda slug, per=None: 0.4)
     monkeypatch.setattr(M, "lock_window", lambda raw=None: None)
     monkeypatch.setattr(M, "RN1_REWARD_PROJECT_H", 3.0)
+    monkeypatch.setattr(M, "RN1_REWARD_QUAL_SCOPE", "account_day")
     eng.b.m(A)
     eng.b.m(B)
     return eng
@@ -132,3 +133,68 @@ def test_default_scope_is_market():
          "print(M.RN1_REWARD_QUAL_SCOPE)"], env=env, capture_output=True,
         text=True, check=True)
     assert out.stdout.strip() == "market"
+
+
+# ------------------------------------------------- program_period scope
+def _pp(e, monkeypatch, pers):
+    monkeypatch.setattr(M, "RN1_REWARD_QUAL_SCOPE", "program_period")
+    monkeypatch.setattr(e, "rn1_reward", lambda slug: pers.get(slug))
+
+
+def test_program_period_aggregates_only_the_same_pool(e, monkeypatch):
+    live = {"programId": "tt_live_20261127", "period": "live"}
+    other = {"programId": "tt_live_20261127", "period": "day_of"}
+    _pp(e, monkeypatch, {A: live, B: other})
+    _plan(e, B, 0.29)
+    q = e.rn1_reward_qualifies(A, extra_usd_h=0.29)
+    assert q["pool"] == "tt_live_20261127|live"
+    assert q["rate_usd_per_hour"] == pytest.approx(0.29)   # B excluded
+    assert not q["qualifies"]                              # 0.87 < 1
+    _pp(e, monkeypatch, {A: live, B: dict(live)})
+    q = e.rn1_reward_qualifies(A, extra_usd_h=0.29)
+    assert q["rate_usd_per_hour"] == pytest.approx(0.58) and q["qualifies"]
+
+
+def test_program_period_ignores_another_programmes_accrual(e, monkeypatch):
+    live = {"programId": "tt_live_20261127", "period": "live"}
+    _pp(e, monkeypatch, {A: live, B: live})
+    e.b.m(B)["reward_theo_pool"] = {"tt_day_of_20261127|day_of": 50.0,
+                                    "atp_live_20261127|live": 50.0}
+    assert e.rn1_reward_pool_projection(A)["accrued_pool_usd"] == 0.0
+    e.b.m(B)["reward_theo_pool"]["tt_live_20261127|live"] = 2.0
+    assert e.rn1_reward_pool_projection(A)["accrued_pool_usd"] == \
+        pytest.approx(0.8)
+
+
+def test_program_period_no_paying_pool_qualifies_nothing(e, monkeypatch):
+    _pp(e, monkeypatch, {A: None, B: None})
+    q = e.rn1_reward_qualifies(A, extra_usd_h=100.0)
+    assert q["why"] == "no_paying_pool" and not q["qualifies"]
+    _pp(e, monkeypatch, {A: {"programId": "x"}, B: None})     # no period
+    assert not e.rn1_reward_qualifies(A, extra_usd_h=100.0)["qualifies"]
+
+
+def test_day_of_horizon_is_capped_at_the_event_start(e, monkeypatch):
+    day_of = {"programId": "nba_day_of_20261127", "period": "day_of"}
+    _pp(e, monkeypatch, {A: day_of, B: None})
+    e.b.m(A)["game_start"] = time.time() + 1800
+    q = e.rn1_reward_pool_projection(A, extra_usd_h=1.0)
+    assert q["horizon_h"] == pytest.approx(0.5, abs=0.01)
+
+
+def test_accrual_is_keyed_by_pool(e, monkeypatch):
+    live = {"programId": "tt_live_20261127", "period": "live"}
+    _pp(e, monkeypatch, {A: live, B: None})
+    mk = e.b.m(A)
+    mk["rn1_reward_est"] = {"t": time.time(), "est_usd_per_hour": 3.6}
+    mk["reward_theo_t"] = time.time() - 100
+    e._rn1_theo_accrue(A, mk, time.time())
+    assert set(mk["reward_theo_pool"]) == {"tt_live_20261127|live"}
+    assert mk["reward_theo_pool"]["tt_live_20261127|live"] == \
+        pytest.approx(0.1, abs=0.002)
+
+
+def test_pool_key():
+    assert M.rn1_pool_key({"programId": "p", "period": "live"}) == "p|live"
+    assert M.rn1_pool_key({"programId": "p"}) is None
+    assert M.rn1_pool_key(None) is None

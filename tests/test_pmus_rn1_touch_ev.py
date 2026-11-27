@@ -26,7 +26,7 @@ T = D("0.01")
 BBO = {"bid": D("0.48"), "ask": D("0.50")}
 FLAT = {"YES": "0", "NO": "0"}
 PER = {"df": 0.3, "targetSize": 10, "pool_rate_usd_s": 0.001,
-       "programId": "P1", "maxSpread": None}
+       "programId": "P1", "period": "live", "maxSpread": None}
 
 
 def _reward(monkeypatch, table):

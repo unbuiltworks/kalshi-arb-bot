@@ -872,6 +872,8 @@ def _real_projection(e, monkeypatch):
                         M.Engine.rn1_incentive.__get__(e))
     monkeypatch.setattr(e, "rn1_reward_day_projection",
                         M.Engine.rn1_reward_day_projection.__get__(e))
+    monkeypatch.setattr(e, "rn1_reward_pool_projection",
+                        M.Engine.rn1_reward_pool_projection.__get__(e))
 
 
 def _mature(e, slug=SLUG):

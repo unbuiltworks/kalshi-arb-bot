@@ -226,6 +226,11 @@ class RewardFeed:
         monkeypatch.setattr(e, "rn1_reward_day_projection",
                             lambda slug=None, extra_usd_h=0.0, now=None:
                             self.day_projection())
+        monkeypatch.setattr(e, "rn1_reward_pool_projection",
+                            lambda slug=None, extra_usd_h=0.0, now=None:
+                            dict(self.day_projection(),
+                                 scope="program_period",
+                                 pool="feed", accrued_pool_usd=0.0))
         self.refresh(slugs)
         return self
 
