@@ -2928,3 +2928,45 @@ safety limits are authorized."
   coverage across eligible markets.
 - **Not authorized:** live trading, arming, taker, capital increases, weaker
   limits, crypto changes, automatic repeat.
+
+### 85c. 6e6cc2d5d campaign close-out — 28 Nov 2026, 09:31 UTC
+
+The 05:17Z close-out reminder fired during a worker restart and was not
+processed. Close-out was therefore done at 09:31Z. In the meantime production
+stayed fully locked: `submission_lock` reported `new_exposure_locked: true`,
+`completions_locked: true` and `why: window_ended` from 05:15Z.
+
+- **Lock:** `PMUS_TWO_SIDED_SUBMISSION_LOCK=1` set at 09:31Z (no automatic
+  repeat). Open orders 0. Resting $0. Unpaired $0.
+- **INVENTORY_RECONCILE 09:20:** venue positions nonzero 0, mismatches 0.
+- **Campaign (00:15–03:15Z plus grace), venue-reconciled:**
+  - 14 markets, 29 fills, 25.0 contracts, spend $11.82.
+  - Pairs: 9.30 at an average of 0.958, pair edge +$0.387.
+  - Residual: 6.40 contracts, $2.91 cost, all lost at settlement.
+  - Fees $0. Rebates $0.
+  - **Settled trading −$1.844.** Cash basis −$1.521 (cash 306.29 → 304.77,
+    unexplained 0).
+  - Worst market: makyar −$1.742 (NO residual, a weakening favourite).
+- **Rewards:**
+  - Campaign rewards: paid $0, pending $0.
+  - Account-wide: PAID $24.09, PENDING $0.86, SKIPPED $4.00 (none are
+    campaign rows yet).
+- **Net realized for the campaign: −$1.844.** The $8 stop was not reached.
+- **Against the a51 baseline:** 29 vs 3 fills, but the settled result was
+  negative. Residual adverse selection (−$1.91) exceeded pair edge (+$0.39).
+  That supports the trading-first change.
+
+### 86a. Deploy 8f7cb2c36 (replaces 86) — 28 Nov 2026, 09:31 UTC
+
+Owner, verbatim: "I explicitly authorize deployment of
+8f7cb2c368c6738dd6b72ae4994ae5fd4691bafa after the existing campaign's grace
+period and close-out, strictly disarmed with
+PMUS_TWO_SIDED_SUBMISSION_LOCK=1. Enable PMUS_SHARP_COVERAGE_LOG=1 [...] No
+live trading, arming, taker execution, capital increases or weakened safety
+limits are authorized."
+
+- **Done:** lock=1 and `PMUS_SHARP_COVERAGE_LOG=1` (skipDeploys). Source
+  pinned to `8f7cb2c36` on `release/pmus-sports-trading-first-8f7cb2c36` at
+  09:31Z.
+- **Unchanged:** no other variable. `PMUS_RN1_TRADING_FIRST` is unset, so it
+  is off.
