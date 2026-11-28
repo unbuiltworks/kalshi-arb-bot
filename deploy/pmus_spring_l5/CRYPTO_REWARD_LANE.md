@@ -193,3 +193,38 @@ roughly $0.3–4.5/day. No fills or credits are venue-confirmed.
 - The halt watchdog's treatment of 100-contract orders resting for hours (they are in the registry).
 - Depth is polled (≤10 s, immediately on a top-of-book change); a fast move can fill a quote first.
 - Daily pools run midnight–midnight ET; the 2 h cutoff is measured from market end only.
+
+## Reward-aware mode (28 Nov 2026; default OFF, not deployed, not armed)
+
+`PMUS_CRYPTO_RA=1` on top of `PMUS_CRYPTO_REWARDS=1`. Same controller, same placement choke
+point, same arming (arm key + signed approval; the approval must now repeat the mode's
+settings under `reward_aware`, so an approval of one mode never arms the other). Packet:
+`analysis/l5/crypto_hourly/CRYPTO_REWARD_PACKET_20261128.md`.
+
+| Variable | Default | Effect |
+|---|---|---|
+| `PMUS_CRYPTO_RA` | 0 | mode on |
+| `PMUS_CRYPTO_RA_SERIES` | `1d` | `1d` or `1d,1h`. Hourly markets are tradable only when named here AND a programme row is listed for the slug |
+| `PMUS_CRYPTO_RA_ALLOCATION` | empty | pool-allocation hypothesis credited in the net estimate: `shared_program_et_day`, `per_contract_et_day`, `per_contract_window`. Empty = no reward credited = nothing opens (outside a probe) |
+| `PMUS_CRYPTO_RA_PAID_VERIFIED` | empty | the hypothesis PAID earnings rows have confirmed; only then is a figure labelled PAID |
+| `PMUS_CRYPTO_RA_PROBE` | 0 | bounded evidence probe: quote although the net estimate is not positive |
+| `PMUS_CRYPTO_RA_MAX_UNPAIRED_QTY` | 4 | per-market unpaired contracts the heavier side may reach |
+| `PMUS_CRYPTO_RA_DEPTH_MAX` | 4 | deepest tick behind the best price the pair of bids may be stepped back to |
+| `PMUS_CRYPTO_RA_PULL_S` / `_OPEN_DELAY_S` | 90 / 60 | no new quote this close to the window end (never under 60) / this soon after its start |
+| `PMUS_CRYPTO_RA_FILL_COST_USD`, `_FILLS_PER_HOUR` | empty | measured upper bounds of the trading cost; empty = cost unknown = nothing opens (outside a probe) |
+| `PMUS_CRYPTO_RA_QUALIFY_FRAC`, `_MIN_NET_USD` | 0.5 / 0 | lower bound on qualifying time; net estimate must exceed |
+| `PMUS_CRYPTO_RA_JUMP_BPS`, `_JUMP_WINDOW_S`, `_JUMP_PAUSE_S`, `_REQUIRE_INDEX`, `_INDEX_MAX_AGE_S` | 10 / 10 / 30 / 1 / 20 | pause on a move of the venue's public reference index (`/v1/asset-prices/history`, read by the feed thread); no index = no quote |
+
+What it changes, only when on: quotes both sides inside the scoring walk and steps the pair
+back to the pair cap; lets the heavier side keep an opening bid up to the unpaired cap while
+the lighter side rests a completion inside the pair cap (never forced); uses the venue's
+`assetPriceTerms.windowEnd` for the cutoff (`endDate` is 30 minutes after the fixing);
+verifies the slug identity against the venue's terms; pauses on index and venue-mid jumps.
+What it does not change: clip, pair cap, per-market and campaign caps, daily halt, campaign
+and crypto loss stops, hard loss budget, submission lock, shared halt, account-risk gate,
+registry, no taker. `src/pmus_crypto_hourly_fair.py` is not imported.
+
+Evidence labels in `CRYPTO_QUOTE.reward_aware`: PUBLISHED (programme row), INFERRED
+(allocation hypothesis), PAID (earnings rows; none exist for crypto). Attribution by series
+is in `CRYPTO_PNL.attribution` and heartbeat `crypto.attribution` (fills, pair edge,
+residual, modelled maker fees, reward rows paid / awaiting / skipped), never mixed with sports.

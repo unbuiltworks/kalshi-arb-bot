@@ -130,6 +130,8 @@ COPY src/pmus_rn1_replica.py src/pmus_rn1_replica.py
 COPY src/pmus_crypto_rewards.py src/pmus_crypto_rewards.py
 COPY src/pmus_crypto_tape.py src/pmus_crypto_tape.py
 COPY src/pmus_crypto_feed.py src/pmus_crypto_feed.py
+COPY src/pmus_crypto_reward_economics.py src/pmus_crypto_reward_economics.py
+COPY src/pmus_crypto_period_identity.py src/pmus_crypto_period_identity.py
 # Imported lazily by pmus_sports_two_sided.py when PMUS_RN1_DURATION_RANK /
 # PMUS_RN1_LIVE_FIRST, PMUS_RN1_REWARD_CALIBRATION and PMUS_ECONOMICS_REPORT
 # are on. LIVE 2026-11-27 12:47Z: 1c1d546b6 shipped without them and the

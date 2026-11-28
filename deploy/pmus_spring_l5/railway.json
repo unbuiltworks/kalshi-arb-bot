@@ -62,6 +62,8 @@
       "src/pmus_crypto_rewards.py",
       "src/pmus_crypto_tape.py",
       "src/pmus_crypto_feed.py",
+      "src/pmus_crypto_reward_economics.py",
+      "src/pmus_crypto_period_identity.py",
       "src/pmus_request_budget.py",
       "src/pmus_pilot_pnl.py",
       "src/pmus_fill_markout.py",
