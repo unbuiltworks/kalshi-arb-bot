@@ -305,3 +305,4 @@ release candidate for 87e348730 (integrated hybrid v3: contract_period qualifica
 release candidate for 52bec8021 (reward economics: paid_fraction rule, pregame fill rate, release balanced; on hybrid v3; all flags default off; not approved, not deployed)
 release candidate for e3ef7eb79 (reward economics v2: paid_fraction, per-sport pregame fill rates, rank by net per slot, release balanced; all flags default off; not approved, not deployed)
 release candidate for cc0a222c9 (integrated: threshold reward rule, live slot cap, completion hold, completion safety class (capped wait), fair-feed freshness, provider coverage report; all flags default off; not approved, not deployed)
+release candidate for a3e27b21d (trading-first: pre-reward edge vs independent fair for openings/additions/ladder, favourite-only and falling-side options; on ac1c1bbaf; all flags default off; not approved, not deployed)
