@@ -144,3 +144,54 @@ priority.
 The next profitability lever is a fair value for these markets. Setka has
 none from any inspected source. Next is the measured provider coverage,
 then a decision whether to restrict accumulation to fair-valued markets.
+
+## 8. Settlement complete — 28 Nov 2026, 12:58 UTC
+
+All 7 filled markets are closed. Outcomes are from gateway `/v1/market/slug` `outcomePrices`: YES won bokrom, masyev, makyar and kanden; NO won beldmy, plivol and aregonreyvar.
+
+### By market (venue-reconciled, CAMPAIGN_ECONOMICS and PILOT_PNL at 09:20Z)
+
+| Market | Fills | Contracts | Pairs | Pair edge | Residual | Residual result | Realized |
+|---|---|---|---|---|---|---|---|
+| makyar-karole | 4 | 3.55 | 0 | 0 | NO 3.55 | −1.742 | **−1.742** |
+| beldmy-kvaiho | 3 | 1.85 | 0 | 0 | YES 1.85 | −0.696 | **−0.696** |
+| bokrom-priser | 7 | 5.60 | 2.30 | +0.064 | YES 1.00 | +0.529 | **+0.594** |
+| masyev-cherom | 7 | 6.00 | 3 | +0.202 | — | — | **+0.202** |
+| plivol-kovnaz | 4 | 4.00 | 2 | +0.060 | — | — | **+0.060** |
+| kanden-kotand | 2 | 2 | 1 | +0.030 | — | — | **+0.030** |
+| aregonreyvar (ATP doubles) | 2 | 2 | 1 | +0.030 | — | — | **+0.030** |
+| **Total** | **29** | **25.00** | **9.30** | **+0.387** | 6.40 contracts, $2.908 cost | **−1.908** | **−1.521** |
+
+**Cross-checks:**
+- PILOT_PNL cash 306.2879 → 304.7666 = −1.5213, unexplained 0.
+- INVENTORY_RECONCILE: 0 venue positions, 0 mismatches.
+- Fees $0. Rebates $0.
+- CAMPAIGN_ECONOMICS `settled_trading_usd` −1.844 covers only the three markets with a settled residual. The four paired-flat markets realized their pair edge (+$0.322) as cash at pairing. **Campaign realized net: −$1.521.** This supersedes the −$1.844 in 85c, which left that pair cash out.
+
+### By role: the 24 window fills, each held to settlement
+
+Value per fill = qty × (payout − price). File: `settled_by_role.txt`.
+
+| Role | Fills | Contracts | Cost | Settled value | Favourite | Underdog |
+|---|---|---|---|---|---|---|
+| Opening | 7 | 9.10 | 4.08 | +0.473 | 2 fills +0.430 | 5 fills +0.043 |
+| Same-side addition | 8 | 6.60 | 3.08 | **−0.333** | 3 fills **−0.520** (weakening favourites: makyar) | 5 fills +0.187 |
+| Completion | 9 | 6.02 | 3.23 | −1.037 | 6 fills −0.839 | 2 fills −0.282 (1 unclassified, +0.084) |
+| **Window total** | 24 | 21.72 | 10.39 | **−0.898** | | |
+
+- The other −$0.623 of the campaign total comes from the 5 grace-period completion fills, which are not in the window reconstruction.
+- **Caveat:** a completion's value only makes sense together with the leg it pairs. Per-fill settlement attribution assigns the lost side of a locked pair to whichever role bought it. It is reported because it was requested, but the pair edge (+$0.387) is the economic measure for completions.
+- **What drove the loss:** unpaired residuals (−$1.908), concentrated in two markets. One was a weakening favourite bought by additions (makyar: NO 3.55 contracts, lost in full). The other was an underdog opening (beldmy). That is the pattern the trading-first weakening-fair filter and the EV gate address. Neither can act on these markets, because Setka has no independent fair.
+
+### Rewards, kept separate from trading
+
+| | Campaign markets | Account-wide (REWARD_CHECK 09:19Z) |
+|---|---|---|
+| Confirmed (PAID) | **$0** | $24.09 (122 rows, all dated before this campaign) |
+| Pending | $0 | $0.86 |
+| Skipped | $0 | $4.00 |
+| Projected (THEORETICAL) | $0.155 | — |
+
+Campaign rewards will be re-checked when 28 Nov reward rows post, normally within 1–7 days. Nothing is counted until it is PAID.
+
+**Production stayed locked throughout:** `window_ended` from 05:15Z, and `PMUS_TWO_SIDED_SUBMISSION_LOCK=1` from 09:31Z.

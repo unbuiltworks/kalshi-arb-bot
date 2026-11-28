@@ -2970,3 +2970,17 @@ limits are authorized."
   09:31Z.
 - **Unchanged:** no other variable. `PMUS_RN1_TRADING_FIRST` is unset, so it
   is off.
+
+### 85d. 6e6cc2d5d campaign settlement complete — 28 Nov 2026, 12:58 UTC
+
+- All 7 filled markets are closed.
+- **Campaign realized net −$1.521:** pair edge +$0.387, residual −$1.908, fees $0, rebates $0.
+  - It matches venue cash exactly.
+  - It corrects 85c's −$1.844, which left out the pair cash of the paired-flat markets.
+- **Campaign rewards:** confirmed $0, pending $0, projected (theoretical) $0.155.
+- **By role (window fills held to settlement):**
+  - openings +$0.473;
+  - additions −$0.333 (favourite additions −$0.520);
+  - completions −$1.037 (attribution caveat in the review).
+- **Detail:** `campaign_20261128/PROFITABILITY_REVIEW.md` §8.
+- Production remains locked on `8f7cb2c36` (86a).

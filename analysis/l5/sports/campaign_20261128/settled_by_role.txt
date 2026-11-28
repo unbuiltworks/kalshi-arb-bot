@@ -1,0 +1,20 @@
+SETTLED value of each of the 24 window fills held to settlement: qty x (payout - price). Outcomes: gateway /v1/market/slug outcomePrices (all 7 markets closed).
+Role totals sum to the window-fill total (-0.898). Venue cash for the whole campaign (29 fills incl. 5 grace fills) is -1.5213; the gap (-0.623) is the grace fills.
+addition    fills  8 qty  6.60 cost  3.08 settled value -0.333
+completion  fills  9 qty  6.02 cost  3.23 settled value -1.037
+opening     fills  7 qty  9.10 cost  4.08 settled value +0.473
+  addition    favorite  fills  3 qty  3.00 avg px 0.507 settled value -0.520
+  addition    underdog  fills  5 qty  3.60 avg px 0.434 settled value +0.187
+  completion  None      fills  1 qty  0.19 avg px 0.560 settled value +0.084
+  completion  favorite  fills  6 qty  5.19 avg px 0.547 settled value -0.839
+  completion  underdog  fills  2 qty  0.64 avg px 0.440 settled value -0.282
+  opening     favorite  fills  2 qty  3.00 avg px 0.523 settled value +0.430
+  opening     underdog  fills  5 qty  6.10 avg px 0.411 settled value +0.043
+by market (window fills):
+  atpdb-aregonreyvar-ambrogg   +0.030
+  setkameua-bokrom-priser      +0.648
+  setkameua-masyev-cherom      +1.128
+  setkameua-plivol-kovnaz      -0.296
+  setkameua-beldmy-kvaiho      -0.696
+  setkameua-makyar-karole      -1.742
+  setkameua-kanden-kotand      +0.030
