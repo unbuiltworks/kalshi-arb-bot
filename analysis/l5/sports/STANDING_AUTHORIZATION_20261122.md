@@ -2850,3 +2850,32 @@ disarmed, no automatic repeat. Verify fresh account reconciliation,
 lifetime loss allowance, reward data and independent watchdog health before
 arming. Report actual inventory accumulation, reward qualification, capital
 utilization and settled net profitability."
+
+### 85a. Deployed, verified and armed — 28 Nov 2026
+
+- **00:05–00:06Z:**
+  - packet §3 variables set with no restart and the lock at `1`:
+    `PMUS_RN1_REWARD_QUAL_SCOPE=contract_period`,
+    `PMUS_RN1_REWARD_MIN_RULE=paid_fraction`,
+    `PMUS_RN1_FILL_RATE_PREGAME_MULT=0.1,setkameua:0.35,setkamemd:0.35`,
+    `PMUS_RN1_RELEASE_BALANCED=1`, `PMUS_RN1_RANK_BY=net_per_hour`,
+    `PMUS_RN1_LIVE_FIRST=0`, `PMUS_RN1_DIRECTIONAL=1`;
+  - service source pinned to `release/pmus-sports-reward-economics-6e6cc2d5d`
+    at `6e6cc2d5d27d2e169010fc853760962707b1a2f2`.
+- **Deployment `1d211fea` (6e6cc2d5d), boot 00:07:25:**
+  - `why: locked`; no loop, import, latch or market error through 00:13;
+  - ACCOUNT_RISK ok (lifetime −$66.5694, ceiling $75.00, **room
+    $8.4306**; drawdown capacity $13.8777);
+  - REWARD_CHECK 00:09:29 ok (PAID $24.09, SKIPPED $4.00: paid fraction
+    0.858);
+  - INVENTORY_RECONCILE 00:11:08 ok (0 positions, 0 mismatches, $0 open
+    unmatched); ACCOUNT_AUDIT 00:11:09 complete;
+  - watchdog 00:10: 0 open orders, all registries OK;
+  - ledger 00:10:42: day $0, lifetime −$66.5694, unresolved 0,
+    unattributed 0.
+- **Armed:**
+  `PMUS_TWO_SIDED_SUBMISSION_LOCK=window:2026-11-28T00:15:00Z/2026-11-28T03:15:00Z`.
+  Deployment `e1bd7039` booted at 00:16:33 with the window open and grace
+  7,200 s; campaign marker 00:15Z. Active: two pregame Setka UA markets.
+- **Scheduled:** first-orders check 00:27; mid-checks 01:20 and 02:20;
+  window report 03:17; close-out and relock 05:17.
