@@ -28,6 +28,18 @@ midnight Eastern Time"). All three are consistent with the published row:
                           between the contracts carrying that id at once
                           (ETH, SOL and XRP share an id; BTC has its own)
 
+What the venue publishes (read 2026-11-28; saved under
+data/pmus_crypto_rewards_20261128/):
+  * polymarket.us/rewards: "Reward pool -- the total amount paid out for a
+    time period, shared across the program's markets -- never summed per
+    market." That supports shared_program_et_day, the conservative basis.
+  * the same page and the docs label these rows "Daily (per event)": "a
+    per-day pool on an event without a fixed start ... midnight to midnight
+    Eastern Time". Each up/down market is its own event, which supports
+    per_contract_et_day. The two texts are not reconciled by the venue.
+  * nothing published says a pool is paid per trading window.
+No basis is PAID-verified, so none is credited without an explicit flag.
+
 For a DAILY market the first two are the same number. `allocation_scenarios`
 lists them most conservative first; `conservative` combines per-hypothesis
 results so a decision never rests on the optimistic one.
