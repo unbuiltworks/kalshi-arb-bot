@@ -169,3 +169,19 @@ def test_weakening_favourite_refused(en, monkeypatch):
     e.step_market(SLUG)
     assert all(s != "YES" for s, _p, _q in resting(v))
     assert e.b.m(SLUG)["_tf_fair"][-1][1] == D("0.60")
+
+
+def test_fair_coverage_logged_only_with_coverage_flag(en, monkeypatch,
+                                                      capsys):
+    e, v, _ = en
+    monkeypatch.setenv("PMUS_SHARP_COVERAGE_LOG", "1")
+    e.step_market(SLUG)
+    fc = quotes(capsys)[-1]["fair_coverage"]
+    assert fc["any"] is False and "guard_configured" in fc
+
+
+def test_fair_coverage_absent_by_default(en, monkeypatch, capsys):
+    e, v, _ = en
+    monkeypatch.delenv("PMUS_SHARP_COVERAGE_LOG", raising=False)
+    e.step_market(SLUG)
+    assert "fair_coverage" not in quotes(capsys)[-1]

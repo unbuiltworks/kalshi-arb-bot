@@ -5961,6 +5961,28 @@ class Engine:
             return None
         return None
 
+    def rn1_fair_coverage(self, slug: str) -> Dict[str, Any]:
+        """READ-ONLY (with PMUS_SHARP_COVERAGE_LOG): which independent
+        probability sources this market has right now -- the international
+        guard (configured, token mapped, fresh mid) and the sportsbook shadow
+        state (fair and its age). Never the market's own price."""
+        out: Dict[str, Any] = {"guard_configured": self.guard is not None}
+        try:
+            if self.guard is not None:
+                tok = self.guard.token(slug)
+                out["intl_token"] = bool(tok)
+                mid = self.intl_fair(slug)
+                out["intl_mid"] = None if mid is None else str(mid)
+            st = ((self.b.d.get("sharp_shadow") or {}).get(slug) or {})
+            out["sportsbook_fair"] = st.get("fair_yes")
+            out["sportsbook_age_s"] = None if not st.get("t") else round(
+                time.time() - float(st["t"]) +
+                float(st.get("odds_age_s") or 0.0), 1)
+            out["any"] = bool(out.get("intl_mid") or out["sportsbook_fair"])
+        except Exception as exc:                          # noqa: BLE001
+            out["error"] = type(exc).__name__
+        return out
+
     def rn1_tf_note_mid(self, slug: str, mk: Dict[str, Any],
                         bbo: Mapping[str, Any], now: float) -> None:
         """Venue YES-mid history for RN1_TF_FALLING_S (diagnostic input to
@@ -7689,6 +7711,9 @@ class Engine:
                 edge=q.get("edge"),
                 marginal_ev=mev_log,
                 directional=q.get("directional"),
+                **({"fair_coverage": self.rn1_fair_coverage(slug)}
+                   if os.getenv("PMUS_SHARP_COVERAGE_LOG", "0").strip() ==
+                   "1" else {}),
                 **({"trading_first": {
                     "pre_reward_edge": mk.get("_tf_last"),
                     "edge_min_usd": str(RN1_TF_EDGE_USD),
