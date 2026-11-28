@@ -7988,7 +7988,10 @@ class Engine:
             # RN1_SIDE_INDEPENDENT: only the side still cancelling waits
             wait_sides = pending
         flat = y == 0 and n == 0
-        if flat and RN1_RELEASE_UNQUALIFIED_S > 0 and not mev_pass and \
+        # Trading-first uses the economic idle-release path below, not reward eligibility.
+        if RN1_TRADING_FIRST:
+            mk.pop("unqualified_since", None)
+        if not RN1_TRADING_FIRST and flat and RN1_RELEASE_UNQUALIFIED_S > 0 and not mev_pass and \
                 new_block in (None, "net_not_positive"):
             if self.rn1_quote_qualifies(slug, mk):
                 mk.pop("unqualified_since", None)
