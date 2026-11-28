@@ -284,3 +284,23 @@
 2026-11-22T04:25Z intl guard: name-based resolver for tennis (atp, wta); exact-slug leagues unchanged.
 2026-11-22T12:30Z esports fail-closed late rule; soccer 2H fail-closed; min 10-contract touch gate for new exposure; Serie A three-outcome resolver; one market per game.
 2026-11-22T12:20Z esports block keyed on the league code as well as match state (CS2 events arrive with no state).
+2026-11-22T15:40Z in-bot safety latch (position mismatch, cap breach, oversize order, loop errors); campaign marker kept across relock.
+2026-11-22T16:20Z registry freshness follows the trading loop's own progress (a wedged loop goes STALE to the watchdog).
+2026-11-22T16:45Z RN1 reward-aware selection ranking; marginal-edge test for adding to an unpaired side.
+2026-11-22T17:05Z stalled loop reports manages_own_resting=false with a fresh stamp, so the watchdog both latches and can cancel the listed orders.
+2026-11-25T23:55Z as 7a0535450 plus: with net ranking on, no opening in any market whose fresh net is not positive.
+2026-11-26T00:45Z as afd8a611d plus reward-scoring corrections (dev/chatgpt-rn1-net-read-guard 16aecb0fb) and own-order book-lag guard.
+2026-11-26T01:55Z as b8693dcf4 plus full-ladder reward scoring (dev/chatgpt-rn1-ladder-score 8137a82eb) and hold-through-a-dip (off by default).
+release candidate for 9b28e6bfe (RN1 marginal EV and fit-every-level, both off by default)
+release candidate for f956b2d6a (final-gate loss stops; in-flight orders across markets)
+release candidate for cf19ef86a (RN1 marginal EV without a fair value; off by default)
+release candidate for ad7cd6237 (integrated: live-first, touch EV, calibration, marginal EV no-fair, duration, economics report; all off by default)
+release candidate for 8e6366786 (integrated release a17a9c978 + enabled-mode safety fixtures; src unchanged)
+release candidate for 1c1d546b6 + image fix (Dockerfile COPY for duration_rank, reward_calibration, campaign_economics; src unchanged)
+release candidate for f185c712b (directional allocation, PMUS_RN1_DIRECTIONAL default off; not approved, not deployed)
+release candidate for 495e139b5 (hybrid allocator v2; all flags default off; not approved, not deployed)
+release candidate for 2e7dd4bdf (integrated hybrid: qualification scope, feasible ladder, allocator, pause options; all flags default off; not approved, not deployed)
+release candidate for f4dfe9226 (integrated hybrid v2: program_period qualification, feasible ladder, allocator, pause options; all flags default off; not approved, not deployed)
+release candidate for 87e348730 (integrated hybrid v3: contract_period qualification, unknown programme terms fail closed, feasible ladder, allocator, pause options; all flags default off; not approved, not deployed)
+release candidate for 52bec8021 (reward economics: paid_fraction rule, pregame fill rate, release balanced; on hybrid v3; all flags default off; not approved, not deployed)
+release candidate for e3ef7eb79 (reward economics v2: paid_fraction, per-sport pregame fill rates, rank by net per slot, release balanced; all flags default off; not approved, not deployed)

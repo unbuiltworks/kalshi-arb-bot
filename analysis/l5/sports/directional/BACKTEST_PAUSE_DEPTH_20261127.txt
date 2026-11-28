@@ -1,0 +1,15 @@
+THEORETICAL: recorded two-venue books (21 Nov, 65 CFB/NBA/NHL markets, all simulated concurrently), production quotes/guard/ladder, modelled fills, 3 s latency; maker fee 0; rewards not modelled
+touch   no pauses (earlier baseline)         traded 22 fills 159 spend  131.10 trading  -12.67 (matched  +6.84 resid  -19.51) deployed tw $201.45 resting tw $140.08 paused 0.0 mkt-h
+touch   production pauses                    traded 19 fills 138 spend  114.00 trading   -5.87 (matched  +5.31 resid  -11.18) deployed tw $184.88 resting tw $128.79 paused 16.0 mkt-h
+touch   pauses + pause depth                 traded 22 fills 152 spend  124.31 trading  -12.18 (matched  +7.59 resid  -19.77) deployed tw $210.41 resting tw $147.11 paused 16.0 mkt-h | paired vs production pauses -0.287±0.129 (n 22)
+touch   pauses + allocator (adds only)       traded 19 fills  73 spend   63.88 trading   -8.31 (matched  +2.34 resid  -10.66) deployed tw $100.84 resting tw $69.22 paused 16.0 mkt-h | paired vs production pauses -0.129±0.128 (n 19)
+touch   pauses + pause depth + allocator     traded 22 fills 100 spend   82.11 trading  -10.54 (matched  +4.75 resid  -15.29) deployed tw $127.86 resting tw $85.66 paused 16.0 mkt-h | paired vs production pauses -0.212±0.153 (n 22)
+through no pauses (earlier baseline)         traded 17 fills 105 spend   82.81 trading  -14.64 (matched  +5.52 resid  -20.16) deployed tw $183.63 resting tw $151.89 paused 0.0 mkt-h
+through production pauses                    traded 14 fills  92 spend   63.61 trading   -7.74 (matched  +5.47 resid  -13.21) deployed tw $159.17 resting tw $133.96 paused 16.0 mkt-h
+through pauses + pause depth                 traded 15 fills  98 spend   70.82 trading   -4.95 (matched  +5.91 resid  -10.86) deployed tw $187.44 resting tw $155.85 paused 16.0 mkt-h | paired vs production pauses +0.186±0.330 (n 15)
+through pauses + allocator (adds only)       traded 14 fills  61 spend   44.59 trading   -2.12 (matched  +3.40 resid   -5.51) deployed tw $86.55 resting tw $68.83 paused 16.0 mkt-h | paired vs production pauses +0.402±0.315 (n 14)
+through pauses + pause depth + allocator     traded 15 fills  71 spend   51.82 trading   -4.35 (matched  +4.36 resid   -8.71) deployed tw $114.15 resting tw $89.86 paused 16.0 mkt-h | paired vs production pauses +0.226±0.377 (n 15)
+
+-- addendum: pause depth with the minimum size while paused (THEORETICAL)
+touch   pauses + pause depth + min size  trading  -11.58 (matched  +7.82 resid  -19.40) deployed tw $196.53 | paired vs production pauses -0.260±0.124 (n 22)
+through pauses + pause depth + min size  trading   -8.35 (matched  +5.49 resid  -13.84) deployed tw $172.34 | paired vs production pauses -0.041±0.346 (n 15)

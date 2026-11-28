@@ -1425,6 +1425,41 @@ def test_no_cricket_ever(monkeypatch):
         assert not M.is_cricket(s) and not M.abandoned(s), s
 
 
+def test_cricket_competitions_found_live_on_25_nov_are_excluded():
+    """Five of six cricket competitions listed on the venue were not caught
+    by the name rule (found by the market-type scan, 2026-11-25)."""
+    for lg in ("sheffield", "wbbl", "smat", "csafc", "pro50", "testcr"):
+        s = "aec-%s-aaa-bbb-2026-11-25" % lg
+        assert M.is_cricket(s) and M.excluded(s) and M.abandoned(s), s
+
+
+def test_cricket_is_learned_from_the_venues_own_label(monkeypatch):
+    """A competition nobody listed: the venue's event type or market type
+    says cricket, so it is excluded from then on, and pre-game discovery
+    never returns it."""
+    monkeypatch.setattr(M, "_CRICKET_BY_VENUE", set())
+    s = "aec-newcomp-aaa-bbb-2026-11-25"
+    assert not M.is_cricket(s)
+    assert M.learn_cricket(s, None, "cricket_match_winner") is True
+    assert M.is_cricket(s) and M.excluded(s) and M.abandoned(s)
+    assert M.is_cricket("aec-newcomp-ccc-ddd-2026-11-26")   # the competition
+    assert M.learn_cricket("aec-atp-a-b-2026-11-25", "tennis",
+                           "tennis_match_winner") is False
+    assert not M.is_cricket("aec-atp-a-b-2026-11-25")
+    import time as _t
+    now = _t.time()
+    iso = _t.strftime("%Y-%m-%dT%H:%M:%SZ", _t.gmtime(now + 3600))
+    evs = [{"live": False, "eventState": {"type": "cricket"},
+            "markets": [{"slug": "aec-othercomp-x-y-2026-11-25",
+                         "gameStartTime": iso}]},
+           {"live": False, "eventState": {"type": "tennis"},
+            "markets": [{"slug": "aec-atp-x-y-2026-11-25",
+                         "gameStartTime": iso}]}]
+    got = [t["slug"] for t in M.pregame_targets(evs, now)]
+    assert got == ["aec-atp-x-y-2026-11-25"]
+    assert M.is_cricket("aec-othercomp-q-r-2026-11-27")
+
+
 def test_daily_loss_stop_blocks_new_openings_only(eng, monkeypatch, capsys):
     e, v = eng
     monkeypatch.setattr(M, "DAILY_LOSS_USD", D("0.10"))
@@ -2565,3 +2600,228 @@ def test_combo_maker_starts_and_logs_without_crashing(eng, monkeypatch,
     e.stop = True                                  # thread exits at once
     mk = M.start_combo_maker(v, e)
     assert mk is not None and mk.mode == "shadow"
+
+
+# ---- account-wide drawdown reaches the sports bot (owner 2026-11-23)
+def _with_drawdown(used, mx="3.00"):
+    d = _risk_doc()
+    d["account_risk"]["portfolio_drawdown"] = {
+        "state": "ON", "drawdown_usd": used, "max_drawdown_usd": mx}
+    return d
+
+
+def test_account_drawdown_at_the_limit_blocks_new_openings(eng, risk_on):
+    e, v = eng
+    risk_on["doc"] = _with_drawdown("3.00")
+    e.select(v.account())
+    e.step_market("aec-x")
+    assert _opened(v) == []
+    assert e.account_risk_blocks() == "ACCOUNT_DRAWDOWN_LIMIT"
+
+
+def test_account_drawdown_under_the_limit_allows_openings(eng, risk_on):
+    e, v = eng
+    risk_on["doc"] = _with_drawdown("0.50")
+    e.select(v.account())
+    e.step_market("aec-x")
+    assert len(_opened(v)) == 2
+    d = e.account_risk()["drawdown"]
+    assert d["state"] == "ON" and D(d["own_worst_case_exposure_usd"]) > 0
+
+
+def test_an_order_larger_than_the_capacity_left_is_refused(eng, risk_on,
+                                                           capsys):
+    e, v = eng
+    # 3.00 - 2.50 = 0.50 left: one bid fits, the second does not, and what
+    # the first committed is counted before the ledger has seen it
+    risk_on["doc"] = _with_drawdown("2.50")
+    e.select(v.account())
+    e.step_market("aec-x")
+    assert len(_opened(v)) == 1
+    assert "ACCOUNT_RISK_CAPACITY" in capsys.readouterr().out
+    assert e.own_exposure_usd() <= D("0.50")
+
+
+def test_what_the_bot_just_committed_counts_before_the_ledger_sees_it(
+        eng, risk_on):
+    e, v = eng
+    # 0.45 left. The first bid (0.42) fits. The second (0.52) would raise
+    # the worst case to 0.52, which does not, and the ledger's snapshot
+    # still shows the figure from before the first one. (2026-11-23: a bid
+    # on each side counts as the worse side, not the sum -- if both fill
+    # they are a pair -- so the room is set where even that does not fit.)
+    risk_on["doc"] = _with_drawdown("2.55")
+    e.select(v.account())
+    e.step_market("aec-x")
+    px = sorted(D(str(o["px"])) * D(str(o["qty"])) for o in v.orders.values())
+    assert len(_opened(v)) == 1, px
+    assert e.own_exposure_usd() <= D("0.60")
+    assert all(p <= D("0.60") for p in px)             # each fits alone
+
+
+# ---- the account-risk document is read off the loop
+@pytest.fixture
+def reader(eng, risk_on, monkeypatch):
+    from src import l5_account_risk as AR
+    e, v = eng
+    t = [1000.0]
+    r = AR.RiskReader(lambda: "http://risk/l5/live_orders.json",
+                      fetch=lambda u: risk_on["doc"], clock=lambda: t[0])
+    e._risk_reader = r
+    return e, v, r, t
+
+
+def test_no_snapshot_yet_blocks_new_orders_but_not_completions(reader):
+    e, v, r, t = reader
+    assert e.account_risk_blocks() == "ACCOUNT_RISK_NOT_READ_YET"
+    e.select(v.account())
+    e.step_market("aec-x")
+    assert _opened(v) == []
+    r.refresh_once()
+    e.step_market("aec-x")
+    assert len(_opened(v)) == 2
+
+
+def test_a_stale_snapshot_blocks_new_orders_and_cancels_still_work(
+        reader, monkeypatch):
+    e, v, r, t = reader
+    r.refresh_once()
+    e.select(v.account())
+    e.step_market("aec-x")
+    assert len(_opened(v)) == 2
+    t[0] += M.ACCOUNT_RISK_SNAPSHOT_MAX_S + 1          # the ledger went quiet
+    assert e.account_risk_blocks() == "ACCOUNT_RISK_SNAPSHOT_STALE"
+    n = len(v.orders)
+    e.place("aec-x", "YES", D("0.40"), D("1"), "two_sided_open")
+    assert len(v.orders) == n                          # no new order
+    e.cancel_all_own("test")                           # cancelling is free
+    assert _opened(v) == []
+
+
+def test_the_loop_never_fetches_when_a_reader_is_present(reader, monkeypatch):
+    from src import l5_account_risk as AR
+    e, v, r, t = reader
+    monkeypatch.setattr(AR, "fetch_json", lambda *a, **k: (_ for _ in ()
+                                                           ).throw(
+        AssertionError("the loop read the ledger itself")))
+    r.refresh_once()
+    assert e.account_risk()["ok"] is True
+
+
+def test_resting_bids_use_up_the_account_capacity_for_good(eng, risk_on,
+                                                           monkeypatch):
+    """LIVE 2026-11-23: with the snapshot unchanged the earlier arithmetic
+    forgot a resting bid after about 30 s and allowed the next one. Now
+    every resting dollar stays counted for as long as it rests."""
+    e, v = eng
+    risk_on["doc"] = _with_drawdown("2.55")          # 0.45 left
+    e.select(v.account())
+    e.step_market("aec-x")
+    assert len(_opened(v)) == 1
+    first = e.own_exposure_usd()
+    # long after any snapshot window: the bid still rests, still counts
+    e._expo_hist = []
+    e._acct_risk = None
+    e.step_market("aec-x")
+    assert len(_opened(v)) == 1
+    d = e.account_risk()["drawdown"]
+    assert D(d["own_resting_orders_usd"]) == first
+    assert D(d["capacity_usd"]) == D("0.45") - first
+
+
+def test_a_bid_on_each_side_counts_as_the_worse_side_not_the_sum(
+        eng, risk_on):
+    """Owner 2026-11-23: enforce the limit "without incorrectly
+    double-counting ... reserved capital". 0.60 left; bids of 0.42 and
+    0.52 on the two sides of one market. If both fill they are a pair
+    bought for 0.94, which the ledger values at $1: the worst case is the
+    dearer side alone."""
+    e, v = eng
+    risk_on["doc"] = _with_drawdown("2.40")
+    e.select(v.account())
+    e.step_market("aec-x")
+    assert len(_opened(v)) == 2
+    assert e.own_exposure_usd() == D("0.94")
+    assert e.own_resting_worst() == D("0.52")
+    d = e.account_risk()["drawdown"]
+    assert D(d["capacity_usd"]) == D("0.08")
+
+
+def test_bids_in_two_markets_do_add_up(eng, risk_on):
+    e, v = eng
+    risk_on["doc"] = _with_drawdown("2.40")
+    for s_ in ("aec-x", "aec-y"):
+        mk = e.b.m(s_)
+        mk["orders"]["r" + s_] = {"side": "YES", "px": "0.40", "qty": "1",
+                                  "filled": "0", "open": True,
+                                  "stage": "rn1_open"}
+    assert e.own_resting_worst() == D("0.80")
+    assert e.account_risk_blocks() == "ACCOUNT_DRAWDOWN_LIMIT"
+
+
+def test_a_resting_extension_adds_its_whole_cost(eng, risk_on):
+    e, v = eng
+    mk = e.b.m("aec-x")
+    mk["pos"]["YES"], mk["cost"]["YES"] = D("2"), D("0.88")
+    mk["orders"]["r"] = {"side": "YES", "px": "0.44", "qty": "2",
+                         "filled": "0", "open": True, "stage": "rn1_extend"}
+    assert e.own_resting_worst() == D("0.88")
+    assert e.own_resting_worst(("aec-x", "NO", D("0.50"), D("2"))) == \
+        D("0.88")       # the completing bid adds nothing to the worst case
+
+
+def test_the_earlier_assumption_is_still_selectable(eng, risk_on,
+                                                    monkeypatch):
+    e, v = eng
+    monkeypatch.setattr(M, "ACCOUNT_RISK_RESTING_IN_LEDGER", True)
+    risk_on["doc"] = _with_drawdown("2.40")
+    e.select(v.account())
+    e.step_market("aec-x")
+    assert e.account_risk()["drawdown"]["resting_counted_separately"] is False
+
+
+# ---- the account-limit verdict is visible while locked (owner 2026-11-23)
+def test_account_limit_status_is_reported_while_locked(eng, risk_on,
+                                                       monkeypatch):
+    e, v = eng
+    monkeypatch.setenv(M.SUBMISSION_LOCK_ENV, "1")
+    risk_on["doc"] = _with_drawdown("1.3444")
+    s = e.account_limit_status()
+    assert s["mode"] == "enforce" and s["ok"] is True
+    assert s["would_block_new"] is None
+    assert s["ledger_figure_usd"] == "1.3444" and s["limit_usd"] == "3.00"
+    assert s["capacity_usd"] == "1.6556"
+    assert s["resting_counted_separately"] is True
+    e.select(v.account())
+    e.step_market("aec-x")
+    assert _opened(v) == []                      # still locked: no order
+
+
+def test_account_limit_status_shows_a_refusal(eng, risk_on):
+    e, v = eng
+    risk_on["doc"] = _with_drawdown("3.00")
+    s = e.account_limit_status()
+    assert s["ok"] is False
+    assert s["would_block_new"] == "ACCOUNT_DRAWDOWN_LIMIT"
+
+
+def test_a_ledger_that_stops_publishing_the_figure_refuses_when_required(
+        eng, risk_on, monkeypatch):
+    """Fail closed: with L5_ACCOUNT_DRAWDOWN_REQUIRED=1 a document without
+    the drawdown block blocks new exposure. Without it, it would pass."""
+    from src import l5_account_risk as AR
+    e, v = eng
+    risk_on["doc"] = _risk_doc()                 # no portfolio_drawdown
+    assert e.account_limit_status()["would_block_new"] is None
+    monkeypatch.setenv(AR.DRAWDOWN_REQUIRED_ENV, "1")
+    e._acct_risk = None
+    s = e.account_limit_status()
+    assert s["would_block_new"] == "ACCOUNT_DRAWDOWN_NOT_PUBLISHED"
+    e.select(v.account())
+    e.step_market("aec-x")
+    assert _opened(v) == []
+
+
+def test_account_limit_status_off_when_the_check_is_off(eng):
+    e, v = eng
+    assert e.account_limit_status() == {"mode": "off"}

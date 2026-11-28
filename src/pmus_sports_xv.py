@@ -341,13 +341,37 @@ THREE_WAY_LEAGUES = tuple(
     x.strip().lower() for x in os.getenv(
         "PMUS_TWO_SIDED_INTL_THREE_WAY", "sea").split(",") if x.strip())
 PM_THREE_WAY_TYPE = "soccer_team_full_time_winner"
+#: A league whose code differs between the venues is mapped only when BOTH
+#: are set by the owner: the PMUS code listed in PMUS_TWO_SIDED_INTL_THREE_WAY
+#: and its international code given here ("lmx=mex": Liga MX is `lmx` on
+#: PMUS and `mex` internationally; the team codes and date are the same).
+#: Every other check of resolve_three_way still has to hold, the team-name
+#: checks included, so a wrong alias resolves nothing. Default: none.
+
+
+def _aliases(raw: str) -> dict:
+    out = {}
+    for part in (raw or "").split(","):
+        a, _, b = part.strip().lower().partition("=")
+        if a and b and "=" not in b:
+            out[a] = b
+    return out
+
+
+THREE_WAY_ALIASES = _aliases(os.getenv(
+    "PMUS_TWO_SIDED_INTL_THREE_WAY_ALIAS", ""))
 
 
 def _words(x: Any) -> str:
     """Lower-case words only: punctuation never joins or hides a word
-    ("draw?" is the word "draw"; "vs." is "vs")."""
+    ("draw?" is the word "draw"; "vs." is "vs"). Accents are dropped, so
+    one venue's "Queretaro" is the other's "Querétaro" (seen live
+    2026-11-23: the draw of that match would not map)."""
+    import unicodedata
+    txt = "".join(ch for ch in unicodedata.normalize("NFKD", str(x or ""))
+                  if not unicodedata.combining(ch))
     return " ".join("".join(ch if ch.isalnum() else " "
-                            for ch in str(x or "").lower()).split())
+                            for ch in txt.lower()).split())
 
 
 def _has_name(text: Any, name: Any) -> bool:
@@ -402,7 +426,7 @@ def resolve_three_way(gamma_get: Callable[[str], Any], slug: str,
     if _json_list(pm_market.get("outcomes")) != ["Yes", "No"] or \
             str(pm_market.get("sportsMarketType") or "") != PM_THREE_WAY_TYPE:
         return None
-    ev_slug = "-".join(parts[1:7])
+    ev_slug = "-".join([THREE_WAY_ALIASES.get(league, league)] + parts[2:7])
     evs = gamma_get(f"/events?slug={ev_slug}") or []
     if not isinstance(evs, list) or len(evs) != 1 or \
             not isinstance(evs[0], Mapping):

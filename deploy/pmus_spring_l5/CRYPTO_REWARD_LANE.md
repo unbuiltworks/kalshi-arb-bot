@@ -1,7 +1,7 @@
 # Daily-crypto reward lane — disarmed release candidate (22 Nov 2026)
 
 For the sports service owner (`pmus-spring-l5-probe`). Nothing here is deployed, armed or
-authorized. Base: `dev/pmus-rn1-replica` @ `08b1a7c93` (merged in). No sports release
+authorized. Base: sports candidate `6e6cc2d5d` (`dev/pmus-reward-economics`, merged in; named by the owner on PR #250, 27 Nov, as the integration target — not a production promotion). No sports release
 ref (`release/pmus-sports-rn1-*`) contains any of this; the sports deployment authorized
 on 22 Nov is exactly `ae5adbe16`. The sports submission lock (`a9987a12f`) binds this lane
 too: locked, every crypto order is cancelled and none is placed. Research: `analysis/l5/rewards/` on
@@ -86,6 +86,24 @@ on a complete positions walk with all fills and positions confirmed, a paying pr
 fresh depth, and a fresh account read that shows — for every open crypto market — exactly
 the book's net position, no unknown resting order and no untracked crypto position.
 Any one of these missing stops the whole lane (`crypto_block` reason in `CRYPTO_QUOTE`).
+
+## The account's global limits apply to crypto (owner 27 Nov)
+
+On `6e6cc2d5d` the sports final gate checks **every** order immediately before submission,
+crypto included: largest clip (`rn1_max_clip()`, 2 contracts as shipped), pair cost
+(`PMUS_RN1_PAIR_CAP`, 0.97), per-market and campaign caps, the campaign and daily loss
+stops, and no taker. The safety latch trips on any resting order above the clip. None of
+that is changed or bypassed here.
+
+- The crypto lane reads those limits (`crypto_global_limits`) and stays inside them: with
+  `PMUS_CRYPTO_QTY` above the clip it quotes **nothing** (`qty_above_global_clip`), before
+  any order is built; opening pairs and completions are priced no higher than the global
+  pair cap.
+- Consequence: an armed crypto lane on this baseline can quote at most 2 contracts a side.
+  The 22 Nov replay puts that at cents per day of modelled reward. Larger crypto quotes
+  need an owner decision on the clip; that is not requested here.
+- Observation mode is unaffected (it places nothing); its tape still records what the
+  venue rule alone would quote at the configured size.
 
 ## Disarmed observation mode (the 24-hour recording)
 

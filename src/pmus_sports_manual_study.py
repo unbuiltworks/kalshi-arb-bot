@@ -61,6 +61,51 @@ def manual_rows(rows: Iterable[Mapping[str, Any]], ours: Iterable[str],
     return out
 
 
+def manual_orders(rows: Iterable[Mapping[str, Any]], ours: Iterable[str],
+                  max_orders: int = 20) -> List[Dict[str, Any]]:
+    """The venue ORDERS behind the owner's manual sports trades, newest
+    first: one entry per order id, taken from OUR side's execution record
+    on each trade row (the aggressor's when we were the aggressor, else the
+    passive one).
+
+    OWNER 2026-11-25: "Use these details to locate the original order
+    through authenticated venue execution or transaction history." The
+    account ledger separates manual results from bot results only for
+    orders the owner attests BY ID, and the venue's app does not show the
+    id of a filled order. This walk already holds it. The id is printed in
+    full because the attestation needs it; nothing else about the account
+    is. Read-only, no venue call of its own."""
+    seen: Dict[str, Dict[str, Any]] = {}
+    for r in manual_rows(rows, ours):
+        t = r.get("trade")
+        if not isinstance(t, Mapping):
+            continue
+        ex = t.get("aggressorExecution" if t.get("isAggressor")
+                   else "passiveExecution")
+        o = ex.get("order") if isinstance(ex, Mapping) else None
+        if not isinstance(o, Mapping) or not o.get("id"):
+            continue
+        oid = str(o["id"])
+        avg = o.get("avgPx")
+        ent = seen.setdefault(oid, {
+            "order_id": oid, "market": str(t.get("marketSlug")),
+            "manual_indicator": o.get("manualOrderIndicator"),
+            "intent": o.get("intent"), "action": o.get("action"),
+            "side": o.get("side"), "outcome_side": o.get("outcomeSide"),
+            "filled": str(o.get("cumQuantity")),
+            "avg_px": (avg.get("value") if isinstance(avg, Mapping)
+                       else avg),
+            "created": str(o.get("createTime") or ""),
+            "aggressor": bool(t.get("isAggressor")), "trades": 0,
+            "last_trade": ""})
+        ent["trades"] += 1
+        ts = str(t.get("createTime") or "")
+        if ts > ent["last_trade"]:
+            ent["last_trade"] = ts
+    out = sorted(seen.values(), key=lambda e: e["last_trade"], reverse=True)
+    return out[:max(0, int(max_orders))]
+
+
 def summarize(rows: Iterable[Mapping[str, Any]], ours: Iterable[str],
               max_markets: int = 40) -> Dict[str, Any]:
     """Per-market summary of the owner's manual sports activity."""

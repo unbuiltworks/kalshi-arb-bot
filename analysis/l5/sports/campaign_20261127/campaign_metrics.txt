@@ -1,0 +1,39 @@
+CAMPAIGN METRICS  window 2026-11-27T13:45Z -> 2026-11-27T16:45:00+00:00  (180 min)
+1 QUALIFYING (heartbeats=172, 13:45:25-16:44:23, counter decreases=0)
+  live: qualifying_contract_s +497.464  resting_contract_s +778.765  orders +38  fills +8
+  pregame: qualifying_contract_s +0.0  resting_contract_s +0.0  orders +0  fills +0
+  % window minutes with resting_orders_usd>0: 6.7%   with qualifying_contract_s increase: 7.8%
+2 CAPITAL (resting+unpaired+paired_awaiting)
+  time-weighted mean $1.3016  max $3.47  | of $60 cap: mean 2.17% max 5.78%  | of $20 at-risk: mean 6.51% max 17.35%
+  zero-capital time 58.1 min (56 heartbeats); max resting $1.54 unpaired $0.8 paired_awaiting $1.93
+  capacity_usd 12.1477-13.8177 (null x1; reasons {'None': 171, 'ACCOUNT_DRAWDOWN_UNREADABLE': 1}); safety_latch always null; submission_lock unlocked in all heartbeats
+  active markets per heartbeat: {'2': 117, '1': 41, '0': 14}
+3 GATES  TOUCH_EV events 413, eligible (net>0) 233 over 18 slugs; per-side outcomes (events / distinct slugs):
+    block:jump_pause                               211 / 13
+    block:vol_pause                                162 / 11
+    block:net_not_positive                          37 / 9
+    why:marginal_ev:marginal_ev_not_positive        21 / 11
+    rested                                          18 / 6
+    block:late:set_S3                               16 / 1
+    block:account_risk                               1 / 1
+  marginal_ev rejections 21: quote reward_usd_per_hour==0 while TOUCH_EV reward>0 in 21; incentive.why {'below_minimum_payout': 21}; projected_usd max 0.0526 mean 0.005
+  TOUCH_EV by hard: {'price_moving': 173, 'recent_jump': 150, 'None': 90}
+  TOUCH_EV by side why: {'NO:no_positive_placement': 272, 'YES:no_positive_placement': 260, 'YES:None': 144, 'NO:None': 130, 'NO:completion_keeps_placement': 11, 'YES:completion_keeps_placement': 9}
+  all RN1_QUOTE block: {'jump_pause': 234, 'vol_pause': 179, 'net_not_positive': 89, 'None': 41, 'account_risk': 5, 'late:set_S4': 4, 'late:set_S3': 2}  (quotes with want: 57)
+  all RN1_QUOTE why: {'YES:None': 418, 'NO:None': 394, 'YES:marginal_ev:marginal_ev_not_positive': 108, 'NO:marginal_ev:marginal_ev_not_positive': 102, 'NO:price_band': 55, 'YES:price_band': 24, 'NO:refill_cooldown': 3, 'YES:refill_cooldown': 3, 'YES:intl_guard:intl_says_not_cheap': 1}
+4 REWARD QUALIFICATION (RN1_QUOTE incentive.why)  count {'below_minimum_payout': 544, 'qualifies': 10}  time_s {'below_minimum_payout': 18456, 'qualifies': 284}  time% {'below_minimum_payout': 98.5, 'qualifies': 1.5}
+  max projected_usd 5.5428 (aec-atpdb-fominkrutyk-ovcharwhiteh-2026-11-27); min_payout_usd ['1.0']
+5 PAYMENTS  latest REWARD_CHECK 2026-11-27T16:39:06.542807+00:00: credited_usd 24.0900000000000001  accrued_not_credited 4.8600000000000001
+  by_status {"PAID": {"n": 122, "usd": "24.0900000000000001"}, "PENDING": {"n": 10, "usd": "0.8600000000000001"}, "SKIPPED": {"n": 65, "usd": "4.00"}}
+  rows_brief n=50; rows dated 2026-11-27: none
+  CAMPAIGN_ECONOMICS 2026-11-27T16:40:47.239575+00:00: markets 6 fills 8 contracts 8.00 spend $3.772500 pairs 4.00 pair_edge $0.2275000
+    rewards_paid $0 rewards_pending $0 fees $0 residual 0.00 net_realized $0 realized_cash_basis $0.2275000
+  PILOT_PNL 2026-11-27T16:40:47.200938+00:00: realized_net_usd 0.2275000  status {'no_fills': 4, 'paired_flat': 2}  avg_pair_cost 0.943125
+6 ORDERS/FILLS  ORDER 38 (stages {'rn1_open': 17, 'two_sided_complete': 21})  FILL 8 (8.0 contracts)  ORDER_NOT_SENT 13 {'two_sided_complete:deferred_by_request_budget': 9, 'two_sided_complete:failed_before_the_order_was_sent': 3, 'rn1_open:failed_before_the_order_was_sent': 1}
+    aec-atpdb-barcamforapa-mansouneuchr-2026-11-27       orders   1  fills 0
+    aec-atpdb-cadenavasami-kravchsanqui-2026-11-27       orders   4  fills 0
+    aec-atpdb-fominkrutyk-ovcharwhiteh-2026-11-27        orders  11  fills 4
+    aec-atpdb-kalendpereir-martinnedunc-2026-11-27       orders   4  fills 0
+    aec-atpdb-sakamosarsan-zeballzorman-2026-11-27       orders   1  fills 0
+    aec-setkameua-kohboh-zendmy-2026-11-27               orders  17  fills 4
+  SELECTED 61  RESELECTED 39  FILL_MARKOUT 8

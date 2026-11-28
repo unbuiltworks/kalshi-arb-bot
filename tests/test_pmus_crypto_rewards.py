@@ -556,7 +556,7 @@ def wire_feed(e, v):
 def wire(e, v):
     """Give an engine the fake venue's reads and readable shared gates."""
     wire_feed(e, v)
-    e.account_risk = lambda: {"ok": True, "lane_cap_usd": "1000"}
+    e.account_risk = lambda fresh=False: {"ok": True, "lane_cap_usd": "1000"}
     e.crypto_account_view = v.account
     return e
 
@@ -567,6 +567,12 @@ def lane(tmp_path, monkeypatch):
     The proposal's 100-a-side sizing (hard loss budget off); the hard
     budget has its own tests below."""
     monkeypatch.setattr(CR, "HARD_LOSS_BUDGET", False)
+    # LANE LIMITS IN ISOLATION. The sports final gate (clip, pair cap and
+    # campaign caps on every order) is switched off HERE ONLY, so the
+    # lane's own limits can be exercised at the proposal's sizes. The lane
+    # under the real final gate and the real clip is tested separately
+    # (fixture `clipped`, at the end of this file).
+    monkeypatch.setattr(M, "FINAL_GATE", False)
     arm_env(monkeypatch)
     monkeypatch.setattr(M, "ACCOUNT_RISK_ON", True)
     monkeypatch.setattr(RN1, "ON", True)       # production runs RN1 mode
@@ -764,10 +770,10 @@ def test_completion_continues_under_a_new_exposure_block(lane):
      "account_state_unreadable:InvalidOperation"),
     (lambda e, mp: mp.setattr(M, "ACCOUNT_RISK_ON", False),
      "account_risk_not_enforced"),
-    (lambda e, mp: setattr(e, "account_risk", lambda: {
+    (lambda e, mp: setattr(e, "account_risk", lambda fresh=False: {
         "ok": False, "reason": "ACCOUNT_DAILY_LOSS_HALT"}),
      "account_risk:ACCOUNT_DAILY_LOSS_HALT"),
-    (lambda e, mp: setattr(e, "account_risk", lambda: {
+    (lambda e, mp: setattr(e, "account_risk", lambda fresh=False: {
         "ok": False, "reason": "ACCOUNT_RISK_STALE"}),
      "account_risk:ACCOUNT_RISK_STALE"),
     (lambda e, mp: setattr(e, "shared_halt", lambda: "HALT"), "shared_halt"),
@@ -898,7 +904,7 @@ def test_the_account_lane_cap_counts_both_lanes(lane):
     """The shared account gate's exposure split (l5_account_risk) sees
     sports + crypto as one figure."""
     e, v = lane
-    e.account_risk = lambda: {"ok": True, "lane_cap_usd": "120"}
+    e.account_risk = lambda fresh=False: {"ok": True, "lane_cap_usd": "120"}
     sports_order(e, qty="80", px="0.50")                         # $40
     select(e, v)
     e.step_market(ETH)
@@ -1455,7 +1461,7 @@ def test_restart_with_unresolved_positions_keeps_the_budget(hard3, tmp_path):
     assert len(v.live(XRP)) == 2
     e2 = M.Engine(v, M.Book(tmp_path / "s.json"))     # restart: no meter,
     wire_feed(e2, v)                                  # no account read yet
-    e2.account_risk = lambda: {"ok": True, "lane_cap_usd": "1000"}
+    e2.account_risk = lambda fresh=False: {"ok": True, "lane_cap_usd": "1000"}
     assert e2.crypto_block(XRP, e2.b.m(XRP), time.time()) == \
         "crypto_meter_unavailable"
     for s in (ETH, XRP):
@@ -2247,3 +2253,141 @@ def test_both_lanes_losses_add_up_in_the_daily_halt(lane, monkeypatch):
     mk = e.b.m("aec-x")
     mk.update(mark0={"date": e._today(), "value": "0"}, mark="-2.50")
     assert e.day_change() == D("-5.50") and e.daily_stopped()
+
+
+# ------------------- under the account's REAL final gate, clip and latch
+# Owner 2026-11-27: preserve the shared daily halt, watchdog, aggregate
+# exposure and all existing clip limits; do not bypass the global latch to
+# accommodate larger crypto quotes; test crypto with the existing
+# authorized clip constraints.
+
+@pytest.fixture
+def clipped(tmp_path, monkeypatch):
+    """Armed lane with NOTHING of the sports protections switched off:
+    final gate on, RN1 clip and caps as shipped, hard loss budget on. The
+    lane is configured inside the clip (2 contracts)."""
+    assert M.FINAL_GATE and M.rn1_max_clip() == D("2")
+    monkeypatch.setattr(RN1, "ON", True)
+    monkeypatch.setattr(CR, "QTY", D("2"))
+    monkeypatch.setattr(CR, "MIN_QTY", D("1"))
+    arm_env(monkeypatch)
+    monkeypatch.setattr(M, "ACCOUNT_RISK_ON", True)
+    v = CV()
+    e = wire(M.Engine(v, M.Book(tmp_path / "s.json")), v)
+    fresh_meter(e)
+    return e, v
+
+
+def test_final_gate_is_in_force_for_crypto_orders(clipped):
+    e, v = clipped
+    assert e.crypto_global_limits() == {"clip": D("2"),
+                                        "pair_cap": D(str(RN1.PAIR_CAP))}
+    assert e.final_gate(ETH, "YES", D("0.47"), D("100"), "crypto_open") == \
+        "size_above_maximum:100>2"
+    assert e.final_gate(ETH, "YES", D("0.47"), D("2"), "crypto_open",
+                        post_only=False) == "taker_not_authorized"
+
+
+def test_lane_inside_the_clip_quotes_two_contracts_and_trips_nothing(
+        clipped):
+    e, v = clipped
+    select(e, v)
+    for s in (ETH, SOL, XRP):
+        e.step_market(s)
+    got = sorted((o["slug"], o["side"], o["qty"]) for o in v.live().values())
+    assert got == sorted((s, sd, D("2")) for s in (ETH, SOL, XRP)
+                         for sd in ("YES", "NO"))
+    e.safety_check(v.account())
+    assert e.safety_latch() is None                 # no clip breach
+    listed = {o["venue_order_id"] for o in M.registry_doc(e.b)["orders"]
+              if not o.get("closing")}
+    assert listed == set(v.live())                  # watchdog list complete
+    assert v.top_depth_calls == []
+
+
+def test_lane_configured_above_the_clip_quotes_nothing(clipped, monkeypatch):
+    """The proposal's 100 a side under the real clip: refused by the lane
+    before any order is built, so nothing reaches the venue, nothing rests,
+    and the latch has nothing to trip on."""
+    e, v = clipped
+    monkeypatch.setattr(CR, "QTY", D("100"))
+    monkeypatch.setattr(CR, "MIN_QTY", D("25"))
+    monkeypatch.setattr(CR, "HARD_LOSS_BUDGET", False)
+    monkeypatch.setenv(CR.APPROVAL_ENV, json.dumps(approval()))
+    assert CR.arm_state(time.time())["armed"]
+    monkeypatch.setattr(v, "place",
+                        lambda *a, **k: pytest.fail("order submitted"))
+    select(e, v)
+    e.step_market(ETH)
+    e.step_market(ETH)
+    assert e.crypto_block(ETH, e.b.m(ETH), time.time()) == \
+        "qty_above_global_clip:100>2"
+    assert e.crypto_place_block(ETH, "YES", D("0.47"), D("100"),
+                                "crypto_open", True) == \
+        "qty_above_global_clip:100>2"
+    e.place(ETH, "YES", D("0.47"), D("100"), "crypto_open")
+    e.safety_check(v.account())
+    assert e.safety_latch() is None and not v.orders
+
+
+def test_the_global_latch_is_not_bypassed_for_a_crypto_order(clipped):
+    """If an over-clip crypto order ever DID rest (here: forced into the
+    book), the account's safety latch trips exactly as for any market, and
+    the lane places nothing more."""
+    e, v = clipped
+    select(e, v)
+    e.feed_sync()
+    v.orders["big"] = {"slug": ETH, "side": "YES", "px": D("0.47"),
+                       "qty": D("100"), "filled": D(0), "open": True}
+    e.b.m(ETH)["orders"]["big"] = {
+        "side": "YES", "px": "0.47", "qty": "100", "filled": "0",
+        "open": True, "stage": "crypto_open", "placed_at": time.time()}
+    e.safety_check(v.account())
+    latch = e.safety_latch()
+    assert latch and latch["why"] == "order_qty_exceeds_clip"
+    n = len(v.orders)
+    e.place(SOL, "YES", D("0.47"), D("2"), "crypto_open")
+    e.place(SOL, "NO", D("0.49"), D("2"), "crypto_complete")
+    assert len(v.orders) == n                       # latched: all refused
+
+
+def test_completion_is_priced_inside_the_global_pair_cap(clipped):
+    """YES 2 @0.47 held, market falls to 0.30 / 0.32. The lane alone would
+    complete up to a 1.00 pair (NO 0.53); the account's pair cap is 0.97,
+    so the completion rests at NO 0.50 and the final gate accepts it."""
+    e, v = clipped
+    assert D(str(RN1.PAIR_CAP)) == D("0.97")
+    select(e, v)
+    e.step_market(ETH)
+    yes = next(k for k, o in v.live(ETH).items() if o["side"] == "YES")
+    v.fill(yes)
+    v.books[ETH] = around(0.30, 0.32)
+    e.step_market(ETH)
+    e.step_market(ETH)
+    live = list(v.live(ETH).values())
+    assert [(o["side"], o["qty"], o["px"]) for o in live] == \
+        [("NO", D("2"), D("0.50"))]
+    assert e.final_gate(ETH, "NO", D("0.51"), D("2"),
+                        "crypto_complete").startswith("pair_cost_above_cap")
+
+
+def test_daily_halt_and_lock_still_bind_under_the_final_gate(clipped,
+                                                             monkeypatch):
+    e, v = clipped
+    select(e, v)
+    e.step_market(ETH)
+    assert len(v.live(ETH)) == 2
+    monkeypatch.setenv(M.SUBMISSION_LOCK_ENV, "1")
+    assert e.crypto_block(ETH, e.b.m(ETH), time.time()) == "submission_lock"
+    e.step_market(ETH)
+    assert not v.live(ETH)
+
+
+@pytest.fixture(autouse=True)
+def _leave_no_registry_rows_behind():
+    """The engine keeps recently closed orders in a module-level registry
+    cache for the watchdog's grace period. Orders these tests cancel must
+    not linger there into other test modules (a later sports test that
+    counts registry rows under a patched clock would see them)."""
+    yield
+    M._REGISTRY_SEEN.clear()

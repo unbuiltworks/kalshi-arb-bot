@@ -110,3 +110,230 @@ def test_lane_cap_split_and_typo_refusal():
 def test_retired_markets():
     assert AR.retired_markets(doc()) == {"aec-a", "aec-b"}
     assert AR.retired_markets({}) == set()
+
+
+# ---- account-wide drawdown (owner 2026-11-23: "The $3 limit needs to apply
+# ---- consistently across every money-capable service.")
+def dd(drawdown="1.6744", mx="3.00", state="ON", **kw):
+    blk = {"state": state, "anchor_usd": "321.4782",
+           "max_drawdown_usd": mx, "drawdown_usd": drawdown}
+    blk.update(kw)
+    return doc(risk={"portfolio_drawdown": blk})
+
+
+@pytest.fixture(autouse=True)
+def _no_drawdown_env(monkeypatch):
+    monkeypatch.delenv(AR.DRAWDOWN_REQUIRED_ENV, raising=False)
+
+
+def test_published_drawdown_under_the_limit_passes_and_is_reported():
+    v = AR.evaluate(dd(), now=NOW)
+    assert v["ok"]
+    assert v["drawdown"]["committed_and_realized_usd"] == "1.6744"
+    assert v["drawdown"]["capacity_usd"] == "1.3256"
+
+
+def test_published_drawdown_at_the_limit_refuses():
+    for used in ("3.00", "3.01", "47"):
+        v = AR.evaluate(dd(used), now=NOW)
+        assert not v["ok"] and v["reason"] == "ACCOUNT_DRAWDOWN_LIMIT"
+
+
+@pytest.mark.parametrize("blk, reason", [
+    ({"state": "INVALID"}, "ACCOUNT_DRAWDOWN_INVALID"),
+    ({"state": "UNREADABLE"}, "ACCOUNT_DRAWDOWN_UNREADABLE"),
+    ({"state": "ON", "max_drawdown_usd": "3"}, "ACCOUNT_DRAWDOWN_UNREADABLE"),
+    ({"state": "ON", "drawdown_usd": "x", "max_drawdown_usd": "3"},
+     "ACCOUNT_DRAWDOWN_UNREADABLE"),
+    ({"state": "ON", "drawdown_usd": "1", "max_drawdown_usd": "0"},
+     "ACCOUNT_DRAWDOWN_UNREADABLE"),
+])
+def test_a_misconfigured_or_unreadable_limit_refuses(blk, reason):
+    v = AR.evaluate(doc(risk={"portfolio_drawdown": blk}), now=NOW)
+    assert not v["ok"] and v["reason"] == reason
+
+
+def test_a_publisher_without_the_figure_is_refused_only_when_required(
+        monkeypatch):
+    assert AR.evaluate(doc(), now=NOW)["ok"]             # earlier behaviour
+    assert AR.evaluate(dd(state="OFF"), now=NOW)["ok"]
+    monkeypatch.setenv(AR.DRAWDOWN_REQUIRED_ENV, "1")
+    assert AR.evaluate(doc(), now=NOW)["reason"] == \
+        "ACCOUNT_DRAWDOWN_NOT_PUBLISHED"
+    assert AR.evaluate(dd(state="OFF"), now=NOW)["reason"] == \
+        "ACCOUNT_DRAWDOWN_OFF_AT_PUBLISHER"
+    assert AR.evaluate(dd(), now=NOW)["ok"]
+
+
+def test_the_three_figures_are_reported_separately():
+    # the ledger's 2.50 includes 1.90 of this bot's own resting orders
+    v = AR.evaluate(dd("2.50"), now=NOW, own_at_risk="1.90")
+    d = v["drawdown"]
+    assert v["ok"]
+    assert d["committed_and_realized_usd"] == "2.50"       # the ledger's own
+    assert d["own_worst_case_exposure_usd"] == "1.90"
+    assert d["realized_drawdown_upper_bound_usd"] == "0.60"
+    assert d["capacity_usd"] == "0.50"                     # 3.00 - 2.50
+
+
+def test_own_committed_money_is_never_taken_out_of_the_limit():
+    # however much of the figure is this bot's own resting money, the
+    # limit is reached when the ledger's figure reaches it
+    for own in ("0", "2.00", "5.00", None):
+        v = AR.evaluate(dd("3.00"), now=NOW, own_at_risk=own)
+        assert v["reason"] == "ACCOUNT_DRAWDOWN_LIMIT", own
+
+
+def test_exposure_added_since_the_snapshot_is_counted_once():
+    # snapshot 1.67; the bot has since put 0.94 at risk the ledger has not
+    # seen: capacity is 3.00 - 1.67 - 0.94
+    v = AR.evaluate(dd("1.67"), now=NOW, own_at_risk="0.94",
+                    own_added_since="0.94")
+    assert v["ok"] and v["drawdown"]["capacity_usd"] == "0.39"
+    # once the ledger's snapshot includes it, it is not added again
+    v = AR.evaluate(dd("2.61"), now=NOW, own_at_risk="0.94",
+                    own_added_since="0")
+    assert v["drawdown"]["capacity_usd"] == "0.39"
+    # and enough of it reaches the limit before the ledger has seen any
+    v = AR.evaluate(dd("1.67"), now=NOW, own_at_risk="1.40",
+                    own_added_since="1.40")
+    assert v["reason"] == "ACCOUNT_DRAWDOWN_LIMIT"
+
+
+def test_unknown_own_additions_refuse():
+    for bad in ("x", None, "NaN"):
+        v = AR.evaluate(dd("1.00"), now=NOW, own_added_since=bad)
+        assert v["reason"] == "ACCOUNT_DRAWDOWN_OWN_UNREADABLE", bad
+    v = AR.evaluate(dd("1.00"), now=NOW, own_added_since="Infinity")
+    assert not v["ok"]
+
+
+def test_one_order_must_fit_the_capacity_left():
+    v = AR.evaluate(dd("1.67"), now=NOW)
+    assert AR.capacity_allows(v, "1.33") and not AR.capacity_allows(v, "1.34")
+    assert not AR.capacity_allows(v, "x")
+    # nothing published and nothing required: nothing to measure against
+    assert AR.capacity_allows(AR.evaluate(doc(), now=NOW), "999")
+
+
+# ---- the document is read off the trading loop
+def test_the_reader_keeps_the_last_good_document_and_its_age():
+    t = [100.0]
+    box = {"doc": {"n": 1}, "fail": False}
+
+    def fetch(url):
+        if box["fail"]:
+            raise OSError("down")
+        return box["doc"]
+    r = AR.RiskReader(lambda: "http://x", fetch=fetch, clock=lambda: t[0])
+    s = r.snapshot()
+    assert s["doc"] is None and s["age_s"] is None and s["tries"] == 0
+    r.refresh_once()
+    assert r.snapshot()["doc"] == {"n": 1} and r.snapshot()["age_s"] == 0
+    t[0] += 40
+    box["fail"] = True
+    r.refresh_once()
+    s = r.snapshot()
+    assert s["doc"] == {"n": 1} and s["age_s"] == 40      # ageing, not fresh
+    assert s["err"] == "ACCOUNT_RISK_UNREADABLE:OSError" and s["tries"] == 2
+    box["fail"] = False
+    r.refresh_once()
+    assert r.snapshot()["age_s"] == 0 and r.snapshot()["err"] is None
+
+
+def test_the_reader_without_an_address_reads_nothing():
+    r = AR.RiskReader(lambda: "", fetch=lambda u: {"never": 1})
+    r.refresh_once()
+    assert r.snapshot()["doc"] is None
+    assert r.snapshot()["err"] == "ACCOUNT_RISK_URL_NOT_SET"
+
+
+def test_a_publisher_that_refuses_for_another_reason_is_followed():
+    v = AR.evaluate(dd(refusal="PORTFOLIO_VALUE_UNAVAILABLE"), now=NOW)
+    assert v["reason"] == "ACCOUNT_DRAWDOWN_PUBLISHER_REFUSES"
+    # its own limit refusal is not double-counted when the figure is under
+    # the reader's (budget-adjusted) limit: the reader's arithmetic decides
+    v = AR.evaluate(dd("1.00", refusal="PORTFOLIO_DRAWDOWN_LIMIT:9>=3"),
+                    now=NOW)
+    assert v["ok"]
+
+
+def test_the_ledgers_own_published_block_shape_is_read(monkeypatch):
+    # exactly what l5_portfolio_drawdown.report() publishes today
+    blk = {"state": "ON", "worst_case_value_usd": "319.8038",
+           "anchor_usd": "321.4782", "max_drawdown_usd": "3.00",
+           "drawdown_usd": "1.6744", "room_usd": "1.3256", "refusal": None}
+    v = AR.evaluate(doc(risk={"portfolio_drawdown": blk}), now=NOW)
+    assert v["ok"] and v["drawdown"]["capacity_usd"] == "1.3256"
+    # a value the ledger could not establish: no figure, its own refusal
+    blk = {"state": "ON", "worst_case_value_usd": None,
+           "anchor_usd": "321.4782", "max_drawdown_usd": "3.00",
+           "refusal": "PORTFOLIO_VALUE_UNAVAILABLE"}
+    v = AR.evaluate(doc(risk={"portfolio_drawdown": blk}), now=NOW)
+    assert not v["ok"] and v["reason"] == "ACCOUNT_DRAWDOWN_UNREADABLE"
+
+
+# ---- resting orders are not inside the published figure (LIVE 2026-11-23)
+def _dd(used, **kw):
+    return AR.drawdown({"portfolio_drawdown": {
+        "state": "ON", "drawdown_usd": used, "max_drawdown_usd": "3.00"}},
+        **kw)
+
+
+def test_the_23_nov_reading_that_passed_is_now_a_refusal():
+    """17:40:53Z: ledger 1.5344, $3.88 of bids resting, nothing unpaired.
+    Read as "already inside", it left 1.4656 and allowed more."""
+    old = _dd("1.5344", own_at_risk="3.88", own_added_since="0")
+    assert old["refusal"] is None and old["capacity_usd"] == "1.4656"
+    new = _dd("1.5344", own_at_risk="3.88", own_added_since="0",
+              own_resting="3.88")
+    assert new["capacity_usd"] == "-2.4144"
+    assert new["refusal"] == "ACCOUNT_DRAWDOWN_LIMIT"
+    assert new["realized_drawdown_upper_bound_usd"] == "1.5344"
+
+
+def test_capacity_does_not_spring_back_when_the_snapshot_refreshes():
+    """The flip seen all evening: 'added since the snapshot' fell to zero
+    on each refresh and the full remainder came back."""
+    a = _dd("1.5344", own_at_risk="1.00", own_added_since="0",
+            own_resting="1.00")
+    b = _dd("1.5344", own_at_risk="1.00", own_added_since="0",
+            own_resting="1.00")
+    assert a["capacity_usd"] == b["capacity_usd"] == "0.4656"
+
+
+def test_an_unpaired_fill_is_counted_once_before_and_after_the_snapshot():
+    """Fill of $1.32 with nothing resting. Before the ledger sees it: the
+    figure is still 1.5344 and the fill is 'added'. After: the figure is
+    2.8544 and nothing is added. Same capacity, same realized figure."""
+    before = _dd("1.5344", own_at_risk="1.32", own_added_since="1.32",
+                 own_resting="0")
+    after = _dd("2.8544", own_at_risk="1.32", own_added_since="0",
+                own_resting="0")
+    assert before["capacity_usd"] == after["capacity_usd"] == "0.1456"
+    assert before["realized_drawdown_upper_bound_usd"] == "1.5344"
+    assert after["realized_drawdown_upper_bound_usd"] == "1.5344"
+
+
+def test_paired_and_settled_money_is_not_subtracted():
+    """After the pair completes the ledger's own figure falls (it values a
+    pair at $1); the bot has nothing unpaired and nothing resting, so the
+    whole remainder is capacity."""
+    v = _dd("1.3444", own_at_risk="0", own_added_since="0", own_resting="0")
+    assert v["capacity_usd"] == "1.6556" and v["refusal"] is None
+    assert v["realized_drawdown_upper_bound_usd"] == "1.3444"
+
+
+def test_one_order_must_fit_what_resting_orders_leave():
+    v = {"drawdown": _dd("1.3444", own_at_risk="0.97", own_added_since="0",
+                         own_resting="0.97")}
+    assert v["drawdown"]["capacity_usd"] == "0.6856"
+    assert AR.capacity_allows(v, "0.68")
+    assert not AR.capacity_allows(v, "0.70")
+
+
+def test_unreadable_resting_figure_refuses():
+    assert _dd("1.0", own_at_risk="1", own_resting="x")["refusal"] == \
+        "ACCOUNT_DRAWDOWN_OWN_UNREADABLE"
+    assert _dd("1.0", own_at_risk="1", own_resting="-1")["refusal"] == \
+        "ACCOUNT_DRAWDOWN_OWN_UNREADABLE"

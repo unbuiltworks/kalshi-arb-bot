@@ -32,6 +32,24 @@ SYMBOLS_CAP_GUARD = 100
 MIN_GAP_S = 0.5                     # <= 2 rps on the public gateway
 LIVE_HOURS_DEFAULT = 3.0
 EPS = 1e-9
+# Liquidity time-period fields this module understands (every field the
+# venue's /v1/incentives payload carried in 40,793 recorded periods on
+# 10 Sep 2026 and in the active slate on 27 Nov 2026, plus maxSpread). The
+# CFTC rule filing PMX-2026-70 describes OPTIONAL programme terms (an
+# executed-notional reward cap, a minimum volume) that no payload has shown
+# so far. A period carrying ANY other field may carry such a term, so it is
+# not credited as payable (fail closed) until this module is taught it.
+KNOWN_PERIOD_KEYS = frozenset((
+    "programId", "programType", "start", "rewardPool", "status",
+    "discountFactor", "targetSize", "period", "createdAt", "maxSpread"))
+import os as _os
+UNKNOWN_TERMS_FAIL_CLOSED = _os.getenv(
+    "PMUS_REWARD_UNKNOWN_TERMS", "fail_closed").strip().lower() != "ignore"
+
+
+def unknown_terms(tp: Mapping[str, Any]) -> list:
+    """Fields of a time period this module does not understand."""
+    return sorted(str(k) for k in tp.keys() if k not in KNOWN_PERIOD_KEYS)
 
 
 # ------------------------------------------------- copied from the recorder
@@ -247,6 +265,7 @@ def build_program_map(found: Mapping[str, Mapping[str, Any]],
                 "maxSpread": _max_spread(tp),
                 "maxSpread_raw": tp.get("maxSpread"),
                 "status": tp.get("status"), "start": tp.get("start"),
+                "unknown_terms": unknown_terms(tp),
                 "M_event": max(1, len(by_prog_ev[key + (ev,)])),
                 "M_program": max(1, len(by_prog[key])),
             })
@@ -289,6 +308,8 @@ def paying_period(prog: Mapping[str, Any], now: Optional[float] = None,
     est = _ts(prog.get("eventStartTime"))
     best = None
     for p in prog.get("periods") or ():
+        if UNKNOWN_TERMS_FAIL_CLOSED and p.get("unknown_terms"):
+            continue           # a possible cap / minimum volume: not payable
         paying, secs, basis = period_pacing(p, est, now, event_live)
         if not paying or not secs:
             continue
@@ -298,6 +319,7 @@ def paying_period(prog: Mapping[str, Any], now: Optional[float] = None,
                     "period": p["period"], "df": p["df"],
                     "targetSize": p["target"], "maxSpread": p["maxSpread"],
                     "period_s": secs, "pacing": basis,
+                    "start": p.get("start"),
                     "pool_rate_usd_s": rate,
                     "M_event": p.get("M_event", 1),
                     "M_program": p.get("M_program", 1)}
@@ -351,17 +373,29 @@ def side_score(levels: list, our_px: Optional[float], our_qty: float,
     ``levels`` best-first [(px, qty)] as the public book shows them.
     ``own_resting`` is the size of our order already in that public book at
     ``our_px``; it is removed first so our order is counted exactly once."""
+    return ladder_side_score(levels, [] if our_px is None else
+                             [(our_px, our_qty)], tick, df, target, is_bid,
+                             [] if our_px is None else [(our_px, own_resting)])
+
+
+def ladder_side_score(levels: list, proposed: list, tick: float, df: float,
+                      target: float, is_bid: bool, own_resting: list) -> dict:
+    """Score a complete proposed side, replacing known visible own levels."""
     if tick <= 0:
         raise ValueError("tick must be > 0")
     lv: dict = {}
+    ours_by_level: dict = {}
     for px, q in levels:
         k = int(round(px / tick))
         lv[k] = lv.get(k, 0.0) + float(q)
-    ok = None if our_px is None else int(round(our_px / tick))
-    if ok is not None and own_resting > 0:
-        lv[ok] = max(0.0, lv.get(ok, 0.0) - float(own_resting))
-    if ok is not None and our_qty > 0:
-        lv[ok] = lv.get(ok, 0.0) + float(our_qty)
+    for px, q in own_resting:
+        k = int(round(px / tick))
+        lv[k] = max(0.0, lv.get(k, 0.0) - max(0.0, float(q)))
+    for px, q in proposed:
+        k = int(round(px / tick))
+        q = max(0.0, float(q))
+        ours_by_level[k] = ours_by_level.get(k, 0.0) + q
+        lv[k] = lv.get(k, 0.0) + q
     keys = sorted((k for k, q in lv.items() if q > EPS), reverse=is_bid)
     out = {"inside": False, "qualifies": False, "share": 0.0,
            "our_score": 0.0, "total_score": 0.0, "ticks_from_best": None,
@@ -381,10 +415,11 @@ def side_score(levels: list, our_px: Optional[float], our_qty: float,
         notional += k * tick * q
         cum += q
         used += 1
-        if ok is not None and k == ok and our_qty > 0:
+        if ours_by_level.get(k, 0.0) > 0:
             out["inside"] = True
-            out["ticks_from_best"] = t
-            ours = (df ** t) * our_qty
+            if out["ticks_from_best"] is None:
+                out["ticks_from_best"] = t
+            ours += (df ** t) * ours_by_level[k]
     qual = cum >= target - EPS
     out.update(qualifies=qual, our_score=ours, total_score=total,
                share=(ours / total) if (qual and total > 0) else 0.0,
@@ -396,7 +431,9 @@ def side_score(levels: list, our_px: Optional[float], our_qty: float,
 def quote_estimate(book_md: Mapping[str, Any], period: Mapping[str, Any],
                    yes_px: Optional[float], no_px: Optional[float],
                    qty: float, tick: float, own_yes: float = 0.0,
-                   own_no: float = 0.0) -> dict:
+                   own_no: float = 0.0, *,
+                   yes_qty: Optional[float] = None,
+                   no_qty: Optional[float] = None) -> dict:
     """THEORETICAL share / reward rate for our YES bid at ``yes_px`` and our
     NO bid at ``no_px`` (= a YES offer at ``1 - no_px``), ``qty`` each; a
     leg passed as None is not quoted. ``own_*`` = our size already in the
@@ -407,13 +444,35 @@ def quote_estimate(book_md: Mapping[str, Any], period: Mapping[str, Any],
     with maxSpread BOTH sides must qualify and have their size-adjusted
     price within maxSpread of the mid, or neither side scores.
     rate_usd_s = pool_rate_usd_s * share; est_usd_per_day = rate * 86400."""
+    yq = qty if yes_qty is None else yes_qty
+    nq = qty if no_qty is None else no_qty
     bids, asks = book_sides(book_md or {})
     df, target = float(period["df"]), float(period["targetSize"])
-    b = side_score(bids, yes_px, qty if yes_px is not None else 0.0, tick,
+    b = side_score(bids, yes_px, yq if yes_px is not None else 0.0, tick,
                    df, target, True, own_yes)
     a = side_score(asks, None if no_px is None else 1.0 - no_px,
-                   qty if no_px is not None else 0.0, tick, df, target,
+                   nq if no_px is not None else 0.0, tick, df, target,
                    False, own_no)
+    return _combine_side_scores(b, a, period, yes_px is not None,
+                                no_px is not None)
+
+
+def ladder_quote_estimate(book_md: Mapping[str, Any], period: Mapping[str, Any],
+                          yes_levels: list, no_levels: list, tick: float,
+                          own_yes: list, own_no: list) -> dict:
+    """Estimate complete replacement ladders. NO prices are contract prices.
+    Own levels must be confirmed visible by the caller."""
+    bids, asks = book_sides(book_md or {})
+    df, target = float(period["df"]), float(period["targetSize"])
+    b = ladder_side_score(bids, yes_levels, tick, df, target, True, own_yes)
+    a = ladder_side_score(asks, [(1.0-p, q) for p, q in no_levels],
+                          tick, df, target, False,
+                          [(1.0-p, q) for p, q in own_no])
+    return _combine_side_scores(b, a, period, bool(yes_levels), bool(no_levels))
+
+
+def _combine_side_scores(b: dict, a: dict, period: Mapping[str, Any],
+                         has_yes: bool, has_no: bool) -> dict:
     mid = ((b["best"] + a["best"]) / 2.0) if (b["best"] is not None and
                                               a["best"] is not None) else None
     ms = period.get("maxSpread")
@@ -428,7 +487,7 @@ def quote_estimate(book_md: Mapping[str, Any], period: Mapping[str, Any],
     sa = a["share"] if ms_ok in (None, True) else 0.0
     share = 0.5 * (sb + sa)
     rate = float(period.get("pool_rate_usd_s") or 0.0) * share
-    legs = [x for x, px in ((b, yes_px), (a, no_px)) if px is not None]
+    legs = [x for x, present in ((b, has_yes), (a, has_no)) if present]
     return {"share": round(share, 9), "bid_share": round(sb, 9),
             "ask_share": round(sa, 9),
             "inside_walk": bool(legs) and all(x["inside"] for x in legs),
@@ -439,3 +498,24 @@ def quote_estimate(book_md: Mapping[str, Any], period: Mapping[str, Any],
             "max_spread_ok": ms_ok, "mid": mid,
             "rate_usd_s": rate, "est_usd_per_hour": round(rate * 3600.0, 6),
             "est_usd_per_day": round(rate * 86400.0, 6), "label": LABEL}
+
+
+def marginal_ladder_reward(book_md: Mapping[str, Any],
+                           period: Mapping[str, Any],
+                           yes_levels: list, no_levels: list, tick: float,
+                           own_yes: list, own_no: list,
+                           side: str, price: float, quantity: float) -> dict:
+    """Incremental theoretical reward of adding one order, same snapshot.
+    Does not authorize execution or estimate fill losses."""
+    if side not in ("YES", "NO") or not (0 < price < 1) or quantity <= 0:
+        raise ValueError("invalid candidate")
+    before = ladder_quote_estimate(book_md, period, yes_levels, no_levels,
+                                   tick, own_yes, own_no)
+    y, n = list(yes_levels), list(no_levels)
+    (y if side == "YES" else n).append((price, quantity))
+    after = ladder_quote_estimate(book_md, period, y, n, tick, own_yes, own_no)
+    delta = after["rate_usd_s"] - before["rate_usd_s"]
+    return {"before": before, "after": after,
+            "incremental_reward_usd_per_hour": delta * 3600,
+            "incremental_notional_usd": price * quantity,
+            "label": LABEL}

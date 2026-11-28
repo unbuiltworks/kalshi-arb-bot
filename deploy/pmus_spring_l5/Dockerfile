@@ -129,8 +129,20 @@ COPY src/pmus_rn1_replica.py src/pmus_rn1_replica.py
 COPY src/pmus_crypto_rewards.py src/pmus_crypto_rewards.py
 COPY src/pmus_crypto_tape.py src/pmus_crypto_tape.py
 COPY src/pmus_crypto_feed.py src/pmus_crypto_feed.py
+# Imported lazily by pmus_sports_two_sided.py when PMUS_RN1_DURATION_RANK /
+# PMUS_RN1_LIVE_FIRST, PMUS_RN1_REWARD_CALIBRATION and PMUS_ECONOMICS_REPORT
+# are on. LIVE 2026-11-27 12:47Z: 1c1d546b6 shipped without them and the
+# loop raised ImportError until the safety latch tripped (lock held, no orders).
+COPY src/pmus_duration_rank.py src/pmus_duration_rank.py
+COPY src/pmus_reward_calibration.py src/pmus_reward_calibration.py
+COPY src/pmus_campaign_economics.py src/pmus_campaign_economics.py
+# Imported lazily when PMUS_RN1_DIRECTIONAL=1 (directional allocation).
+COPY src/pmus_directional_alloc.py src/pmus_directional_alloc.py
 COPY src/pmus_request_budget.py src/pmus_request_budget.py
 COPY src/pmus_pilot_pnl.py src/pmus_pilot_pnl.py
+COPY src/pmus_fill_markout.py src/pmus_fill_markout.py
+COPY src/pmus_sports_phase.py src/pmus_sports_phase.py
+COPY src/pmus_campaign_auth.py src/pmus_campaign_auth.py
 COPY src/pmus_sports_completion.py src/pmus_sports_completion.py
 COPY src/pmus_sports_completion_replay.py src/pmus_sports_completion_replay.py
 COPY src/l5_halt_gate.py src/l5_halt_gate.py

@@ -28,7 +28,9 @@ directional exposure until the market settles.
 from __future__ import annotations
 
 import json
+import contextlib
 import os
+import re
 import queue
 import signal
 import threading
@@ -36,7 +38,7 @@ import time
 from datetime import datetime, timezone
 from decimal import ROUND_CEILING, ROUND_DOWN, Decimal as D
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional
 
 ONE = D("1")
 
@@ -44,6 +46,7 @@ from src import pmus_rn1_replica as RN1  # noqa: E402  (default OFF)
 # daily-crypto reward lane (default OFF and disarmed): its own decisions,
 # limits and accounting; a crypto market never reaches RN1 or the sports path
 from src import pmus_crypto_rewards as CR  # noqa: E402
+from src import pmus_sports_phase as PH  # noqa: E402  (pure)
 
 
 def _env_d(name: str, default: str) -> D:
@@ -129,6 +132,17 @@ OPEN_LADDER = os.getenv("PMUS_TWO_SIDED_OPEN_LADDER", "1").strip() != "0"
 # OWNER 2026-11-14 "set up the daily reward credit check": the venue's own
 # /v1/incentives/earnings (credited vs pending split) every REWARD_CHECK_S.
 REWARD_CHECK_S = float(os.getenv("PMUS_TWO_SIDED_REWARD_CHECK_S", "3600"))
+# CAMPAIGN ECONOMICS REPORT (owner 2026-11-26, default OFF; read-only,
+# logging only; see src/pmus_campaign_economics.py). After each audit round
+# (REWARD_CHECK then PILOT_PNL), at most once per ECONOMICS_MIN_S, one
+# CAMPAIGN_ECONOMICS line joins by market the pilot meter's venue-reconciled
+# trading with the venue reward rows for that market, by sport and for the
+# campaign: settled trading P&L (realized), rewards PAID (realized income,
+# separate), rewards PENDING / SKIPPED (not realized), net = settled + PAID.
+ECONOMICS_REPORT = os.getenv("PMUS_ECONOMICS_REPORT", "0").strip() == "1"
+ECONOMICS_MIN_S = float(os.getenv("PMUS_ECONOMICS_REPORT_MIN_S") or "600")
+ECONOMICS_REWARD_ROWS = int(os.getenv("PMUS_ECONOMICS_REWARD_ROWS")
+                            or "2000")
 # OWNER 2026-11-14 "close out single-side fills early": a lone leg unpaired
 # for EXIT_S is completed by TAKING the complement at its ask, but only while
 # that pair costs <= EXIT_MAX_PAIR (a small, bounded realized loss). Beyond
@@ -343,6 +357,40 @@ _ACCOUNT_RISK_MODE = os.getenv("PMUS_TWO_SIDED_ACCOUNT_RISK", "0").strip()
 ACCOUNT_RISK_ON = _ACCOUNT_RISK_MODE == "1"
 ACCOUNT_RISK_OBSERVE = _ACCOUNT_RISK_MODE.lower() == "observe"
 ACCOUNT_RISK_TTL_S = float(os.getenv("PMUS_TWO_SIDED_ACCOUNT_RISK_TTL_S", "10"))
+# LIVE 2026-11-24 18:27-18:50Z: the cached verdict's capacity counted only
+# the bids resting when it was computed, and every new bid was checked
+# against that same figure, so several bids inside one cache period each
+# passed (account figure + resting bids read 3.06 to 3.36 against 3.00).
+# Owner: "Reserve capital for each submitted order immediately, including
+# in-flight and uncertain submissions. Prevent subsequent orders from
+# spending the same cached available capacity. Release reservations only
+# after confirmed cancellation, rejection or reconciliation."
+#   * a placement is checked against a verdict computed AT THAT MOMENT;
+#   * a submission is reserved before it is sent; a failed send keeps its
+#     reservation until an account read newer than it has been swept;
+#   * a bid must leave this much room, so one that exactly fits cannot put
+#     the reading at the limit and have every bid pulled (the place-and-
+#     cancel cycle of that half hour).
+ACCOUNT_RISK_ROOM_MARGIN_USD = _env_d(
+    "PMUS_TWO_SIDED_ACCOUNT_RISK_ROOM_MARGIN_USD", "0.01")
+RESERVATION_HOLD_S = float(os.getenv(
+    "PMUS_TWO_SIDED_RESERVATION_HOLD_S", "5"))
+# The account-risk document is read on its OWN thread once the loop runs
+# (ACCOUNT_RISK_ASYNC, on): the loop only looks at the last snapshot. A
+# snapshot older than ACCOUNT_RISK_SNAPSHOT_MAX_S, or none yet, refuses new
+# openings and extensions; cancels and completions are untouched.
+ACCOUNT_RISK_ASYNC = os.getenv("PMUS_TWO_SIDED_ACCOUNT_RISK_ASYNC",
+                               "1").strip() != "0"
+ACCOUNT_RISK_READ_S = float(os.getenv("PMUS_TWO_SIDED_ACCOUNT_RISK_READ_S",
+                                      "5"))
+# LIVE 2026-11-23: the ledger's drawdown figure did not move while $4-$9 of
+# this bot's bids rested; it moved only on fills. "0" (default) = resting
+# orders are NOT in the ledger's figure, so all of them are subtracted from
+# the capacity. "1" = the earlier assumption (resting already inside).
+ACCOUNT_RISK_RESTING_IN_LEDGER = os.getenv(
+    "PMUS_TWO_SIDED_ACCOUNT_RISK_RESTING_IN_LEDGER", "0").strip() == "1"
+ACCOUNT_RISK_SNAPSHOT_MAX_S = float(os.getenv(
+    "PMUS_TWO_SIDED_ACCOUNT_RISK_SNAPSHOT_MAX_S", "30"))
 #: RISK-REDUCING stages: they buy the missing side of a held leg (or exit
 #: it) and are never refused by the account-wide limits. Everything else --
 #: two_sided_open, two_sided_open_rewarded, two_sided_extend -- adds risk.
@@ -377,6 +425,393 @@ SHARP_MAX_MARKETS = int(os.getenv("PMUS_SHARP_MAX_MARKETS", "30"))
 # whether a market is profitable. 0 disables.
 MIN_TOUCH_QTY = _env_d("PMUS_TWO_SIDED_MIN_TOUCH_QTY", "10")
 DEPTH_TTL_S = float(os.getenv("PMUS_TWO_SIDED_DEPTH_TTL_S", "10"))
+
+# OWNER 2026-11-22 reward-aware selection. Evidence (14-18 Nov, every fill
+# reconciled): the 74 markets that earned a liquidity reward netted +$0.63
+# (rewards +15.63, trading -15.00); the 167 that earned none netted -$25.71.
+# In RN1 mode candidates carrying a paying liquidity programme are selected
+# first, richest pool rate first; PMUS_RN1_REWARD_ONLY=1 selects nothing
+# else. The programme read is the public incentives endpoint the bot already
+# uses, cached REWARD_REFRESH_S. A programme is a published pool, not a
+# payment: whether we were paid is known only days later, from the venue's
+# earnings record.
+RN1_REWARD_RANK = os.getenv("PMUS_RN1_REWARD_RANK", "1").strip() != "0"
+RN1_REWARD_ONLY = os.getenv("PMUS_RN1_REWARD_ONLY", "0").strip() == "1"
+#: extra edge (ticks) an add to an unpaired side needs, by the event's type:
+#: how far one scoring event moves the price. ESTIMATED priors.
+RN1_JUMP_TICKS = {
+    k.strip().lower(): int(v) for k, v in (
+        tok.split(":") for tok in os.getenv(
+            "PMUS_RN1_JUMP_TICKS",
+            "soccer:3,hockey:2,football:1,tennis:1,table-tennis:1"
+        ).split(",") if ":" in tok)}
+#: credit (ticks) for a market with a paying liquidity programme
+RN1_REWARD_CREDIT_TICKS = int(os.getenv("PMUS_RN1_REWARD_CREDIT_TICKS", "1"))
+#: A PROGRAMME EXISTING IS NOT A PAYMENT (issue #251: "A quote must not pass
+#: solely on speculative incentive payouts"). In the venue's own earnings
+#: rows (Sept and 14-18 Nov) every day whose rewards totalled under $1 was
+#: skipped entirely, while single paid rows are as small as $0.01. So the
+#: credit above is applied only while the THEORETICAL reward of what this
+#: bot is actually resting, over RN1_REWARD_PROJECT_H hours across its
+#: active markets, reaches RN1_REWARD_MIN_DAY_USD. It is still an estimate
+#: of a payment nobody has made; it only ever offsets the inventory-risk
+#: allowance of the marginal test, never the trading edge itself.
+#: A FAVOURABLE FAIR VALUE HAS TO LAST. LIVE 2026-11-22 20:18:11Z,
+#: Baltimore-Carolina: the international mid spiked from 0.365 to about
+#: 0.395 for some three seconds and came back. In that moment YES "worth
+#: 0.395" at 0.37 passed the marginal test, an order went out, and by the
+#: time it reached the venue the market was back at 0.3625 / 0.365 -- the
+#: post-only bid would have crossed and the venue rejected it. A minute
+#: later the price was 3c lower. A jump in the fair value is exactly when
+#: the fair value is least reliable.
+#:
+#: So each side is judged against the fair value LEAST favourable to it
+#: over the last RN1_FAIR_STABLE_S seconds: a YES bid against the lowest
+#: international mid in that period, a NO bid against the highest. A move
+#: against a resting bid counts at once (it is cancelled on the next pass);
+#: a move in its favour counts only after it has lasted the whole period.
+#: Until the bot has that many seconds of unbroken fair value for a market
+#: (after a start, a feed gap, a newly selected market) there is no fair
+#: value and so no bid.
+RN1_FAIR_STABLE_S = float(os.getenv("PMUS_RN1_FAIR_STABLE_S", "10"))
+#: ...AND THE FAIR VALUE HAS TO BE CALM. LIVE 2026-11-22 21:36:21Z,
+#: Detroit-Atlanta, the first fill of the profit-first build: the
+#: international mid had gone 0.555 -> 0.615 -> 0.585 inside 45 seconds and
+#: was still falling. YES at 0.57 passed (lowest mid of the last 10 s was
+#: 0.585), the bid was filled 1.8 s later, and the mid was 0.50 fifteen
+#: seconds after that: -3.5c at 5 s and at 30 s by the bot's own markout.
+#: The lowest-recent-value rule cannot see that a price is in motion. So
+#: while the international mid has moved more than RN1_FAIR_MAX_RANGE_USD
+#: within the stability period there is NO fair value, for either side:
+#: nothing new is bid and resting bids come off. A resting maker bid is
+#: only worth having while the price is quiet.
+RN1_FAIR_MAX_RANGE_USD = _env_d("PMUS_RN1_FAIR_MAX_RANGE_USD", "0.01")
+RN1_REWARD_MIN_DAY_USD = float(os.getenv("PMUS_RN1_REWARD_MIN_DAY_USD", "1"))
+RN1_REWARD_PROJECT_H = float(os.getenv("PMUS_RN1_REWARD_PROJECT_H", "3"))
+# REWARD QUALIFICATION SCOPE (2026-11-27, default "market" = unchanged).
+# LIVE 2026-11-27 16:02Z: RN1_TOUCH_EV scored copmih-dumvit at +$0.166/h
+# (calibrated reward $0.146/h a bid) while the marginal test credited $0
+# ("below_minimum_payout"): the standing-start projection counted only THAT
+# market's planned bids over 3 h (~$0.88), whereas the regular projection
+# (rn1_incentive) counts every active market, the selection check counted
+# every active market WITHOUT the calibration multiplier, and RN1_TOUCH_EV
+# applied no minimum at all. Four sites, three scopes. The venue's records
+# show the minimum is not per market (paid rows of $0.01;
+# analysis/l5/rewards/REWARD_PAYOUT_THRESHOLD_20261122.md).
+# "account_day": ONE qualification for all four sites -- the calibrated
+# theoretical reward already accrued today on every market, plus the
+# calibrated rate of every active market (what rests, or the bids it is
+# about to rest when nothing does yet) and of the candidate, over
+# min(RN1_REWARD_PROJECT_H, time left in the trading window, time left in
+# the venue's reward day), must reach RN1_REWARD_MIN_DAY_USD. RN1_TOUCH_EV
+# then credits a reward only when that qualification holds, so selection,
+# placement and the order gate agree. The minimum itself is unchanged.
+# "program_period" (27 Nov, correction): the venue's liquidity programme
+# documentation (data/pmus/sports_incentives_2026-09-10/doc_incentives_
+# liquidity.md) defines each Time Period -- early pre-game (listing to 6 h
+# before), day-of pre-game (6 h to start), live (start to settlement) -- as
+# its own reward pool, calculated when that period ends, and says "Rewards
+# under $1.00 are not paid out" without stating the scope. External research
+# (Grok, 27 Nov) reports the minimum is applied per programme and period.
+# With this scope each pool is tested on ITS OWN total: accrual keyed by
+# (programId, period), plus the calibrated rate of active markets in the SAME
+# pool and the candidate, over min(3 h, window left, period left). An
+# expired period's accrual, another programme or another period never
+# counts toward a bid, and a market with no paying pool qualifies nothing.
+# "account_day" stays available but is NOT recommended: no source supports
+# account-wide daily aggregation.
+# "contract_period" (27 Nov, release correction; RECOMMENDED): a programme id
+# is NOT one pool. The venue's own payloads show one programmeId|period
+# spanning many contracts (atp_wta_moneyline_live_20261018 has run since
+# 18 Oct over every ATP/WTA match; cfb_t2_ml_live_20261125 over 43 games),
+# each carrying the same rewardPool, and scoring is normalised per contract
+# book per snapshot. The pool is therefore one CONTRACT's time period: key
+# (market slug, programId, period, start). Only that contract's own accrual
+# in that period and its own resting/planned rate count; no other match,
+# no other period, no expired period. Data/pmus/incentives_2026-11-27/.
+RN1_REWARD_QUAL_SCOPE = os.getenv("PMUS_RN1_REWARD_QUAL_SCOPE",
+                                  "market").strip().lower()
+#: the scopes that use the one unified qualification at every site
+RN1_QUAL_UNIFIED = ("account_day", "program_period", "contract_period")
+RN1_POOL_SCOPES = ("program_period", "contract_period")
+#: a planned (not yet resting) market's rate is used for this long
+RN1_REWARD_PLAN_TTL_S = float(os.getenv("PMUS_RN1_REWARD_PLAN_TTL_S", "120"))
+
+# OWNER 2026-11-22 "The bot must reliably stop and cancel orders without
+# depending on Claude's session." LIVE that morning: a reconciliation
+# mismatch at 14:28:33Z was a stop condition, and the relock issued from a
+# coding session reached production 45 minutes late. The SAFETY LATCH is the
+# bot stopping ITSELF: when one of the conditions below holds, it records a
+# latch in its own durable book, cancels every own order by exact id and
+# refuses every placement (completions included). The latch survives
+# restarts and variable changes. It is cleared ONLY by the owner setting
+# PMUS_TWO_SIDED_SAFETY_LATCH_ACK to that latch's id -- an acknowledgement of
+# one specific stop, which can never pre-clear a future one.
+#
+#   position_mismatch       the venue's position in a market differs from
+#                           the book for longer than MISMATCH_GRACE_S, after
+#                           the bot has re-read its own orders' fills and a
+#                           complete venue positions walk confirms it
+#   position_unverifiable   the difference persists 3x that long and no
+#                           complete walk could be made (fail closed)
+#   order_qty_exceeds_clip  an own resting order larger than the RN1 clip
+#   campaign_cap_breached   FILLED spend or FILLED unmatched cost above the
+#   market_cap_breached     campaign / per-market caps (the caps are applied
+#                           before placing, so this means they failed)
+#   loop_errors             LOOP_ERROR_LATCH_N consecutive failed loop passes
+# OWNER 2026-11-22: "a bot that detects its own failure and stops is safer,
+# yet that alone does not prove the independent watchdog can shut it down if
+# the bot itself stalls." It could not. The watchdog exempts this lane's
+# resting orders from its order-age latch while this lane's registry
+# document says `manages_own_resting` with an `as_of_utc` under 60 s old --
+# and that stamp was the time of the HTTP REQUEST, written by the registry
+# thread. A trading loop wedged on a socket or a lock kept answering "fresh,
+# managing" for ever, so its resting orders stayed exempt for ever (the
+# watchdog's own notes call this the WEDGED executor case).
+#
+# The document now reports the trading loop's own progress. The loop thread
+# beats at the top of every pass, after every market step, before every
+# sleep and after every venue request it makes. While the last beat is at
+# most LOOP_STALL_S old the document is exactly as before. Past that it says
+# `manages_own_resting: false` (and `loop_stalled: true`) while staying
+# freshly stamped and still listing this bot's order ids:
+#   * the exemption ends at once (the watchdog requires manages_own_resting
+#     true), so its order-age latch applies to these orders again;
+#   * the ownership claim stays readable and fresh, which the watchdog's
+#     cancel path requires -- a frozen stamp would have latched the halt and
+#     left the orders resting ("ownership registry named no ids").
+# The ids are still truthfully ours; what stopped is the managing. Other
+# threads cannot beat for the loop. If the whole process dies the registry is
+# unreachable: the watchdog latches the halt and, having no ownership claim,
+# cancels nothing -- that case is unchanged and needs a person.
+LOOP_STALL_S = float(os.getenv("PMUS_TWO_SIDED_LOOP_STALL_S", "120"))
+_LOOP: Dict[str, Any] = {"beat": None, "thread": None}
+
+
+def loop_beat() -> None:
+    """Progress of the trading loop. Only the loop's own thread counts once
+    the loop has started. The longest gap between two beats since the last
+    heartbeat is kept, so how close the loop comes to LOOP_STALL_S in
+    ordinary running can be read from the bot's own log."""
+    if _LOOP["thread"] in (None, threading.get_ident()):
+        now = time.time()
+        last = _LOOP.get("beat")
+        if last is not None:
+            _LOOP["max_gap"] = max(float(_LOOP.get("max_gap") or 0.0),
+                                   now - float(last))
+        _LOOP["beat"] = now
+
+
+def loop_report(reset: bool = True) -> Dict[str, Any]:
+    """{"idle_s", "max_gap_s", "stall_s", "stalled"} for the heartbeat."""
+    idle = loop_idle_s()
+    gap = max(float(_LOOP.get("max_gap") or 0.0), idle or 0.0)
+    oidle = order_service_idle_s()
+    ogap = max(float(_ORDERS.get("max_gap") or 0.0), oidle or 0.0)
+    if reset:
+        _LOOP["max_gap"] = 0.0
+        _ORDERS["max_gap"] = 0.0
+    return {"idle_s": None if idle is None else round(idle, 1),
+            "max_gap_s": round(gap, 1), "stall_s": LOOP_STALL_S,
+            "stalled": (idle is not None and idle > LOOP_STALL_S)
+            or order_service_stalled(),
+            "order_service_idle_s": None if oidle is None
+            else round(oidle, 1),
+            "order_service_max_gap_s": round(ogap, 1),
+            "order_service_stall_s": ORDER_SERVICE_STALL_S}
+
+
+# OWNER 2026-11-22: "Verify the independent watchdog can detect a stalled
+# sports execution loop and cancel its owned resting orders." The loop
+# cannot be wedged from outside the process, so the test needs a switch:
+#
+#   PMUS_TWO_SIDED_STALL_DRILL=window:<startZ>/<endZ>
+#
+# Inside the window the trading loop does NOTHING and reports no progress --
+# no reads, no cancels, no orders -- exactly a wedged loop. The registry
+# thread keeps serving, so after LOOP_STALL_S the watchdog sees
+# `manages_own_resting: false` with the bot's order ids still claimed. At
+# the end the loop resumes and its ordinary lock handling runs. Bounded: a
+# window longer than STALL_DRILL_MAX_S, malformed, or not this exact form is
+# NO drill. It can only ever stop this bot from acting; it cannot place or
+# keep an order. SIGTERM still ends the process during a drill.
+# SELF-EXPIRING ORDERS (the case nothing else covers). If the whole bot
+# process is gone its registry is unreachable, and the watchdog -- which
+# cancels only what an owner claims -- latches the halt and cancels nothing.
+# The venue documents an order that expires by itself (see l5_order_body).
+# With PMUS_TWO_SIDED_ORDER_TTL_S > 0 every order this bot places carries
+# an expiry that many seconds ahead; an expired order is seen as closed by
+# the venue and simply re-quoted on the next pass, so a live bot keeps
+# quoting and a dead one stops being exposed within the TTL. OFF (0) by
+# default: the venue's handling has not been observed yet, and turning it
+# on is a production setting for the owner. Bounded 60 s .. 1 h.
+ORDER_TTL_S = float(os.getenv("PMUS_TWO_SIDED_ORDER_TTL_S", "0") or 0)
+
+
+def order_good_till(now: Optional[float] = None) -> Optional[str]:
+    """RFC 3339 UTC expiry for an order placed now, or None when off."""
+    if not (60.0 <= ORDER_TTL_S <= 3600.0):
+        return None
+    t = (time.time() if now is None else now) + ORDER_TTL_S
+    return datetime.fromtimestamp(int(t), timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%SZ")
+
+
+STALL_DRILL_ENV = "PMUS_TWO_SIDED_STALL_DRILL"
+STALL_DRILL_MAX_S = 600.0
+
+
+# THE PROCESS-DEATH DRILL (owner 2026-11-23: "I would not approve another
+# extended live campaign until the independent cancellation path is deployed
+# and verified"). A restart cannot stand in for a death: on SIGTERM the bot
+# cancels its own orders. So, for a drill only:
+#
+#   PMUS_TWO_SIDED_DEATH_DRILL=window:<startZ>/<endZ>
+#
+# At the window's start the running process exits at once with os._exit --
+# no cancel, no shutdown handler, the registry gone with it. Every restart
+# inside the window waits, serving nothing and touching nothing, until the
+# window ends, then boots normally (under a lock it cancels what is left).
+# Whatever was resting is therefore unmanaged for the window and only the
+# independent watchdog can cancel it. Same bounds as the stall drill: a
+# window longer than STALL_DRILL_MAX_S or malformed is NO drill. It can only
+# stop this bot from acting; it cannot place or keep an order.
+DEATH_DRILL_ENV = "PMUS_TWO_SIDED_DEATH_DRILL"
+
+
+def death_drill(now: Optional[float] = None) -> Optional[Dict[str, Any]]:
+    return stall_drill(now, env=DEATH_DRILL_ENV)
+
+
+def death_drill_exit_if_due(exit_fn: Optional[Callable[[int], None]] = None
+                            ) -> None:
+    """In the running loop: inside the window, die without cleaning up."""
+    d = death_drill()
+    if d and d["active"]:
+        log("DEATH_DRILL", phase="exit", end=_iso(d["end"]),
+            label="deliberate drill: the process exits with no cancel and "
+                  "no shutdown handling")
+        (exit_fn or os._exit)(70)
+
+
+def death_drill_boot_hold(sleep: Callable[[float], None] = time.sleep
+                          ) -> bool:
+    """At boot: inside the window, do nothing until it ends. True if held."""
+    held = False
+    while True:
+        d = death_drill()
+        if not d or not d["active"]:
+            return held
+        if not held:
+            held = True
+            log("DEATH_DRILL", phase="boot_hold", end=_iso(d["end"]),
+                label="deliberate drill: nothing is served or touched until "
+                      "the window ends")
+        sleep(1.0)
+
+
+def stall_drill(now: Optional[float] = None, env: Optional[str] = None
+                ) -> Optional[Dict[str, Any]]:
+    """{"start", "end", "active"} for a well-formed drill window, else None."""
+    raw = (os.getenv(env or STALL_DRILL_ENV) or "").strip()
+    if not raw.startswith("window:"):
+        return None
+    try:
+        a, b = raw[len("window:"):].split("/")
+        st = datetime.fromisoformat(a.strip().replace("Z", "+00:00"))
+        en = datetime.fromisoformat(b.strip().replace("Z", "+00:00"))
+        if st.tzinfo is None or en.tzinfo is None:
+            return None
+        st, en = st.timestamp(), en.timestamp()
+    except (ValueError, TypeError):
+        return None
+    if not (0 < en - st <= STALL_DRILL_MAX_S):
+        return None
+    now = time.time() if now is None else now
+    return {"start": st, "end": en, "active": st <= now < en}
+
+
+def loop_idle_s(now: Optional[float] = None) -> Optional[float]:
+    b = _LOOP["beat"]
+    if b is None:
+        return None
+    return max(0.0, (time.time() if now is None else now) - float(b))
+
+
+# LIVE 2026-11-22 22:08:55Z-22:10:21Z: the hourly audit ran on the trading
+# loop's own thread, about 85 read-only requests paced at one a second. For
+# 87 s nothing read an order's status and nothing drained the queued price
+# events: a fill was recorded 88.8 s late and a cancel the price guard asked
+# for waited 93 s. `loop_beat` counts every venue request as progress, so
+# the stall figure read 5 s throughout and the watchdog saw a healthy loop.
+#
+# Two changes. (1) Order management runs BETWEEN the audit's requests
+# (Engine.service_pass; AUDIT_INTERLEAVE, on). (2) A second, stricter
+# measure: when the bot's markets were last actually served. With
+# ORDER_SERVICE_STALL_S set, a gap longer than that reads as a stalled loop
+# in the registry (`manages_own_resting: false`), so the watchdog cancels
+# what rests exactly as for a wedged loop. 0 = measured and reported only.
+AUDIT_INTERLEAVE = os.getenv("PMUS_TWO_SIDED_AUDIT_INTERLEAVE",
+                             "1").strip() != "0"
+ORDER_SERVICE_STALL_S = float(os.getenv(
+    "PMUS_TWO_SIDED_ORDER_SERVICE_STALL_S", "0"))
+_ORDERS: Dict[str, Any] = {"served": None, "max_gap": 0.0}
+
+
+def orders_served() -> None:
+    """One complete pass of order management has just finished."""
+    if _LOOP["thread"] in (None, threading.get_ident()):
+        now = time.time()
+        last = _ORDERS.get("served")
+        if last is not None:
+            _ORDERS["max_gap"] = max(float(_ORDERS.get("max_gap") or 0.0),
+                                     now - float(last))
+        _ORDERS["served"] = now
+
+
+def order_service_idle_s(now: Optional[float] = None) -> Optional[float]:
+    b = _ORDERS["served"]
+    if b is None:
+        return None
+    return max(0.0, (time.time() if now is None else now) - float(b))
+
+
+def order_service_stalled(now: Optional[float] = None) -> bool:
+    idle = order_service_idle_s(now)
+    return ORDER_SERVICE_STALL_S > 0 and idle is not None and \
+        idle > ORDER_SERVICE_STALL_S
+
+
+class ServicedTransport:
+    """A transport that runs `service` after every request it makes, so a
+    long read-only job cannot hold order management still. Everything else
+    is the wrapped transport's."""
+
+    def __init__(self, t: Any, service: Callable[[], None]):
+        self._t, self._service = t, service
+
+    def request(self, *a: Any, **k: Any) -> Any:
+        try:
+            return self._t.request(*a, **k)
+        finally:
+            try:
+                self._service()
+            except Exception as exc:                      # noqa: BLE001
+                log("service_pass_error",
+                    err=f"{type(exc).__name__}:{str(exc)[:160]}")
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._t, name)
+
+
+SAFETY_LATCH_ON = os.getenv("PMUS_TWO_SIDED_SAFETY_LATCH",
+                            "1").strip() != "0"
+SAFETY_LATCH_ACK_ENV = "PMUS_TWO_SIDED_SAFETY_LATCH_ACK"
+MISMATCH_GRACE_S = float(os.getenv("PMUS_TWO_SIDED_MISMATCH_GRACE_S", "45"))
+MISMATCH_CONFIRMED_TTL_S = float(os.getenv(
+    "PMUS_TWO_SIDED_MISMATCH_CONFIRMED_TTL_S", "600"))
+LOOP_ERROR_LATCH_N = int(os.getenv("PMUS_TWO_SIDED_LOOP_ERROR_LATCH_N", "10"))
+_CAP_TOL = D("0.01")
 
 SUBMISSION_LOCK_ENV = "PMUS_TWO_SIDED_SUBMISSION_LOCK"
 # OWNER 2026-11-22: "any future unlock must be restricted to the exact
@@ -418,6 +853,11 @@ def _iso(ts: float) -> str:
         "%Y-%m-%dT%H:%M:%SZ")
 
 
+def _iso_precise(ts: float) -> str:
+    from datetime import datetime, timezone
+    return datetime.fromtimestamp(float(ts), timezone.utc).isoformat()
+
+
 def lock_window(raw: Optional[str] = None) -> Optional[tuple]:
     """(start, end) epoch seconds of a VALID window value, else None."""
     raw = (os.getenv(SUBMISSION_LOCK_ENV) or "") if raw is None else raw
@@ -434,6 +874,76 @@ def lock_window(raw: Optional[str] = None) -> Optional[tuple]:
     return start, end
 
 
+# ---------------------------------------------------------------------------
+# RUNTIME CAMPAIGN AUTHORIZATION (owner 2026-11-23). With the lock value
+# `runtime` the decision to trade comes from a signed, expiring campaign
+# file the RUNNING bot reads (src/pmus_campaign_auth.py), not from a
+# settings change that restarts it. Everything else about the lock is
+# unchanged: `1` still locks whatever any file says, and a window value
+# still works as before.
+#   * No file, an unreadable, unsigned, expired, revoked, wrong-build or
+#     out-of-bounds file, or a refresh that failed: fully locked, own
+#     orders cancelled (no grace).
+#   * The file chooses competitions, market count, order size, slate and
+#     the campaign and per-market caps INSIDE the deployed values, which
+#     are the hard ceilings. It cannot touch the account limit, the loss
+#     stop, the daily halt, the pair cap or anything about a halt.
+#   * The emergency halt is checked before this on every order. A campaign
+#     that has seen a latched halt is ended for good.
+RUNTIME_LOCK = "runtime"
+CAMPAIGN_AUTH_URL_ENV = "PMUS_CAMPAIGN_AUTH_URL"
+CAMPAIGN_AUTH_SECRET_ENV = "PMUS_CAMPAIGN_AUTH_SECRET"
+CAMPAIGN_AUTH_BEARER_ENV = "PMUS_CAMPAIGN_AUTH_BEARER"
+CAMPAIGN_AUTH_ACCEPT_ENV = "PMUS_CAMPAIGN_AUTH_ACCEPT"
+CAMPAIGN_AUTH_SERVICE_ENV = "PMUS_CAMPAIGN_AUTH_SERVICE"
+CAMPAIGN_AUTH_POLL_S = float(os.getenv("PMUS_CAMPAIGN_AUTH_POLL_S", "20"))
+#: the last SUCCESSFUL read may be at most this old (two polls and a bit)
+CAMPAIGN_AUTH_MAX_AGE_S = float(os.getenv(
+    "PMUS_CAMPAIGN_AUTH_MAX_AGE_S", "45"))
+#: the engine's own decision must be this fresh for the lock to open: a
+#: loop that has stopped evaluating stops permitting
+CAMPAIGN_DECISION_MAX_AGE_S = float(os.getenv(
+    "PMUS_CAMPAIGN_DECISION_MAX_AGE_S", "15"))
+#: `1` = read and evaluate the campaign file and SHOW the verdict in the
+#: heartbeat while the lock value is not `runtime`. It permits nothing,
+#: records nothing and applies nothing: a non-trading preflight.
+CAMPAIGN_AUTH_REPORT = os.getenv("PMUS_CAMPAIGN_AUTH_REPORT",
+                                 "0").strip() == "1"
+_RUNTIME: Dict[str, Any] = {"at": None, "decision": None}
+
+
+def runtime_mode() -> bool:
+    return (os.getenv(SUBMISSION_LOCK_ENV) or "").strip().lower() \
+        == RUNTIME_LOCK
+
+
+def runtime_state(now: Optional[float] = None) -> Dict[str, Any]:
+    """The lock state under the `runtime` value, from the engine's last
+    decision. Anything short of a fresh, permitted decision inside the
+    campaign's own window is fully locked."""
+    def locked(why: str) -> Dict[str, Any]:
+        return {"new": True, "all": True, "why": "runtime:" + why}
+    at, d = _RUNTIME.get("at"), _RUNTIME.get("decision")
+    if at is None or not isinstance(d, Mapping):
+        return locked("AUTH_NOT_EVALUATED")
+    if time.monotonic() - float(at) > CAMPAIGN_DECISION_MAX_AGE_S:
+        return locked("AUTH_DECISION_STALE")
+    if not d.get("permit"):
+        return locked(str(d.get("reason") or "AUTH_REFUSED"))
+    c = d.get("campaign") or {}
+    try:
+        start, end = float(c["start"]), float(c["end"])
+    except Exception:                                     # noqa: BLE001
+        return locked("AUTH_WINDOW_UNREADABLE")
+    wall = time.time() if now is None else now
+    if wall < start:
+        return locked("AUTH_NOT_STARTED")
+    if wall >= end:
+        return locked("AUTH_EXPIRED")
+    return {"new": False, "all": False, "why": None, "start": start,
+            "end": end, "campaign_id": c.get("campaign_id")}
+
+
 def lock_state(now: Optional[float] = None) -> Dict[str, Any]:
     """`new` = openings/extensions (and everything else that adds risk) are
     refused; `all` = maker completions are refused too. `why` names it."""
@@ -442,6 +952,8 @@ def lock_state(now: Optional[float] = None) -> Dict[str, Any]:
         return {"new": False, "all": False, "why": None}
     if raw == "1":
         return {"new": True, "all": True, "why": "locked"}
+    if raw.lower() == RUNTIME_LOCK:
+        return runtime_state(now)
     w = lock_window(raw)
     if w is None:
         return {"new": True, "all": True,
@@ -478,6 +990,97 @@ _w = lock_window()
 if _w is not None and (PILOT_SINCE is None or PILOT_SINCE < _w[0]):
     PILOT_SINCE = _w[0]            # the window start is the campaign marker
 del _w
+
+
+_CEIL: Dict[str, Any] = {}
+
+
+def campaign_ceilings() -> Dict[str, Any]:
+    """The hard ceilings a campaign file must stay inside: the DEPLOYED
+    values, captured once before any file is applied."""
+    if not _CEIL:
+        _CEIL.update({
+            "max_window_s": WINDOW_MAX_S, "max_markets": MAX_MARKETS,
+            "order_qty": rn1_max_clip(),
+            "campaign_spend_usd": RN1.TOTAL_SPEND_USD,
+            "campaign_unpaired_usd": RN1.TOTAL_UNMATCHED_USD,
+            "per_market_spend_usd": RN1.PER_MARKET_USD,
+            "per_market_unpaired_usd": RN1.RESIDUAL_CAP_USD,
+            "competitions": sorted(OPEN_GATE_ALLOW_SPORTS),
+            "_qty": RN1.QTY, "_pregame": RN1_PREGAME_QTY,
+            "_live": RN1_LIVE_QTY, "_strict": STRICT_SPORTS,
+            "_slate": SLATE})
+    return _CEIL
+
+
+def apply_campaign(c: Optional[Mapping[str, Any]]) -> None:
+    """Put a permitted campaign's values in force, each no higher than its
+    ceiling (the file was already refused if any exceeded one; the min()
+    here is the second lock on the same door). None = back to the deployed
+    values."""
+    global MAX_MARKETS, OPEN_GATE_ALLOW_SPORTS, STRICT_SPORTS, SLATE
+    global RN1_PREGAME_QTY, RN1_LIVE_QTY
+    k = campaign_ceilings()
+    if c is None:
+        MAX_MARKETS = k["max_markets"]
+        RN1.QTY, RN1_PREGAME_QTY, RN1_LIVE_QTY = \
+            k["_qty"], k["_pregame"], k["_live"]
+        RN1.TOTAL_SPEND_USD = k["campaign_spend_usd"]
+        RN1.TOTAL_UNMATCHED_USD = k["campaign_unpaired_usd"]
+        RN1.PER_MARKET_USD = k["per_market_spend_usd"]
+        RN1.RESIDUAL_CAP_USD = k["per_market_unpaired_usd"]
+        OPEN_GATE_ALLOW_SPORTS = frozenset(k["competitions"])
+        STRICT_SPORTS, SLATE = k["_strict"], k["_slate"]
+        return
+    q = D(str(c["order_qty"]))
+    MAX_MARKETS = min(int(k["max_markets"]), int(D(str(c["max_markets"]))))
+    RN1.QTY = min(D(str(k["_qty"])), q)
+    RN1_PREGAME_QTY = None if k["_pregame"] is None \
+        else min(D(str(k["_pregame"])), q)
+    RN1_LIVE_QTY = None if k["_live"] is None \
+        else min(D(str(k["_live"])), q)
+    RN1.TOTAL_SPEND_USD = min(D(str(k["campaign_spend_usd"])),
+                              D(str(c["campaign_spend_usd"])))
+    RN1.TOTAL_UNMATCHED_USD = min(D(str(k["campaign_unpaired_usd"])),
+                                  D(str(c["campaign_unpaired_usd"])))
+    RN1.PER_MARKET_USD = min(D(str(k["per_market_spend_usd"])),
+                             D(str(c["per_market_spend_usd"])))
+    RN1.RESIDUAL_CAP_USD = min(D(str(k["per_market_unpaired_usd"])),
+                               D(str(c["per_market_unpaired_usd"])))
+    OPEN_GATE_ALLOW_SPORTS = frozenset(c["competitions"]) & \
+        frozenset(k["competitions"])
+    STRICT_SPORTS, SLATE = True, str(c["slate"])
+
+
+def adopt_campaign_marker(book: Any) -> Optional[float]:
+    """Keep the campaign marker across a relock. LIVE 2026-11-22: after the
+    14:05Z window the lock went back to `1`, the marker fell back to the
+    stale PMUS_RN1_PILOT_SINCE (01:15Z) and the meter reported two campaigns
+    as one (+0.63 = last night's +0.35 and today's +0.28). The latest window
+    start is stored in the bot's book and stays the marker until a later
+    window (or a later PMUS_RN1_PILOT_SINCE) replaces it. Returns the
+    marker in force for this book."""
+    w = lock_window()
+    stored = book.d.get("campaign_since")
+    # LIVE 2026-11-22 20:16Z: a window armed for 21:35 was moved to start at
+    # 20:16. The stored marker only ever moved LATER, so it stayed at 21:35:
+    # orders placed before then would not have counted toward the campaign
+    # spend cap, the unmatched cap or the campaign loss stop (the window was
+    # put back before anything filled). A configured window IS the campaign:
+    # whenever the window differs from the one this book last ran under, its
+    # start becomes the marker -- earlier or later. The same window after a
+    # restart keeps its marker; no window (a plain lock) keeps the last one.
+    if w is not None:
+        cur = [float(w[0]), float(w[1])]
+        if book.d.get("campaign_window") != cur or stored is None \
+                or float(stored) < w[0]:
+            book.d["campaign_window"] = cur
+            book.d["campaign_since"] = stored = w[0]
+            book.save()
+    if stored is not None and (PILOT_SINCE is None or
+                               PILOT_SINCE < float(stored)):
+        return float(stored)
+    return PILOT_SINCE
 
 
 # ADVERSE-SELECTION-ADJUSTED OPENING CAP (2026-11-18, default OFF).
@@ -622,6 +1225,930 @@ PREGAME_MAX_LEAD_S = float(os.getenv("PMUS_TWO_SIDED_PREGAME_MAX_LEAD_S",
                                      "21600"))
 PREGAME_CUTOFF_S = float(os.getenv("PMUS_TWO_SIDED_PREGAME_CUTOFF_S", "300"))
 PREGAME_CACHE_S = float(os.getenv("PMUS_TWO_SIDED_PREGAME_CACHE_S", "120"))
+# OWNER 2026-11-22: "I want BOTH pregame and in-game liquidity provision ...
+# one continuous, reward-aware, inventory-aware sports controller ... At
+# kickoff, revalidate or cancel stale orders before continuing. Pause during
+# unsafe price moves, then resume when conditions permit."
+# SLATE says which games the one controller may pick up: "live" (as before),
+# "pregame" (what PREGAME=1 selects) or "both". On the RN1 path a market
+# with a known start time goes pregame -> kickoff -> live
+# (src/pmus_sports_phase): from KICKOFF_PULL_S before the start every
+# resting order in it is cancelled and nothing is placed until the venue
+# lists the game as live, KICKOFF_RESUME_MIN_S have passed since the start,
+# the book reads and (when the marginal test is on) the fair value has
+# settled. A re-check that has not passed KICKOFF_MAX_HOLD_S after the start
+# leaves the market with no new exposure (completions continue).
+SLATE = (os.getenv("PMUS_TWO_SIDED_SLATE") or "").strip().lower()
+
+
+def slate() -> str:
+    """live | pregame | both. Unset (or an unknown value) follows the older
+    PREGAME switch, so yesterday's configuration selects what it did."""
+    if SLATE in ("live", "pregame", "both"):
+        return SLATE
+    return "pregame" if PREGAME else "live"
+
+
+KICKOFF_PULL_S = float(os.getenv("PMUS_TWO_SIDED_KICKOFF_PULL_S",
+                                 str(PREGAME_CUTOFF_S)))
+KICKOFF_RESUME_MIN_S = float(os.getenv(
+    "PMUS_TWO_SIDED_KICKOFF_RESUME_MIN_S", "120"))
+KICKOFF_MAX_HOLD_S = float(os.getenv(
+    "PMUS_TWO_SIDED_KICKOFF_MAX_HOLD_S", "1800"))
+# Order size by phase (RN1 path). Unset = RN1.QTY in both phases, as before.
+# The in-game size is halved while the venue's own mid has ranged
+# VOL_SHRINK_USD or more inside VOL_WINDOW_S; a range of VOL_PAUSE_USD or
+# more pulls opening and extension bids for VOL_CALM_S (completions, which
+# only lock a pair inside the pair cap, keep resting). 0 = that rule off.
+RN1_PREGAME_QTY = (_env_d("PMUS_RN1_PREGAME_QTY", "0")
+                   if (os.getenv("PMUS_RN1_PREGAME_QTY") or "").strip()
+                   else None)
+RN1_LIVE_QTY = (_env_d("PMUS_RN1_LIVE_QTY", "0")
+                if (os.getenv("PMUS_RN1_LIVE_QTY") or "").strip() else None)
+VOL_WINDOW_S = float(os.getenv("PMUS_TWO_SIDED_VOL_WINDOW_S", "30"))
+VOL_PAUSE_USD = _env_d("PMUS_TWO_SIDED_VOL_PAUSE_USD", "0")
+VOL_SHRINK_USD = _env_d("PMUS_TWO_SIDED_VOL_SHRINK_USD", "0")
+VOL_CALM_S = float(os.getenv("PMUS_TWO_SIDED_VOL_CALM_S", "60"))
+# OWNER 2026-11-22: "a cap on the total value of outstanding orders, not
+# just filled inventory, so simultaneous fills cannot bypass the intended
+# exposure limit". One number for the whole bot: unpaired filled cost plus
+# the value of EVERY resting order (own_exposure_usd) plus the order being
+# placed must stay within it. Enforced in Engine.place, the one gate every
+# order passes. 0 = not configured (the other caps still apply).
+AT_RISK_BUDGET_USD = _env_d("PMUS_TWO_SIDED_AT_RISK_BUDGET_USD", "0")
+# Selection order on the RN1 path: expected trading result of a first bid
+# plus the theoretical reward per contract over RANK_HORIZON_H, cut by
+# RANK_REWARD_HAIRCUT and counted only when the projected day total clears
+# the minimum payout. A market with no fair value gets no ranking number.
+# At most RANK_NEW_PER_ROUND candidates are priced per selection round and
+# a ranking number is reused for RANK_TTL_S (one public book read each).
+RN1_RANK_NET = os.getenv("PMUS_RN1_RANK_NET", "0").strip() == "1"
+# RANK BY OUR SHARE, NOT THE POOL (owner 2026-11-25: "Rank live markets by
+# estimated reward capture relative to capital committed, rather than
+# headline reward pool size"). Live 24-25 Nov: ranked by pool rate, every
+# slot went to ATP (pool $61 an hour, 1,400 contracts at the touch, our
+# modelled share 0.3 cents an hour for one contract) ahead of thin markets
+# where one contract's modelled share was 15 to 40 cents an hour.
+# With RN1_RANK_SHARE on, candidates carrying a paying programme are
+# ordered by the THEORETICAL reward of OUR quote (our size, one tick-depth
+# behind each touch, the venue's published scoring rule) per dollar that
+# quote commits. It needs one public book read per candidate: at most
+# RANK_SHARE_NEW_PER_ROUND new ones per selection round, taken in turn
+# across competitions, each kept RANK_SHARE_TTL_S. No signed request.
+# Ranking only: every bid still passes every gate and cap, and nothing
+# here is a payment. 0 = off (pool rate, as before).
+RN1_RANK_SHARE = os.getenv("PMUS_RN1_RANK_SHARE", "0").strip() == "1"
+RANK_SHARE_NEW_PER_ROUND = int(os.getenv(
+    "PMUS_RN1_RANK_SHARE_NEW_PER_ROUND", "3"))
+RANK_SHARE_TTL_S = float(os.getenv("PMUS_RN1_RANK_SHARE_TTL_S", "300"))
+# HYSTERESIS for a resting bid (see RN1.quotes): kept at its own price while
+# it misses the marginal test by no more than RN1_KEEP_TOL_USD, for at most
+# RN1_KEEP_MAX_S in a row; then it is pulled like any failing bid. 0 = off
+# (every failing bid is pulled at once, as before).
+RN1_KEEP_TOL_USD = _env_d("PMUS_RN1_KEEP_TOL_USD", "0")
+# EXACT MARKETS AND SIDES (owner 2026-11-23: "Prepare Option B using a
+# minimal market-and-side pinning setting, default off, with regression
+# tests"). PMUS_RN1_PIN="<slug>:YES,<slug>:NO,<slug>" names the ONLY markets
+# the RN1 path may open in and, where a side is given, the only side it may
+# bid there. Unset = no pin (every market and side as before). With a pin:
+#   - selection considers pinned markets only;
+#   - in a pinned market an opening or extension bid on the other side is
+#     dropped ("pinned_other_side");
+#   - a market that is not pinned gets no new exposure ("not_pinned").
+# A completion is never dropped by the pin: it only pairs what is held. Every
+# other gate still applies; a pin can only narrow what the bot may do. A
+# malformed entry pins nothing AND opens nothing (fail closed).
+
+
+def parse_pin(raw: Optional[str]) -> Optional[Dict[str, Optional[str]]]:
+    """None = no pin configured. {} = a pin that allows nothing (malformed
+    input). Otherwise {slug: "YES" | "NO" | None (both sides)}."""
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    out: Dict[str, Optional[str]] = {}
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        slug, sep, side = part.partition(":")
+        slug, side = slug.strip(), side.strip().upper()
+        if not slug.startswith(SPORTS_PREFIXES) or \
+                (sep and side not in ("YES", "NO")) or slug in out:
+            return {}
+        out[slug] = side if sep else None
+    return out
+
+
+def rn1_pin() -> Optional[Dict[str, Optional[str]]]:
+    return parse_pin(os.getenv("PMUS_RN1_PIN"))
+RN1_KEEP_MAX_S = float(os.getenv("PMUS_RN1_KEEP_MAX_S", "60"))
+# HOLD THROUGH A SHORT FAIR-VALUE GAP. LIVE 2026-11-23: the same prices were
+# cancelled and re-posted every 30-90 s because the international fair value
+# dropped out for a pass ("no_fair": 444 of 1,111 side decisions). Six of
+# eight exposure-adding fills had rested under 15 s, and only 13% of
+# pre-game resting time counted for rewards. Every re-post goes to the back
+# of its price level and restarts the reward clock.
+# With RN1_GAP_HOLD_S > 0 an opening/extension bid ALREADY RESTING is left
+# where it is when the ONLY reason to pull it is that the fair value is
+# missing this pass, and ALL of:
+#   * the same bid at the same price passed the full marginal test no more
+#     than RN1_GAP_HOLD_S ago (a hold never renews itself);
+#   * the venue's own best bid and ask have not changed since that pass;
+#   * the international price is not known to be moving (a fair value
+#     that is unsettled BECAUSE it moved pulls the bid, as now);
+#   * the depth rule still passes, and nothing blocks new exposure (any
+#     block, pause, lock or halt pulls it, as now).
+# It never places a new bid and never moves one. 0 = off (today).
+RN1_GAP_HOLD_S = float(os.getenv("PMUS_RN1_GAP_HOLD_S", "0"))
+#: 1 (default) = a market with an unpaired leg holds a quoting slot, as
+#: since 2026-11-22. 0 = only a market with a resting opening/extension bid
+#: does (see Engine._rn1_slot_holder).
+RN1_SLOTS_COUNT_INVENTORY = os.getenv(
+    "PMUS_RN1_SLOTS_COUNT_INVENTORY", "1").strip() != "0"
+# FILL DETECTION FROM ONE LIST READ (owner 2026-11-25: "Eliminate redundant
+# requests ... Support substantially more concurrent markets within the
+# existing venue request budget"). Measured live, 4 markets: about 70% of
+# all signed requests were one GET /v1/order/{id} per open order per pass
+# (2,669 of them in 70 minutes); at 8 markets those polls alone exceed the
+# one-request-a-second budget, and they are never deferred, so placements
+# and audits starve.
+# With FILL_LIST_POLL on, one GET /v1/orders/open per pass stands in for
+# them. An order's own status is still read EXACTLY, as now, unless the
+# list PROVES nothing happened to it, i.e. ALL of:
+#   * the list was read no more than FILL_LIST_MAX_AGE_S ago;
+#   * the order was placed at least FILL_LIST_SETTLE_S before that read;
+#   * the order is in the list, in an ordinary resting state;
+#   * the list row carries a readable filled quantity and it equals the
+#     quantity the book has already recorded;
+#   * the order's exact status was read no more than FILL_EXACT_EVERY_S ago.
+# A fill is recorded only from the exact read, never from the list. An
+# order missing from the list, changed, unreadable or too new is read
+# exactly at once, so detection is as fast as before. A failed list read
+# falls back to exact polls for every order. 0 = off (as before).
+FILL_LIST_POLL = os.getenv("PMUS_TWO_SIDED_FILL_LIST_POLL",
+                           "0").strip() == "1"
+FILL_LIST_REFRESH_S = float(os.getenv(
+    "PMUS_TWO_SIDED_FILL_LIST_REFRESH_S", "4"))
+FILL_LIST_MAX_AGE_S = float(os.getenv(
+    "PMUS_TWO_SIDED_FILL_LIST_MAX_AGE_S", "8"))
+FILL_LIST_SETTLE_S = float(os.getenv(
+    "PMUS_TWO_SIDED_FILL_LIST_SETTLE_S", "2"))
+FILL_EXACT_EVERY_S = float(os.getenv(
+    "PMUS_TWO_SIDED_FILL_EXACT_EVERY_S", "60"))
+# A PAUSE IS NOT A REASON TO ABANDON A MARKET. LIVE 2026-11-24 01:20Z: a
+# flat market with nothing to quote for 120 s gives up its slot, a
+# price-move pause counted as "nothing to quote", and a released market was
+# never looked at again. In-play tennis pauses on almost every point: all
+# three markets were dropped within eight minutes and the bot sat idle for
+# the rest of an authorised hour while one of them traded in band.
+#   RN1_PAUSED_RELEASE_S  how long a flat market that is only PAUSED (price
+#       move, or the international price missing) keeps its slot before it
+#       is released. It is still released after that, so a market that
+#       never calms down does not hold a slot against better ones.
+#       Default 120 = today.
+#   RN1_RESELECT          1 = a market released flat is a candidate again
+#       once RN1_RESELECT_COOLDOWN_S has passed, through the SAME filters
+#       as any other candidate (in the slate, in band, in scope, not late,
+#       priced). Its record (orders, fills, inventory, costs) is the same
+#       one, so nothing about its accounting restarts. A market that
+#       closed, settled or holds anything is never reselected. Default 0.
+RN1_PAUSED_RELEASE_S = float(os.getenv("PMUS_RN1_PAUSED_RELEASE_S", "120"))
+# ADAPTIVE PAUSE DEPTH (2026-11-27, default OFF). Campaign 27 Nov
+# 13:45-16:45Z: 373 of 466 side-outcomes the reward-adjusted placement scored
+# positive were blocked by jump_pause / vol_pause, and bids rested only 6.7%
+# of the window. With PMUS_RN1_PAUSE_DEPTH=1 a jump or volatility pause no
+# longer withdraws every opening/extension bid: they may rest no closer than
+# the 30 s mid range (rounded up to ticks) plus PMUS_RN1_PAUSE_DEPTH_EXTRA_TICKS
+# below the touch -- below where the move has already been -- and only if
+# every later gate (marginal EV with the behind-the-touch fill loss, the
+# international guard, every cap, the final gate) still passes. The touch is
+# never joined during a pause. Completions are unchanged. 0 = as before.
+RN1_PAUSE_DEPTH = os.getenv("PMUS_RN1_PAUSE_DEPTH", "0").strip() == "1"
+RN1_PAUSE_DEPTH_EXTRA_TICKS = int(os.getenv(
+    "PMUS_RN1_PAUSE_DEPTH_EXTRA_TICKS", "1"))
+#: with RN1_PAUSE_DEPTH, rest the venue minimum size while paused (1 = on)
+RN1_PAUSE_MIN_SIZE = os.getenv("PMUS_RN1_PAUSE_MIN_SIZE", "1").strip() == "1"
+# PAUSED-MARKET ROTATION (default 0 = as before). A flat market with nothing
+# resting that is only paused (jump/vol) releases its slot after this many
+# seconds instead of max(120, RN1_PAUSED_RELEASE_S), so another eligible
+# market can be quoted; with RN1_RESELECT it may be selected again later.
+RN1_PAUSE_ROTATE_S = float(os.getenv("PMUS_RN1_PAUSE_ROTATE_S", "0"))
+RN1_RESELECT = os.getenv("PMUS_RN1_RESELECT", "0").strip() == "1"
+RN1_RESELECT_COOLDOWN_S = float(os.getenv(
+    "PMUS_RN1_RESELECT_COOLDOWN_S", "60"))
+# FINAL ORDER GATE (owner 2026-11-24). On the RN1 path the order size, the
+# campaign and per-market ceilings and the pair-cost ceiling were applied
+# where the quote is BUILT and not again where the order is SENT; an
+# oversize order was only caught on the next pass. With FINAL_GATE on
+# (default) every order is checked again, independently, immediately before
+# submission, and a violation prevents the submission:
+#   * size:      qty <= the largest size any phase may use
+#   * maker:     on the RN1 path a non-post-only order is refused unless
+#                ALLOW_TAKER=1 (the older two-sided path keeps its own
+#                taker authorization)
+#   * ceilings:  this market's and the campaign's worst-case spend and
+#                unpaired cost, counting every resting order already
+#                recorded PLUS this one (so two orders that each fit alone
+#                cannot both be sent when together they do not)
+#   * pair cost: this bid plus the dearest thing it could pair with -- the
+#                other side's filled average if it would complete held
+#                inventory, and every bid resting on the other side -- must
+#                not exceed the pair cap. It never refuses a bid for NOT
+#                pairing: adding to the heavier side is untouched.
+# The checks already at the gate stay where they are: authorization (lock /
+# window / campaign file), the emergency halt, strict scope, the account
+# limit with its fail-closed read, the portfolio budget and depth.
+FINAL_GATE = os.getenv("PMUS_TWO_SIDED_FINAL_GATE", "1").strip() != "0"
+ALLOW_TAKER = os.getenv("PMUS_TWO_SIDED_ALLOW_TAKER", "0").strip() == "1"
+# DO NOT CHASE THE BEST PRICE UPWARD. Today a resting bid is cancelled and
+# re-posted whenever its target moves by one tick, in either direction.
+# When the target has moved AWAY (the best price improved, so our bid is
+# now deeper than intended) the resting bid is still wanted, at a better
+# price than the one the test just passed, and it has its place in the
+# queue. With RN1_KEEP_DEEPER_TICKS = n an opening/extension bid up to n
+# ticks BELOW its target is left alone. A bid ABOVE its target (the market
+# came toward us) is re-priced or pulled exactly as now, and so is a
+# completion. 0 = off (today).
+RN1_KEEP_DEEPER_TICKS = int(os.getenv("PMUS_RN1_KEEP_DEEPER_TICKS", "0"))
+# INVENTORY AT SEVERAL PRICE LEVELS (owner 2026-11-25: "Build inventory at
+# different price levels", "Maintain multiple resting orders", "We want
+# sustained inventory accumulation, not isolated two-contract transactions
+# followed by inactivity"). Until now each side of a market held ONE
+# resting bid, so a side could buy at most one clip per price move and
+# then waited for the next re-quote. With RN1_LADDER_LEVELS = N > 1, behind
+# every opening or same-side extension bid the controller also rests up to
+# N-1 further bids of the same size, each RN1_LADDER_STEP_TICKS deeper.
+# A falling price then fills them in turn: the side accumulates at
+# progressively lower prices instead of one clip at a time.
+# Bounded by everything that bounds one bid: each level is added only
+# while the market's worst case WITH every level filled stays inside the
+# per-market spend and unpaired caps and the campaign caps, the price
+# floor applies, the final gate re-checks every order against all resting
+# orders, and the account limit counts each order as it rests. Completion
+# bids are never laddered. When the price moves, a resting bid that now
+# sits at another level's price is kept, not cancelled and re-placed.
+# 1 = one bid per side, exactly as before.
+RN1_LADDER_LEVELS = max(1, int(os.getenv("PMUS_RN1_LADDER_LEVELS", "1")))
+RN1_LADDER_STEP_TICKS = max(1, int(os.getenv(
+    "PMUS_RN1_LADDER_STEP_TICKS", "2")))
+# PULL ONLY THE THREATENED BID (owner 2026-11-25: "Determine whether
+# economically acceptable individual ladder levels are being unnecessarily
+# pulled. Preserve hard safety cancellations."). The reactive pull fired
+# when ANY resting bid came within a tick of its touch or of crossing, and
+# then cancelled EVERY bid in the market: the other side and every deeper
+# ladder level with it (live 18:23-18:38 UTC 25 Nov: median bid life 21 s).
+# With 1, only the bids that themselves meet a pull condition are
+# cancelled; the rest keep their place and the next pass re-prices as
+# usual. The jump pause (a move of 2+ ticks) still cancels everything, and
+# so do every lock, halt, cap and account block. 0 = as before.
+# THE CAMPAIGN LOSS STOP COUNTS RESTING BIDS (found 2026-11-25 19:40 UTC).
+# The stop refuses new openings once realized results plus every held
+# unpaired contract settling worthless reach -PILOT_LOSS_USD. Resting bids
+# were not counted, so several ladder levels could fill at once and carry
+# the worst case past the stop: live 18:40:57, two YES levels filled
+# together (worst case -1.67 - 1.78 - 2.60 = -6.05 against a $4 stop).
+# On (default), the final gate also refuses an opening or extension when
+# the worst case of the book PLUS every resting and reserved bid PLUS this
+# order (each filling and losing, the same arithmetic as the account
+# limit) would reach the stop. Completions are never refused by it.
+RN1_LOSS_STOP_COUNTS_RESTING = os.getenv(
+    "PMUS_RN1_LOSS_STOP_COUNTS_RESTING", "1").strip() == "1"
+# REWARD-QUALIFIED QUOTING (owner 2026-11-25: "Determine whether we can
+# maintain reward-qualifying size at the best bid while accumulating at
+# deeper levels"; "Prioritize markets that currently satisfy reward
+# qualification requirements. Continuously replace markets that cease
+# qualifying"). Measured on live books 20:23 UTC: a 10-contract bid scores
+# about 3x more AT the best bid than one tick behind, and most books are
+# one tick wide, where the bot never joined.
+#   RN1_JOIN_ONE_TICK=1     the join rule (RN1_JOIN_TOUCH) may join on a
+#                           one-tick spread when calm; a joined bid is no
+#                           longer pulled for sitting one tick from the
+#                           offer (it is post-only: it cannot take). The
+#                           pair-cost limit still allows only one side at
+#                           the best bid on a one-tick spread.
+#   RN1_LADDER_QTY          size of every deeper ladder level (level 0
+#                           keeps the full clip); empty = same as level 0.
+#   RN1_RELEASE_UNQUALIFIED_S  a market holding no inventory whose quote
+#                           would earn no reward under the venue's rule
+#                           for this long is released, so selection can
+#                           replace it. 0 = off.
+RN1_JOIN_ONE_TICK = os.getenv("PMUS_RN1_JOIN_ONE_TICK", "0").strip() == "1"
+_lq = os.getenv("PMUS_RN1_LADDER_QTY", "").strip()
+RN1_LADDER_QTY = D(_lq) if _lq else None
+RN1_RELEASE_UNQUALIFIED_S = float(os.getenv(
+    "PMUS_RN1_RELEASE_UNQUALIFIED_S", "0") or 0)
+# RELEASE BALANCED INVENTORY (27 Nov, default OFF). LIVE 27 Nov 21:32Z: a
+# market whose pair completed (2 YES / 2 NO, no unpaired leg) wanted no bid
+# for the rest of the match but kept one of the two quoting slots, because
+# the idle release only applied to a FLAT (0/0) market. With
+# PMUS_RN1_RELEASE_BALANCED=1 a balanced market (YES = NO > 0) with no bid
+# wanted and no order open is released after the same idle time as a flat
+# one. Its inventory stays in the book and in every limit, the meter and
+# the audit (accounting reads all markets); only the slot is freed.
+RN1_RELEASE_BALANCED = os.getenv("PMUS_RN1_RELEASE_BALANCED",
+                                 "0").strip() == "1"
+RN1_PULL_THREATENED_ONLY = os.getenv(
+    "PMUS_RN1_PULL_THREATENED_ONLY", "0").strip() == "1"
+# NET-PROFIT RANKING (owner 2026-11-25: "Rank markets by expected net
+# profit after inventory acquisition losses, not gross projected rewards";
+# "Compare joining the best bid against resting one tick deeper on a
+# market-by-market basis"; "Recalculate marginal economics after each fill
+# before replenishing"). With RN1_NET_RANK on (needs RN1_RANK_SHARE), each
+# candidate is priced at two placements, at the best bid and one tick
+# behind it, with our own clip on both sides:
+#   net per hour = THEORETICAL reward of that quote (venue rule)
+#                  - expected contracts filled per hour x loss per contract
+# expected contracts filled per hour = clip x FILL_RATE (contracts filled
+# per resting contract-hour, measured live, by placement and competition)
+# per side. The better placement is kept per market: the join rule may
+# join only where it is the better one. Markets are ranked by that net per
+# dollar committed; a market estimated at zero or below is not selected,
+# a flat one is released (RN1_RELEASE_UNQUALIFIED_S), and one holding
+# inventory stops replenishing (openings and extensions; completions
+# continue) until a fresh estimate is positive again. Every fill clears the
+# market's estimate, so the next pass re-prices it on the new book first.
+# Estimates only, not payments; every bid still passes every gate and cap.
+RN1_NET_RANK = os.getenv("PMUS_RN1_NET_RANK", "0").strip() == "1"
+# Own resting orders are deducted from the public book's competition only
+# once they are at least this old (the public snapshot can lag our order's
+# acknowledgement; until then the order is left in the denominator).
+RN1_NET_OWN_LAG_S = float(os.getenv("PMUS_RN1_NET_OWN_LAG_S", "5") or 5)
+# HOLD THROUGH A DIP (owner 2026-11-26: "Do not rotate away merely because
+# one side fills or a temporary estimate fluctuates"; "Preserve productive
+# resting orders and queue priority"). Live 26 Nov: estimates near zero
+# flipped sign every minute or two, and every flip cancelled the ladder.
+# With RN1_NET_HOLD_S > 0, once the fresh net estimate turns not positive
+# nothing NEW is placed (no opening, extension or replenishment), but bids
+# already resting are kept for up to RN1_NET_HOLD_S, as long as each still
+# sits at or behind its own side's best bid (it never becomes the price-
+# setting bid by staying). After that, or on any other block (pause, late,
+# cap, lock), they are cancelled as before. Completions are unaffected.
+# 0 = off (cancel at once, as before).
+RN1_NET_HOLD_S = float(os.getenv("PMUS_RN1_NET_HOLD_S", "0") or 0)
+# DURATION-AWARE RANKING (owner 2026-11-26, default OFF; see
+# src/pmus_duration_rank.py). A market about to end should not take a slot
+# from one with a long remaining life. With RN1_DURATION_RANK on, each
+# candidate's expected remaining quoting time (to the late cut-off) comes
+# from its competition's expected duration (PMUS_RN1_DURATION_MIN, merged
+# over conservative defaults), its scheduled start and whether the venue
+# lists it live. Then:
+#   - a candidate with a KNOWN remaining time below RN1_MIN_REMAINING_S is
+#     not a candidate (an unknown one never is excluded for that alone);
+#   - the share/net ranking (RN1_RANK_SHARE, RN1_NET_RANK) scales each
+#     positive per-hour estimate by min(remaining, horizon) / horizon;
+#   - the per-contract ranking (RN1_RANK_NET) counts the reward term only
+#     for min(remaining, horizon) instead of the whole horizon.
+# Unknown remaining time gets RN1_DURATION_UNKNOWN_FACTOR (no full-life
+# credit). Ranking only: every bid still passes every gate and cap.
+RN1_DURATION_RANK = os.getenv("PMUS_RN1_DURATION_RANK", "0").strip() == "1"
+RN1_MIN_REMAINING_S = float(os.getenv("PMUS_RN1_MIN_REMAINING_S")
+                            or "900")              # 0 = no exclusion
+RN1_DURATION_HORIZON_S = float(os.getenv("PMUS_RN1_DURATION_HORIZON_S")
+                               or "3600")
+RN1_DURATION_UNKNOWN_FACTOR = float(os.getenv(
+    "PMUS_RN1_DURATION_UNKNOWN_FACTOR") or "0.5")
+RN1_DURATION_MIN = os.getenv("PMUS_RN1_DURATION_MIN", "")
+# LIVE-FIRST SLOTS (owner 2026-11-27, default OFF). LIVE 26-27 Nov, two
+# slots: both went to table-tennis pre-game markets starting hours later
+# (theoretical +$0.04-0.41/h), while the capital they tie up stays tied
+# until settlement. With RN1_LIVE_FIRST on (src/pmus_duration_rank.py):
+#   - each candidate is classed live / near (start within
+#     RN1_NEAR_START_S) / distant / unknown (no start on record);
+#   - the share/net ranking (RN1_RANK_SHARE) orders positive estimates by
+#     per_dollar_hour x (H/3600) x min(1, H/R), R = remaining quoting time
+#     (time-to-settlement proxy), H = RN1_DURATION_HORIZON_S, unknown R ->
+#     RN1_DURATION_UNKNOWN_FACTOR; this replaces the duration factor when
+#     RN1_DURATION_RANK is also on (never applied twice);
+#   - at most RN1_DISTANT_MAX_SLOTS slots may be claimed by distant
+#     markets at selection;
+#   - when every slot is claimed and a live/near candidate has a fresh
+#     positive estimate, ONE flat distant market (no contracts, no
+#     completion bid) yields: its resting openings are cancelled through
+#     the normal cancel path and it is released flat (reselectable as any
+#     flat release). A market holding contracts is never preempted.
+# Selection only: every bid still passes every gate and cap.
+RN1_LIVE_FIRST = os.getenv("PMUS_RN1_LIVE_FIRST", "0").strip() == "1"
+# RANK BY NET PER SLOT (27 Nov, default "per_dollar" = unchanged). LIVE 27
+# Nov: with RN1_LIVE_FIRST / RN1_DURATION_RANK the share ranking orders
+# positive estimates by net per dollar x turnover (min(1, H / time to
+# settlement)), so a pregame programme market starting in 3 h is scored at
+# about 0.29 of its value, while capital is not binding (mean $1.30 used of
+# $60) and the two quoting SLOTS are. With PMUS_RN1_RANK_BY=net_per_hour
+# positive markets are ordered by the slot's absolute reward-adjusted net
+# per hour (the touch-EV / net estimate), with no turnover, duration or
+# live-first factor; a non-positive estimate is never selected ahead of a
+# positive one. Use with PMUS_RN1_LIVE_FIRST=0 (its distant-slot cap and
+# pre-emption are slot rules of their own).
+RN1_RANK_BY = os.getenv("PMUS_RN1_RANK_BY", "per_dollar").strip().lower()
+RN1_NEAR_START_S = float(os.getenv("PMUS_RN1_NEAR_START_S") or "1800")
+RN1_DISTANT_MAX_SLOTS = int(os.getenv("PMUS_RN1_DISTANT_MAX_SLOTS") or "1")
+# NO SELECT/RELEASE LOOP (owner 2026-11-27, default OFF). LIVE: with every
+# slot held (one by a market carrying inventory) a third market was
+# selected, blocked `max_markets`, released flat after 2 minutes and
+# re-selected, again and again. With RN1_SELECT_NO_CHURN on, a market is
+# not selected while the slot claimants (slot holders, see _rn1_slot_holder,
+# plus selected markets with no unpaired leg still waiting to quote) already
+# number MAX_MARKETS. Logged once per change.
+RN1_SELECT_NO_CHURN = os.getenv("PMUS_RN1_SELECT_NO_CHURN",
+                                "0").strip() == "1"
+# MARGINAL NET EV PER BID (external review of 1b496656c, findings 1, 2, 4).
+# The market-level net estimate (RN1_NET_RANK) stops every opening and
+# extension in a market whose estimated reward does not exceed a fixed
+# expected fill loss, even where a bid is cheap against the international
+# fair value; and a market-level positive estimate lets through a bid that
+# adds no reward and loses on its fills. With PMUS_RN1_MARGINAL_EV=1 every
+# opening/extension target AND every deeper ladder level is judged on its
+# own (src/pmus_rn1_replica.marginal_ev), per resting hour:
+#   fills/h x (fair - px - maker fee - adverse - concentration risk)
+#   + incremental THEORETICAL reward of this order (same-snapshot marginal
+#     ladder score, credited only when the day's projection clears the
+#     venue's minimum payout, then x RANK_REWARD_HAIRCUT)
+#   + rebates: none (no rebate is sourced; 0)
+#   fills/h      = qty x RN1_FILL_RATE (touch / behind), per competition
+#   adverse      = the larger of the marginal test's allowance
+#                  (ADVERSE_TICKS) and RN1_FILL_LOSS for the placement
+#   fair, risk   = exactly as the marginal test (RN1.edge) computes them;
+#                  each deeper level counts the levels above it as filled
+# A bid is kept only when that total is positive AND its trade edge at the
+# marginal test's own allowance is not negative (rewards never rescue a
+# negative trade edge). Without a fair value (marginal test off, or none
+# fresh) nothing is evaluated and the controller behaves exactly as before.
+# Where capital is short, the campaign cap removes the target of lowest
+# marginal EV first instead of the dearest (finding 2). A market whose
+# market-level estimate is not positive keeps quoting the bids that pass
+# on their own; only when none passes is it blocked "net_not_positive"
+# (hold, release and cancellation then exactly as before), so neither the
+# hold expiry nor the unqualified release cancels bids that pass (finding
+# 4). Completions are not evaluated here. Every cap, lock, halt and gate is
+# unchanged; this can only remove bids from, or stop the market-level block
+# removing bids from, the plan the existing rules produce. 0 = off.
+RN1_MARGINAL_EV = os.getenv("PMUS_RN1_MARGINAL_EV", "0").strip() == "1"
+# MARGINAL NET EV WITHOUT A FAIR VALUE (live 26 Nov: doubles, table
+# tennis, UTR and ITF have no international feed, so RN1_MARGINAL_EV judged
+# none of their bids). With PMUS_RN1_MARGINAL_EV_NO_FAIR=1 (needs
+# PMUS_RN1_MARGINAL_EV=1) a market with no international fair value has
+# each opening/extension target and each deeper level judged on its own
+# (src/pmus_rn1_replica.marginal_ev_no_fair), per resting hour:
+#   incremental THEORETICAL reward (same-snapshot marginal ladder score,
+#     only when the day's projection clears the minimum payout, x
+#     RANK_REWARD_HAIRCUT)
+#   - fills/h x (RN1_FILL_LOSS + maker fee + concentration risk)
+#   + rebates: none (0)
+#   fills/h = qty x RN1_FILL_RATE (touch / behind), per competition; the
+#   risk charge is RN1.concentration_risk, exactly the marginal test's.
+# NO TRADE-EDGE TERM: there is no fair value and none is substituted (not
+# the venue's mid, not a model). RN1_FILL_LOSS -- the settings cost the
+# market-level net estimate charges per fill -- is the adverse-selection
+# proxy. A bid rests only if that total is positive, so with no qualifying
+# reward nothing does. A market WITH a fair value is judged by
+# RN1.marginal_ev exactly as before.
+# ONLY WITH PMUS_RN1_EDGE_GATE=0. With the marginal test on, a market with
+# no fair value gets no bid at all (RN1.quotes refuses it "no_fair"); this
+# mode never overrides that and is inert there. With the gate off it can
+# only remove bids from the plan the existing rules produce, or (as
+# RN1_MARGINAL_EV does for fair-value markets) keep the market-level
+# net_not_positive block off bids that pass on their own. Every cap, lock,
+# halt and maker-only rule is unchanged. 0 = off.
+RN1_MARGINAL_EV_NO_FAIR = os.getenv("PMUS_RN1_MARGINAL_EV_NO_FAIR",
+                                    "0").strip() == "1"
+RN1_MARGINAL_BOOK_TTL_S = float(os.getenv(
+    "PMUS_RN1_MARGINAL_BOOK_TTL_S", "60") or 60)
+# FIT EVERY LEVEL (review finding 3). PMUS_RN1_FIT_QTY sizes level 0 down to
+# the per-market caps only, and ladder levels only while it is on; the
+# campaign caps and the two-bid per-market cap drop a whole bid, and the
+# first deeper level that does not fit ends its side's ladder. With
+# PMUS_RN1_FIT_ALL_LEVELS=1 every one of those is first tried at each
+# smaller whole size down to the venue minimum, and a level that does not
+# fit at the minimum is skipped rather than ending the ladder (a deeper,
+# cheaper level may still fit). No cap changes. 0 = off.
+RN1_FIT_ALL_LEVELS = os.getenv("PMUS_RN1_FIT_ALL_LEVELS",
+                               "0").strip() == "1"
+
+
+def _comp_rates(name: str, default: str) -> Dict[str, float]:
+    """"0.2" or "0.2,utr:0.5,atpdb:0.1" -> {"": 0.2, "utr": 0.5, ...}."""
+    out: Dict[str, float] = {"": float(default)}
+    for part in (os.getenv(name) or "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        k, _, v = part.rpartition(":")
+        try:
+            out[k.strip().lower()] = float(v)
+        except ValueError:
+            continue
+    return out
+
+
+# Clip sizes the net ranking compares per market (each capped at the
+# configured clip): in a thin book our reward share stops growing with size
+# while the expected fill cost keeps growing, so the smallest size that
+# qualifies often nets the most. The chosen size caps that market's clip.
+RN1_NET_SIZES = tuple(sorted({D(x.strip()) for x in os.getenv(
+    "PMUS_RN1_NET_SIZES", "1,2,5,10").split(",") if x.strip()}))
+RN1_FILL_RATE = {0: _comp_rates("PMUS_RN1_FILL_RATE_TOUCH", "0.5"),
+                 1: _comp_rates("PMUS_RN1_FILL_RATE_BEHIND", "0.2")}
+RN1_FILL_LOSS = {0: _comp_rates("PMUS_RN1_FILL_LOSS_TOUCH", "0.05"),
+                 1: _comp_rates("PMUS_RN1_FILL_LOSS_BEHIND", "0.035")}
+
+# DIRECTIONAL INVENTORY ALLOCATION (2026-11-27, default OFF; see
+# src/pmus_directional_alloc.py). With PMUS_RN1_DIRECTIONAL=1 every opening
+# and same-side addition bid the quoting rule wants is judged on the
+# international fair value (intl_fair_band: the mid and its range over
+# RN1_FAIR_STABLE_S, only once settled): it is kept, resized or refused by its
+# marginal EV per contract after the competition's fill loss and an
+# inventory-concentration charge, the side the fair value does not favour
+# rests a tick further back, and ladder levels are judged on the inventory
+# they would add. Without a settled fair value nothing changes. Completions,
+# pair-cost limits, caps, loss stops, the guard and every other gate are
+# untouched; it can only remove, shrink or deepen a bid, never add one.
+RN1_DIRECTIONAL = os.getenv("PMUS_RN1_DIRECTIONAL", "0").strip() == "1"
+RN1_DIR_CFG = {
+    "risk_aversion": os.getenv("PMUS_RN1_DIR_RISK_AVERSION", "0.005"),
+    "min_ev": os.getenv("PMUS_RN1_DIR_MIN_EV", "0"),
+    "hysteresis": os.getenv("PMUS_RN1_DIR_HYSTERESIS", "0.01"),
+    "depth_unfavoured_ticks": int(os.getenv(
+        "PMUS_RN1_DIR_DEPTH_UNFAVOURED_TICKS", "1")),
+    "touch_edge": os.getenv("PMUS_RN1_DIR_TOUCH_EDGE", "0.02"),
+    # 0 (default): openings on a flat side pass unchanged so both sides
+    # still open and pair; only same-side additions (and ladder levels
+    # behind a bid) are judged. Backtest 2026-11-27 (recorded two-venue
+    # books, 21 Nov): judging openings too made inventory one-sided.
+    "judge_openings": os.getenv("PMUS_RN1_DIR_JUDGE_OPENINGS",
+                                "0").strip() == "1",
+    "up_mult": os.getenv("PMUS_RN1_DIR_UP_MULT", "1"),
+    "extra_levels": int(os.getenv("PMUS_RN1_DIR_EXTRA_LEVELS", "0")),
+    "upsize_edge": os.getenv("PMUS_RN1_DIR_UPSIZE_EDGE", "0.03"),
+}
+# Same-side additions priced by their marginal EV against the probability
+# instead of the average-cost "don't chase" cap (only while a probability
+# is in force; the residual, per-market, campaign and account caps apply).
+RN1_DIR_PRICE_ADDS = os.getenv("PMUS_RN1_DIR_PRICE_ADDS", "0").strip() == "1"
+# Sportsbook probability (the sharp shadow feed's de-vigged fair value) when
+# no international fair value is settled. Refused past MAX_AGE_S; younger
+# readings widen the band by DRIFT per second of age.
+RN1_DIR_SHARP = os.getenv("PMUS_RN1_DIR_SHARP", "0").strip() == "1"
+RN1_DIR_SHARP_MAX_AGE_S = float(os.getenv("PMUS_RN1_DIR_SHARP_MAX_AGE_S",
+                                          "900"))
+RN1_DIR_SHARP_DRIFT = os.getenv("PMUS_RN1_DIR_SHARP_DRIFT", "0.00002")
+
+
+# PREGAME FILL RATE (27 Nov, default 1.0 = unchanged). The fill rates above
+# were measured on live play. Lifetime heartbeat phases (27 Nov 19:20Z):
+# live 85 fills over 28.2 resting contract-hours (3.0 / contract-hour),
+# pregame 26 fills over 127.7 (0.20 / contract-hour), 15x lower. With
+# PMUS_RN1_FILL_RATE_PREGAME_MULT < 1 a market the engine has seen as NOT
+# live (pregame) uses rate x mult; a market whose phase is unknown keeps the
+# live rate (conservative). The fill LOSS per contract is unchanged.
+# Per competition, like the other fill settings: "0.25,setkameua:0.35,
+# atp:0.1" (unlisted competitions use the first value). Measured 22-27 Nov
+# (ORDER/FILL logs): 25 of 26 pregame fills were setkameua (8.6% of ordered
+# quantity, as often per order as ATP live); atp/atpdb/utr/wta pregame
+# filled 0.34 of ~250 contracts. Pregame 300 s markouts: setka openings
+# -1.35c (n 13), additions +0.17c (n 9), vs live openings -2.5c (n 29).
+RN1_FILL_RATE_PREGAME_MULT_T = {k: max(0.0, min(1.0, v)) for k, v in
+                                _comp_rates("PMUS_RN1_FILL_RATE_PREGAME_MULT",
+                                            "1").items()}
+RN1_FILL_RATE_PREGAME_MULT = RN1_FILL_RATE_PREGAME_MULT_T[""]
+#: slug -> "live" / "pregame", recorded by Engine.event_live
+RN1_PHASE: Dict[str, str] = {}
+
+
+def rn1_fill_param(table: Mapping[int, Mapping[str, float]], depth: int,
+                   slug: str) -> float:
+    t = table[min(1, max(0, int(depth)))]
+    comp = slug.split("-")[1].lower() if slug.count("-") >= 1 else ""
+    v = float(t.get(comp, t[""]))
+    if table is RN1_FILL_RATE and RN1_PHASE.get(slug) == "pregame":
+        tab = dict(RN1_FILL_RATE_PREGAME_MULT_T)
+        tab[""] = RN1_FILL_RATE_PREGAME_MULT
+        m = float(tab.get(comp, tab[""]))
+        if m < 1.0:
+            v *= m
+    return v
+
+
+# REWARD PAYOUT RULE (27 Nov, default "projection" = unchanged). The venue
+# says "Rewards under $1.00 are not paid out" without a scope. Our own
+# reward rows contradict a per-market or per-competition-day $1 test: 34 of
+# 39 (competition, day) groups were PAID with totals under $1, rows of $0.01
+# are paid, and no group mixed PAID and SKIPPED (data/pmus/..., analysis/l5/
+# rewards/REWARD_PAYOUT_THRESHOLD_20261122.md). "projection" credits nothing
+# until the projected total reaches $1, so at our clip size every reward was
+# credited as $0. "paid_fraction" instead credits each theoretical reward
+# (after calibration) times the share of the venue's resolved reward value
+# that was actually PAID: PAID / (PAID + SKIPPED) from the latest
+# REWARD_CHECK (pending rows excluded; at least RN1_PAID_FRACTION_MIN_USD
+# resolved, at most RN1_PAID_FRACTION_MAX_AGE_S old). Unknown or stale ->
+# no reward is credited at all (fail closed). Rewards are still never
+# realized P&L, and never rescue a negative trading edge beyond their value.
+RN1_REWARD_MIN_RULE = os.getenv("PMUS_RN1_REWARD_MIN_RULE",
+                                "projection").strip().lower()
+RN1_PAID_FRACTION_MIN_USD = float(os.getenv(
+    "PMUS_RN1_PAID_FRACTION_MIN_USD") or "5")
+RN1_PAID_FRACTION_MAX_AGE_S = float(os.getenv(
+    "PMUS_RN1_PAID_FRACTION_MAX_AGE_S") or "14400")
+_PAID_FRACTION: Dict[str, Any] = {"v": None, "t": 0.0}
+
+
+def rn1_set_paid_fraction(by_status: Any, now: Optional[float] = None
+                          ) -> Optional[float]:
+    """Record PAID / (PAID + SKIPPED) from a REWARD_CHECK's by_status."""
+    v = None
+    try:
+        paid = float(((by_status or {}).get("PAID") or {}).get("usd") or 0)
+        skip = float(((by_status or {}).get("SKIPPED") or {}).get("usd")
+                     or 0)
+        if paid >= 0 and skip >= 0 and paid + skip >= \
+                RN1_PAID_FRACTION_MIN_USD:
+            v = max(0.0, min(1.0, paid / (paid + skip)))
+    except Exception:                                     # noqa: BLE001
+        v = None
+    _PAID_FRACTION.update(v=v, t=time.time() if now is None else now)
+    return v
+
+
+def rn1_paid_fraction(now: Optional[float] = None) -> Optional[float]:
+    """The fresh paid fraction, or None (unknown, stale or unreadable)."""
+    now = time.time() if now is None else now
+    v = _PAID_FRACTION.get("v")
+    if v is None or now - float(_PAID_FRACTION.get("t") or 0) > \
+            RN1_PAID_FRACTION_MAX_AGE_S:
+        return None
+    return float(v)
+
+
+def rn1_paid_rule() -> bool:
+    return RN1_REWARD_MIN_RULE == "paid_fraction"
+
+
+def rn1_comp_value(table: Mapping[str, float], slug: str) -> float:
+    """A per-competition setting (see _comp_rates) for this market."""
+    comp = slug.split("-")[1].lower() if slug.count("-") >= 1 else ""
+    return float(table.get(comp, table[""]))
+
+
+_CAL_PARSED: Dict[str, Any] = {}
+
+
+def rn1_reward_cal_table(raw: Optional[str] = None) -> Dict[str, float]:
+    """PMUS_RN1_REWARD_CALIBRATION_TABLE parsed: {"program=<id>": m,
+    "<competition>": m, "*": m}; malformed entries are ignored."""
+    raw = RN1_REWARD_CAL_TABLE if raw is None else raw
+    hit = _CAL_PARSED.get(raw)
+    if hit is not None:
+        return hit
+    out: Dict[str, float] = {}
+    for part in (raw or "").split(","):
+        k, _, v = part.strip().rpartition(":")
+        if not k:
+            continue
+        try:
+            f = float(v)
+        except ValueError:
+            continue
+        if f == f:                                   # not NaN
+            out[k.strip().lower()] = f
+    _CAL_PARSED[raw] = out
+    return out
+
+
+def rn1_reward_mult(slug: str, per: Optional[Mapping[str, Any]] = None
+                    ) -> float:
+    """The multiplier applied to a THEORETICAL reward credited for this
+    market (see RN1_REWARD_CALIBRATION). Flag off: the clamped
+    RANK_REWARD_HAIRCUT, exactly what the haircut sites applied."""
+    hc = max(0.0, min(1.0, RANK_REWARD_HAIRCUT))
+    if not RN1_REWARD_CALIBRATION:
+        if rn1_paid_rule():
+            return hc * (rn1_paid_fraction() or 0.0)
+        return hc
+    tab = rn1_reward_cal_table()
+    comp = slug.split("-")[1].lower() if slug.count("-") >= 1 else ""
+    prog = str((per or {}).get("programId") or "").lower()
+    m = None
+    for k in (("program=" + prog) if prog else None, comp, "*"):
+        if k and k in tab:
+            m = tab[k]
+            break
+    m = hc if m is None else max(0.0, min(1.0, float(m)))
+    div = 1.0
+    if RN1_REWARD_POOL_SCOPE == "event":
+        div = float((per or {}).get("M_event") or 1)
+    elif RN1_REWARD_POOL_SCOPE == "program":
+        div = float((per or {}).get("M_program") or 1)
+    m = m / max(1.0, div)
+    if rn1_paid_rule():
+        m *= rn1_paid_fraction() or 0.0            # unknown: nothing credited
+    return m
+
+
+def rn1_pool_key(per: Optional[Mapping[str, Any]],
+                 slug: Optional[str] = None) -> Optional[str]:
+    """The reward pool a paying period belongs to. With `slug` (scope
+    "contract_period"): "slug|programId|period|start", one contract's time
+    period. Without: "programId|period". None without the needed parts."""
+    if not per:
+        return None
+    pid, prd = per.get("programId"), per.get("period")
+    if not pid or not prd:
+        return None
+    if slug is not None:
+        return "%s|%s|%s|%s" % (slug, pid, prd, per.get("start") or "")
+    return "%s|%s" % (pid, prd)
+
+
+def rn1_scope_pool_key(per: Optional[Mapping[str, Any]],
+                       slug: Optional[str]) -> Optional[str]:
+    """The pool key for the configured scope."""
+    if RN1_REWARD_QUAL_SCOPE == "contract_period":
+        return rn1_pool_key(per, slug) if slug else None
+    return rn1_pool_key(per)
+
+
+def rn1_reward_cal(slug: str, per: Optional[Mapping[str, Any]] = None
+                   ) -> float:
+    """At a site that credited the raw theoretical reward before: 1.0 with
+    the calibration flag off (unchanged), rn1_reward_mult with it on."""
+    return rn1_reward_mult(slug, per) if RN1_REWARD_CALIBRATION else 1.0
+
+
+# JOIN THE BEST BID WHEN IT IS JUSTIFIED (owner 2026-11-25: "Competitive
+# maker quoting that can join the best bid when economically justified").
+# PMUS_RN1_DEPTH_TICKS=1 rests every bid one tick behind the touch. The
+# venue's reward rule scores only the levels needed to reach the target
+# size, so behind a touch that already meets the target the bid scores
+# nothing, and it fills only after the touch is traded through.
+# With RN1_JOIN_TOUCH on, a market's bids rest AT the touch (still
+# post-only, never crossing) while ALL of these hold, and one tick back
+# otherwise:
+#   - the spread is at least RN1_JOIN_MIN_SPREAD_TICKS (at one tick a
+#     joined bid is within a tick of crossing: never joined);
+#   - the mid moved no more than RN1_JOIN_MAX_RANGE_USD in the last
+#     VOL_WINDOW_S;
+#   - no price jump in the last RN1_JOIN_CALM_S.
+# Pair cost, every cap, the thin-touch rule and the final gate apply to
+# the joined price exactly as to any other. 0 = off (as before).
+RN1_JOIN_TOUCH = os.getenv("PMUS_RN1_JOIN_TOUCH", "0").strip() == "1"
+RN1_JOIN_MIN_SPREAD_TICKS = int(os.getenv(
+    "PMUS_RN1_JOIN_MIN_SPREAD_TICKS", "2"))
+RN1_JOIN_MAX_RANGE_USD = float(os.getenv(
+    "PMUS_RN1_JOIN_MAX_RANGE_USD", "0.01"))
+RN1_JOIN_CALM_S = float(os.getenv("PMUS_RN1_JOIN_CALM_S", "60"))
+# PER-COMPETITION VOLATILITY THRESHOLD (owner 2026-11-27). The hard
+# "price_moving" refusal above uses one RN1_JOIN_MAX_RANGE_USD for every
+# competition. PMUS_RN1_JOIN_MAX_RANGE_COMP ("atp:0.01,utr:0.02") sets it per
+# competition (the 30 s mid range above which the touch is never joined);
+# a competition not listed keeps RN1_JOIN_MAX_RANGE_USD. Unset = exactly as
+# before. jump_pause, recent_jump, reactive_pull, vol_pause and every loss
+# stop and cap are unchanged hard protections.
+RN1_JOIN_MAX_RANGE = _comp_rates("PMUS_RN1_JOIN_MAX_RANGE_COMP",
+                                 str(RN1_JOIN_MAX_RANGE_USD))
+# ECONOMICALLY JUSTIFIED PLACEMENT (owner 2026-11-27, default OFF). With
+# RN1_TOUCH_EV on, the placement of each opening/extension bid (the touch,
+# one tick behind, ... RN1_TOUCH_EV_MAX_DEPTH ticks behind) is the one with
+# the best reward-adjusted marginal value per resting hour:
+#   EV(d) = calibrated incremental reward at that placement (the venue's
+#           ladder rule, pmus_sports_rewards.marginal_ladder_reward, times
+#           rn1_reward_mult)
+#         - fills/h(d) x qty x (fill loss(d) + maker fee + concentration
+#           charge), fill rate and loss from RN1_FILL_RATE / RN1_FILL_LOSS
+#           for that placement and competition.
+# Only a placement with EV > 0 is chosen (ties: the deeper one); with none,
+# the bid stays at max(1, RN1.DEPTH_TICKS) behind, as without the flag.
+# The touch is never chosen while a hard protection holds (spread under the
+# join minimum, the competition's volatility threshold, a recent jump), when
+# the bid would cross or lock the book, when the side's unpaired cost would
+# exceed the residual cap, or when the pair of both bids would exceed the
+# pair cap. Market selection scores every candidate with the SAME function
+# (rn1_touch_ev) on the same inputs, so a market is selected on the
+# placement it will be quoted at. Completion bids keep today's placement.
+RN1_TOUCH_EV = os.getenv("PMUS_RN1_TOUCH_EV", "0").strip() == "1"
+# SIDES REPLENISH INDEPENDENTLY (owner 2026-11-27, default OFF). When a
+# pass cancels a stale bid and the venue has not yet confirmed that cancel
+# (no fill raced it: inventory unchanged), the pass used to stop there, so
+# the OTHER side's new or replenishing bid waited a pass for an unrelated
+# cancel. With RN1_SIDE_INDEPENDENT on only the side whose cancel is
+# pending waits; the other side's targets are placed this pass (each still
+# through the final gate, which counts the still-open order). A fill that
+# raced a cancel still stops the whole pass (inventory changed).
+RN1_SIDE_INDEPENDENT = os.getenv("PMUS_RN1_SIDE_INDEPENDENT",
+                                 "0").strip() == "1"
+# EV-AWARE HOLD THROUGH A BRIEF DIP (owner 2026-11-27, default OFF; needs
+# PMUS_RN1_MARGINAL_EV=1). A RESTING opening/extension bid whose marginal EV
+# turns negative is kept, instead of cancelled, only while
+#   EV/h x RN1_EV_HOLD_MAX_S/3600 + RN1_REPLACE_COST_USD >= 0
+# (its expected value over the bounded hold window plus the saved cost of
+# cancelling and re-placing it: two signed requests and the queue position)
+# and for at most RN1_EV_HOLD_MAX_S since it first failed, and only while
+# its reward is still credited this pass (a lost, unread or unqualified
+# reward withdraws at once). A NEW bid with
+# marginal EV <= 0 is never posted. With this flag on, RN1_NET_HOLD_S no
+# longer keeps openings regardless of their EV. Hard blocks still pull.
+RN1_EV_HOLD = os.getenv("PMUS_RN1_EV_HOLD", "0").strip() == "1"
+RN1_EV_HOLD_MAX_S = float(os.getenv("PMUS_RN1_EV_HOLD_MAX_S") or "60")
+RN1_REPLACE_COST_USD = float(os.getenv("PMUS_RN1_REPLACE_COST_USD")
+                             or "0.002")
+# REPOST HYSTERESIS (owner 2026-11-27, default 0 = off; Stage 1 audit: a
+# market whose net estimate oscillated around 0 placed 5 bids and cancelled
+# them about 5 minutes later, four times). With RN1_NET_REPOST_MIN_S > 0
+# (net ranking on), once a market has been `net_not_positive`, its
+# openings/extensions are re-posted only after the market has stayed
+# unblocked (positive) for RN1_NET_REPOST_MIN_S; meanwhile it stays
+# `net_not_positive` (completions continue; RN1_NET_HOLD_S keeps whatever
+# it already keeps).
+RN1_NET_REPOST_MIN_S = float(os.getenv("PMUS_RN1_NET_REPOST_MIN_S")
+                             or "0")
+RN1_TOUCH_EV_MAX_DEPTH = max(1, int(os.getenv("PMUS_RN1_TOUCH_EV_MAX_DEPTH")
+                                    or "2"))
+# REWARD CALIBRATION (owner 2026-11-27, default OFF). Every theoretical
+# reward the bot credits (ranking, marginal EV, standing start, the day's
+# projection, the touch EV) is multiplied by rn1_reward_mult(slug):
+#   flag off: RANK_REWARD_HAIRCUT where a haircut applied before, nothing
+#             where none did (exactly as before);
+#   flag on:  PMUS_RN1_REWARD_CALIBRATION_TABLE, e.g.
+#             "program=atp_wta_moneyline_live_20261018:0.4,atpdb:0.45,*:0.4"
+#             (programme id first, then competition, then "*", else
+#             RANK_REWARD_HAIRCUT), clamped to [0, 1], divided by the pool
+#             scope divisor PMUS_RN1_REWARD_POOL_SCOPE: "market" (default,
+#             1: the evidence says each market has its own pool), "event"
+#             (M_event) or "program" (M_program: shared across the
+#             programme's markets on the slate).
+# A read-only routine (src/pmus_reward_calibration.py) logs
+# REWARD_CALIBRATION after each reward check (at most every
+# RN1_REWARD_CAL_LOG_S): venue rows (PAID preferred, PENDING flagged) over
+# the bot's own logged theoretical accrual per market and day, by
+# competition. It is never applied automatically; the owner sets the table.
+RN1_REWARD_CALIBRATION = os.getenv("PMUS_RN1_REWARD_CALIBRATION",
+                                   "0").strip() == "1"
+RN1_REWARD_CAL_TABLE = os.getenv("PMUS_RN1_REWARD_CALIBRATION_TABLE", "")
+RN1_REWARD_POOL_SCOPE = (os.getenv("PMUS_RN1_REWARD_POOL_SCOPE") or
+                         "market").strip().lower()
+RN1_REWARD_CAL_LOG_S = float(os.getenv("PMUS_RN1_REWARD_CAL_LOG_S")
+                             or "3600")
+# venue reward rows are dated by the venue's day (US Eastern, 25 Nov rows =
+# 05:00-05:00 UTC): the theoretical accrual is keyed the same way
+RN1_REWARD_CAL_DAY_OFFSET_H = float(os.getenv(
+    "PMUS_RN1_REWARD_CAL_DAY_OFFSET_H") or "-5")
+# DURABLE HALT ON A RECONCILIATION FAILURE, with no session involved
+# (owner 2026-11-23: "reconciliation failures must trigger a durable halt";
+# LIVE 2026-11-22 22:10Z a fill was recorded 89 s after the venue made it,
+# the position check then agreed again, nothing latched, and the manual
+# relock arrived 22 minutes late). Both use the existing safety latch: every
+# own order is cancelled, nothing is placed, it survives a restart and only
+# the owner's acknowledgement clears it.
+#   FILL_LATE_LATCH_S   a fill recorded more than this long after the
+#                       venue's own stamp on the order latches
+#                       ("fill_seen_late"). 0 = measure and log only.
+#   AUDIT_LATCH         the audit's two reconciliations (venue positions
+#                       against the book; venue trade rows against recorded
+#                       fills) latch when the SAME one fails
+#                       AUDIT_LATCH_STRIKES audits in a row. The first
+#                       failure blocks new exposure at once and brings the
+#                       next audit forward to AUDIT_RECHECK_S, so a fill
+#                       that landed between the two reads is not a halt.
+FILL_LATE_LATCH_S = float(os.getenv("PMUS_TWO_SIDED_FILL_LATE_LATCH_S", "0"))
+AUDIT_LATCH = os.getenv("PMUS_TWO_SIDED_AUDIT_LATCH", "0").strip() == "1"
+AUDIT_LATCH_STRIKES = max(1, int(os.getenv(
+    "PMUS_TWO_SIDED_AUDIT_LATCH_STRIKES", "2")))
+AUDIT_RECHECK_S = float(os.getenv("PMUS_TWO_SIDED_AUDIT_RECHECK_S", "30"))
+# LIVE 2026-11-23: both hourly audits of a campaign were refused by the
+# request budget and nothing retried, so the bot quoted for 1 h 45 min with
+# no account audit.
+#   AUDIT_RETRY_S    an audit (or reward read) that did not complete is
+#                    tried again after this long, not after another hour.
+#   AUDIT_MAX_AGE_S  with no COMPLETED audit (venue walk and position
+#                    reconciliation both read) within this long -- none yet
+#                    since boot counts -- new exposure is blocked
+#                    ("audit_stale"). Cancels and completions are not.
+#                    0 = off (today's behaviour).
+AUDIT_RETRY_S = float(os.getenv("PMUS_TWO_SIDED_AUDIT_RETRY_S", "60"))
+AUDIT_MAX_AGE_S = float(os.getenv("PMUS_TWO_SIDED_AUDIT_MAX_AGE_S", "0"))
+RANK_HORIZON_H = float(os.getenv("PMUS_RN1_RANK_HORIZON_H", "1"))
+RANK_REWARD_HAIRCUT = float(os.getenv("PMUS_RN1_RANK_REWARD_HAIRCUT", "0.5"))
+RANK_TTL_S = float(os.getenv("PMUS_RN1_RANK_TTL_S", "300"))
+RANK_NEW_PER_ROUND = int(os.getenv("PMUS_RN1_RANK_NEW_PER_ROUND", "3"))
+# A candidate can only be priced once the international feed follows it, so
+# the first RANK_WATCH_MAX candidates of the cheap screen are followed
+# alongside the active markets. A "no fair value" answer is retried after
+# RANK_NO_FAIR_TTL_S. With the marginal test on, a candidate that has no
+# ranking number yet is not selected: it could not bid anyway.
+RANK_WATCH_MAX = int(os.getenv("PMUS_RN1_RANK_WATCH_MAX", "8"))
+RANK_NO_FAIR_TTL_S = float(os.getenv("PMUS_RN1_RANK_NO_FAIR_TTL_S", "30"))
+
+
+def rn1_pregame_qty() -> D:
+    return D(str(RN1.QTY)) if RN1_PREGAME_QTY is None else RN1_PREGAME_QTY
+
+
+def rn1_live_qty() -> D:
+    return D(str(RN1.QTY)) if RN1_LIVE_QTY is None else RN1_LIVE_QTY
+
+
+def rn1_max_clip() -> D:
+    """Largest order size any phase may send (the clip the latch checks)."""
+    return max(D(str(RN1.QTY)), rn1_pregame_qty(), rn1_live_qty())
 
 
 def parse_start(v: Any) -> Optional[float]:
@@ -649,6 +2176,11 @@ def pregame_targets(events: Iterable[Mapping[str, Any]], now: float
             slug = str(m.get("slug") or "")
             if not slug.startswith(SPORTS_PREFIXES) or slug in seen:
                 continue
+            if learn_cricket(slug, m.get("sportsMarketType"),
+                             (ev.get("eventState") or {}).get("type")
+                             if isinstance(ev.get("eventState"), Mapping)
+                             else None):
+                continue
             g = parse_start(m.get("gameStartTime") or ev.get("startTime"))
             if g is None:
                 continue
@@ -672,6 +2204,17 @@ SHARED_HALT_URL_ENV = "L5_HALT_URL"
 SETTLE_LOOKUPS_PER_AUDIT = int(os.getenv(
     "PMUS_TWO_SIDED_SETTLE_LOOKUPS", "400"))
 SETTLE_LOOKUP_GAP_S = float(os.getenv("PMUS_TWO_SIDED_SETTLE_GAP_S", "0.2"))
+# LIVE 2026-11-23: the campaign spend ceiling counts a market until its
+# settlement price is recorded, and that was only looked up inside the
+# hourly audit -- which never ran, so nothing was ever released. With
+# SETTLE_CHECK_S > 0 the loop itself looks up closed markets that still
+# hold contracts (the venue's public final price, a keyless read that is
+# not on the signed budget), at most SETTLE_CHECK_MAX per pass. Capital is
+# released only by a FINAL settlement price, never because a position is
+# balanced. 0 = off (today's behaviour).
+SETTLE_CHECK_S = float(os.getenv("PMUS_TWO_SIDED_SETTLE_CHECK_S", "0"))
+SETTLE_CHECK_MAX = max(1, int(os.getenv(
+    "PMUS_TWO_SIDED_SETTLE_CHECK_MAX", "2")))
 # OWNER 2026-11-15 "Prevent losing first legs": open a two-sided quote only
 # when its expected NET value from this bot's own SETTLED results is
 # positive (src/pmus_sports_open_gate.py). DEFAULT OFF.
@@ -696,10 +2239,29 @@ OPEN_EV_MIN_MARKETS = _env_d("PMUS_TWO_SIDED_OPEN_EV_MIN_MARKETS", "10")
 # these sports past the open-EV gate (comma list of slug sport codes, e.g.
 # "dota2,utr"). Every other sport stays gated exactly as before. Empty
 # (default) = no exception. The gate's own statistics are unchanged.
+# OWNER 2026-11-23: "The campaign must not silently expand beyond its
+# authorization." OPEN_GATE_ALLOW_SPORTS is not a whitelist: it lets the
+# listed competitions past the open-EV gate, and an UNLISTED competition
+# still opens whenever its own settled history shows positive expected
+# value. With STRICT_SPORTS=1 the list is exactly the scope: no opening or
+# extension in any other competition, and no slot taken by one. Completions
+# and cancels are never blocked. An empty list with STRICT on permits
+# nothing. Default 0 = today's behaviour.
+STRICT_SPORTS = os.getenv("PMUS_TWO_SIDED_STRICT_SPORTS",
+                          "0").strip() == "1"
 OPEN_GATE_ALLOW_SPORTS = frozenset(
     x.strip().lower() for x in os.getenv(
         "PMUS_TWO_SIDED_OPEN_GATE_ALLOW_SPORTS", "").split(",") if x.strip())
 SHARED_HALT_TTL_S = float(os.getenv("PMUS_TWO_SIDED_SHARED_HALT_TTL_S", "15"))
+# How old the watchdog's "no halt" attestation may be before this bot stops
+# trusting it. The watchdog writes one every sweep (20 s); the default of
+# 900 s meant a dead watchdog, or one withholding its attestation because
+# the operator's halt channel is down, left this bot opening exposure for
+# up to 15 more minutes. A stale attestation blocks NEW exposure only
+# (it reads as "unavailable", not as a halt); completions and cancels go
+# on. Default 900 = today.
+SHARED_HALT_MAX_AGE_S = float(os.getenv(
+    "PMUS_TWO_SIDED_SHARED_HALT_MAX_AGE_S", "900"))
 # OWNER 2026-11-15 "We're bleeding money" -> restart: reward quotes no
 # longer rest AT the touch, where they were picked off (10-lot CS2 YES@0.60
 # -> 0.08). They rest REWARD_MIN_DEPTH_PX (2c) under it like every other
@@ -833,6 +2395,35 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+#: keys of a venue order row that can carry the time of its last execution
+_ORDER_TIME_KEYS = ("lastTransactTime", "transactTime", "lastUpdateTime",
+                    "updateTime", "updatedAt")
+
+
+def order_time(o: Any) -> Optional[float]:
+    """Epoch seconds of the venue's own last-update stamp on an order row,
+    or None. Used only to time a fill for the markout record; a row with no
+    readable stamp leaves the fill timed at the moment the bot saw it."""
+    if not isinstance(o, Mapping):
+        return None
+    for k in _ORDER_TIME_KEYS:
+        raw = o.get(k)
+        if raw in (None, ""):
+            continue
+        try:
+            txt = str(raw).strip().replace("Z", "+00:00")
+            m = re.match(r"^(.*T\d{2}:\d{2}:\d{2})(\.\d+)?(.*)$", txt)
+            if m:
+                txt = m.group(1) + (m.group(2) or "")[:7] + m.group(3)
+            t = datetime.fromisoformat(txt)
+            if t.tzinfo is None:
+                t = t.replace(tzinfo=timezone.utc)
+            return t.timestamp()
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
 # OWNER 2026-11-15: record depth, quote age, movement and fills going
 # forward (src/pmus_sports_tape.py). Set in main(); None = not recording.
 TAPE = None
@@ -865,14 +2456,42 @@ EXCLUDE_TAGS = tuple(t.strip() for t in os.getenv(
 # setting. Cricket is never selected, and any cricket market already in the
 # book is abandoned (orders cancelled, nothing re-placed, completions too).
 CRICKET_LEAGUES = ("ipl", "bbl", "psl", "cpl", "wpl", "sa20", "t20", "odi",
-                   "t20i", "ilt20", "hundred", "cricket")
+                   "t20i", "ilt20", "hundred", "cricket",
+                   # FOUND 2026-11-25: live on the venue, labelled cricket by
+                   # the venue, and NOT caught by the names above
+                   "sheffield", "wbbl", "smat", "csafc", "pro50", "county",
+                   "ranji", "bpl", "lpl", "mlc", "wbbl", "plunket",
+                   "supersmash", "vitality", "marsh")
+#: league codes the VENUE ITSELF labelled cricket (event state type, or a
+#: market type starting "cricket"), learned as the slate is read. A name
+#: list goes stale every time the venue lists a new competition; the
+#: venue's own label does not. Only ever added to.
+_CRICKET_BY_VENUE: set = set()
+
+
+def _league_of(slug: Any) -> str:
+    parts = str(slug).split("-")
+    return parts[1] if len(parts) > 1 else ""
+
+
+def learn_cricket(slug: Any, *labels: Any) -> bool:
+    """Record this market's competition as cricket when any venue label
+    says so. Returns True when it is (now) known as cricket."""
+    if any("cricket" in str(x or "").lower() for x in labels):
+        lg = _league_of(slug)
+        if lg and lg not in _CRICKET_BY_VENUE:
+            _CRICKET_BY_VENUE.add(lg)
+            log("CRICKET_LEARNED", league=lg, example=str(slug),
+                label="the venue labels this competition cricket: never "
+                      "selected, never quoted")
+        return True
+    return False
 
 
 def is_cricket(slug: str) -> bool:
-    parts = str(slug).split("-")
-    league = parts[1] if len(parts) > 1 else ""
+    league = _league_of(slug)
     return league.endswith("cr") or league in CRICKET_LEAGUES or \
-        "cricket" in str(slug)
+        league in _CRICKET_BY_VENUE or "cricket" in str(slug)
 
 
 def excluded(slug: str) -> bool:
@@ -915,6 +2534,29 @@ def _minute(v: Any) -> Optional[int]:
         return None
 
 
+# ESPORTS WITH NO PUBLISHED FORMAT. Checked on the venue 2026-11-25 (live
+# Valorant match, event list, event state, market record, market text):
+# the venue publishes a map score ("1-1") and a period ("Map 3") and
+# nowhere a best-of. So every esports match is refused, Dota 2 included.
+# With this setting on, a match of unknown format may open ONLY before any
+# map has been won (score 0-0, period not past the first map) -- the one
+# state the best-of-3 rule also allows. Everything later stays refused.
+# KNOWN GAP, the reason this is off by default and needs the owner's
+# approval: a best-of-1 is decided by its first map and a best-of-2 can
+# end level (the venue settles a tie at $0.50); neither can be told apart
+# from the first map of a best-of-3. 0 = refuse every unknown format.
+ESPORTS_UNKNOWN_FIRST_MAP = os.getenv(
+    "PMUS_TWO_SIDED_ESPORTS_UNKNOWN_FIRST_MAP", "0").strip() == "1"
+
+
+def _esports_first_map(state: Mapping[str, Any]) -> bool:
+    """True only for score 0-0 with a period that is not a later map."""
+    if str(state.get("score") or "").replace(" ", "") != "0-0":
+        return False
+    nums = re.findall(r"\d+", str(state.get("period") or ""))
+    return all(int(n) <= 1 for n in nums)
+
+
 def esports_late(state: Mapping[str, Any]) -> Optional[str]:
     """OWNER 2026-11-22 (CS2 was on the allowlist with NO late rule: it would
     have been quoted to the last round). Conservative and FAIL CLOSED: a new
@@ -940,6 +2582,8 @@ def esports_late(state: Mapping[str, Any]) -> Optional[str]:
     try:
         bo = int(bo)
     except (TypeError, ValueError):
+        if ESPORTS_UNKNOWN_FIRST_MAP and _esports_first_map(state):
+            return None
         return "esports_format_unknown"
     if bo < 1 or bo > 7 or bo % 2 == 0:
         return "esports_format_unknown"
@@ -977,7 +2621,42 @@ def safeguards_cfg() -> Dict[str, Any]:
             "esports_leagues": sorted(ESPORTS_LEAGUES),
             "intl_name_match": list(XV.NAME_MATCH_LEAGUES),
             "intl_three_way": list(XV.THREE_WAY_LEAGUES),
-            "one_market_per_game": True}
+            "one_market_per_game": True,
+            "loop_stall_s": LOOP_STALL_S,
+            "rn1_reward_rank": RN1_REWARD_RANK,
+            **({"rn1_duration_rank": {
+                "min_remaining_s": RN1_MIN_REMAINING_S,
+                "horizon_s": RN1_DURATION_HORIZON_S,
+                "unknown_factor": RN1_DURATION_UNKNOWN_FACTOR,
+                "table_override": RN1_DURATION_MIN}}
+               if RN1_DURATION_RANK else {}),
+            **({"economics_report": {"min_interval_s": ECONOMICS_MIN_S}}
+               if ECONOMICS_REPORT else {}),
+            "rn1_reward_only": RN1_REWARD_ONLY,
+            "rn1_edge_gate": {"on": RN1.EDGE_GATE,
+                              "adverse_ticks": RN1.ADVERSE_TICKS,
+                              "risk_step_ticks": RN1.RISK_STEP_TICKS,
+                              "allowance_step_usd": str(RN1.EDGE_UNIT_USD),
+                              "add_jump_ticks": RN1_JUMP_TICKS,
+                              "reward_credit_ticks": RN1_REWARD_CREDIT_TICKS,
+                              "reward_min_day_usd": RN1_REWARD_MIN_DAY_USD,
+                              "reward_project_h": RN1_REWARD_PROJECT_H,
+                              "no_fair_means": "no_bid",
+                              "fair_stable_s": RN1_FAIR_STABLE_S,
+                              "fair_max_range_usd":
+                                  str(RN1_FAIR_MAX_RANGE_USD)},
+            "markout_horizons_s": [5, 30, 120, 300],
+            "stall_drill": stall_drill(),
+            "order_ttl_s": (ORDER_TTL_S if order_good_till() else 0),
+            "rn1_extend_ev": {"on": RN1.EXTEND_EV,
+                              "edge_ticks": RN1.EXTEND_EDGE_TICKS,
+                              "step_ticks": RN1.EXTEND_STEP_TICKS,
+                              "jump_ticks": RN1_JUMP_TICKS,
+                              "reward_credit_ticks":
+                                  RN1_REWARD_CREDIT_TICKS},
+            "safety_latch": {"on": SAFETY_LATCH_ON,
+                             "mismatch_grace_s": MISMATCH_GRACE_S,
+                             "loop_error_n": LOOP_ERROR_LATCH_N}}
 
 
 def is_esports(slug: str, state: Optional[Mapping[str, Any]] = None) -> bool:
@@ -1247,6 +2926,9 @@ class Venue:
             for m in (ev.get("markets") or []) if isinstance(ev, Mapping) else []:
                 if isinstance(m, Mapping) and m.get("slug"):
                     st[str(m["slug"])] = es or {}
+                    learn_cricket(m["slug"], (es or {}).get("type")
+                                  if isinstance(es, Mapping) else None,
+                                  m.get("sportsMarketType"))
         if st:
             keep = {k: v for k, v in self.states.items()
                     if (v or {}).get("type") == "crypto-1d"}
@@ -1357,6 +3039,21 @@ class Venue:
         orders = [o for o in (oo.get("orders") or []) if isinstance(o, Mapping)]
         return {"positions": held, "open_orders": orders}
 
+    def open_orders(self) -> Dict[str, Any]:
+        """The venue's open-order list in ONE signed read, never deferred
+        by the request budget (it replaces reads that never were).
+        {"rows": {order id: row}}. A list may be one page of several: an
+        order MISSING from it therefore proves nothing and is read
+        exactly; an order PRESENT in it is the venue's own word."""
+        kw = {"budget_class": "critical"} if hasattr(self.t, "budget") \
+            else {}
+        oo = self.t.request("GET", "/v1/orders/open", **kw)
+        if not isinstance(oo, Mapping) or \
+                not isinstance(oo.get("orders"), list):
+            raise ValueError("open-order list unreadable")
+        return {"rows": {str(o.get("id")): o for o in oo["orders"]
+                         if isinstance(o, Mapping) and o.get("id")}}
+
     def positions_snapshot(self, max_pages: int = 20) -> Dict[str, Any]:
         """EVERY venue position row (account-wide, all strategies) plus all
         open orders. Read-only GETs. /v1/portfolio/positions pages with
@@ -1408,12 +3105,19 @@ class Venue:
                           ("CANCEL", "EXPIRED", "REJECT", "FILLED")) or \
             "PARTIALLY" in state or "PENDING" in state
         return {"qty": f["qty"] if f else D(0), "px": f["price"] if f else None,
-                "open": is_open, "state": state}
+                "open": is_open, "state": state, "t": order_time(o)}
 
     def place(self, slug: str, side: str, px: D, qty: D, stage: str,
               post_only: bool = True) -> str:
-        return self.micro.place_limit_buy(self.t, slug, side, px, qty, stage,
-                                          post_only=post_only)
+        gt = order_good_till()
+        # records whether the order itself was handed to the venue, so a
+        # failure BEFORE that point is known to have left nothing behind
+        t = self.last_order_post = OrderPostWatch(self.t)
+        if gt is None:
+            return self.micro.place_limit_buy(t, slug, side, px, qty,
+                                              stage, post_only=post_only)
+        return self.micro.place_limit_buy(t, slug, side, px, qty, stage,
+                                          post_only=post_only, good_till=gt)
 
     def cancel(self, oid: str) -> bool:
         return self.q1.cancel_exact(self.t, oid)
@@ -1438,11 +3142,52 @@ class Venue:
         return last                # still open after ~1.2s: caller sees open
 
 
+class OrderPostWatch:
+    """Pass-through for the signed transport that notes when the ORDER
+    itself (POST /v1/orders) is handed on. Everything before that -- the
+    venue's preview, the local post-only check -- sends no order."""
+
+    def __init__(self, inner: Any):
+        self._inner = inner
+        self.attempted = False
+
+    def request(self, method: str, path: str, *a: Any, **kw: Any) -> Any:
+        if str(method).upper() == "POST" and \
+                str(path).split("?", 1)[0].rstrip("/") == "/v1/orders":
+            self.attempted = True
+        return self._inner.request(method, path, *a, **kw)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+
+def send_never_left(venue: Any, exc: BaseException) -> Optional[str]:
+    """Why a failed placement is KNOWN to have sent no order, else None
+    (owner 2026-11-25: "Release capital reservations immediately when a
+    send is definitively deferred locally and never transmitted. Preserve
+    reservations for every uncertain submission").
+      * the shared request budget refused the request: it raises before
+        anything is written to the wire (pmus_request_budget.acquire);
+      * the failure came before the order POST was attempted (the venue's
+        preview refused, or the local post-only check refused).
+    A failure at or after the order POST -- a timeout, a dropped
+    connection, an answer without an order id -- is NOT known, and is not
+    released here."""
+    if type(exc).__name__ == "BudgetDeferred":
+        return "deferred_by_request_budget"
+    w = getattr(venue, "last_order_post", None)
+    if isinstance(w, OrderPostWatch) and not w.attempted:
+        return "failed_before_the_order_was_sent"
+    return None
+
+
 # ------------------------------------------------------------- engine
 
 class Engine:
     def __init__(self, venue: Venue, book: Book):
         self.v, self.b = venue, book
+        #: campaign marker in force (window start kept across a relock)
+        self.since = adopt_campaign_marker(book)
         # account freshness (new exposure needs a fresh read; set by run())
         self.require_fresh_account = False
         self._acct_ok_at: Optional[float] = None
@@ -1589,12 +3334,44 @@ class Engine:
             # a >= REWARD_REPRICE_TICKS move or a target-walk exit. The jump
             # pause above still pulls at once.
             return
-        legs = {o["side"]: D(o["px"]) for o in mk["orders"].values()
-                if o.get("open")}
+        legs: Dict[str, D] = {}
+        for o in mk["orders"].values():
+            if o.get("open"):
+                # with several levels on a side, the highest is the one the
+                # move threatens first
+                legs[o["side"]] = max(legs.get(o["side"], D(0)), D(o["px"]))
+        # a bid deliberately joined at the touch is not "too close" to it;
+        # the near-cross rule below still pulls it when the spread closes
+        joined = bool(getattr(self, "_rn1_joined", {}).get(slug))
         why = adverse_reasons(legs, {"bid": D(str(new["bid"])),
                                      "ask": D(str(new["ask"]))},
-                              tick, depth_ticks(tick))
-        if why:
+                              tick, 0 if joined else depth_ticks(tick))
+        if joined and RN1_JOIN_ONE_TICK:
+            # a post-only bid at the best bid of a one-tick book is one tick
+            # from the offer by design; it is pulled only if it would cross
+            nb_ = {"bid": D(str(new["bid"])), "ask": D(str(new["ask"]))}
+            why = [w for w in why if not w.endswith("_near_cross")] + [
+                "%s_crossed" % sd.lower() for sd, px_ in legs.items()
+                if px_ >= (nb_["ask"] if sd == "YES"
+                           else ONE - nb_["bid"])]
+        if why and RN1.ON and RN1_PULL_THREATENED_ONLY:
+            nb = {"bid": D(str(new["bid"])), "ask": D(str(new["ask"]))}
+            dep = 0 if joined else depth_ticks(tick)
+            hit = [(oid, o) for oid, o in mk["orders"].items()
+                   if o.get("open") and adverse_reasons(
+                       {o["side"]: D(o["px"])}, nb, tick, dep)]
+            kept = sum(1 for o in mk["orders"].values() if o.get("open")) \
+                - len(hit)
+            c0 = time.monotonic()
+            self._cancel_legs(slug, hit)
+            self.reactive_pulls += 1
+            log("reactive_pull", slug=slug, reason=",".join(why),
+                legs=len(hit), kept=kept, mode="threatened_only",
+                latency_ms=round((time.monotonic() - t0) * 1000),
+                cancel_ms=round((time.monotonic() - c0) * 1000),
+                pos=mk["pos"])
+            self.step_market(slug)
+        elif why:
             self._pull(slug, ",".join(why), t0)
             self.step_market(slug)          # re-set both legs at the new touch
 
@@ -1695,10 +3472,34 @@ class Engine:
             prog = (self._prog.get(s) or (0, None))[1]
             if not prog or not reward_allowed(s):
                 continue
-            per = R.paying_period(prog, time.time(), event_live=True)
+            per = R.paying_period(prog, time.time(),
+                                  event_live=self.event_live(s))
             if per:
                 out[s] = per
         return out
+
+    def event_live(self, slug: str) -> bool:
+        """Is this market's game on? Decides which reward period can be
+        paying. A market with no start time on record came from the live
+        slate. One with a start time is live once the venue lists it as
+        live or the start has passed. PMUS_TWO_SIDED_SLATE=live keeps the
+        earlier answer (every market on the slate is live). The answer is
+        recorded in RN1_PHASE (pregame fill rate)."""
+        live = self._event_live(slug)
+        RN1_PHASE[slug] = "live" if live else "pregame"
+        return live
+
+    def _event_live(self, slug: str) -> bool:
+        if slate() == "live":
+            return True
+        gs = (self.b.d["markets"].get(slug) or {}).get("game_start")
+        if gs is None:
+            gs = self._game_start.get(slug)
+        if gs is None:
+            return True
+        if slug in (getattr(self.v, "states", {}) or {}):
+            return True
+        return time.time() >= float(gs)
 
     def refresh_active_rewards(self) -> None:
         """Keep each active market's paying period current (a period that
@@ -1789,7 +3590,9 @@ class Engine:
         r = R.quote_estimate(book, rp, float(y[0]) if y else None,
                              float(n[0]) if n else None, q, float(tick),
                              own_yes=float(y[1]) if y else 0.0,
-                             own_no=float(n[1]) if n else 0.0)
+                             own_no=float(n[1]) if n else 0.0,
+                             yes_qty=float(y[1]) if y else 0.0,
+                             no_qty=float(n[1]) if n else 0.0)
         est = {"t": time.time(), "legs": key, **r}
         mk["reward_est"] = est
         return est
@@ -2067,6 +3870,15 @@ class Engine:
         st = G.stats(self.b.d.get("markets") or {})
         self._gate_cache = (now, st)
         return st
+
+    def scope_block(self, slug: str) -> Optional[str]:
+        """"competition_not_permitted" when the strict scope is on and this
+        market's competition is not on the owner's list; else None."""
+        if not STRICT_SPORTS:
+            return None
+        from src import pmus_sports_open_gate as G
+        return None if G.sport_of(slug) in OPEN_GATE_ALLOW_SPORTS \
+            else "competition_not_permitted"
 
     def open_gate(self, slug: str) -> Dict[str, Any]:
         from src import pmus_sports_open_gate as G
@@ -2424,14 +4236,131 @@ class Engine:
         if new > 0 and st["px"] is not None:
             mk["pos"][side] = str(D(mk["pos"][side]) + new)
             mk["cost"][side] = str(D(mk["cost"][side]) + new * st["px"])
+            # PER-ORDER COST, for the ownership feed (`fills_doc`). An order
+            # that already held fills from before this field existed starts
+            # from its limit price for that earlier quantity.
+            _had = D(o.get("filled", "0"))
+            _base = (D(str(o["fill_cost"])) if o.get("fill_cost") is not None
+                     else _had * D(str(o["px"])))
+            o["fill_cost"] = str(_base + new * st["px"])
             o["filled"] = str(st["qty"])
+            self._markout_open(slug, mk, side, oid, st["px"], new,
+                               st.get("t"), o.get("stage"))
             mk.setdefault("last_fill_t", {})[side] = time.time()
             if CR.is_crypto_market(slug, mk):
                 CR.record_fill(mk, side, st["px"], new, mk.get("crypto_mid"),
                                time.time())
+            if RN1_NET_RANK:
+                self.rn1_net_forget(slug)
+            late = None
+            try:
+                if st.get("t") is not None:
+                    late = round(max(0.0, time.time() - float(st["t"])), 1)
+            except (TypeError, ValueError):
+                late = None
+            if o.get("phase"):
+                self._phase_count(mk, o["phase"], "fills", 1)
+                self._phase_count(mk, o["phase"], "filled_contracts", new)
             log("FILL", slug=slug, side=side, px=st["px"], qty=new,
-                order_id=oid, pos=mk["pos"],
+                order_id=oid, pos=mk["pos"], seen_late_s=late,
+                phase=o.get("phase"),
                 label="venue-reported fill; not realized until settlement")
+            if late is not None and FILL_LATE_LATCH_S > 0 and \
+                    late > FILL_LATE_LATCH_S:
+                self.latch("fill_seen_late", slug=slug, order_id=oid,
+                           side=side, late_s=late,
+                           limit_s=FILL_LATE_LATCH_S)
+
+    # ------------------------------------------------ post-fill markout
+    #: fills kept per market in the durable book (newest last)
+    MARKOUT_KEEP = 60
+
+    def _mids(self):
+        from src import pmus_fill_markout as MK
+        m = getattr(self, "_mk_mids", None)
+        if m is None:
+            m = self._mk_mids = MK.Mids()
+        return m
+
+    def _markout_open(self, slug: str, mk: Dict[str, Any], side: str,
+                      oid: str, px: Any, qty: Any, t_venue: Any,
+                      stage: Any) -> None:
+        """Start a markout record for one fill. Measurement only: nothing
+        here can place, cancel or block an order, and it never raises."""
+        try:
+            from src import pmus_fill_markout as MK
+            seen = time.time()
+            # the venue's stamp is used only when it is plausible: not in
+            # the future and not older than the history we keep
+            t_fill, src = seen, "seen_by_bot"
+            if t_venue is not None and \
+                    seen - MK.KEEP_S / 2 <= float(t_venue) <= seen + 2:
+                t_fill, src = min(float(t_venue), seen), "venue_order_row"
+            other = "NO" if side == "YES" else "YES"
+            before = D(str(mk["pos"][side])) - D(str(qty)) - \
+                D(str(mk["pos"][other]))
+            role = {"two_sided_complete": "complete", "rn1_extend": "extend",
+                    "rn1_open": "open"}.get(str(stage), str(stage))
+            rec = MK.new_record(
+                slug=slug, side=side, px=px, qty=qty, order_id=oid,
+                t_fill=t_fill, t_seen=seen, t_source=src, mids=self._mids(),
+                fair_yes=self.intl_fair(slug), unpaired_before=before,
+                role=role)
+            rec["phase"] = (mk["orders"].get(oid) or {}).get("phase")
+            rows = mk.setdefault("markouts", [])
+            rows.append(rec)
+            del rows[:-self.MARKOUT_KEEP]
+        except Exception as exc:                          # noqa: BLE001
+            log("markout_error", slug=slug, where="open", err=str(exc)[:120])
+
+    def _markout_step(self, slug: str, mk: Dict[str, Any],
+                      bbo: Optional[Mapping]) -> None:
+        """Feed the book just read into the rolling history and decide
+        every horizon that is due. One FILL_MARKOUT line per fill, when its
+        last horizon is decided."""
+        try:
+            from src import pmus_fill_markout as MK
+            now = time.time()
+            if bbo is not None:
+                self._mids().add(slug, now, bbo.get("bid"), bbo.get("ask"))
+            dirty = False
+            for rec in mk.get("markouts") or ():
+                if rec.get("logged"):
+                    continue
+                if MK.resolve(rec, self._mids(), now):
+                    dirty = True
+                if MK.complete(rec):
+                    rec["logged"] = True
+                    dirty = True
+                    log("FILL_MARKOUT", slug=slug, side=rec["side"],
+                        px=rec["px"], qty=rec["qty"],
+                        order_id=rec["order_id"], role=rec.get("role"),
+                        phase=rec.get("phase"),
+                        unpaired_before=rec.get("unpaired_before"),
+                        t_source=rec.get("t_source"),
+                        seen_after_s=round(rec["t_seen"] - rec["t"], 1),
+                        book_before=rec.get("book_before"),
+                        fair_before=rec.get("fair_before"),
+                        h=rec["h"], label=MK.LABEL)
+            if dirty:
+                self.b.save()
+        except Exception as exc:                          # noqa: BLE001
+            log("markout_error", slug=slug, where="step", err=str(exc)[:120])
+
+    def markout_summary(self) -> Dict[str, Any]:
+        from src import pmus_fill_markout as MK
+        rows = [r for mk in (self.b.d.get("markets") or {}).values()
+                for r in (mk.get("markouts") or ())]
+        # the book history of a market the bot no longer works is dropped
+        # once none of its fills is waiting on a horizon (bounded memory)
+        live = set(self.active())
+        for slug in list(self._mids()._t):
+            if slug in live:
+                continue
+            mk = (self.b.d.get("markets") or {}).get(slug) or {}
+            if all(MK.complete(r) for r in (mk.get("markouts") or ())):
+                self._mids().drop(slug)
+        return MK.summary(rows)
 
     def account_fresh(self) -> bool:
         """True unless run() requires freshness and the last good account
@@ -2494,11 +4423,435 @@ class Engine:
                        new_exposure_only and
                        o.get("stage") == "two_sided_complete"))
 
+    # ------------------------------------------------ autonomous safety latch
+    def safety_latch(self) -> Optional[Dict[str, Any]]:
+        """The active latch, or None. An acknowledgement that names THIS
+        latch's id clears it (logged); any other value is ignored."""
+        cur = self.b.d.get("safety_latch")
+        if not cur:
+            return None
+        ack = (os.getenv(SAFETY_LATCH_ACK_ENV) or "").strip()
+        if ack and ack == str(cur.get("id")):
+            self.b.d.setdefault("safety_latch_history", []).append(
+                dict(cur, cleared_at=now_iso()))
+            self.b.d["safety_latch"] = None
+            self.b.save()
+            log("SAFETY_LATCH_CLEARED", id=cur.get("id"), why=cur.get("why"),
+                label="owner acknowledged this latch by its id")
+            return None
+        return cur
+
+    def latch(self, why: str, **detail: Any) -> None:
+        """Stop this bot: durable, cancels everything, refuses everything.
+        Idempotent -- the FIRST reason is kept."""
+        if not SAFETY_LATCH_ON:
+            log("SAFETY_LATCH_DISABLED_WOULD_LATCH", why=why, **detail)
+            return
+        if self.b.d.get("safety_latch"):
+            return
+        cur = {"id": now_iso(), "why": why,
+               "detail": {k: str(v) for k, v in detail.items()}}
+        self.b.d["safety_latch"] = cur
+        self.b.save()
+        log("SAFETY_LATCH", id=cur["id"], why=why, **cur["detail"],
+            effect="every own order is cancelled and every placement "
+                   "refused until the owner sets %s to this id; held "
+                   "positions are kept and reconciled" % SAFETY_LATCH_ACK_ENV)
+
+    # ---- fill detection from the open-order list (FILL_LIST_POLL) -------
+    _FILLED_KEYS = ("cumQuantity", "cumQuantityDecimal", "cumQty",
+                    "filledQuantity", "filledQuantityDecimal")
+
+    def _exact_read(self, oid: str) -> None:
+        ex = getattr(self, "_exact_at", None)
+        if ex is None:
+            ex = self._exact_at = {}
+        ex[oid] = time.monotonic()
+        st = self._fill_stats()
+        st["exact_reads"] += 1
+        if len(ex) > 5000:                      # closed orders drop out
+            keep = sorted(ex, key=ex.get)[-1000:]
+            self._exact_at = {k: ex[k] for k in keep}
+
+    def _fill_stats(self) -> Dict[str, int]:
+        st = getattr(self, "_fill_poll", None)
+        if st is None:
+            st = self._fill_poll = {"list_reads": 0, "list_errors": 0,
+                                    "exact_reads": 0, "skipped": 0}
+        return st
+
+    def _fill_list(self) -> Optional[Dict[str, Any]]:
+        """The current open-order list, read at most once per
+        FILL_LIST_REFRESH_S; None when it cannot be had (then every order
+        is read exactly, as before)."""
+        now = time.monotonic()
+        cur = getattr(self, "_oo", None)
+        if cur is not None and now - cur["t"] < FILL_LIST_REFRESH_S:
+            return cur if cur.get("ok") else None
+        st = self._fill_stats()
+        try:
+            wall = time.time()
+            got = self.v.open_orders()
+            st["list_reads"] += 1
+            rows = got["rows"]
+            if rows and not getattr(self, "_oo_keys_logged", False):
+                self._oo_keys_logged = True
+                log("fill_list_row_keys",
+                    keys=sorted(str(k) for k in next(iter(rows.values()))),
+                    label="field NAMES of one open-order row, logged once")
+            self._oo = {"t": now, "wall": wall, "rows": rows, "ok": True}
+            return self._oo
+        except Exception as exc:                          # noqa: BLE001
+            st["list_errors"] += 1
+            self._oo = {"t": now, "ok": False}
+            if now - getattr(self, "_oo_err_at", -1e9) > 60:
+                self._oo_err_at = now
+                log("fill_list_error", err=type(exc).__name__,
+                    effect="every open order is read exactly this pass")
+            return None
+
+    def _row_filled(self, row: Mapping[str, Any]) -> Optional[D]:
+        """The filled quantity a list row states, or None when it states
+        none in a form this can read (then nothing is proved)."""
+        try:
+            for k in self._FILLED_KEYS:
+                if row.get(k) is not None and str(row.get(k)).strip() != "":
+                    v = D(str(row.get(k)))
+                    return v if v.is_finite() and v >= 0 else None
+            q = next((row.get(k) for k in ("quantity", "quantityDecimal",
+                                           "qty") if row.get(k) is not None),
+                     None)
+            lv = next((row.get(k) for k in ("leavesQuantity",
+                                            "leavesQuantityDecimal",
+                                            "leavesQty")
+                       if row.get(k) is not None), None)
+            if q is not None and lv is not None:
+                v = D(str(q)) - D(str(lv))
+                return v if v.is_finite() and v >= 0 else None
+        except Exception:                                 # noqa: BLE001
+            return None
+        return None
+
+    def fill_list_proves_unchanged(self, oid: str,
+                                   o: Mapping[str, Any]) -> bool:
+        """True only when the venue's open-order list proves this order is
+        still resting with nothing filled beyond what the book holds (see
+        FILL_LIST_POLL). Any doubt is False: the caller reads it exactly."""
+        if not FILL_LIST_POLL:
+            return False
+        try:
+            last = (getattr(self, "_exact_at", None) or {}).get(oid)
+            if last is None or \
+                    time.monotonic() - last > FILL_EXACT_EVERY_S:
+                return False
+            lst = self._fill_list()
+            if lst is None or \
+                    time.monotonic() - lst["t"] > FILL_LIST_MAX_AGE_S:
+                return False
+            placed = o.get("placed_at")
+            if placed is None or \
+                    float(placed) > lst["wall"] - FILL_LIST_SETTLE_S:
+                return False
+            row = lst["rows"].get(str(oid))
+            if row is None:
+                return False     # gone, or on a page this read lacks
+            state = str(row.get("state") or row.get("status") or "").upper()
+            if any(x in state for x in ("CANCEL", "PENDING", "FILLED",
+                                        "REJECT", "EXPIRED", "PARTIAL")):
+                return False
+            got = self._row_filled(row)
+            if got is None or got != D(str(o.get("filled") or "0")):
+                return False
+            self._fill_stats()["skipped"] += 1
+            return True
+        except Exception:                                 # noqa: BLE001
+            return False
+
+    def refresh_fills(self, slug: str) -> None:
+        """Re-read every own open order of one market from the venue now
+        (fills are otherwise learned on the market's next step)."""
+        mk = self.b.d["markets"].get(slug) or {}
+        for oid, o in list((mk.get("orders") or {}).items()):
+            if not o.get("open"):
+                continue
+            st = self.v.status(oid)
+            self._record_fill(slug, o["side"], oid, st)
+            o["open"] = st["open"]
+
+    @staticmethod
+    def _book_net(mk: Mapping[str, Any]) -> D:
+        return abs(D(str(mk["pos"]["YES"])) - D(str(mk["pos"]["NO"])))
+
+    def _venue_net_complete(self, slug: str) -> Optional[D]:
+        """|venue position| from a COMPLETE positions walk, else None."""
+        from src import pmus_sports_inventory as INV
+        try:
+            snap = self.v.positions_snapshot()
+        except Exception:                                 # noqa: BLE001
+            return None
+        if not snap.get("complete"):
+            return None
+        for row in snap["rows"]:
+            pr = INV.parse_row(row)
+            if pr["slug"] == slug:
+                return abs(D(str(pr["net"] or 0)))
+        return D(0)
+
+    def safety_check(self, acct: Optional[Mapping[str, Any]]) -> None:
+        """Every account read (~20 s). Book-only invariants first, then the
+        venue's positions against the book. Never raises into the loop."""
+        if self.safety_latch():
+            return
+        markets = self.b.d.get("markets") or {}
+        if RN1.ON:
+            from src import pmus_pilot_pnl as PP
+            spend = unm = D(0)
+            for slug in PP.pilot_slugs(markets, self.since):
+                mk = markets[slug]
+                if mk.get("settle_px") is not None:
+                    continue
+                c = D(str(mk["cost"]["YES"])) + D(str(mk["cost"]["NO"]))
+                u = RN1.unmatched_usd(mk["pos"], mk["cost"])
+                if c > RN1.PER_MARKET_USD + _CAP_TOL or \
+                        u > RN1.RESIDUAL_CAP_USD + _CAP_TOL:
+                    return self.latch("market_cap_breached", slug=slug,
+                                      spend=c, unmatched=u)
+                spend += c
+                unm += u
+            if spend > RN1.TOTAL_SPEND_USD + _CAP_TOL or \
+                    unm > RN1.TOTAL_UNMATCHED_USD + _CAP_TOL:
+                return self.latch("campaign_cap_breached", spend=spend,
+                                  unmatched=unm)
+            for slug, mk in markets.items():
+                for oid, o in (mk.get("orders") or {}).items():
+                    if o.get("open") and D(str(o["qty"])) > rn1_max_clip():
+                        return self.latch("order_qty_exceeds_clip",
+                                          slug=slug, order_id=oid,
+                                          qty=o["qty"])
+        if acct is None:
+            return
+        pos = acct.get("positions") or {}
+        now = time.time()
+        for slug, mk in list(markets.items()):
+            if mk.get("done"):
+                continue
+            book = self._book_net(mk)
+            seen = abs(D(str(pos.get(slug) or 0)))
+            ok = mk.get("venue_net_ok") or {}
+            if abs(book - seen) <= D("0.0001") or (
+                    ok.get("book") == str(book) and
+                    now - float(ok.get("t") or 0) < MISMATCH_CONFIRMED_TTL_S):
+                mk.pop("mismatch_since", None)
+                continue
+            if not mk.get("mismatch_since"):
+                # most often our own fill, not yet read: read it now
+                try:
+                    self.refresh_fills(slug)
+                except Exception:                         # noqa: BLE001
+                    pass
+                book = self._book_net(mk)
+                if abs(book - seen) <= D("0.0001"):
+                    continue
+                mk["mismatch_since"] = now
+                log("position_mismatch_suspected", slug=slug, book_net=book,
+                    venue_net_first_page=seen, grace_s=MISMATCH_GRACE_S)
+                continue
+            age = now - float(mk["mismatch_since"])
+            if age < MISMATCH_GRACE_S:
+                continue
+            try:
+                self.refresh_fills(slug)
+            except Exception:                             # noqa: BLE001
+                pass
+            book = self._book_net(mk)
+            full = self._venue_net_complete(slug)
+            if full is None:
+                if age >= 3 * MISMATCH_GRACE_S:
+                    return self.latch("position_unverifiable", slug=slug,
+                                      book_net=book, age_s=int(age))
+                continue
+            if abs(book - full) <= D("0.0001"):
+                mk.pop("mismatch_since", None)
+                mk["venue_net_ok"] = {"book": str(book), "t": now}
+                continue
+            return self.latch("position_mismatch", slug=slug, book_net=book,
+                              venue_net=full, age_s=int(age))
+
+    # --------------------------------------- runtime campaign authorization
+    def start_campaign_reader(self) -> None:
+        if not (runtime_mode() or CAMPAIGN_AUTH_REPORT) or \
+                getattr(self, "_camp_reader", None) is not None:
+            return
+        from src import pmus_campaign_auth as CA
+        campaign_ceilings()                  # before anything is applied
+        self._camp_reader = CA.FileReader(
+            (os.getenv(CAMPAIGN_AUTH_URL_ENV) or "").strip(),
+            bearer=(os.getenv(CAMPAIGN_AUTH_BEARER_ENV) or "").strip(),
+            accept=(os.getenv(CAMPAIGN_AUTH_ACCEPT_ENV) or "").strip(),
+            every_s=CAMPAIGN_AUTH_POLL_S).start()
+        log("campaign_auth_reader_started", poll_s=CAMPAIGN_AUTH_POLL_S,
+            max_age_s=CAMPAIGN_AUTH_MAX_AGE_S,
+            url_set=bool((os.getenv(CAMPAIGN_AUTH_URL_ENV) or "").strip()),
+            secret_set=bool((os.getenv(CAMPAIGN_AUTH_SECRET_ENV)
+                             or "").strip()),
+            ceilings={k: str(v) for k, v in campaign_ceilings().items()
+                      if not k.startswith("_")},
+            label="trading is permitted only by a signed, unexpired "
+                  "campaign file read just now; no file = locked")
+
+    def _campaign_store(self) -> Dict[str, Any]:
+        st = self.b.d.get("campaign_auth")
+        if not isinstance(st, dict):
+            st = self.b.d["campaign_auth"] = {"active": None, "ended": {}}
+        st.setdefault("active", None)
+        st.setdefault("ended", {})
+        return st
+
+    def refresh_campaign_auth(self, force: bool = False
+                              ) -> Optional[Dict[str, Any]]:
+        """Evaluate the campaign file and publish the decision the lock
+        reads. No-op unless the lock value is `runtime`."""
+        report_only = not runtime_mode()
+        if report_only and getattr(self, "_camp_reader", None) is None:
+            return None
+        nowm = time.monotonic()
+        last = getattr(self, "_camp_eval", None)
+        if not force and last and nowm - last[0] < 1.0:
+            if report_only:
+                return None
+            _RUNTIME.update(at=nowm, decision=last[1])
+            return last[1]
+        from src import pmus_campaign_auth as CA
+        ceil = {k: v for k, v in campaign_ceilings().items()
+                if not k.startswith("_")}
+        st = self._campaign_store()
+        act = st["active"] if isinstance(st.get("active"), dict) else None
+        reader = getattr(self, "_camp_reader", None)
+        snap = reader.snapshot() if reader is not None else {
+            "raw": None, "age_s": None, "err": "AUTH_READER_NOT_STARTED",
+            "missing": False}
+        utc = datetime.now(timezone.utc)
+        try:
+            d = CA.decide(
+                snap, max_age_s=CAMPAIGN_AUTH_MAX_AGE_S,
+                secret=(os.getenv(CAMPAIGN_AUTH_SECRET_ENV) or ""),
+                service=((os.getenv(CAMPAIGN_AUTH_SERVICE_ENV) or "").strip()
+                         or (os.getenv("RAILWAY_SERVICE_NAME") or "").strip()),
+                build=(os.getenv("RAILWAY_GIT_COMMIT_SHA") or "").strip(),
+                ceilings=ceil, now=utc, ended_ids=list(st["ended"]),
+                active=act)
+        except Exception as exc:                          # noqa: BLE001
+            d = {"permit": False, "campaign": None,
+                 "reason": "AUTH_EVAL_ERROR:%s" % type(exc).__name__}
+        camp = d.get("campaign")
+        if report_only:
+            # shown, never acted on: no state, no values, no permission
+            self._camp_eval = (nowm, d)
+            return None
+        changed = False
+
+        def end(cid: str, why: str) -> None:
+            nonlocal changed, act
+            if cid in st["ended"]:
+                return
+            st["ended"][cid] = {"why": why, "t": utc.isoformat()}
+            if act and act.get("id") == cid:
+                st["active"] = act = None
+            changed = True
+            log("CAMPAIGN_ENDED", campaign_id=cid, why=why,
+                label="this campaign id is never accepted again")
+
+        halt = self.shared_halt()
+        if halt == "HALT":
+            # precedence: a latched halt ends the campaign in force and any
+            # campaign that could otherwise run now; neither comes back
+            if act:
+                end(str(act["id"]), "emergency_halt")
+            if camp and d.get("reason") in (None, "AUTH_NOT_STARTED"):
+                end(str(camp["campaign_id"]), "emergency_halt")
+            d = dict(d, permit=False, reason="EMERGENCY_HALT")
+        elif halt is not None:
+            d = dict(d, permit=False, reason="HALT_STATE_UNAVAILABLE")
+        else:
+            if act:
+                aid = str(act["id"])
+                if time.time() >= float(act.get("end") or 0):
+                    end(aid, "expired")
+                elif d.get("reason") == "AUTH_FILE_ABSENT":
+                    end(aid, "revoked:file_removed")
+                elif d.get("permit") and camp and \
+                        camp["campaign_id"] != aid:
+                    end(aid, "revoked_by:%s" % camp["campaign_id"])
+            if d.get("permit") and camp and st["active"] is None:
+                if camp["campaign_id"] in st["ended"]:
+                    d = dict(d, permit=False, reason="AUTH_CAMPAIGN_ENDED")
+                else:
+                    st["active"] = act = {
+                        "id": camp["campaign_id"], "digest": camp["digest"],
+                        "start": camp["start"], "end": camp["end"]}
+                    self.b.d["campaign_window"] = [camp["start"], camp["end"]]
+                    self.b.d["campaign_since"] = camp["start"]
+                    self.since = float(camp["start"])
+                    changed = True
+                    log("CAMPAIGN_STARTED", **{k: camp[k] for k in camp
+                                               if k != "digest"},
+                        label="values in force are these or the deployed "
+                              "ceilings, whichever is lower")
+        if d.get("permit") and act and float(self.since or 0) != \
+                float(act["start"]):
+            self.since = float(act["start"])     # restart: original start
+        apply_campaign(camp if d.get("permit") else None)
+        if changed:
+            self.b.save()
+        key = (d.get("permit"), d.get("reason"),
+               (camp or {}).get("campaign_id"))
+        if key != getattr(self, "_camp_key", None):
+            self._camp_key = key
+            log("CAMPAIGN_AUTH", permit=bool(d.get("permit")),
+                reason=d.get("reason"),
+                campaign_id=(camp or {}).get("campaign_id"),
+                expires=(camp or {}).get("expires"),
+                active_id=(act or {}).get("id"),
+                snapshot_age_s=snap.get("age_s"), fetch_error=snap.get("err"),
+                detail={k: d[k] for k in ("field", "fields", "outside",
+                                          "active_id") if k in d})
+        self._camp_eval = (nowm, d)
+        _RUNTIME.update(at=nowm, decision=d)
+        return d
+
+    def campaign_status(self) -> Dict[str, Any]:
+        """For the heartbeat: which campaign is in force and, if none, why
+        not. Computed whatever the lock value is, so a locked deployment
+        shows what the file WOULD decide (it permits nothing while locked
+        with `1`)."""
+        if not runtime_mode() and getattr(self, "_camp_reader", None) is None:
+            return {"mode": "off"}
+        d = (getattr(self, "_camp_eval", None) or (0, {}))[1] or {}
+        c = d.get("campaign") or {}
+        st = self._campaign_store()
+        return {"mode": "runtime" if runtime_mode() else "report_only",
+                "permit": bool(d.get("permit")), "reason": d.get("reason"),
+                "campaign_id": c.get("campaign_id"),
+                "expires": c.get("expires"),
+                "active_id": (st.get("active") or {}).get("id"),
+                "ended": len(st.get("ended") or {}),
+                "in_force": {"max_markets": MAX_MARKETS,
+                             "order_qty": str(rn1_max_clip()),
+                             "competitions": sorted(OPEN_GATE_ALLOW_SPORTS),
+                             "slate": slate()}}
+
     def enforce_lock(self) -> Optional[str]:
         """The lock acts on what is ALREADY resting, not only on new
         placements: when the window ends (or the lock is on) every own
         order the lock forbids is cancelled by exact id, each pass until
-        none is left. Logs each change of lock state once."""
+        none is left. Logs each change of lock state once. The safety
+        latch comes first and overrides every lock value."""
+        self.refresh_campaign_auth()
+        lt = self.safety_latch()
+        if lt:
+            if self.open_own_orders():
+                self.cancel_all_own("safety_latch:" + str(lt.get("why")))
+            return "safety_latch:" + str(lt.get("why"))
         st = lock_state()
         if st["why"] != getattr(self, "_lock_why", "?"):
             self._lock_why = st["why"]
@@ -2507,7 +4860,7 @@ class Engine:
                 window=({"start": _iso(st["start"]), "end": _iso(st["end"]),
                          "complete_grace_s": WINDOW_COMPLETE_GRACE_S}
                         if "start" in st else None),
-                campaign_since=PILOT_SINCE)
+                campaign_since=self.since)
         if st["all"] and self.open_own_orders():
             self.cancel_all_own("submission_lock:" + str(st["why"]))
         elif st["new"] and self.open_own_orders(new_exposure_only=True):
@@ -2564,7 +4917,8 @@ class Engine:
             return hit[1]
         try:
             from src import l5_halt_gate as HG
-            st = HG.HaltGate(HG.HttpHaltStore(url)).state()
+            st = HG.HaltGate(HG.HttpHaltStore(url),
+                             max_age_s=SHARED_HALT_MAX_AGE_S).state()
             why = st.get("why")
             val = None if st.get("permitted") else (
                 "HALT" if why in ("halt_asserted", "env_halt")
@@ -2666,6 +5020,8 @@ class Engine:
                     label="SHADOW: would-quote only; nothing placed")
                 rows += 1
                 state[slug] = {"t": now, "fair_yes": str(fy["fair_yes"]),
+                               "odds_age_s": fy.get("age_s"),
+                               "source": fy.get("source"),
                                "q": {"YES": None if q["YES"] is None
                                      else str(q["YES"]),
                                      "NO": None if q["NO"] is None
@@ -2692,7 +5048,130 @@ class Engine:
                         out += max(D(0), left) * D(str(o.get("px")))
                     except Exception:                    # noqa: BLE001
                         return D("Infinity")             # unknown: fail closed
+        try:
+            for r in self.reserved_orders():
+                out += D(str(r["px"])) * D(str(r["qty"]))
+        except Exception:                                # noqa: BLE001
+            return D("Infinity")
         return out
+
+    # ---- reservations: a submission counts from before it is sent --------
+    def _reservations(self) -> Dict[str, Any]:
+        res = self.b.d.setdefault("acct_reservations", {})
+        if not getattr(self, "_res_rebased", False):
+            # a reservation from an earlier process is as old as this one
+            self._res_rebased = True
+            for r in res.values():
+                r["mono"] = time.monotonic()
+                r["state"] = "uncertain"
+        return res
+
+    def reserved_orders(self, slug: Optional[str] = None) -> list:
+        return [r for r in self._reservations().values()
+                if slug is None or r.get("slug") == slug]
+
+    def reserve_order(self, slug: str, side: str, px: Any, qty: Any,
+                      stage: str) -> str:
+        self._res_seq = getattr(self, "_res_seq", 0) + 1
+        rid = "res-%d-%d" % (int(time.time() * 1000), self._res_seq)
+        self._reservations()[rid] = {
+            "slug": slug, "side": side, "px": str(px), "qty": str(qty),
+            "stage": stage, "state": "in_flight", "at": time.time(),
+            "mono": time.monotonic()}
+        return rid
+
+    def release_reservation(self, rid: str) -> None:
+        self._reservations().pop(rid, None)
+
+    def reservation_uncertain(self, rid: str, exc: BaseException) -> None:
+        r = self._reservations().get(rid)
+        if not r:
+            return
+        r["state"] = "uncertain"
+        try:
+            self.b.save()
+        except Exception:                                # noqa: BLE001
+            pass
+        log("ORDER_RESERVATION_HELD", slug=r["slug"], side=r["side"],
+            px=r["px"], qty=r["qty"], stage=r["stage"],
+            err=type(exc).__name__,
+            label="the send failed without a definite answer: its capital "
+                  "stays reserved until an account read newer than it has "
+                  "been reconciled")
+
+    def release_reconciled_reservations(
+            self, read_mono: Optional[float],
+            acct: Optional[Mapping[str, Any]] = None) -> int:
+        """Release an uncertain submission's reservation ONLY on definitive
+        venue evidence (owner 2026-11-24: "Require definitive venue order
+        and position reconciliation before releasing reserved capital").
+        All of:
+          * an orphan sweep has run over an account read (`acct`, taken at
+            `read_mono`) at least RESERVATION_HOLD_S newer than the send;
+          * every order the venue shows open in that market is an order in
+            the book (an accepted order would have been adopted by now);
+          * a COMPLETE positions walk shows the venue's position in that
+            market equal to the book's. An unanswered order that was
+            accepted and filled in full is in no open-order list; only its
+            position shows it. Then the reservation stays, and the
+            position-mismatch latch stops the bot.
+        Anything unread, incomplete or unequal holds the reservation. A
+        ledger reading plays no part."""
+        if read_mono is None or acct is None:
+            return 0
+        res = self._reservations()
+        due = [k for k, r in res.items() if r.get("state") == "uncertain"
+               and float(r.get("mono") or 1e18) + RESERVATION_HOLD_S
+               <= read_mono]
+        if not due:
+            return 0
+        try:
+            venue_open: Dict[str, set] = {}
+            for o in acct.get("open_orders") or []:
+                venue_open.setdefault(str(o.get("marketSlug") or ""),
+                                      set()).add(str(o.get("id")))
+        except Exception:                                # noqa: BLE001
+            return 0
+        gone = []
+        for k in due:
+            r = res[k]
+            slug = str(r.get("slug") or "")
+            why = None
+            try:
+                mk = self.b.m(slug)
+                known = set((mk.get("orders") or {}).keys())
+                if not venue_open.get(slug, set()) <= known:
+                    why = "venue_order_not_in_book"
+                else:
+                    net = self._venue_net_complete(slug)
+                    have = abs(D(str(mk["pos"]["YES"])) -
+                               D(str(mk["pos"]["NO"])))
+                    if net is None:
+                        why = "venue_positions_not_complete"
+                    elif net != have:
+                        why = "venue_position_differs_from_book"
+            except Exception as exc:                     # noqa: BLE001
+                why = "reconcile_error:%s" % type(exc).__name__
+            if why is None:
+                gone.append(k)
+            elif r.get("held_why") != why:
+                r["held_why"] = why
+                log("ORDER_RESERVATION_HELD", slug=slug, side=r.get("side"),
+                    px=r.get("px"), qty=r.get("qty"), stage=r.get("stage"),
+                    err=why, label="not released: the venue's orders and "
+                                   "positions do not yet prove this "
+                                   "submission left nothing behind")
+        for k in gone:
+            r = res.pop(k)
+            log("ORDER_RESERVATION_RELEASED", slug=r.get("slug"),
+                side=r.get("side"), px=r.get("px"), qty=r.get("qty"),
+                why="venue_orders_and_positions_reconciled")
+        if gone:
+            try:
+                self.b.save()
+            except Exception:                            # noqa: BLE001
+                pass
+        return len(gone)
 
     def own_unaccounted_losses(self, retired: set) -> D:
         """Today's mark-to-market change of markets the shared ledger has NOT
@@ -2707,37 +5186,62 @@ class Engine:
                 out += D(mk["mark"]) - D(base["value"])
         return out
 
-    def account_risk(self) -> Dict[str, Any]:
+    def account_risk(self, fresh: bool = False) -> Dict[str, Any]:
         """Cached shared-limit verdict; {"ok": True, "off": True} when the
-        switch is off. Logs every change of verdict."""
+        switch is off. Logs every change of verdict. `fresh` recomputes it
+        from the last ledger snapshot and the book as they are NOW (no
+        network): a placement must never be judged on room that an earlier
+        placement has already taken."""
         if not (ACCOUNT_RISK_ON or ACCOUNT_RISK_OBSERVE):
             return {"ok": True, "off": True}
         now = time.monotonic()
         hit = getattr(self, "_acct_risk", None)
-        if hit and now - hit[0] < ACCOUNT_RISK_TTL_S:
+        if hit and not fresh and now - hit[0] < ACCOUNT_RISK_TTL_S:
             return hit[1]
         from src import l5_account_risk as AR
         url = (os.getenv(AR.RISK_URL_ENV) or "").strip()
-        doc_box: Dict[str, Any] = {}
-
-        def fetch(u: str) -> Any:
-            doc_box["doc"] = AR.fetch_json(u)
-            return doc_box["doc"]
-
         try:
-            first = AR.account_risk(url=url, now=datetime.now(timezone.utc),
-                                    own_unaccounted=0, fetch=fetch)
-            if "doc" in doc_box and first.get("reason") not in (
-                    "ACCOUNT_RISK_URL_NOT_SET",):
-                own = self.own_unaccounted_losses(
-                    AR.retired_markets(doc_box["doc"]))
-                v = AR.evaluate(doc_box["doc"],
-                                now=datetime.now(timezone.utc),
-                                own_unaccounted=own)
-            else:
-                v = first
-            lane = AR.lane_cap()
             expo = self.own_exposure_usd()
+            rest = None
+            if ACCOUNT_RISK_RESTING_IN_LEDGER:
+                added = self._own_added_since(expo)
+            else:
+                # the ledger's figure moves on fills, not on resting bids:
+                # count every resting dollar, and only NEW unpaired fills
+                unp = D(self.b.total_unmatched())
+                rest = self.own_resting_worst()
+                added = self._own_added_since(unp)
+            reader = getattr(self, "_risk_reader", None)
+            doc, v = None, None
+            if reader is not None:
+                # the loop never waits on the ledger: last snapshot only
+                snap = reader.snapshot()
+                if snap["doc"] is None:
+                    v = {"ok": False, "reason": snap["err"] or
+                         "ACCOUNT_RISK_NOT_READ_YET"}
+                elif snap["age_s"] is None or \
+                        snap["age_s"] > ACCOUNT_RISK_SNAPSHOT_MAX_S:
+                    v = {"ok": False, "reason": "ACCOUNT_RISK_SNAPSHOT_STALE",
+                         "age_s": None if snap["age_s"] is None
+                         else round(snap["age_s"], 1), "last_error":
+                         snap["err"]}
+                else:
+                    doc = snap["doc"]
+            elif not url:
+                v = {"ok": False, "reason": "ACCOUNT_RISK_URL_NOT_SET",
+                     "env": AR.RISK_URL_ENV}
+            else:
+                try:
+                    doc = AR.fetch_json(url)
+                except Exception as exc:                 # noqa: BLE001
+                    v = {"ok": False, "reason": "ACCOUNT_RISK_UNREADABLE:%s"
+                         % type(exc).__name__}
+            if v is None:
+                own = self.own_unaccounted_losses(AR.retired_markets(doc))
+                v = AR.evaluate(doc, now=datetime.now(timezone.utc),
+                                own_unaccounted=own, own_at_risk=expo,
+                                own_added_since=added, own_resting=rest)
+            lane = AR.lane_cap()
             v = dict(v, lane_cap_usd=None if lane is None else str(lane),
                      own_exposure_usd=str(expo))
             if v.get("ok") and lane is None:
@@ -2753,27 +5257,146 @@ class Engine:
                 "ok", "reason", "utc_day_realized_usd", "daily_halt_usd",
                 "lifetime_realized_usd", "cumulative_loss_ceiling_usd",
                 "own_losses_not_yet_in_account_ledger_usd", "loss_room_usd",
-                "lane_cap_usd", "own_exposure_usd", "age_s")},
+                "lane_cap_usd", "own_exposure_usd", "age_s", "drawdown")},
                 label="shared account-wide limits; refusals block NEW "
                       "openings/extensions only, completions continue")
         self._acct_risk = (now, v)
         return v
 
+    def _own_added_since(self, expo: D) -> D:
+        """How much this bot's at-risk money has grown over the period a
+        ledger snapshot may be old: now, less the LOWEST it has been in
+        that period. The ledger's figure cannot contain it yet. Erring high
+        only makes the capacity smaller."""
+        from src import l5_account_risk as AR
+        hist = getattr(self, "_expo_hist", None)
+        if hist is None:
+            hist = self._expo_hist = []
+        now = time.monotonic()
+        keep = AR.RISK_MAX_AGE_S + ACCOUNT_RISK_SNAPSHOT_MAX_S + 10
+        hist.append((now, expo))
+        while len(hist) > 1 and now - hist[0][0] > keep:
+            hist.pop(0)
+        try:
+            low = min(e for _t, e in hist)
+            return max(D(0), expo - low) if low.is_finite() and \
+                expo.is_finite() else D("Infinity")
+        except Exception:                                # noqa: BLE001
+            return D("Infinity")
+
+    def start_risk_reader(self) -> None:
+        """Begin reading the account-risk document off the loop."""
+        if not (ACCOUNT_RISK_ON or ACCOUNT_RISK_OBSERVE) or \
+                not ACCOUNT_RISK_ASYNC or \
+                getattr(self, "_risk_reader", None) is not None:
+            return
+        from src import l5_account_risk as AR
+        self._risk_reader = AR.RiskReader(
+            lambda: os.getenv(AR.RISK_URL_ENV) or "",
+            every_s=ACCOUNT_RISK_READ_S).start()
+        log("account_risk_reader_started", every_s=ACCOUNT_RISK_READ_S,
+            max_age_s=ACCOUNT_RISK_SNAPSHOT_MAX_S,
+            label="the trading loop no longer waits on the account ledger")
+
+    def account_limit_status(self) -> Dict[str, Any]:
+        """The account-limit verdict for the heartbeat, computed whether or
+        not the bot is locked (owner 2026-11-23: the verdict must be
+        checkable in a non-trading preflight). `would_block_new` is what a
+        new opening would be told right now."""
+        if not (ACCOUNT_RISK_ON or ACCOUNT_RISK_OBSERVE):
+            return {"mode": "off"}
+        try:
+            v = self.account_risk()
+            dd = v.get("drawdown") if isinstance(v.get("drawdown"),
+                                                 Mapping) else {}
+            return {"mode": "enforce" if ACCOUNT_RISK_ON else "observe",
+                    "ok": bool(v.get("ok")), "reason": v.get("reason"),
+                    "would_block_new": self.account_risk_blocks(),
+                    "ledger_figure_usd": dd.get("committed_and_realized_usd"),
+                    "limit_usd": dd.get("max_drawdown_usd"),
+                    "capacity_usd": dd.get("capacity_usd"),
+                    "own_resting_worst_usd": dd.get("own_resting_orders_usd"),
+                    "resting_counted_separately":
+                        dd.get("resting_counted_separately"),
+                    "drawdown_state": dd.get("state"),
+                    "snapshot_age_s": v.get("age_s")}
+        except Exception as exc:                         # noqa: BLE001
+            return {"mode": "enforce" if ACCOUNT_RISK_ON else "observe",
+                    "ok": False, "reason": "STATUS_ERROR:%s"
+                    % type(exc).__name__}
+
+    def own_resting_worst(self, extra: Optional[tuple] = None) -> D:
+        """The most this bot's RESTING bids can add to its unpaired cost,
+        over every way they could fill, summed over markets. A bid on each
+        side of one market is not the sum of the two: if both fill they
+        are a pair bought under the pair cap, which the ledger values at
+        $1. `extra` = (slug, side, px, qty) adds one hypothetical bid.
+        Unknown figures return Infinity (refuse)."""
+        try:
+            tot = D(0)
+            markets = self.b.d.get("markets") or {}
+            seen = False
+            held: Dict[str, list] = {}
+            for r in self.reserved_orders():
+                held.setdefault(r["slug"], []).append(
+                    (r["side"], D(str(r["px"])), D(str(r["qty"])), False))
+            for s_, legs in held.items():
+                if s_ not in markets:          # no book entry: face value
+                    tot += sum(px_ * q_ for _sd, px_, q_, _c in legs)
+            for s_, mk_ in markets.items():
+                resting = [(o["side"], o["px"], D(str(o["qty"])) - D(str(
+                    o.get("filled") or "0")), False)
+                    for o in (mk_.get("orders") or {}).values()
+                    if o.get("open")]
+                resting += held.get(s_, [])
+                if extra is not None and extra[0] == s_:
+                    resting.append((extra[1], extra[2], extra[3], False))
+                    seen = True
+                if not resting:
+                    continue
+                worst = RN1.committed(mk_["pos"], mk_["cost"],
+                                      resting)["unmatched"]
+                tot += max(D(0), worst - RN1.unmatched_usd(
+                    mk_["pos"], mk_["cost"]))
+            if extra is not None and not seen:
+                tot += D(str(extra[2])) * D(str(extra[3]))
+            return tot if tot.is_finite() else D("Infinity")
+        except Exception:                                # noqa: BLE001
+            return D("Infinity")
+
     def account_risk_blocks(self, px: Optional[D] = None,
-                            qty: Optional[D] = None) -> Optional[str]:
-        """Reason a NEW opening/extension is refused, or None."""
-        v = self.account_risk()
+                            qty: Optional[D] = None,
+                            slug: Optional[str] = None,
+                            side: Optional[str] = None) -> Optional[str]:
+        """Reason a NEW opening/extension is refused, or None. With a price
+        and quantity (a placement) the verdict is computed now, so its
+        capacity already excludes every bid resting or reserved."""
+        v = self.account_risk(fresh=px is not None and qty is not None)
         if v.get("off") or not ACCOUNT_RISK_ON:          # observe: log only
             return None
         if not v.get("ok"):
             return str(v.get("reason"))
         if px is not None and qty is not None:
+            need = D(str(px)) * D(str(qty))
             try:
                 lane = D(str(v.get("lane_cap_usd")))
-                if self.own_exposure_usd() + D(str(px)) * D(str(qty)) > lane:
+                if self.own_exposure_usd() + need > lane:
                     return "ACCOUNT_EXPOSURE_CAP"
             except Exception:                            # noqa: BLE001
                 return "ACCOUNT_EXPOSURE_UNREADABLE"
+            from src import l5_account_risk as AR
+            cap_need = need
+            if slug is not None and side is not None and \
+                    not ACCOUNT_RISK_RESTING_IN_LEDGER:
+                # what THIS bid adds to the worst case, not its face value
+                cap_need = self.own_resting_worst(
+                    (slug, side, D(str(px)), D(str(qty)))) - \
+                    self.own_resting_worst()
+            dd_ = v.get("drawdown")
+            if isinstance(dd_, Mapping) and dd_.get("state") == "ON":
+                cap_need = cap_need + ACCOUNT_RISK_ROOM_MARGIN_USD
+            if not AR.capacity_allows(v, cap_need):
+                return "ACCOUNT_RISK_CAPACITY"
         return None
 
     def stale_completion_block(self, slug: str, side: str,
@@ -2864,6 +5487,11 @@ class Engine:
             log("place_refused_shutdown", slug=slug, side=side, px=px,
                 qty=qty, stage=stage)
             return
+        lt = self.b.d.get("safety_latch")
+        if lt:
+            log("place_refused_safety_latch", slug=slug, side=side, px=px,
+                qty=qty, stage=stage, why=lt.get("why"), id=lt.get("id"))
+            return
         if is_completion_stage(stage) and not self.account_fresh():
             why = self.stale_completion_block(slug, side, qty)
             if why:
@@ -2890,7 +5518,7 @@ class Engine:
                     qty=qty, stage=stage, post_only=post_only, reason=why)
                 return
         if not is_completion_stage(stage):
-            why = self.account_risk_blocks(px, qty)
+            why = self.account_risk_blocks(px, qty, slug, side)
             if why:
                 log("place_refused_account_risk", slug=slug, side=side,
                     px=px, qty=qty, stage=stage, reason=why)
@@ -2902,6 +5530,21 @@ class Engine:
                     **{k: str(v) for k, v in
                        self.combined_exposure().items()})
                 return
+            cur = self.own_exposure_usd()
+            if not PH.at_risk_allows(cur, D(str(px)) * D(str(qty)),
+                                     AT_RISK_BUDGET_USD):
+                key = "%s:%s:%s" % (side, px, qty)
+                mk_ = self.b.m(slug)
+                if mk_.get("at_risk_logged") != key:
+                    mk_["at_risk_logged"] = key
+                    log("place_refused_at_risk_budget", slug=slug, side=side,
+                        px=px, qty=qty, stage=stage, at_risk_usd=cur,
+                        budget_usd=AT_RISK_BUDGET_USD,
+                        label="unpaired filled cost plus every resting "
+                              "order plus this one would exceed the "
+                              "portfolio budget")
+                return
+        self.refresh_campaign_auth()
         if submission_locked(stage, post_only):
             log("place_refused_submission_lock", slug=slug, side=side, px=px,
                 qty=qty, stage=stage, why=lock_state()["why"])
@@ -2915,16 +5558,49 @@ class Engine:
                     qty=qty, stage=stage, reason=why,
                     min_touch_qty=str(MIN_TOUCH_QTY))
                 return
+        if not is_completion_stage(stage) and self.scope_block(slug):
+            log("place_refused_scope", slug=slug, side=side, px=px, qty=qty,
+                stage=stage, reason=self.scope_block(slug),
+                allow_sports=sorted(OPEN_GATE_ALLOW_SPORTS))
+            return
         if self.shared_halt() == "HALT":
             log("place_refused_shared_halt", slug=slug, side=side, px=px,
                 qty=qty, stage=stage)
             return
-        oid = (self.v.place(slug, side, px, qty, stage) if post_only else
-               self.v.place(slug, side, px, qty, stage, post_only=False))
+        why = self.final_gate(slug, side, px, qty, stage, post_only)
+        if why:
+            log("place_refused_final_gate", slug=slug, side=side, px=px,
+                qty=qty, stage=stage, post_only=post_only, reason=why,
+                label="refused immediately before submission; nothing "
+                      "was sent")
+            return
+        rid = self.reserve_order(slug, side, px, qty, stage)
+        if hasattr(self.v, "last_order_post"):
+            self.v.last_order_post = None        # never judge by an old send
+        try:
+            oid = (self.v.place(slug, side, px, qty, stage) if post_only
+                   else self.v.place(slug, side, px, qty, stage,
+                                     post_only=False))
+        except BaseException as exc:
+            why = send_never_left(self.v, exc)
+            if type(exc).__name__ == "RejectedNoFill":
+                self.release_reservation(rid)    # the venue said no
+            elif why:
+                self.release_reservation(rid)    # nothing was transmitted
+                log("ORDER_NOT_SENT", slug=slug, side=side, px=px, qty=qty,
+                    stage=stage, why=why, err=type(exc).__name__,
+                    label="no order left the bot; nothing is reserved")
+            else:
+                self.reservation_uncertain(rid, exc)
+            raise
         mk = self.b.m(slug)
         mk["orders"][oid] = {"side": side, "px": str(px), "qty": str(qty),
                              "filled": "0", "open": True, "stage": stage,
                              "placed_at": time.time()}
+        self.release_reservation(rid)            # the book holds it now
+        if mk.get("phase_now"):
+            mk["orders"][oid]["phase"] = mk["phase_now"]
+            self._phase_count(mk, mk["phase_now"], "orders", 1)
         self.b.d["own_order_ids"].append(oid)
         if stage == CR.STAGE_OPEN:
             mk["lane"] = CR.LANE
@@ -2933,7 +5609,7 @@ class Engine:
                 days.append(CR.day_key(slug))
         self.b.save()
         log("ORDER", slug=slug, side=side, px=px, qty=qty, stage=stage,
-            order_id=oid)
+            order_id=oid, phase=mk.get("phase_now"))
 
     # ------------------------------------------------ crypto reward lane
     # Decisions, limits and accounting: src/pmus_crypto_rewards.py (pure).
@@ -3056,6 +5732,17 @@ class Engine:
         if r.get("unconfirmed"):
             return "crypto_fills_unconfirmed"
         return None
+
+    def crypto_global_limits(self) -> Optional[Dict[str, D]]:
+        """The account's global order limits as the final gate will apply
+        them to a crypto order: the largest clip any order may have and the
+        pair-cost ceiling. None when that gate is not in force. The crypto
+        lane sizes and prices INSIDE these; it never raises or bypasses
+        them (owner 2026-11-27)."""
+        if not (FINAL_GATE and RN1.ON):
+            return None
+        return {"clip": D(str(rn1_max_clip())),
+                "pair_cap": D(str(RN1.PAIR_CAP))}
 
     def crypto_account_view(self) -> Optional[Mapping[str, Any]]:
         """The last account read if it is fresh enough to size risk on."""
@@ -3200,6 +5887,12 @@ class Engine:
         why = self.crypto_meter_block() or self.crypto_account_block()
         if why:
             return why
+        gl = self.crypto_global_limits()
+        if gl and CR.QTY > gl["clip"]:
+            # the lane is configured larger than the account's clip: it
+            # quotes nothing rather than send orders the final gate refuses
+            # (and that would trip the safety latch if one ever rested)
+            return "qty_above_global_clip:%s>%s" % (CR.QTY, gl["clip"])
         days = self._crypto_state()["days"]
         if CR.day_key(slug) not in days and len(days) >= CR.MARKET_DAYS:
             return "pilot_market_days_used"
@@ -3248,6 +5941,9 @@ class Engine:
             return "opening_while_unpaired"
         if D(str(qty)) > CR.QTY:
             return "qty_over_cap"
+        gl = self.crypto_global_limits()
+        if gl and D(str(qty)) > gl["clip"]:
+            return "qty_above_global_clip:%s>%s" % (qty, gl["clip"])
         try:
             why = self.crypto_block(slug, mk, time.time())
             if why:
@@ -3335,6 +6031,17 @@ class Engine:
                       "and every gate allows")
         feed.watch(s for s in self.active() if CR.tradable(s))
         self.b.save()
+
+    def _crypto_quote_cfg(self) -> Optional[Dict[str, Any]]:
+        """Pair ceilings no looser than the account's global pair cap, so a
+        crypto opening pair or completion is never priced where the final
+        gate would refuse it."""
+        gl = self.crypto_global_limits()
+        if not gl:
+            return None
+        return {"pair_cap": str(min(CR.PAIR_CAP, gl["pair_cap"])),
+                "complete_max_pair": str(min(CR.COMPLETE_MAX_PAIR,
+                                             gl["pair_cap"]))}
 
     def _crypto_stale(self, slug: str, mk: Dict[str, Any], why: str,
                       age: Optional[float] = None, pull_all: bool = False
@@ -3574,7 +6281,7 @@ class Engine:
                       min_qty=spec["min_qty"],
                       capital_used=CR.market_capital(
                           {**mk, "orders": {}})["filled"],
-                      max_leg_usd=leg)
+                      max_leg_usd=leg, c=self._crypto_quote_cfg())
         self._crypto_observe(slug, mk, book, tick, resting, q, block,
                              arm["armed"])
         want: Dict[str, Any] = {}
@@ -3698,6 +6405,93 @@ class Engine:
 
 
     # ------------------------------------------------ RN1 replica (default off)
+    def final_gate(self, slug: str, side: str, px: Any, qty: Any,
+                   stage: str, post_only: bool = True) -> Optional[str]:
+        """Why this order may not be sent, or None. Independent of whatever
+        built the order. Unknown or unreadable figures refuse."""
+        if not FINAL_GATE:
+            return None
+        try:
+            p, q = D(str(px)), D(str(qty))
+            if not (p.is_finite() and q.is_finite()) or q <= 0 or \
+                    not (D(0) < p < D(1)):
+                return "order_unreadable"
+            if not RN1.ON:
+                # the older two-sided path keeps its own limits and its
+                # own, separately authorized, taker exits
+                return None
+            if not post_only and not ALLOW_TAKER:
+                return "taker_not_authorized"
+            if q > rn1_max_clip():
+                return "size_above_maximum:%s>%s" % (q, rn1_max_clip())
+            mk = self.b.m(slug)
+            sd = "YES" if str(side).upper() == "YES" else "NO"
+            ot = "NO" if sd == "YES" else "YES"
+            pos = {k: D(str(mk["pos"][k])) for k in ("YES", "NO")}
+            cost = {k: D(str(mk["cost"][k])) for k in ("YES", "NO")}
+            rest = [(o["side"], D(str(o["px"])),
+                     D(str(o["qty"])) - D(str(o.get("filled") or "0")))
+                    for o in (mk.get("orders") or {}).values()
+                    if o.get("open")]
+            rest += [(r["side"], D(str(r["px"])), D(str(r["qty"])))
+                     for r in self.reserved_orders(slug)]
+            # ---- pair cost: against what this bid could pair with
+            cap = D(str(RN1.PAIR_CAP))
+            partners = [rp for rs, rp, rl in rest if rs == ot and rl > 0]
+            if pos[ot] > pos[sd] and pos[ot] > 0:
+                partners.append(cost[ot] / pos[ot])   # held, unpaired
+            if partners and p + max(partners) > cap + D("0.0000001"):
+                return "pair_cost_above_cap:%s+%s>%s" % (
+                    p, max(partners).quantize(D("0.0001")), cap)
+            if is_completion_stage(stage):
+                # it reduces risk and its cost is already reserved; the
+                # pair-cost ceiling above is its limit
+                return None
+            # LOSS STOPS, again, immediately before submission (owner
+            # 2026-11-26). The decision layer (step_market) already refuses
+            # new exposure under either stop; this backstop holds even if a
+            # path reaches place() without it. Same evaluations, no new
+            # limit: the campaign stop and its fail-closed meter checks
+            # (pilot_block) and the bot's UTC-day stop (daily_stopped).
+            # Completions returned above and are never refused here.
+            pb = self.pilot_block()
+            if pb:
+                return "campaign_loss_stop:%s" % pb
+            if self.daily_stopped():
+                return "daily_loss_stop"
+            if RN1_LOSS_STOP_COUNTS_RESTING and PILOT_LOSS_USD > 0:
+                from src import pmus_pilot_pnl as PP
+                worst = PP.book_worst_case(self.b.d.get("markets") or {},
+                                           self.since) - \
+                    self.own_resting_worst(extra=(slug, sd, p, q))
+                if worst <= -D(str(PILOT_LOSS_USD)):
+                    return "campaign_loss_stop_with_resting:%s<=-%s" % (
+                        worst.quantize(D("0.01")), PILOT_LOSS_USD)
+            # ---- ceilings: everything recorded plus this order
+            every = [(rs, rp, rl, False) for rs, rp, rl in rest] + \
+                [(sd, p, q, False)]
+            c = RN1.committed(mk["pos"], mk["cost"], every)
+            tol = D("0.000001")
+            if c["spend"] > D(str(RN1.PER_MARKET_USD)) + tol:
+                return "per_market_spend:%s>%s" % (
+                    c["spend"], RN1.PER_MARKET_USD)
+            if c["unmatched"] > D(str(RN1.RESIDUAL_CAP_USD)) + tol:
+                return "per_market_unpaired:%s>%s" % (
+                    c["unmatched"], RN1.RESIDUAL_CAP_USD)
+            other = self.rn1_campaign_exposure(exclude=slug)
+            if other["spend"] + c["spend"] > \
+                    D(str(RN1.TOTAL_SPEND_USD)) + tol:
+                return "campaign_spend:%s>%s" % (
+                    other["spend"] + c["spend"], RN1.TOTAL_SPEND_USD)
+            if other["unmatched"] + c["unmatched"] > \
+                    D(str(RN1.TOTAL_UNMATCHED_USD)) + tol:
+                return "campaign_unpaired:%s>%s" % (
+                    other["unmatched"] + c["unmatched"],
+                    RN1.TOTAL_UNMATCHED_USD)
+            return None
+        except Exception as exc:                          # noqa: BLE001
+            return "gate_error:%s" % type(exc).__name__
+
     def rn1_campaign_exposure(self, exclude: Optional[str] = None
                               ) -> Dict[str, D]:
         """Committed spend / unmatched across RN1 markets not yet settled:
@@ -3705,16 +6499,41 @@ class Engine:
         from src import pmus_pilot_pnl as PP
         tot = {"spend": D(0), "unmatched": D(0)}
         markets = self.b.d.get("markets") or {}
-        for s_ in PP.pilot_slugs(markets, PILOT_SINCE):
+        # in-flight or uncertain submissions in OTHER markets count from
+        # before they are sent, exactly as at-risk counts them (owner
+        # 2026-11-24: "Include outstanding and in-flight orders")
+        reserved: Dict[str, list] = {}
+        for r in self.reserved_orders():
+            if r.get("slug") != exclude:
+                reserved.setdefault(str(r.get("slug")), []).append(r)
+        seen = set()
+        for s_ in PP.pilot_slugs(markets, self.since):
             mk_ = markets[s_]
             if s_ == exclude or mk_.get("settle_px") is not None:
                 continue
+            seen.add(s_)
             resting = [(o["side"], o["px"],
                         D(o["qty"]) - D(o.get("filled") or "0"),
                         is_completion_stage(o.get("stage")))
                        for o in (mk_.get("orders") or {}).values()
                        if o.get("open")]
+            resting += [(r["side"], r["px"], D(str(r["qty"])),
+                         is_completion_stage(r.get("stage")))
+                        for r in reserved.get(s_, [])]
             c = RN1.committed(mk_["pos"], mk_["cost"], resting)
+            tot["spend"] += c["spend"]
+            tot["unmatched"] += c["unmatched"]
+        for s_, rs in reserved.items():
+            if s_ in seen:
+                continue
+            mk_ = markets.get(s_) or {"pos": {"YES": "0", "NO": "0"},
+                                      "cost": {"YES": "0", "NO": "0"}}
+            if mk_.get("settle_px") is not None:
+                continue
+            c = RN1.committed(mk_["pos"], mk_["cost"],
+                              [(r["side"], r["px"], D(str(r["qty"])),
+                                is_completion_stage(r.get("stage")))
+                               for r in rs])
             tot["spend"] += c["spend"]
             tot["unmatched"] += c["unmatched"]
         return tot
@@ -3738,11 +6557,251 @@ class Engine:
         others = sum(1 for s_, m_ in (self.b.d.get("markets") or {}).items()
                      if s_ != slug and not m_.get("done") and
                      not CR.is_crypto_market(s_, m_) and
-                     self._rn1_exposed(m_))
+                     self._rn1_slot_holder(m_))
         return others >= MAX_MARKETS
 
+    def _rn1_slot_holder(self, mk: Mapping[str, Any]) -> bool:
+        """Does this market hold one of the MAX_MARKETS quoting slots?
+        Default (as since 2026-11-22): any market with an unpaired leg or
+        a resting opening/extension bid. LIVE 2026-11-25: a carried
+        unpaired leg in a competition no longer permitted held a slot for
+        68 minutes, so three markets were quoted where four were
+        authorized (24 `max_markets` blocks), and the fourth selection was
+        released and re-selected in a loop. Owner: "Separate passive
+        inventory tracking from active quoting slots, while retaining full
+        exposure accounting and position management."
+        With RN1_SLOTS_COUNT_INVENTORY off a slot is held only by a market
+        with a RESTING opening or extension bid -- the thing a slot is for.
+        A market that merely carries inventory keeps its completion bid,
+        its place in the book, the registry and the audit, and every dollar
+        of it still counts in the per-market, campaign, at-risk and account
+        limits; the number of tracked markets stays bounded by
+        MAX_TRACKED."""
+        if RN1_SLOTS_COUNT_INVENTORY:
+            return self._rn1_exposed(mk)
+        return any(o.get("open") and not is_completion_stage(o.get("stage"))
+                   for o in (mk.get("orders") or {}).values())
+
+    def rn1_quote_qualifies(self, slug: str, mk: Dict[str, Any]) -> bool:
+        """True when our standard quote in this market would earn a reward
+        under the venue's rule right now (see RN1_RELEASE_UNQUALIFIED_S):
+        a paying programme and a positive modelled reward. One public book
+        read at most every 60 s per market; legacy reward-only mode retains a slot on read failure;
+        net ranking must not authorize openings on a failed read."""
+        try:
+            per = self.rn1_reward(slug)
+            if not per:
+                return False
+            hit = mk.get("qualify_check")
+            if hit and time.time() - float(hit.get("t") or 0) < 60:
+                return bool(hit.get("ok"))
+            got = self._reward_share_score(slug, per)
+            if "why" in got and got.get("why") not in ("no_two_sided_book",
+                                                       "no_room_for_a_bid"):
+                return not RN1_NET_RANK
+            ok = float(got.get("net_usd_per_hour" if RN1_NET_RANK
+                               else "usd_per_hour") or 0.0) > 0
+            mk["qualify_check"] = {"t": time.time(), "ok": ok,
+                                   "usd_per_hour": got.get("usd_per_hour"),
+                                   "net_usd_per_hour":
+                                       got.get("net_usd_per_hour")}
+            return ok
+        except Exception:                                 # noqa: BLE001
+            return not RN1_NET_RANK
+
+    @staticmethod
+    def rn1_pause_depth(rng: Any, tick: Any) -> int:
+        """RN1_PAUSE_DEPTH: ticks below the touch an opening/extension bid
+        rests at while the market is paused: the 30 s mid range rounded up
+        to ticks plus RN1_PAUSE_DEPTH_EXTRA_TICKS, and at least JUMP_TICKS
+        plus that (a jump pause can follow a single update)."""
+        t = D(str(tick))
+        r = max(D(0), D(str(rng or 0)))
+        ticks = int((r / t).to_integral_value(rounding="ROUND_CEILING")) \
+            if t > 0 else 0
+        return max(ticks, JUMP_TICKS) + max(0, RN1_PAUSE_DEPTH_EXTRA_TICKS)
+
+    def rn1_directional_prob(self, slug: str) -> Optional[Dict[str, Any]]:
+        """The probability band for RN1_DIRECTIONAL, or None (= no change):
+        the international fair band once settled; otherwise, with
+        RN1_DIR_SHARP, the sportsbook fair value from the sharp shadow
+        state, refused past RN1_DIR_SHARP_MAX_AGE_S and widened by its age.
+        Never the traded market's own price."""
+        from src import pmus_directional_alloc as DA
+        try:
+            band = self.intl_fair_band(slug)
+            if band.get("settled") and band.get("mid") is not None:
+                return DA.probability(band["mid"], band.get("lo"),
+                                      band.get("hi"), source="intl")
+            if RN1_DIR_SHARP:
+                st = ((self.b.d.get("sharp_shadow") or {}).get(slug) or {})
+                if st.get("fair_yes") is not None and st.get("t"):
+                    age = max(0.0, time.time() - float(st["t"])) + \
+                        float(st.get("odds_age_s") or 0.0)
+                    return DA.probability(
+                        st["fair_yes"], source="sportsbook:%s" % (
+                            st.get("source") or "odds"),
+                        age_s=round(age, 1),
+                        max_age_s=RN1_DIR_SHARP_MAX_AGE_S,
+                        drift_per_s=RN1_DIR_SHARP_DRIFT)
+        except Exception:                                 # noqa: BLE001
+            return None
+        return None
+
+    def rn1_directional_inputs(self, slug: str, want: Mapping[str, Any],
+                               bbo: Mapping[str, Any]) -> tuple:
+        """(touch prices, fill loss per side): the competition's
+        RN1_FILL_LOSS for each bid's placement (at the best bid = touch,
+        behind it = behind)."""
+        touch = {"YES": D(str(bbo["bid"])), "NO": ONE - D(str(bbo["ask"]))}
+        fl = {}
+        for sd in ("YES", "NO"):
+            tg = want.get(sd)
+            depth = 0 if tg is not None and D(str(tg["px"])) >= touch[sd] \
+                else 1
+            fl[sd] = rn1_fill_param(RN1_FILL_LOSS, depth, slug)
+        return touch, fl
+
+    def rn1_directional(self, slug: str, mk: Dict[str, Any],
+                        q: Dict[str, Any], want: Dict[str, Any],
+                        bbo: Mapping[str, Any], tick: Any, min_qty: Any,
+                        prob: Optional[Mapping[str, Any]] = None,
+                        priced: bool = False
+                        ) -> Optional[Dict[str, Any]]:
+        """See RN1_DIRECTIONAL. Changes `want` in place (remove, resize or
+        deepen opening/extension bids only) and records the decision in
+        q["directional"]. Returns the probability used (None = no change).
+        Any error leaves `want` as it was -- except that additions priced
+        without the average-cost cap (`priced`) are then withdrawn, since
+        nothing judged them (fail closed)."""
+        try:
+            from src import pmus_directional_alloc as DA
+            touch, fl = self.rn1_directional_inputs(slug, want, bbo)
+            res = DA.allocate(prob=prob, want=want, pos=mk["pos"], tick=tick,
+                              min_qty=min_qty, touch=touch, fill_loss=fl,
+                              prev_favoured=mk.get("dir_favoured"),
+                              cfg=RN1_DIR_CFG)
+            rec = res.get("directional") or {}
+            q["directional"] = rec
+            if prob is None:
+                return None
+            if rec.get("favoured"):
+                mk["dir_favoured"] = rec["favoured"]
+            for sd in ("YES", "NO"):
+                if want.get(sd) is None:
+                    continue
+                if res.get(sd) is None:
+                    want[sd] = None
+                    q["why_" + sd] = res.get("why_" + sd) or "directional"
+                else:
+                    want[sd] = res[sd]
+            return prob
+        except Exception as exc:                          # noqa: BLE001
+            q["directional"] = {"active": False,
+                                "why": "error:%s" % type(exc).__name__}
+            if priced:
+                for sd in ("YES", "NO"):
+                    tg = want.get(sd)
+                    if tg is not None and tg.get("role") == "extend":
+                        want[sd] = None
+                        q["why_" + sd] = "directional_error_unpriced_add"
+            return None
+
+    def rn1_directional_ladder(self, slug: str, mk: Dict[str, Any],
+                               q: Dict[str, Any], want: Mapping[str, Any],
+                               ladder: list, bbo: Mapping[str, Any],
+                               tick: Any, min_qty: Any,
+                               prob: Mapping[str, Any]) -> list:
+        """Deeper ladder levels judged on the inventory they would add (see
+        RN1_DIRECTIONAL). Any error keeps the ladder unchanged."""
+        try:
+            from src import pmus_directional_alloc as DA
+            fl = {sd: rn1_fill_param(RN1_FILL_LOSS, 1, slug)
+                  for sd in ("YES", "NO")}       # deeper = behind the touch
+            kept, refused = DA.allocate_ladder(
+                prob=prob, ladder=ladder, front=want, pos=mk["pos"],
+                min_qty=min_qty, fill_loss=fl, cfg=RN1_DIR_CFG)
+            if refused:
+                rec = q.setdefault("directional", {})
+                rec["ladder_refused"] = refused
+            return kept
+        except Exception:                                 # noqa: BLE001
+            return ladder
+
+    def rn1_ladder(self, slug: str, mk: Dict[str, Any],
+                   want: Mapping[str, Any], tick: Any,
+                   clip: Any = None, min_qty: Any = 1,
+                   extra_levels: Optional[Mapping[str, int]] = None) -> list:
+        """Deeper bids behind each side's target (see RN1_LADDER_LEVELS;
+        `extra_levels` adds levels to one side for RN1_DIRECTIONAL, under
+        exactly the same per-level caps):
+        [{"side","px","qty","role","level"}]. A level is added only while
+        this market's worst case with EVERY planned bid filled stays inside
+        the per-market and campaign caps; the first level that would not
+        fit ends that side's ladder.
+
+        Behind a COMPLETION bid the deeper levels are ordinary opening bids
+        of the normal clip on that side (LIVE-TESTED 2026-11-25 in replay:
+        after one fill the lighter side otherwise fell back to a single
+        completing bid, so neither side could keep accumulating). They are
+        cheaper than the completion, so each still pairs inside the
+        pair-cost limit with what the other side holds."""
+        xl = {sd: max(0, int((extra_levels or {}).get(sd) or 0))
+              for sd in ("YES", "NO")}
+        if RN1_LADDER_LEVELS <= 1 and not any(xl.values()):
+            return []
+        t = D(str(tick))
+        out: list = []
+        planned = [(sd, tg["px"], tg["qty"], tg["role"] == "complete")
+                   for sd, tg in want.items() if tg is not None]
+        other = self.rn1_campaign_exposure(exclude=slug)
+        tol = D("0.000001")
+        for side in ("YES", "NO"):
+            tg = want.get(side)
+            if tg is None or tg.get("kept"):
+                continue
+            behind_completion = tg["role"] == "complete"
+            qty = D(str(clip)) if (behind_completion and clip is not None) \
+                else D(str(tg["qty"]))
+            if RN1_LADDER_QTY is not None and RN1_LADDER_QTY > 0:
+                qty = min(qty, RN1_LADDER_QTY)
+            role = "open" if behind_completion else tg["role"]
+            for k in range(1, RN1_LADDER_LEVELS + xl[side]):
+                px = D(str(tg["px"])) - k * RN1_LADDER_STEP_TICKS * t
+                if px < D(str(RN1.PX_MIN)) or px <= 0:
+                    break
+
+                def _fits(qq: D) -> bool:
+                    trial = planned + [(l_["side"], l_["px"], l_["qty"],
+                                        False) for l_ in out] + \
+                        [(side, px, qq, False)]
+                    c = RN1.committed(mk["pos"], mk["cost"], trial)
+                    return not (
+                        c["spend"] > D(str(RN1.PER_MARKET_USD)) + tol or
+                        c["unmatched"] > D(str(RN1.RESIDUAL_CAP_USD)) + tol
+                        or other["spend"] + c["spend"] >
+                        D(str(RN1.TOTAL_SPEND_USD)) + tol or
+                        other["unmatched"] + c["unmatched"] >
+                        D(str(RN1.TOTAL_UNMATCHED_USD)) + tol)
+                lq = qty
+                if RN1_FIT_ALL_LEVELS:
+                    mq = max(D(1), D(str(min_qty)))
+                    while lq - 1 >= mq and not _fits(lq):
+                        lq -= 1
+                    if lq < mq or not _fits(lq):
+                        continue        # a deeper, cheaper level may fit
+                elif RN1.FIT_QTY:
+                    while lq > 1 and not _fits(lq):
+                        lq -= 1
+                if not _fits(lq):
+                    break
+                out.append({"side": side, "px": px, "qty": lq,
+                            "role": role, "level": k})
+        return out
+
     def rn1_campaign_caps(self, slug: str, mk: Dict[str, Any],
-                          want: Dict[str, Any], q: Dict[str, Any]) -> None:
+                          want: Dict[str, Any], q: Dict[str, Any],
+                          min_qty: Any = 1) -> None:
         """Owner 2026-11-22: $16 total spend and $6 unmatched across the
         campaign, counting filled inventory AND resting commitments. Drops
         opening/extension targets (dearest first) until this market's plan
@@ -3764,8 +6823,1050 @@ class Engine:
             if not opt:
                 return
             drop = max(opt, key=lambda sd: want[sd]["px"] * want[sd]["qty"])
+            if RN1_MARGINAL_EV and len(opt) > 1 and \
+                    all(want[sd].get("mev") for sd in opt):
+                # ECONOMIC PRIORITY (RN1_MARGINAL_EV): among the targets
+                # whose removal alone brings the plan inside both campaign
+                # caps, the one of lowest marginal net EV goes, not the
+                # dearest. When no single removal fits (the dearest is
+                # usually the binding one) the dearest-first rule stays.
+                def _fits_without(sd_: str) -> bool:
+                    r_ = [(s2, t2["px"], t2["qty"], t2["role"] == "complete")
+                          for s2, t2 in want.items()
+                          if t2 is not None and s2 != sd_]
+                    c2 = RN1.committed(mk["pos"], mk["cost"], r_)
+                    return other["spend"] + c2["spend"] <= \
+                        RN1.TOTAL_SPEND_USD and other["unmatched"] + \
+                        c2["unmatched"] <= RN1.TOTAL_UNMATCHED_USD
+                fix = [sd for sd in opt if _fits_without(sd)]
+                if len(fix) > 1:
+                    drop = min(fix, key=lambda sd: (
+                        want[sd]["mev"]["ev_usd_per_hour"],
+                        -(want[sd]["px"] * want[sd]["qty"])))
+            mq = max(D(1), D(str(min_qty)))
+            if RN1_FIT_ALL_LEVELS and D(str(want[drop]["qty"])) - 1 >= mq:
+                # size down by one whole contract and test again
+                want[drop] = dict(want[drop],
+                                  qty=D(str(want[drop]["qty"])) - 1)
+                q["why_" + drop] = over + "_sized"
+                continue
             want[drop] = None
             q["why_" + drop] = over
+
+    def intl_fair(self, slug: str) -> Optional[D]:
+        """International mid for the market's YES side, or None when the
+        guard has no fresh two-sided quote for it."""
+        g = self.guard
+        if g is None:
+            return None
+        try:
+            tok = g.token(slug)
+            it = g.intl.fresh(tok, g.max_age) if tok else None
+            if not it or it.get("bid") is None or it.get("ask") is None \
+                    or it["ask"] <= it["bid"]:
+                return None
+            return (D(str(it["bid"])) + D(str(it["ask"]))) / 2
+        except Exception:                                 # noqa: BLE001
+            return None            # unreadable fair value = no fair value
+
+    def intl_fair_band(self, slug: str) -> Dict[str, Any]:
+        """{"mid", "lo", "hi", "settled", "span_s"}: the international mid
+        now and its lowest and highest value over the last
+        RN1_FAIR_STABLE_S seconds. `settled` is False (and nothing may be
+        bid) when there is no fresh fair value now, or the unbroken history
+        does not yet cover the period. A missing fair value clears the
+        history: stability is counted from the next good reading."""
+        hist = getattr(self, "_fair_hist", None)
+        if hist is None:
+            hist = self._fair_hist = {}
+        h = hist.setdefault(slug, [])
+        now = time.time()
+        mid = self.intl_fair(slug)
+        if mid is None:
+            h.clear()
+            return {"mid": None, "lo": None, "hi": None, "settled": False,
+                    "span_s": 0.0}
+        h.append((now, mid))
+        w = max(0.0, RN1_FAIR_STABLE_S)
+        # keep one reading older than the period, so its start is covered
+        while len(h) > 1 and now - h[1][0] >= w:
+            h.pop(0)
+        span = now - h[0][0]
+        vals = [m for _t, m in h]
+        lo, hi = min(vals), max(vals)
+        calm = (hi - lo) <= RN1_FAIR_MAX_RANGE_USD
+        return {"mid": mid, "lo": lo, "hi": hi,
+                "settled": span >= w and calm, "calm": calm,
+                "range": hi - lo, "span_s": round(span, 1)}
+
+    def campaign_marker_mismatch(self) -> bool:
+        """True when a trading window is configured and the campaign marker
+        is not at (or before) its start: orders placed from the window's
+        start up to the marker would count toward no campaign cap and no
+        campaign loss stop (LIVE 2026-11-22 20:16Z). Fail closed: no new
+        exposure while it holds."""
+        w = lock_window()
+        if w is None and runtime_mode():
+            act = self._campaign_store().get("active")
+            if act:
+                w = (float(act["start"]), float(act["end"]))
+        if w is None:
+            return False
+        return self.since is None or float(self.since) > float(w[0]) + 1e-6
+
+    def rn1_reward(self, slug: str) -> Optional[Dict[str, Any]]:
+        """The paying liquidity period for this market from the cached
+        programme read (no request here), or None. A cache entry older
+        than 2 x REWARD_REFRESH_S (two missed refreshes) is no programme:
+        a programme withdrawn at the venue must not keep being credited
+        just because nothing re-read it (fail closed until refreshed)."""
+        ent = self._prog.get(slug) or (0, None)
+        prog = ent[1]
+        if not prog:
+            return None
+        try:
+            if time.monotonic() - float(ent[0]) > 2 * REWARD_REFRESH_S:
+                return None
+        except Exception:                                 # noqa: BLE001
+            return None
+        try:
+            from src import pmus_sports_rewards as R
+            return R.paying_period(prog, time.time(),
+                                   event_live=self.event_live(slug))
+        except Exception:                                 # noqa: BLE001
+            return None
+
+    # ------------------------------------------------ one controller, phases
+    def _vol(self, slug: str, bbo: Optional[Mapping], now: float) -> D:
+        """Record the venue's mid just read and return its range over
+        VOL_WINDOW_S. No book = no reading (the range is over what was
+        seen)."""
+        hist = getattr(self, "_vol_hist", None)
+        if hist is None:
+            hist = self._vol_hist = {}
+        h = hist.setdefault(slug, [])
+        try:
+            if bbo and bbo.get("bid") is not None and \
+                    bbo.get("ask") is not None:
+                h.append((now, (D(str(bbo["bid"])) + D(str(bbo["ask"]))) / 2))
+            PH.prune(h, now, max(VOL_WINDOW_S, 1.0))
+            return PH.price_range(h, now, VOL_WINDOW_S)
+        except Exception:                                 # noqa: BLE001
+            return D("0")
+
+    # MEASURED SEPARATELY BY PHASE (owner 2026-11-23: "Measure qualifying
+    # resting time, actual fills, adverse markouts, and credited rewards
+    # separately"). Per market, per phase: orders sent, fills, contracts
+    # filled, contract-seconds resting, and contract-seconds resting while
+    # the venue's scoring rule gives the resting quotes a share of a paying
+    # reward pool (theoretical; a credit is only what the venue pays).
+    # Measurement only: nothing here places, cancels or blocks an order.
+    @staticmethod
+    def _phase_count(mk: Dict[str, Any], phase: str, key: str,
+                     amount: Any) -> None:
+        try:
+            row = mk.setdefault("phase_stats", {}).setdefault(str(phase), {})
+            row[key] = str(D(str(row.get(key) or 0)) + D(str(amount)))
+        except Exception:                                 # noqa: BLE001
+            pass
+
+    def _phase_resting(self, mk: Dict[str, Any], phase: str,
+                       now: float) -> None:
+        """Add the time since this market's last pass to what was resting
+        through it. A gap longer than 60 s is not counted as resting (the
+        bot was not watching)."""
+        last = mk.get("phase_t")
+        mk["phase_t"] = now
+        if last is None:
+            return
+        dt = now - float(last)
+        if not (0 < dt <= 60):
+            return
+        left = D(0)
+        for o in mk["orders"].values():
+            if o.get("open"):
+                left += max(D(0), D(str(o["qty"])) -
+                            D(str(o.get("filled") or "0")))
+        if left <= 0:
+            return
+        self._phase_count(mk, phase, "resting_contract_s",
+                          left * D(str(round(dt, 3))))
+        est = mk.get("rn1_reward_est") or {}
+        if float(est.get("share") or 0.0) > 0 and \
+                now - float(est.get("t") or 0) <= 4 * REWARD_WALK_CHECK_S:
+            self._phase_count(mk, phase, "qualifying_contract_s",
+                              left * D(str(round(dt, 3))))
+
+    def phase_summary(self) -> Dict[str, Any]:
+        """Totals by phase across this bot's markets, for the heartbeat."""
+        out: Dict[str, Dict[str, D]] = {}
+        try:
+            for mk in (self.b.d.get("markets") or {}).values():
+                for ph, row in (mk.get("phase_stats") or {}).items():
+                    agg = out.setdefault(ph, {})
+                    for k, v in row.items():
+                        agg[k] = agg.get(k, D(0)) + D(str(v))
+            return {ph: {k: str(v) for k, v in sorted(row.items())}
+                    for ph, row in sorted(out.items())}
+        except Exception:                                 # noqa: BLE001
+            return {}
+
+    def market_phase(self, slug: str, mk: Dict[str, Any], bbo: Optional[
+            Mapping], now: float) -> Dict[str, Any]:
+        """pregame / kickoff / live for this market (src/pmus_sports_phase),
+        storing the kickoff re-check once it passes."""
+        gs = mk.get("game_start")
+        ko = mk.get("kickoff") or {}
+        fair_ok = True
+        if gs is not None and not ko.get("resumed_at") and RN1.EDGE_GATE \
+                and now >= float(gs):
+            fair_ok = bool(self.intl_fair_band(slug).get("settled"))
+        ph = PH.phase(
+            now=now, game_start=gs, pull_s=KICKOFF_PULL_S,
+            resume_min_s=KICKOFF_RESUME_MIN_S, max_hold_s=KICKOFF_MAX_HOLD_S,
+            resumed=bool(ko.get("resumed_at")),
+            confirmed_live=slug in (getattr(self.v, "states", {}) or {}),
+            fair_ok=fair_ok,
+            book_ok=bool(bbo and bbo.get("bid") is not None
+                         and bbo.get("ask") is not None))
+        if ph["resume"]:
+            mk["kickoff"] = dict(ko, resumed_at=now)
+            self.b.save()
+            log("KICKOFF_RESUME", slug=slug, game_start=gs,
+                held_s=round(now - float(ko.get("hold_since") or now), 1),
+                pos=mk["pos"], label="re-checked as live: quoting continues "
+                                     "with the in-game size")
+        return ph
+
+    def _kickoff_hold(self, slug: str, mk: Dict[str, Any],
+                      ph: Mapping[str, Any], now: float) -> None:
+        """Cancel EVERY resting order in this market (completions too: a
+        price from before the start is stale) and place nothing."""
+        ko = mk.get("kickoff") or {}
+        if not ko.get("hold_since"):
+            ko = dict(ko, hold_since=now)
+            mk["kickoff"] = ko
+        if now - float(getattr(self, "_ko_slate_at", 0.0)) >= 30.0:
+            # the re-check needs the venue's live list; selection may not be
+            # running (slots full, a cap reached), so read it here too
+            self._ko_slate_at = now
+            try:
+                self.v.live_sports()
+            except Exception as exc:                      # noqa: BLE001
+                log("discovery_error", err=str(exc)[:160], at="kickoff_hold")
+        live = [(oid, o) for oid, o in mk["orders"].items() if o.get("open")]
+        if live:
+            self._cancel_legs(slug, live)
+        if ko.get("logged") != ph["why"] or live:
+            ko["logged"] = ph["why"]
+            log("KICKOFF_HOLD", slug=slug, why=ph["why"],
+                game_start=mk.get("game_start"), cancelled=len(live),
+                still_open=sum(1 for o in mk["orders"].values()
+                               if o.get("open")),
+                pos=mk["pos"], label="no order rests through the start; "
+                                     "quoting resumes after the re-check")
+        self.b.save()
+
+    def _rn1_mature_own(self, mk: Mapping[str, Any], now: float
+                        ) -> Dict[str, Dict[D, D]]:
+        """{side: {px: qty left}} of this market's own open orders old
+        enough (RN1_NET_OWN_LAG_S) to be in the public book.
+        Count all mature owned resting levels, not only the nearest bid.
+        Young orders are omitted until the next measurement; the public
+        book may not yet contain them."""
+        owned = set(self.b.d.get("own_order_ids", []))
+        levels: Dict[str, Dict[D, D]] = {"YES": {}, "NO": {}}
+        for oid, o in (mk.get("orders") or {}).items():
+            side = o.get("side")
+            if (oid not in owned or not o.get("open") or side not in levels
+                    or o.get("stage") == "orphan"
+                    or not o.get("placed_at")
+                    or now - float(o["placed_at"]) < RN1_NET_OWN_LAG_S):
+                continue
+            px = D(o["px"])
+            left = D(o["qty"]) - D(o.get("filled", "0"))
+            if left > 0:
+                levels[side][px] = levels[side].get(px, D(0)) + left
+        return levels
+
+    @staticmethod
+    def _rn1_visible_own(book: Mapping[str, Any],
+                         levels: Mapping[str, Mapping[D, D]], tick: Any
+                         ) -> tuple:
+        """(yes, no) [(contract px, qty)] of our own levels, each capped
+        at the size the public book shows at that price."""
+        from src import pmus_sports_rewards as R
+        bids, asks = R.book_sides(book)
+
+        def visible_levels(side, public):
+            visible: Dict[int, float] = {}
+            for p, q in public:
+                k = round(float(p) / float(tick))
+                visible[k] = visible.get(k, 0.0) + float(q)
+            result = []
+            for p, q in levels[side].items():
+                price = float(p) if side == "YES" else 1.0 - float(p)
+                amount = min(float(q), visible.get(
+                    round(price / float(tick)), 0.0))
+                if amount > 0:
+                    result.append((float(p), amount))
+            return result
+        return visible_levels("YES", bids), visible_levels("NO", asks)
+
+    def rn1_marginal_ev(self, slug: str, mk: Dict[str, Any],
+                        bbo: Mapping[str, Any], tick: D,
+                        qcfg: Mapping[str, Any], cands: list,
+                        planned: list) -> Optional[list]:
+        """See RN1_MARGINAL_EV. `cands`: the opening/extension bids to judge,
+        each {"side","px","qty","role"}, level order per side (level 0
+        first). `planned`: every bid this market would rest (cands and any
+        completion), for the incremental reward. Returns one
+        RN1.marginal_ev result per candidate, or None when there is no fair
+        value to judge against (the caller then changes nothing) -- unless
+        RN1_MARGINAL_EV_NO_FAIR applies (marginal test off, no
+        international fair value): then each candidate is judged by
+        RN1.marginal_ev_no_fair, reward against fill cost, no trade edge."""
+        no_fair = False
+        if not qcfg.get("edge_gate") or qcfg.get("fair_yes") is None:
+            if not (RN1_MARGINAL_EV_NO_FAIR and not RN1.EDGE_GATE
+                    and not qcfg.get("edge_gate")
+                    and self.intl_fair(slug) is None):
+                return None
+            no_fair = True
+        t = D(str(tick))
+        pos = {s_: D(str(mk["pos"][s_])) for s_ in ("YES", "NO")}
+        clip = D(str(qcfg.get("qty", RN1.QTY)))
+        touch = {"YES": D(str(bbo["bid"])), "NO": ONE - D(str(bbo["ask"]))}
+        adv_cfg = qcfg.get("adverse_ticks")
+        # reward: credited only when the day's projection qualifies
+        inc = (getattr(self, "_rn1_inc", {}) or {}).get(slug) or {}
+        per = self.rn1_reward(slug) if inc.get("why") == "qualifies" \
+            else None
+        # STANDING START (no fair value only). The day's projection counts
+        # only what already rests, so before the first bid it is $0 and no
+        # no-fair market could ever get one. When a programme IS paying
+        # and nothing at all is counted yet (projected $0), the projection
+        # is instead that of the ladder that would rest: every planned bid
+        # (completions, kept bids, each candidate and the levels above and
+        # beside it) except a candidate that is itself refused, under the
+        # existing formula (ladder_quote_estimate x RN1_REWARD_PROJECT_H;
+        # see _rn1_boot_projection). Only if that self-supporting set
+        # reaches RN1_REWARD_MIN_DAY_USD is any of it credited, and each
+        # credit is still the haircut incremental reward of the bid alone.
+        boot = False
+        if no_fair and per is None and \
+                inc.get("why") == "below_minimum_payout" and (
+                    float(inc.get("projected_usd") or 0.0) <= 0.0 or
+                    RN1_REWARD_QUAL_SCOPE in RN1_QUAL_UNIFIED):
+            # account_day: the planned ladder is projected together with
+            # everything else (accrued today, the other active markets),
+            # so it is tested whenever the total is still short
+            per = self.rn1_reward(slug)
+            boot = bool(per)
+        book, own_y, own_n = None, [], []
+        rw_err = None
+        if per:
+            try:
+                cache = getattr(self, "_mev_book", None)
+                if cache is None:
+                    cache = self._mev_book = {}
+                hit = cache.get(slug)
+                if hit and time.monotonic() - hit[0] < \
+                        RN1_MARGINAL_BOOK_TTL_S:
+                    book = hit[1]
+                else:
+                    book = (self._reward_get()(
+                        f"/v1/markets/{slug}/book") or {}
+                    ).get("marketData") or {}
+                    cache[slug] = (time.monotonic(), book)
+                own_y, own_n = self._rn1_visible_own(
+                    book, self._rn1_mature_own(mk, time.time()), t)
+            except Exception as exc:                  # noqa: BLE001
+                book, rw_err = None, "book_error:%s" % type(exc).__name__
+        if boot and book is not None:
+            # fixed point: a refused candidate never carries the others'
+            # projection; repeat until the credited set is self-supporting
+            alive = {id(c) for c in cands}
+            last_seen: Dict[int, Dict[str, Any]] = {}
+            while True:
+                proj = self._rn1_boot_projection(book, per, planned, cands,
+                                                 alive, t, own_y, own_n,
+                                                 slug)
+                # Judge only the surviving ladder. Rejected candidates
+                # must not contribute reward or concentration to survivors.
+                if RN1_REWARD_QUAL_SCOPE in RN1_QUAL_UNIFIED:
+                    candidate_ids = {id(c) for c in cands}
+                    feasible = [c for c in cands if id(c) in alive]
+                    feasible_planned = [
+                        x for x in planned
+                        if id(x) not in candidate_ids or id(x) in alive
+                    ]
+                    judged = self._rn1_judge(
+                        slug, mk, feasible, feasible_planned, no_fair,
+                        pos, clip, touch, adv_cfg, qcfg, t,
+                        per, book, own_y, own_n, rw_err,
+                        {i: proj for i in alive})
+                    by_id = {id(c): result
+                             for c, result in zip(feasible, judged)}
+                    last_seen.update(by_id)
+                    # a candidate refused earlier keeps the judgement it was
+                    # refused with (its own figures, never a survivor's)
+                    out = [by_id.get(id(c)) or last_seen.get(id(c)) or
+                           self._rn1_rejected(c) for c in cands]
+                else:
+                    out = self._rn1_judge(slug, mk, cands, planned, no_fair,
+                                          pos, clip, touch, adv_cfg, qcfg, t,
+                                          per, book, own_y, own_n, rw_err,
+                                          {i: proj for i in alive})
+                ok = {id(c) for c, r in zip(cands, out) if r.get("ok")} \
+                    & alive
+                if ok == alive:
+                    return out
+                alive = ok
+        if RN1_REWARD_QUAL_SCOPE in RN1_QUAL_UNIFIED and not boot:
+            # the same surviving-ladder rule outside a standing start: a
+            # bid refused on its own economics is taken out of the plan and
+            # every survivor is judged again without it (its reward share
+            # and the inventory it would have added ahead), until no
+            # survivor changes. Survivors only ever see a smaller plan.
+            ids = {id(c) for c in cands}
+            alive = set(ids)
+            seen: Dict[int, Dict[str, Any]] = {}
+            while True:
+                feasible = [c for c in cands if id(c) in alive]
+                fplan = [x for x in planned
+                         if id(x) not in ids or id(x) in alive]
+                judged = self._rn1_judge(slug, mk, feasible, fplan, no_fair,
+                                         pos, clip, touch, adv_cfg, qcfg, t,
+                                         per, book, own_y, own_n, rw_err,
+                                         None)
+                by_id = {id(c): r for c, r in zip(feasible, judged)}
+                seen.update(by_id)
+                ok = {i for i, r in by_id.items() if r.get("ok")}
+                if ok == alive:
+                    return [by_id.get(id(c)) or seen.get(id(c)) or
+                            self._rn1_rejected(c) for c in cands]
+                alive = ok
+        return self._rn1_judge(slug, mk, cands, planned, no_fair, pos, clip,
+                               touch, adv_cfg, qcfg, t,
+                               None if boot else per, book, own_y, own_n,
+                               rw_err, None)
+
+    @staticmethod
+    def _rn1_rejected(c: Mapping[str, Any]) -> Dict[str, Any]:
+        """The result for a candidate taken out of the feasible ladder: the
+        same keys every reader of a marginal-EV result uses (the campaign
+        caps' economic priority reads ev_usd_per_hour), credited nothing."""
+        return {"ok": False, "why": "marginal_ev_not_positive",
+                "side": c["side"], "level": c.get("level", 0),
+                "px": str(c["px"]), "qty": str(c["qty"]),
+                "reward_why": "rejected_from_feasible_ladder",
+                "reward_usd_per_hour": 0.0, "ev_usd_per_hour": 0.0,
+                "trading_usd_per_hour": 0.0}
+
+    def _rn1_ev_hold(self, mk: Dict[str, Any], c: Mapping[str, Any],
+                     r: Mapping[str, Any], tick: Any, now: float,
+                     seen: set) -> bool:
+        """RN1_EV_HOLD: keep this failing candidate only if it is ALREADY
+        resting (an open opening/extension order on its side at its
+        price), its hold began at most RN1_EV_HOLD_MAX_S ago, and
+        EV/h x window + RN1_REPLACE_COST_USD >= 0. Never for a new bid."""
+        try:
+            px = D(str(c["px"]))
+            resting = any(
+                o.get("open") and o.get("side") == c["side"] and
+                not is_completion_stage(o.get("stage")) and
+                abs(D(str(o["px"])) - px) < RN1.REPRICE_TICKS * D(str(tick))
+                for o in (mk.get("orders") or {}).values())
+            if not resting:
+                return False
+            # only a dip in an economics that is still being read: never
+            # when the reward is lost, unread or unqualified (programme
+            # withdrawn or ended, feed or book read failing, projection
+            # below the minimum payout) -- those withdraw at once
+            if r.get("reward_why") is not None or \
+                    float(r.get("reward_usd_per_hour") or 0.0) <= 0.0:
+                return False
+            ev = float(r.get("ev_usd_per_hour"))
+            key = "%s|%s" % (c["side"], px)
+            hold = mk.setdefault("ev_hold", {})
+            t0 = float(hold.setdefault(key, now))
+            seen.add(key)
+            if now - t0 > RN1_EV_HOLD_MAX_S:
+                return False
+            return ev * RN1_EV_HOLD_MAX_S / 3600.0 + RN1_REPLACE_COST_USD \
+                >= 0.0
+        except Exception:                                 # noqa: BLE001
+            return False
+
+    def _rn1_boot_projection(self, book, per, planned, cands, alive, t,
+                             own_y, own_n, slug: str = "") -> float:
+        """THEORETICAL projected USD over RN1_REWARD_PROJECT_H of the
+        ladder that would rest: every planned bid except a candidate not
+        in `alive` (refused). The existing projection's formula
+        (rn1_incentive: ladder_quote_estimate of the resting set x
+        RN1_REWARD_PROJECT_H), applied to the planned set in place of the
+        resting one. Never raises (doubt = 0)."""
+        try:
+            from src import pmus_sports_rewards as RW
+            ids = {id(x) for x in cands}
+            ys, ns = [], []
+            for x in planned:
+                if id(x) in ids and id(x) not in alive:
+                    continue
+                (ys if x["side"] == "YES" else ns).append(
+                    (float(x["px"]), float(x["qty"])))
+            if not (ys or ns):
+                return 0.0
+            est = RW.ladder_quote_estimate(book, per, ys, ns, float(t),
+                                           own_y, own_n)
+            rate = max(0.0, float(est.get("est_usd_per_hour") or 0.0)) * \
+                rn1_reward_cal(slug, per)
+            if RN1_REWARD_QUAL_SCOPE in RN1_QUAL_UNIFIED:
+                # the same total as every other site (scope-dependent):
+                # this market's planned ladder plus what the scope adds
+                return float(self.rn1_reward_qualifies(
+                    slug, extra_usd_h=rate)["projected_usd"])
+            return rate * RN1_REWARD_PROJECT_H
+        except Exception:                                 # noqa: BLE001
+            return 0.0
+
+    def _rn1_judge(self, slug, mk, cands, planned, no_fair, pos, clip,
+                   touch, adv_cfg, qcfg, t, per, book, own_y, own_n, rw_err,
+                   qual) -> list:
+        """One RN1.marginal_ev(_no_fair) result per candidate (see
+        rn1_marginal_ev). `qual`: None, or {id(candidate): standing-start
+        projected USD}; then only a candidate whose projection reaches
+        RN1_REWARD_MIN_DAY_USD is credited any reward."""
+        from src import pmus_sports_rewards as RW
+        out = []
+        ahead = {"YES": D(0), "NO": D(0)}
+        for x in planned:            # a completion fills before what is behind
+            if x.get("role") == "complete" and x["side"] in ahead:
+                ahead[x["side"]] += D(str(x["qty"]))
+        for c in cands:
+            side, px, qty = c["side"], D(str(c["px"])), D(str(c["qty"]))
+            other = "NO" if side == "YES" else "YES"
+            held = max(D(0), pos[side] + ahead[side] - pos[other])
+            clips = int((held / clip).to_integral_value(
+                rounding="ROUND_CEILING")) if clip > 0 else 0
+            if no_fair:
+                ev = {"risk": RN1.concentration_risk(
+                    tick=t, unpaired_clips=clips,
+                    risk_step_ticks=qcfg.get("risk_step_ticks")),
+                    "fee": RN1.fee(px, RN1.MAKER_FEE_RATE)}
+            else:
+                adv = adv_cfg.get(c["role"], adv_cfg.get("default")) \
+                    if isinstance(adv_cfg, Mapping) else adv_cfg
+                fy = qcfg.get("fair_yes_lo" if side == "YES"
+                              else "fair_yes_hi", qcfg["fair_yes"])
+                if fy is None:
+                    fy = qcfg["fair_yes"]
+                ev = RN1.edge(side=side, px=px, tick=t, fair_yes=fy,
+                              adds_exposure=True, unpaired_clips=clips,
+                              fee_rate=RN1.MAKER_FEE_RATE,
+                              adverse_ticks=adv,
+                              risk_step_ticks=qcfg.get("risk_step_ticks"),
+                              incentive_ticks=0)
+            if not no_fair and ev.get("why") == "no_fair":
+                out.append({"ok": False, "why": "no_fair"})
+                ahead[side] += qty
+                continue
+            depth = max(0, int(((touch[side] - px) / t).to_integral_value(
+                rounding="ROUND_HALF_UP")))
+            loss = D(str(rn1_fill_param(RN1_FILL_LOSS, depth, slug)))
+            rew, why_r = 0.0, rw_err or ("no_qualifying_reward"
+                                          if not per else None)
+            boot_usd = None if qual is None else qual.get(id(c), 0.0)
+            if boot_usd is not None and not rw_err and \
+                    boot_usd + 1e-9 < RN1_REWARD_MIN_DAY_USD:
+                why_r = "below_minimum_payout"
+            if per and book is not None and (
+                    boot_usd is None or why_r is None):
+                try:
+                    rest = [x for x in planned if x is not c]
+                    m = RW.marginal_ladder_reward(
+                        book, per,
+                        [(float(x["px"]), float(x["qty"])) for x in rest
+                         if x["side"] == "YES"],
+                        [(float(x["px"]), float(x["qty"])) for x in rest
+                         if x["side"] == "NO"],
+                        float(t), own_y, own_n, side, float(px), float(qty))
+                    # flag off: the clamped RANK_REWARD_HAIRCUT, as before
+                    rew = max(0.0, float(m["incremental_reward_usd_per_hour"])
+                              ) * rn1_reward_mult(slug, per)
+                except Exception as exc:              # noqa: BLE001
+                    rew, why_r = 0.0, "reward_error:%s" % type(exc).__name__
+            if no_fair:
+                # no trade edge: there is no fair value (see
+                # RN1_MARGINAL_EV_NO_FAIR); the fill loss is the
+                # adverse-selection proxy
+                r = RN1.marginal_ev_no_fair(
+                    px=px, qty=qty,
+                    fill_rate=rn1_fill_param(RN1_FILL_RATE, depth, slug),
+                    fill_loss=loss, fee=ev["fee"], risk=ev["risk"],
+                    reward_usd_per_hour=rew, rebate=D(0))
+            else:
+                r = RN1.marginal_ev(
+                    fair=ev["fair"], px=px, qty=qty,
+                    fill_rate=rn1_fill_param(RN1_FILL_RATE, depth, slug),
+                    fee=ev["fee"], gate_adverse=ev["adverse"],
+                    adverse=max(D(ev["adverse"]), loss), risk=ev["risk"],
+                    reward_usd_per_hour=rew, rebate=D(0))
+            r.update(side=side, depth=depth, level=c.get("level", 0),
+                     reward_why=why_r)
+            if boot_usd is not None:
+                r["reward_projection"] = {
+                    "basis": "standing_start_planned_ladder",
+                    "projected_usd": round(boot_usd, 4),
+                    "min_payout_usd": RN1_REWARD_MIN_DAY_USD,
+                    "label": "THEORETICAL reward projection; not a payment"}
+            out.append(r)
+            ahead[side] += qty
+        return out
+
+    def _rn1_theo_accrue(self, slug: str, mk: Dict[str, Any],
+                         now: float) -> None:
+        """RN1_REWARD_CALIBRATION: accrue this market's THEORETICAL reward
+        (rn1_reward_est, the venue rule on the resting legs, full pool, no
+        haircut) over the time since the last pass (at most 300 s per
+        step), keyed by the venue's reward day, in mk["reward_theo"]. Only
+        while a programme is paying and the estimate is fresh. Recording
+        only: nothing reads it to decide an order."""
+        try:
+            last = mk.get("reward_theo_t")
+            mk["reward_theo_t"] = now
+            if last is None:
+                return
+            dt = max(0.0, min(300.0, now - float(last)))
+            est = mk.get("rn1_reward_est") or {}
+            rate = float(est.get("est_usd_per_hour") or 0.0)
+            if dt <= 0 or rate <= 0 or time.time() - float(
+                    est.get("t") or 0) > 4 * REWARD_WALK_CHECK_S or \
+                    not self.rn1_reward(slug):
+                return
+            day = datetime.fromtimestamp(
+                now + RN1_REWARD_CAL_DAY_OFFSET_H * 3600.0,
+                timezone.utc).strftime("%Y-%m-%d")
+            th = mk.setdefault("reward_theo", {})
+            th[day] = round(float(th.get(day) or 0.0) + rate * dt / 3600.0,
+                            6)
+            # the pool this accrual belongs to (RN1_REWARD_QUAL_SCOPE
+            # "program_period"): programme id + period, never pooled with
+            # another programme or another period of the same market
+            per_ = self.rn1_reward(slug) or {}
+            tp = None
+            for pk in {rn1_pool_key(per_), rn1_pool_key(per_, slug)}:
+                if pk:
+                    tp = mk.setdefault("reward_theo_pool", {}) \
+                        if tp is None else tp
+                    tp[pk] = round(float(tp.get(pk) or 0.0) +
+                                   rate * dt / 3600.0, 6)
+        except Exception:                                 # noqa: BLE001
+            return
+
+    def reward_calibration(self, rows: Any) -> Optional[Dict[str, Any]]:
+        """RN1_REWARD_CALIBRATION: log REWARD_CALIBRATION (at most every
+        RN1_REWARD_CAL_LOG_S) from the venue rows just read and the bot's
+        own theoretical accrual. READ-ONLY; never applied automatically."""
+        if not RN1_REWARD_CALIBRATION:
+            return None
+        nowm = time.monotonic()
+        last = getattr(self, "_cal_logged", None)
+        if last is not None and nowm - last < RN1_REWARD_CAL_LOG_S:
+            return None
+        try:
+            from src import pmus_reward_calibration as RC
+            theo = {s_: dict(m_.get("reward_theo") or {})
+                    for s_, m_ in (self.b.d.get("markets") or {}).items()
+                    if m_.get("reward_theo")}
+            got = RC.calibrate(rows, theo)
+        except Exception as exc:                          # noqa: BLE001
+            log("REWARD_CALIBRATION", ok=False,
+                err="%s:%s" % (type(exc).__name__, str(exc)[:120]))
+            return None
+        self._cal_logged = nowm
+        log("REWARD_CALIBRATION", ok=True,
+            by_competition=got["by_competition"],
+            by_program=got["by_program"],
+            table_in_force=rn1_reward_cal_table(),
+            pool_scope=RN1_REWARD_POOL_SCOPE,
+            haircut_fallback=RANK_REWARD_HAIRCUT,
+            day_offset_h=RN1_REWARD_CAL_DAY_OFFSET_H,
+            label=got["label"])
+        return got
+
+    def _rn1_reward_estimate(self, slug: str, mk: Dict[str, Any],
+                             per: Mapping[str, Any], tick: D) -> None:
+        """THEORETICAL reward rate of this market's CURRENT resting legs
+        under the venue's published scoring rule, kept in `rn1_reward_est`
+        (one public book read per REWARD_WALK_CHECK_S, or when the legs
+        change). Its own key: the reward-first path's state is untouched."""
+        now = time.time()
+        levels = self._rn1_mature_own(mk, now)
+        key = {side: [[str(p), str(q)] for p, q in sorted(lv.items())]
+               for side, lv in levels.items() if lv}
+        est = mk.get("rn1_reward_est")
+        if est and est.get("legs") == key and now - float(
+                est.get("t") or 0) < REWARD_WALK_CHECK_S:
+            return
+        if not key:
+            mk["rn1_reward_est"] = {"t": now, "legs": key,
+                                    "est_usd_per_hour": 0.0}
+            return
+        from src import pmus_sports_rewards as R
+        book = (self._reward_get()(f"/v1/markets/{slug}/book") or {}
+                ).get("marketData") or {}
+        y, n = self._rn1_visible_own(book, levels, tick)
+        r = R.ladder_quote_estimate(book, per, y, n, float(tick), y, n)
+        mk["rn1_reward_est"] = {"t": time.time(), "legs": key,
+                                "share": r.get("share"),
+                                "est_usd_per_hour": r.get("est_usd_per_hour"),
+                                "max_spread_ok": r.get("max_spread_ok")}
+
+    def rn1_reward_day_projection(self, slug: Optional[str] = None,
+                                  extra_usd_h: float = 0.0,
+                                  now: Optional[float] = None
+                                  ) -> Dict[str, Any]:
+        """RN1_REWARD_QUAL_SCOPE "account_day": the THEORETICAL, calibrated
+        day total the minimum payout is tested against. Pure reads; never
+        raises (doubt = 0). `slug`'s own rate is replaced by `extra_usd_h`
+        (already calibrated) when that is given."""
+        now = time.time() if now is None else now
+        out = {"scope": "account_day", "accrued_today_usd": 0.0,
+               "rate_usd_per_hour": 0.0, "horizon_h": 0.0,
+               "projected_usd": 0.0, "markets": 0,
+               "label": "THEORETICAL reward projection; not a payment"}
+        try:
+            off = RN1_REWARD_CAL_DAY_OFFSET_H * 3600.0
+            dt_day = datetime.fromtimestamp(now + off, timezone.utc)
+            day = dt_day.strftime("%Y-%m-%d")
+            day_end = datetime(dt_day.year, dt_day.month, dt_day.day,
+                               tzinfo=timezone.utc).timestamp() + 86400.0 \
+                - off
+            acc = 0.0
+            for s_, m_ in (self.b.d.get("markets") or {}).items():
+                th = (m_.get("reward_theo") or {}).get(day)
+                if th:
+                    acc += float(th) * rn1_reward_cal(s_, self.rn1_reward(s_))
+            rate = 0.0
+            plan = getattr(self, "_net_choice", None) or {}
+            seen = 0
+            for s_ in self.sports_active():
+                if s_ == slug and extra_usd_h:
+                    continue
+                per = self.rn1_reward(s_)
+                if not per:
+                    continue
+                est = (self.b.m(s_).get("rn1_reward_est") or {})
+                r_ = 0.0
+                if now - float(est.get("t") or 0) <= \
+                        4 * REWARD_WALK_CHECK_S:
+                    r_ = float(est.get("est_usd_per_hour") or 0.0) * \
+                        rn1_reward_cal(s_, per)
+                pl = plan.get(s_) or {}
+                if r_ <= 0.0 and now - float(pl.get("t") or 0) <= \
+                        RN1_REWARD_PLAN_TTL_S:
+                    r_ = float(pl.get("reward_usd_per_hour") or 0.0)
+                rate += max(0.0, r_)
+                seen += 1
+            rate += max(0.0, float(extra_usd_h or 0.0))
+            h = max(0.0, RN1_REWARD_PROJECT_H)
+            w = lock_window()
+            if w is not None and float(w[1]) > now:
+                h = min(h, (float(w[1]) - now) / 3600.0)
+            h = min(h, max(0.0, (day_end - now) / 3600.0))
+            out.update(accrued_today_usd=round(acc, 4),
+                       rate_usd_per_hour=round(rate, 6),
+                       horizon_h=round(h, 4), markets=seen,
+                       projected_usd=round(acc + rate * h, 4))
+        except Exception:                                 # noqa: BLE001
+            pass
+        return out
+
+    def rn1_reward_pool_projection(self, slug: Optional[str],
+                                   extra_usd_h: float = 0.0,
+                                   now: Optional[float] = None
+                                   ) -> Dict[str, Any]:
+        """RN1_REWARD_QUAL_SCOPE "program_period": the THEORETICAL,
+        calibrated total of `slug`'s own reward pool (programId|period):
+        what this bot has accrued in that pool, plus the calibrated rate of
+        every active market currently paying from the SAME pool (resting
+        estimate, or fresh planned rate when nothing rests) and `extra_usd_h`
+        for `slug`, over min(RN1_REWARD_PROJECT_H, window left, period
+        left). No paying pool for `slug` = 0. Never raises."""
+        now = time.time() if now is None else now
+        out = {"scope": RN1_REWARD_QUAL_SCOPE if RN1_REWARD_QUAL_SCOPE in
+               RN1_POOL_SCOPES else "program_period", "pool": None,
+               "accrued_pool_usd": 0.0, "rate_usd_per_hour": 0.0,
+               "horizon_h": 0.0, "projected_usd": 0.0, "markets": 0,
+               "label": "THEORETICAL reward projection; not a payment"}
+        try:
+            per = self.rn1_reward(slug) if slug else None
+            contract = out["scope"] == "contract_period"
+            pk = rn1_pool_key(per, slug) if contract else rn1_pool_key(per)
+            if not pk:
+                out["why"] = "no_paying_pool"
+                return out
+            out["pool"] = pk
+            acc = 0.0
+            for s_, m_ in (self.b.d.get("markets") or {}).items():
+                if contract and s_ != slug:
+                    continue                 # another contract's pool
+                v_ = (m_.get("reward_theo_pool") or {}).get(pk)
+                if v_:
+                    acc += float(v_) * rn1_reward_cal(s_, per)
+            rate, seen = 0.0, 0
+            plan = getattr(self, "_net_choice", None) or {}
+            for s_ in self.sports_active():
+                if s_ == slug and extra_usd_h:
+                    continue
+                per_s = self.rn1_reward(s_)
+                if (rn1_pool_key(per_s, s_) if contract else
+                        rn1_pool_key(per_s)) != pk:
+                    continue                 # another contract/programme/period
+                est = (self.b.m(s_).get("rn1_reward_est") or {})
+                r_ = 0.0
+                if now - float(est.get("t") or 0) <= \
+                        4 * REWARD_WALK_CHECK_S:
+                    r_ = float(est.get("est_usd_per_hour") or 0.0) * \
+                        rn1_reward_cal(s_, per_s)
+                pl = plan.get(s_) or {}
+                if r_ <= 0.0 and now - float(pl.get("t") or 0) <= \
+                        RN1_REWARD_PLAN_TTL_S:
+                    r_ = float(pl.get("reward_usd_per_hour") or 0.0)
+                rate += max(0.0, r_)
+                seen += 1
+            rate += max(0.0, float(extra_usd_h or 0.0))
+            h = max(0.0, RN1_REWARD_PROJECT_H)
+            w = lock_window()
+            if w is not None and float(w[1]) > now:
+                h = min(h, (float(w[1]) - now) / 3600.0)
+            left = self.rn1_period_left_s(slug, per, now)
+            if left is not None:
+                h = min(h, max(0.0, left) / 3600.0)
+            out.update(accrued_pool_usd=round(acc, 4),
+                       rate_usd_per_hour=round(rate, 6),
+                       horizon_h=round(h, 4), markets=seen,
+                       projected_usd=round(acc + rate * h, 4))
+        except Exception:                                 # noqa: BLE001
+            pass
+        return out
+
+    def rn1_period_left_s(self, slug: Optional[str],
+                          per: Optional[Mapping[str, Any]],
+                          now: float) -> Optional[float]:
+        """Seconds left in the paying period, where its end is known: the
+        event start for day-of pre-game, event start - 6 h for early
+        pre-game. Live runs to settlement (unknown): None."""
+        try:
+            prd = str((per or {}).get("period") or "")
+            gs = (self.b.d["markets"].get(slug) or {}).get("game_start") \
+                if slug else None
+            if gs is None and slug:
+                gs = (getattr(self, "_game_start", {}) or {}).get(slug)
+            if gs is None:
+                return None
+            gs = float(gs) if not isinstance(gs, str) else \
+                datetime.fromisoformat(gs.replace("Z", "+00:00")).timestamp()
+            if prd == "day_of":
+                return gs - now
+            if prd == "early":
+                return gs - 6 * 3600.0 - now
+        except Exception:                                 # noqa: BLE001
+            return None
+        return None
+
+    def rn1_reward_qualifies(self, slug: Optional[str] = None,
+                             extra_usd_h: float = 0.0) -> Dict[str, Any]:
+        """The one qualification every site uses (see RN1_REWARD_QUAL_SCOPE):
+        "program_period" tests `slug`'s own pool; "account_day" the
+        account's day total."""
+        if RN1_REWARD_QUAL_SCOPE in RN1_POOL_SCOPES:
+            pj = self.rn1_reward_pool_projection(slug, extra_usd_h)
+        else:
+            pj = self.rn1_reward_day_projection(slug, extra_usd_h)
+        pj["min_payout_usd"] = RN1_REWARD_MIN_DAY_USD
+        pj["qualifies"] = pj["projected_usd"] + 1e-9 >= \
+            RN1_REWARD_MIN_DAY_USD
+        if rn1_paid_rule():
+            pf = rn1_paid_fraction()
+            per_ = self.rn1_reward(slug) if slug else None
+            pool_ok = bool(per_) and (
+                RN1_REWARD_QUAL_SCOPE not in RN1_POOL_SCOPES or
+                bool(pj.get("pool")))           # a pool scope needs its pool
+            pj.update(rule="paid_fraction", paid_fraction=pf,
+                      qualifies=bool(pf) and pool_ok)
+        return pj
+
+    def rn1_incentive(self, slug: str, mk: Optional[Dict[str, Any]] = None,
+                      tick: Any = None) -> Dict[str, Any]:
+        """{"ticks", "why", ...}: the reward credit the marginal test may
+        apply for this market right now. Zero unless a programme is paying
+        AND the theoretical reward of what the bot is resting, projected
+        over RN1_REWARD_PROJECT_H across its active markets, reaches the
+        venue's minimum payout. Never raises; any doubt is zero."""
+        out: Dict[str, Any] = {"ticks": 0, "why": "no_paying_programme"}
+        try:
+            per = self.rn1_reward(slug)
+            if not per or RN1_REWARD_CREDIT_TICKS <= 0:
+                return out
+            mk = self.b.m(slug) if mk is None else mk
+            if tick is not None:
+                self._rn1_reward_estimate(slug, mk, per, D(str(tick)))
+            if rn1_paid_rule():
+                pf = rn1_paid_fraction()
+                out.update(rule="paid_fraction", paid_fraction=pf,
+                           label="THEORETICAL reward x venue paid fraction; "
+                                 "not a payment")
+                if not pf:
+                    out["why"] = "paid_fraction_unavailable"
+                    return out
+                out.update(ticks=RN1_REWARD_CREDIT_TICKS, why="qualifies")
+                return out
+            if RN1_REWARD_QUAL_SCOPE in RN1_QUAL_UNIFIED:
+                pj = self.rn1_reward_qualifies(slug)
+                out.update(projected_usd=pj["projected_usd"],
+                           min_payout_usd=RN1_REWARD_MIN_DAY_USD,
+                           scope=RN1_REWARD_QUAL_SCOPE,
+                           pool=pj.get("pool"),
+                           accrued_usd=pj.get("accrued_pool_usd",
+                                              pj.get("accrued_today_usd")),
+                           horizon_h=pj["horizon_h"],
+                           label="THEORETICAL reward projection; not a "
+                                 "payment")
+                if not pj["qualifies"]:
+                    out["why"] = "below_minimum_payout"
+                    return out
+                out.update(ticks=RN1_REWARD_CREDIT_TICKS, why="qualifies")
+                return out
+            total = 0.0
+            for s in self.sports_active():
+                est = (self.b.m(s).get("rn1_reward_est") or {})
+                if time.time() - float(est.get("t") or 0) > \
+                        4 * REWARD_WALK_CHECK_S:
+                    continue                  # an old estimate is not one
+                total += float(est.get("est_usd_per_hour") or 0.0) * (
+                    rn1_reward_cal(s, self.rn1_reward(s))
+                    if RN1_REWARD_CALIBRATION else 1.0)
+            proj = total * RN1_REWARD_PROJECT_H
+            out.update(projected_usd=round(proj, 4),
+                       min_payout_usd=RN1_REWARD_MIN_DAY_USD,
+                       label="THEORETICAL reward projection; not a payment")
+            if proj + 1e-9 < RN1_REWARD_MIN_DAY_USD:
+                out["why"] = "below_minimum_payout"
+                return out
+            out.update(ticks=RN1_REWARD_CREDIT_TICKS, why="qualifies")
+            return out
+        except Exception as exc:                          # noqa: BLE001
+            return {"ticks": 0, "why": "reward_estimate_error:%s"
+                    % type(exc).__name__}
+
+    def rn1_quote_cfg(self, slug: str, mk: Optional[Dict[str, Any]] = None,
+                      tick: Any = None) -> Dict[str, Any]:
+        """Inputs to RN1.quotes for this market. With the marginal test on
+        (RN1.EDGE_GATE) every bid needs the international fair value; the
+        adverse-selection allowance is RN1.ADVERSE_TICKS, plus the event
+        type's jump allowance for a bid that adds to an unpaired side."""
+        if not RN1.EDGE_GATE:
+            # MEASUREMENT ONLY (owner 2026-11-25: "Restore reward
+            # qualification measurement independently of international
+            # pricing"). Live 25 Nov: with this test off the reward
+            # estimate was never computed, so three hours of resting bids
+            # showed no qualifying time and `incentive: null`. The estimate
+            # and its projection are refreshed here in every mode; the
+            # result is recorded and returned to nobody, so no bid changes.
+            self._rn1_inc = getattr(self, "_rn1_inc", {})
+            self._rn1_inc[slug] = dict(self.rn1_incentive(slug, mk, tick),
+                                       measured_only=True)
+            return self.rn1_extend_cfg(slug)
+        typ = str(((getattr(self.v, "states", {}) or {}).get(slug) or {}
+                   ).get("type") or "").lower()
+        base = RN1.ADVERSE_TICKS
+        inc = self.rn1_incentive(slug, mk, tick)
+        self._rn1_inc = getattr(self, "_rn1_inc", {})
+        self._rn1_inc[slug] = inc
+        band = self.intl_fair_band(slug)
+        self._rn1_fair = getattr(self, "_rn1_fair", {})
+        self._rn1_fair[slug] = {k: (None if v is None else str(v))
+                                if k in ("mid", "lo", "hi", "range") else v
+                                for k, v in band.items()}
+        return {"edge_gate": True,
+                "fair_yes": band["mid"] if band["settled"] else None,
+                "fair_yes_lo": band["lo"], "fair_yes_hi": band["hi"],
+                "adverse_ticks": {"open": base, "complete": base,
+                                  "extend": base + RN1_JUMP_TICKS.get(typ, 0),
+                                  "default": base},
+                "risk_step_ticks": RN1.RISK_STEP_TICKS,
+                "incentive_ticks": inc["ticks"]}
+
+    def rn1_extend_cfg(self, slug: str) -> Dict[str, Any]:
+        """Inputs to the marginal test for adding to an unpaired side."""
+        if not RN1.EXTEND_EV or self.guard is None:
+            return {}
+        typ = str(((getattr(self.v, "states", {}) or {}).get(slug) or {}
+                   ).get("type") or "").lower()
+        extra = RN1_JUMP_TICKS.get(typ, 0)
+        if self.rn1_reward(slug):
+            extra -= RN1_REWARD_CREDIT_TICKS
+        return {"extend_ev": True, "fair_yes": self.intl_fair(slug),
+                "extend_extra_ticks": extra}
+
+    def _gap_hold(self, slug: str, mk: Dict[str, Any], q: Dict[str, Any],
+                  want: Dict[str, Any], bbo: Mapping,
+                  new_block: Optional[str], now: float) -> None:
+        """See RN1_GAP_HOLD_S. Records each exposure-adding bid that passed
+        the full test, and puts back a RESTING one whose only failure this
+        pass is a missing fair value."""
+        lp = mk.setdefault("last_pass", {})
+        for side in ("YES", "NO"):
+            tg = want.get(side)
+            if tg is not None:
+                if tg["role"] != "complete":
+                    lp[side] = {"t": now, "px": str(tg["px"]),
+                                "role": tg["role"], "bid": str(bbo["bid"]),
+                                "ask": str(bbo["ask"])}
+                else:
+                    lp.pop(side, None)
+                continue
+            rec = lp.get(side)
+            if RN1_GAP_HOLD_S <= 0 or new_block or rec is None or \
+                    q.get("why_" + side) != "no_fair":
+                lp.pop(side, None)       # any other failure ends the claim
+                continue
+            if now - float(rec["t"]) > RN1_GAP_HOLD_S:
+                lp.pop(side, None)
+                q["why_" + side] = "no_fair:hold_expired"
+                continue
+            if str(bbo["bid"]) != rec["bid"] or str(bbo["ask"]) != rec["ask"]:
+                lp.pop(side, None)
+                q["why_" + side] = "no_fair:venue_price_moved"
+                continue
+            band = (getattr(self, "_rn1_fair", {}) or {}).get(slug) or {}
+            if band.get("calm") is False:
+                lp.pop(side, None)
+                q["why_" + side] = "no_fair:intl_price_moving"
+                continue
+            # the bid that passed, or one left resting below it (never one
+            # above the price the test passed)
+            rest = [o for o in mk["orders"].values()
+                    if o.get("open") and o.get("side") == side
+                    and not is_completion_stage(o.get("stage"))
+                    and D(str(o["px"])) <= D(rec["px"])]
+            if len(rest) != 1:
+                lp.pop(side, None)
+                continue
+            if self.depth_block(slug, side):
+                lp.pop(side, None)
+                q["why_" + side] = "no_fair:depth"
+                continue
+            o = rest[0]
+            want[side] = {"px": D(str(o["px"])),
+                          "qty": D(str(o["qty"])) - D(str(o.get("filled")
+                                                          or "0")),
+                          "role": rec["role"], "held": True}
+            q["why_" + side] = "held_fair_gap"
+            self._gap_holds = int(getattr(self, "_gap_holds", 0)) + 1
 
     def _rn1_step(self, slug: str, mk: Dict[str, Any], spec: Mapping,
                   bbo: Mapping, tick: D) -> None:
@@ -3787,7 +7888,17 @@ class Engine:
             log("PAIR_LOCKED", slug=slug, pairs=y, avg_pair_cost=cpair,
                 locked_edge_per_pair=ONE - cpair, mode="rn1",
                 label="locked pair economics; realized at settlement")
+        rng = self._vol(slug, bbo, now)
+        if RN1_REWARD_CALIBRATION:
+            self._rn1_theo_accrue(slug, mk, now)
+        ph = self.market_phase(slug, mk, bbo, now)
+        self._phase_resting(mk, mk.get("phase_now") or ph["phase"], now)
+        mk["phase_now"] = ph["phase"]
+        if ph["phase"] == PH.KICKOFF:
+            self._kickoff_hold(slug, mk, ph, now)
+            return
         new_block = None
+        pause_reason: Optional[str] = None   # see RN1_PAUSE_DEPTH
         if os.getenv(ENABLED_ENV, "").upper() != "YES":
             new_block = "not_enabled"
         elif submission_locked():
@@ -3804,6 +7915,10 @@ class Engine:
             new_block = "account_risk"
         elif self.pilot_block():
             new_block = self.pilot_block()
+        elif self.campaign_marker_mismatch():
+            new_block = "campaign_marker_mismatch"
+        elif self.audit_blocks():
+            new_block = self.audit_blocks()
         # account-wide blocks hold the slot (they lift); a block about THIS
         # market (late, excluded, open-EV gate) frees a flat market's slot,
         # exactly as the two-sided path releases a gated flat market
@@ -3814,21 +7929,145 @@ class Engine:
             late = "excluded"
         if not new_block and late:
             new_block = "late:" + str(late)
+        if not new_block and self.scope_block(slug):
+            new_block = self.scope_block(slug)
         if not new_block and OPEN_EV_GATE and not self.open_gate(slug)["allow"]:
             new_block = "open_ev_gate"
         if not new_block and self.ws is not None and \
                 now < float(mk.get("jump_pause_until") or 0):
-            new_block = "jump_pause"
+            if RN1_PAUSE_DEPTH:
+                pause_reason = "jump_pause"
+            else:
+                new_block = "jump_pause"
+        if not new_block and slate() == "live" and \
+                ph["phase"] == "pregame":
+            # LIVE 2026-11-25 17:08Z: with the slate switched to in-play
+            # only, a market already tracked from before still placed five
+            # pre-game opening bids. The slate decides selection; this
+            # holds the same rule for markets already on the list. Only
+            # openings and extensions stop; completions continue.
+            new_block = "slate_live_pregame"
+        if not new_block and ph["expired"]:
+            new_block = "kickoff_unconfirmed"
+        pin = rn1_pin()
+        if not new_block and pin is not None and slug not in pin:
+            new_block = "not_pinned"
+        vp = PH.pause_until(self._vol_hist.get(slug) or (), now,
+                            window_s=VOL_WINDOW_S, move_usd=VOL_PAUSE_USD,
+                            calm_s=VOL_CALM_S,
+                            prev_until=float(mk.get("vol_pause_until") or 0))
+        if vp != float(mk.get("vol_pause_until") or 0):
+            mk["vol_pause_until"] = vp
+            log("VOL_PAUSE", slug=slug, range=rng, window_s=VOL_WINDOW_S,
+                threshold=VOL_PAUSE_USD, calm_s=VOL_CALM_S, phase=ph["phase"],
+                label="price moving fast: opening and extension bids "
+                      "pulled until it is calm")
+        if not new_block and now < vp:
+            if RN1_PAUSE_DEPTH:
+                pause_reason = pause_reason or "vol_pause"
+            else:
+                new_block = "vol_pause"
         if not new_block and self.rn1_market_slots_full(slug, mk):
             new_block = "max_markets"
+        net_neg = False
+        if not new_block and RN1_NET_RANK and \
+                not self.rn1_quote_qualifies(slug, mk):
+            # no opening or extension while the fresh estimate (re-priced
+            # after every fill) is not positive, flat or not; completions
+            # go on. LIVE 25 Nov 23:45: markets carried over from before
+            # the window quoted for up to RELEASE_UNQUALIFIED_S at a
+            # negative estimate, and one filled.
+            # With RN1_MARGINAL_EV the block is decided below, per bid.
+            if RN1_MARGINAL_EV:
+                net_neg = True
+            else:
+                new_block = "net_not_positive"
+        qcfg = dict(self.rn1_quote_cfg(slug, mk, tick))
+        if RN1_MARGINAL_EV:
+            qcfg["ev_priority"] = True
+        if RN1_FIT_ALL_LEVELS:
+            qcfg["fit_qty"] = True
+            qcfg["fit_pair_cap"] = True
+        join_why = self.rn1_join_touch(slug, mk, bbo, tick, rng, now)
+        if join_why is None and not pause_reason:
+            qcfg["depth_ticks"] = 0
+        pq = PH.qty_for(ph["phase"], pregame_qty=rn1_pregame_qty(),
+                        live_qty_now=PH.live_qty(rn1_live_qty(),
+                                                 spec["min_qty"], rng,
+                                                 VOL_SHRINK_USD))
+        nc_ = (getattr(self, "_net_choice", None) or {}).get(slug)
+        if (RN1_NET_RANK or RN1_TOUCH_EV) and nc_ and \
+                nc_.get("qty") is not None:
+            pq = max(min(pq, D(str(nc_["qty"]))), D(str(spec["min_qty"])))
+        if pq != D(str(RN1.QTY)):
+            qcfg["qty"] = pq
+        if RN1_TOUCH_EV:
+            # per-side placement by reward-adjusted marginal EV, on the
+            # same function the selection used (see RN1_TOUCH_EV)
+            tev = self.rn1_touch_ev_quote(slug, mk, bbo, tick, rng, pq,
+                                          qcfg, now)
+            qcfg["depth_ticks_side"] = tev["depth_side"]
+        if pause_reason:
+            # RN1_PAUSE_DEPTH: rest below where the move has already been
+            pdep = self.rn1_pause_depth(rng, tick)
+            base = qcfg.get("depth_ticks_side") or {}
+            dflt = int(qcfg.get("depth_ticks", RN1.DEPTH_TICKS))
+            qcfg["depth_ticks_side"] = {
+                sd: max(int(base.get(sd, dflt)), pdep)
+                for sd in ("YES", "NO")}
+            qcfg["depth_ticks"] = max(dflt, pdep)
+            if RN1_PAUSE_MIN_SIZE:
+                # volatility-adaptive size: the venue minimum while paused
+                qcfg["qty"] = min(D(str(qcfg.get("qty", RN1.QTY))),
+                                  max(D(1), D(str(spec["min_qty"]))))
+        if RN1_KEEP_TOL_USD > 0 and not new_block:
+            qcfg["keep_tol_usd"] = RN1_KEEP_TOL_USD
+            qcfg["keep_px"] = {o["side"]: o["px"]
+                               for o in mk["orders"].values()
+                               if o.get("open")}
+        dir_prob = None
+        if RN1_DIRECTIONAL:
+            dir_prob = self.rn1_directional_prob(slug)
+            if dir_prob is not None:
+                try:
+                    from src import pmus_directional_alloc as DA
+                    touch0 = {"YES": D(str(bbo["bid"])),
+                              "NO": ONE - D(str(bbo["ask"]))}
+                    fl0 = {sd: rn1_fill_param(RN1_FILL_LOSS, 0, slug)
+                           for sd in ("YES", "NO")}
+                    qcfg["qty_side"] = DA.size_hint(
+                        prob=dir_prob, touch=touch0,
+                        clip=qcfg.get("qty", RN1.QTY), fill_loss=fl0,
+                        prev_favoured=mk.get("dir_favoured"),
+                        cfg=RN1_DIR_CFG, max_qty=rn1_max_clip())
+                    mk["_dir_levels"] = DA.ladder_hint(
+                        prob=dir_prob, touch=touch0, fill_loss=fl0,
+                        prev_favoured=mk.get("dir_favoured"),
+                        cfg=RN1_DIR_CFG)
+                    if RN1_DIR_PRICE_ADDS:
+                        qcfg["adds_priced_externally"] = True
+                except Exception:                         # noqa: BLE001
+                    dir_prob = None
         q = RN1.quotes(yes_bid=bbo["bid"], yes_ask=bbo["ask"], tick=tick,
                        pos=mk["pos"], cost=mk["cost"],
                        last_fill_t=mk.get("last_fill_t"), now=now,
-                       min_qty=spec["min_qty"])
+                       min_qty=spec["min_qty"], c=qcfg)
         want: Dict[str, Any] = {}
+        ks = mk.setdefault("keep_since", {})
         for side in ("YES", "NO"):
             tg = q.get(side)
+            if tg and tg.get("kept"):
+                since = float(ks.setdefault(side, now))
+                if now - since > RN1_KEEP_MAX_S:
+                    q["why_" + side] = "keep_expired"
+                    tg = None
+            else:
+                ks.pop(side, None)
             if tg and tg["role"] != "complete" and new_block:
+                tg = None
+            if tg and tg["role"] != "complete" and pin is not None and \
+                    pin.get(slug) not in (None, side):
+                q["why_" + side] = "pinned_other_side"
                 tg = None
             if tg and tg["role"] != "complete":
                 dwhy = self.depth_block(slug, side)
@@ -3848,59 +8087,280 @@ class Engine:
                     q["why_" + side] = "intl_guard:" + str(gv.get("why"))
                     tg = None
             want[side] = tg
-        self.rn1_campaign_caps(slug, mk, want, q)
+        if RN1_DIRECTIONAL:
+            dir_prob = self.rn1_directional(slug, mk, q, want, bbo, tick,
+                                            spec["min_qty"], dir_prob,
+                                            priced=bool(qcfg.get(
+                                                "adds_priced_externally")))
+        self._gap_hold(slug, mk, q, want, bbo, new_block, now)
+        mev_on = RN1_MARGINAL_EV and not new_block
+        mev_pass = False
+        if mev_on:
+            # ECONOMIC PRIORITY for the campaign caps (finding 2)
+            lv0 = [dict(tg, side=sd) for sd, tg in want.items()
+                   if tg is not None and tg["role"] != "complete"]
+            got = self.rn1_marginal_ev(
+                slug, mk, bbo, tick, qcfg, lv0,
+                lv0 + [dict(tg, side=sd) for sd, tg in want.items()
+                       if tg is not None and tg["role"] == "complete"])
+            for c_, r_ in zip(lv0, got or ()):
+                want[c_["side"]] = dict(want[c_["side"]], mev=r_)
+        self.rn1_campaign_caps(slug, mk, want, q, min_qty=spec["min_qty"])
+        ladder = self.rn1_ladder(slug, mk, want, tick,
+                                 clip=qcfg.get("qty", RN1.QTY),
+                                 min_qty=spec["min_qty"],
+                                 extra_levels=(mk.pop("_dir_levels", None)
+                                               if dir_prob is not None
+                                               else None))
+        if RN1_DIRECTIONAL and dir_prob is not None and ladder:
+            ladder = self.rn1_directional_ladder(slug, mk, q, want, ladder,
+                                                 bbo, tick, spec["min_qty"],
+                                                 dir_prob)
+        mev_log = None
+        if mev_on:
+            # MARGINAL NET EV PER BID (finding 1): level-0 targets and every
+            # deeper level, each against everything else planned
+            lv0 = [dict(tg, side=sd, level=0) for sd, tg in want.items()
+                   if tg is not None and tg["role"] != "complete"
+                   and not tg.get("kept") and not tg.get("held")]
+            cands = lv0 + [l_ for l_ in ladder
+                           if l_.get("role") != "complete"]
+            judged = {c_["side"] for c_ in lv0}
+            planned = lv0 + [dict(tg, side=sd) for sd, tg in want.items()
+                             if tg is not None and sd not in judged] + \
+                list(ladder)
+            got = self.rn1_marginal_ev(slug, mk, bbo, tick, qcfg, cands,
+                                       planned)
+            if got is None:
+                if net_neg:
+                    new_block = "net_not_positive"   # exactly as before
+            else:
+                mev_log = []
+                drop_ids = set()
+                ev_seen: set = set()
+                for c_, r_ in zip(cands, got):
+                    mev_log.append({"side": c_["side"],
+                                    "level": c_.get("level", 0),
+                                    "px": str(c_["px"]),
+                                    "qty": str(c_["qty"]),
+                                    "ok": r_.get("ok"), "why": r_.get("why"),
+                                    "ev_usd_per_hour":
+                                        r_.get("ev_usd_per_hour"),
+                                    "reward_usd_per_hour":
+                                        r_.get("reward_usd_per_hour")})
+                    if r_.get("basis"):
+                        mev_log[-1]["basis"] = r_["basis"]
+                    if not r_.get("ok") and RN1_EV_HOLD and \
+                            self._rn1_ev_hold(mk, c_, r_, tick, now,
+                                              ev_seen):
+                        mev_log[-1]["held"] = True
+                        continue           # resting, kept through the dip
+                    if not r_.get("ok"):
+                        drop_ids.add(id(c_))
+                        if c_.get("level", 0) == 0:
+                            want[c_["side"]] = None
+                            q["why_" + c_["side"]] = \
+                                "marginal_ev:" + str(r_.get("why"))
+                ladder = [l_ for l_ in ladder if id(l_) not in drop_ids]
+                if RN1_EV_HOLD:
+                    # a bid that passes again starts a fresh hold window
+                    hold_ = mk.get("ev_hold") or {}
+                    for k_ in [k_ for k_ in hold_ if k_ not in ev_seen]:
+                        hold_.pop(k_, None)
+                mev_pass = any(
+                    tg is not None and tg["role"] != "complete"
+                    for tg in want.values()) or any(
+                    l_.get("role") != "complete" for l_ in ladder)
+                if net_neg and not mev_pass:
+                    new_block = "net_not_positive"
+            if new_block:
+                for sd in ("YES", "NO"):
+                    if want.get(sd) is not None and \
+                            want[sd]["role"] != "complete":
+                        want[sd] = None
+        if RN1_NET_REPOST_MIN_S > 0 and RN1_NET_RANK and \
+                new_block in (None, "net_not_positive"):
+            # REPOST HYSTERESIS (see RN1_NET_REPOST_MIN_S)
+            if new_block == "net_not_positive":
+                mk["net_repost_neg_t"] = now
+                mk.pop("net_repost_pos_since", None)
+            elif mk.get("net_repost_neg_t") is not None:
+                ps_ = float(mk.setdefault("net_repost_pos_since", now))
+                if now - ps_ < RN1_NET_REPOST_MIN_S:
+                    new_block = "net_not_positive"
+                    q["net_repost_wait_s"] = round(
+                        RN1_NET_REPOST_MIN_S - (now - ps_), 1)
+                    for sd in ("YES", "NO"):
+                        if want.get(sd) is not None and \
+                                want[sd]["role"] != "complete":
+                            want[sd] = None
+                else:
+                    mk.pop("net_repost_neg_t", None)
+                    mk.pop("net_repost_pos_since", None)
+        if new_block:
+            # A block stops every opening and extension. The levels behind
+            # a completing bid are openings (see rn1_ladder), so they stop
+            # too; only completions continue. LIVE 25 Nov 2026: with the
+            # campaign loss stop in force two such opening bids rested
+            # behind the completing bid.
+            ladder = [l_ for l_ in ladder if l_.get("role") == "complete"]
         key = json.dumps({s: (None if t is None else
                               [str(t["px"]), str(t["qty"]), t["role"]])
                           for s, t in want.items()} |
-                         {"block": new_block,
+                         {"ladder": [[l_["side"], str(l_["px"])]
+                                     for l_ in ladder]} |
+                         {"block": new_block, "phase": ph["phase"],
                           "why": {s: q.get("why_" + s) for s in ("YES", "NO")}},
                          sort_keys=True)
         if mk.get("rn1_logged") != key:
             mk["rn1_logged"] = key
             log("RN1_QUOTE", slug=slug, pos=mk["pos"], cost=mk["cost"],
                 bid=bbo["bid"], ask=bbo["ask"], block=new_block,
+                phase=ph["phase"], range=rng,
                 want={s: (None if t is None else
                           {"px": str(t["px"]), "qty": str(t["qty"]),
                            "role": t["role"]}) for s, t in want.items()},
                 why={s: q.get("why_" + s) for s in ("YES", "NO")},
+                ladder=[{"side": l_["side"], "px": str(l_["px"]),
+                         "qty": str(l_["qty"]), "level": l_["level"]}
+                        for l_ in ladder] or None,
+                extend_ev=q.get("extend_ev"),
+                edge=q.get("edge"),
+                marginal_ev=mev_log,
+                directional=q.get("directional"),
+                pause_depth=(None if not pause_reason else
+                             {"reason": pause_reason,
+                              "ticks": self.rn1_pause_depth(rng, tick)}),
+                fair=(getattr(self, "_rn1_fair", {}) or {}).get(slug),
+                incentive=(getattr(self, "_rn1_inc", {}) or {}).get(slug),
+                reward=bool(self.rn1_reward(slug)),
                 label="RN1 replica decision; orders only if every gate "
                       "and the submission lock allow")
         # reconcile: keep a resting bid within REPRICE_TICKS of target with
         # no more than the target size left; cancel everything else first
+        # every bid this market should have: one per side (level 0) plus
+        # any deeper levels (RN1_LADDER_LEVELS). Each resting order is kept
+        # for the first target it matches; nothing is kept twice.
+        targets = [(sd, tg, 0) for sd, tg in want.items() if tg is not None]
+        targets += [(l_["side"], l_, l_["level"]) for l_ in ladder]
         stale = []
-        keep = {}
+        matched: set = set()
+        # A side waiting out its refill cooldown keeps the deeper bids it
+        # already has resting (LIVE-TESTED 2026-11-25 in replay: one fill
+        # otherwise cancelled the rest of that side's ladder, so inventory
+        # could not build through successive fills). Nothing new is placed
+        # on that side until the cooldown ends, and only when no market
+        # block (pause, late, cap, lock) applies.
+        cooling = set() if new_block or RN1_LADDER_LEVELS <= 1 else {
+            sd for sd in ("YES", "NO") if want.get(sd) is None and
+            q.get("why_" + sd) == "refill_cooldown"}
+        if new_block == "net_not_positive" and RN1_NET_HOLD_S > 0 and \
+                not (RN1_EV_HOLD and RN1_MARGINAL_EV):
+            neg0 = float(mk.setdefault("net_neg_since", now))
+            if now - neg0 < RN1_NET_HOLD_S:
+                touch = {"YES": D(str(bbo["bid"])),
+                         "NO": ONE - D(str(bbo["ask"]))}
+                for oid_, o_ in list(mk["orders"].items()):
+                    if o_.get("open") and \
+                            not is_completion_stage(o_.get("stage")) and \
+                            D(str(o_["px"])) > touch.get(o_["side"], ONE):
+                        # it would now set the price: not kept
+                        o_["_hold_drop"] = True
+                cooling = {"YES", "NO"}
+        else:
+            mk.pop("net_neg_since", None)
         for oid, o in mk["orders"].items():
             if not o.get("open"):
                 continue
-            tg = want.get(o["side"])
             left = D(o["qty"]) - D(o.get("filled") or "0")
-            if tg is not None and o["side"] not in keep and \
-                    abs(D(o["px"]) - tg["px"]) < RN1.REPRICE_TICKS * tick and \
-                    left <= tg["qty"]:
-                keep[o["side"]] = oid
-            else:
+            if o["side"] in cooling and \
+                    not is_completion_stage(o.get("stage")) and \
+                    not o.pop("_hold_drop", False):
+                continue                         # kept through the cooldown
+            hit = None
+            for i, (sd, tg, lv) in enumerate(targets):
+                if i in matched or sd != o["side"]:
+                    continue
+                gap = tg["px"] - D(o["px"])
+                near = abs(gap) < RN1.REPRICE_TICKS * tick
+                deeper = lv == 0 and RN1_KEEP_DEEPER_TICKS > 0 and \
+                    tg["role"] != "complete" and \
+                    not is_completion_stage(o.get("stage")) and \
+                    D(0) < gap <= RN1_KEEP_DEEPER_TICKS * tick
+                if (near or deeper) and left <= tg["qty"]:
+                    hit = i
+                    if deeper and not near:
+                        self._kept_deeper = int(getattr(
+                            self, "_kept_deeper", 0)) + 1
+                    break
+            if hit is None:
                 stale.append((oid, o))
+            else:
+                matched.add(hit)
+        wait_sides: set = set()
         if stale:
             before = (str(mk["pos"]["YES"]), str(mk["pos"]["NO"]))
             self._cancel_legs(slug, stale)
             self.b.save()
-            if (str(mk["pos"]["YES"]), str(mk["pos"]["NO"])) != before or \
-                    any(o.get("open") for _oid, o in stale):
+            raced = (str(mk["pos"]["YES"]), str(mk["pos"]["NO"])) != before
+            pending = {o["side"] for _oid, o in stale if o.get("open")}
+            if raced or (pending and not RN1_SIDE_INDEPENDENT):
                 return       # a fill raced the cancel, or still pending
+            # RN1_SIDE_INDEPENDENT: only the side still cancelling waits
+            wait_sides = pending
         flat = y == 0 and n == 0
-        if flat and not any(want.values()) and not account_block:
+        if flat and RN1_RELEASE_UNQUALIFIED_S > 0 and not mev_pass and \
+                new_block in (None, "net_not_positive"):
+            if self.rn1_quote_qualifies(slug, mk):
+                mk.pop("unqualified_since", None)
+            else:
+                since_u = float(mk.setdefault("unqualified_since", now))
+                if now - since_u > RN1_RELEASE_UNQUALIFIED_S and \
+                        not any(o.get("open") for o in mk["orders"].values()):
+                    mk["done"] = True
+                    mk["released_flat"] = now
+                    self.b.save()
+                    log("released_unqualified_market", slug=slug,
+                        unqualified_s=round(now - since_u, 1),
+                        label="our quote here would earn no reward under "
+                              "the venue's rule; slot freed for a market "
+                              "that qualifies")
+                    return
+                if now - since_u > RN1_RELEASE_UNQUALIFIED_S:
+                    self._cancel_legs(slug, [(oid, o) for oid, o in
+                                             mk["orders"].items()
+                                             if o.get("open")])
+                    self.b.save()
+                    return
+        balanced = RN1_RELEASE_BALANCED and y == n and y > 0
+        if (flat or balanced) and not any(want.values()) and \
+                not account_block:
             idle = mk.setdefault("idle_since", now)
-            if now - float(idle) > 120 and \
+            # only paused: the price is moving, or the international price
+            # is missing this pass. Anything else (late, out of scope, no
+            # edge, thin) is about the market itself.
+            paused = new_block in ("jump_pause", "vol_pause") or \
+                bool(pause_reason) or (
+                new_block is None and any(
+                    str(q.get("why_" + s_) or "").startswith("no_fair")
+                    for s_ in ("YES", "NO")))
+            limit = max(120.0, RN1_PAUSED_RELEASE_S) if paused else 120.0
+            if paused and RN1_PAUSE_ROTATE_S > 0:
+                # RN1_PAUSE_ROTATE_S: a paused flat market frees its slot
+                limit = max(15.0, min(limit, RN1_PAUSE_ROTATE_S))
+            if now - float(idle) > limit and \
                     not any(o.get("open") for o in mk["orders"].values()):
                 mk["done"] = True
+                mk["released_flat"] = now
                 self.b.save()
                 log("released_flat_market", slug=slug, pos=mk["pos"],
-                    bid=bbo["bid"], ask=bbo["ask"], mode="rn1")
+                    bid=bbo["bid"], ask=bbo["ask"], mode="rn1",
+                    paused=paused, idle_s=round(now - float(idle), 1),
+                    reselectable=RN1_RESELECT)
             return
         mk.pop("idle_since", None)
-        for side in ("YES", "NO"):
-            tg = want.get(side)
-            if tg is None or side in keep:
+        for i, (side, tg, _lv) in enumerate(targets):
+            if i in matched or side in wait_sides:
                 continue
             stage = {"complete": "two_sided_complete",
                      "extend": "rn1_extend"}.get(tg["role"], "rn1_open")
@@ -3919,7 +8379,10 @@ class Engine:
         for oid, o in list(mk["orders"].items()):
             if not o.get("open"):
                 continue
+            if self.fill_list_proves_unchanged(oid, o):
+                continue                 # resting, nothing filled: no read
             st = self.v.status(oid)
+            self._exact_read(oid)
             self._record_fill(slug, o["side"], oid, st)
             o["open"] = st["open"]
             if not st["open"] and D(o.get("filled") or "0") < D(o["qty"]):
@@ -3952,6 +8415,7 @@ class Engine:
             return
         spec = self.v.spec(slug)
         bbo = self.v.bbo(slug)
+        self._markout_step(slug, mk, bbo)
         if spec is None or bbo is None:
             if spec is None:
                 # LIVE 2026-11-15 20:03Z: this marked every order closed
@@ -3973,6 +8437,8 @@ class Engine:
                     self.b.save()
                     return
                 mk["done"] = True
+                mk["closed"] = True               # never reselected
+                mk.pop("released_flat", None)
                 if mk.get("lone_since") is not None:
                     self._recovery_resolved(slug, mk, "held_to_close")
                 self.b.save()
@@ -4362,49 +8828,1081 @@ class Engine:
         log(kind, slug=slug, **kw,
             label="no taker exit; maker completion keeps resting/stepping")
 
+    def slate_targets(self) -> list:
+        """Candidates for the one controller: games in progress, games not
+        yet started, or both (PMUS_TWO_SIDED_SLATE). With both, a game in
+        progress comes first and a market is listed once."""
+        sl = slate()
+        if sl == "pregame":
+            return self.v.pregame_sports()
+        live = self.v.live_sports()
+        if sl == "live":
+            return live
+        seen = {t["slug"] for t in live}
+        return live + [t for t in self.v.pregame_sports()
+                       if t["slug"] not in seen]
+
+    def _reward_share_score(self, slug: str,
+                            per: Mapping[str, Any]) -> Dict[str, Any]:
+        """THEORETICAL reward per dollar committed for our own quote in
+        this market: {"usd_per_hour", "capital_usd", "per_dollar_hour",
+        "share"} or {"why": ...}. One public book read."""
+        from src import pmus_sports_rewards as R
+        spec = self.v.spec(slug)
+        if not spec:
+            return {"why": "no_spec"}
+        tick = D(str(spec["tick"]))
+        book = (self._reward_get()(f"/v1/markets/{slug}/book") or {}
+                ).get("marketData") or {}
+        bids, asks = R.book_sides(book)
+        if not bids or not asks:
+            return {"why": "no_two_sided_book"}
+        bb, ba = D(str(bids[0][0])), D(str(asks[0][0]))
+        if RN1_TOUCH_EV:
+            # the placement the controller will quote (same function)
+            return self._touch_ev_score(slug, book, per, bb, ba, tick)
+        depth = max(0, int(RN1.DEPTH_TICKS))
+        yes_px = bb - depth * tick
+        no_px = (ONE - ba) - depth * tick
+        if not (D(0) < yes_px < ONE and D(0) < no_px < ONE):
+            return {"why": "no_room_for_a_bid"}
+        qty = rn1_max_clip()
+        if RN1_NET_RANK:
+            return self._net_score(slug, book, per, bb, ba, tick, qty, R)
+        est = R.quote_estimate(book, per, float(yes_px), float(no_px),
+                               float(qty), float(tick))
+        cap = qty * (yes_px + no_px)
+        rate = float(est.get("est_usd_per_hour") or 0.0) * \
+            rn1_reward_cal(slug, per)
+        return {"usd_per_hour": round(rate, 6),
+                "capital_usd": str(cap),
+                "per_dollar_hour": round(rate / float(cap), 6)
+                if cap > 0 else 0.0,
+                "share": est.get("share"),
+                "max_spread_ok": est.get("max_spread_ok")}
+
+    def _net_score(self, slug: str, book: Mapping[str, Any],
+                   per: Mapping[str, Any], bb: D, ba: D, tick: D, qty: D,
+                   R: Any) -> Dict[str, Any]:
+        """See RN1_NET_RANK: the better of two placements (0 = at the best
+        bid, 1 = one tick behind) by THEORETICAL net per hour. Where both
+        bids at a placement would exceed the pair-cost limit, the dearer
+        one is lowered to fit, as the quoting rule does."""
+        cap_px = D(str(RN1.PAIR_CAP))
+        sizes = [x for x in RN1_NET_SIZES if 0 < x <= qty] or [qty]
+        best_q = None
+        for q_ in sizes:
+            got = self._net_rows(slug, book, per, bb, ba, tick, q_, R, cap_px)
+            if got is None:
+                continue
+            if best_q is None or got[1]["net_usd_per_hour"] > \
+                    best_q[2][1]["net_usd_per_hour"] + 1e-12:
+                best_q = (q_, got[0], got)
+        if best_q is None:
+            return {"why": "no_room_for_a_bid"}
+        qty, best, (_d, b, rows) = best_q[0], best_q[1], best_q[2]
+        out = {"usd_per_hour": b["reward_usd_per_hour"],
+               "net_usd_per_hour": b["net_usd_per_hour"],
+               "capital_usd": str(b["capital_usd"]),
+               "per_dollar_hour": round(b["net_usd_per_hour"]
+                                        / b["capital_usd"], 6)
+               if b["capital_usd"] > 0 else 0.0,
+               "depth": best, "qty": str(qty), "placements": rows,
+               "share": b["share"], "max_spread_ok": b["max_spread_ok"]}
+        choice = getattr(self, "_net_choice", None)
+        if choice is None:
+            choice = self._net_choice = {}
+        prev = choice.get(slug)
+        choice[slug] = {"t": time.time(), "depth": best, "qty": qty,
+                        "net_usd_per_hour": b["net_usd_per_hour"]}
+        if not prev or prev.get("depth") != best or \
+                prev.get("qty") != qty or \
+                (prev.get("net_usd_per_hour", 0) > 0) != \
+                (b["net_usd_per_hour"] > 0):
+            log("RN1_NET_PLACEMENT", slug=slug, placement=(
+                "best_bid" if best == 0 else "one_tick_behind"),
+                qty=str(qty), placements=rows,
+                label="THEORETICAL reward minus expected fill cost per "
+                      "hour; an estimate, not a payment")
+        return out
+
+    def _net_rows(self, slug: str, book: Mapping[str, Any],
+                  per: Mapping[str, Any], bb: D, ba: D, tick: D, qty: D,
+                  R: Any, cap_px: D) -> Optional[tuple]:
+        """(best depth, its row, {depth: row}) for one clip size."""
+        rows = {}
+        for d in (0, 1):
+            y = bb - d * tick
+            n = (ONE - ba) - d * tick
+            over = y + n - cap_px
+            if over > 0:
+                if y >= n:
+                    y -= over
+                else:
+                    n -= over
+            if not (D(0) < y < ONE and D(0) < n < ONE):
+                rows[d] = {"why": "no_room_for_a_bid"}
+                continue
+            # Only acknowledged, locally owned open orders at the candidate
+            # price are replacements. Other ladder levels remain in the
+            # denominator (conservative until multi-level scoring exists).
+            mk = self.b.d.get("markets", {}).get(slug, {})
+            owned = set(self.b.d.get("own_order_ids", []))
+            own = {"YES": D(0), "NO": D(0)}
+            for oid, order in (mk.get("orders") or {}).items():
+                side = order.get("side")
+                if (oid not in owned or not order.get("open") or
+                        side not in own or order.get("stage") == "orphan"):
+                    continue
+                # an order younger than the public book's lag may not be in
+                # the snapshot yet: deducting it would remove a competitor's
+                # size instead of ours (optimistic), so it is not deducted
+                if time.time() - float(order.get("placed_at") or 0) < \
+                        RN1_NET_OWN_LAG_S:
+                    continue
+                if D(str(order["px"])) == (y if side == "YES" else n):
+                    own[side] += max(D(0), D(str(order["qty"])) -
+                                     D(str(order.get("filled", "0"))))
+            kwargs = {}
+            if own["YES"] or own["NO"]:
+                # Do not subtract more than the visible level. A public
+                # snapshot can lag private acknowledgements/fills.
+                bids, asks = R.book_sides(book)
+                visible_y = sum(q for p, q in bids
+                                if D(str(p)) == y)
+                visible_n = sum(q for p, q in asks
+                                if D(str(p)) == ONE - n)
+                kwargs = {"own_yes": min(float(own["YES"]), float(visible_y)),
+                          "own_no": min(float(own["NO"]), float(visible_n))}
+            est = R.quote_estimate(book, per, float(y), float(n),
+                                   float(qty), float(tick), **kwargs)
+            rew = float(est.get("est_usd_per_hour") or 0.0) * \
+                rn1_reward_cal(slug, per)
+            cost = 2 * float(qty) * rn1_fill_param(RN1_FILL_RATE, d, slug) \
+                * rn1_fill_param(RN1_FILL_LOSS, d, slug)
+            capital = float(qty * (y + n))
+            net = rew - cost
+            rows[d] = {"reward_usd_per_hour": round(rew, 6),
+                       "fill_cost_usd_per_hour": round(cost, 6),
+                       "net_usd_per_hour": round(net, 6),
+                       "capital_usd": round(capital, 4),
+                       "yes_px": str(y), "no_px": str(n),
+                       "share": est.get("share"),
+                       "max_spread_ok": est.get("max_spread_ok")}
+        ok = [d for d in (0, 1) if "net_usd_per_hour" in rows[d]]
+        if not ok:
+            return None
+        best = max(ok, key=lambda d: (rows[d]["net_usd_per_hour"], d))
+        return best, rows[best], rows
+
+    def rn1_net_forget(self, slug: str) -> None:
+        """A fill changes the book and our inventory: drop the market's net
+        estimate so the next pass prices it afresh (RN1_NET_RANK)."""
+        mk = self.b.m(slug) if slug in self.b.d.get("markets", {}) else None
+        if mk is not None:
+            mk.pop("qualify_check", None)
+        for name in ("_net_choice", "_share_cache"):
+            c = getattr(self, name, None)
+            if c:
+                c.pop(slug, None)
+
+    def rn1_touch_hard(self, slug: str, mk: Mapping[str, Any],
+                       bbo: Mapping[str, Any], tick: Any,
+                       rng: Any) -> Optional[str]:
+        """The hard protections against resting AT the touch (None = none
+        applies): a spread under the join minimum, the 30 s mid range above
+        the competition's threshold (RN1_JOIN_MAX_RANGE; unknown = moving),
+        a price jump within RN1_JOIN_CALM_S. Used by rn1_join_touch and by
+        rn1_touch_ev, at selection and when quoting."""
+        spread = D(str(bbo["ask"])) - D(str(bbo["bid"]))
+        last_jump = float(mk.get("jump_pause_until") or 0) - JUMP_PAUSE_S
+        min_t = 1 if RN1_JOIN_ONE_TICK else \
+            max(2, RN1_JOIN_MIN_SPREAD_TICKS)
+        if spread < min_t * D(str(tick)):
+            return "spread_too_tight"
+        if rng is None or float(rng) > rn1_comp_value(RN1_JOIN_MAX_RANGE,
+                                                       slug):
+            return "price_moving"
+        if mk.get("jump_pause_until") and \
+                time.time() - last_jump < RN1_JOIN_CALM_S:
+            return "recent_jump"
+        return None
+
+    def rn1_join_touch(self, slug: str, mk: Dict[str, Any],
+                       bbo: Mapping[str, Any], tick: D, rng: Any,
+                       now: float) -> Optional[str]:
+        """None = this market's bids may rest at the touch this pass (see
+        RN1_JOIN_TOUCH); otherwise why not. Records the answer for the
+        reactive pull and logs each change once."""
+        joined = getattr(self, "_rn1_joined", None)
+        if joined is None:
+            joined = self._rn1_joined = {}
+        why: Optional[str] = None
+        nc = (getattr(self, "_net_choice", None) or {}).get(slug)
+        if not RN1_JOIN_TOUCH:
+            why = "off"
+        elif RN1_NET_RANK and nc and nc.get("depth") == 1:
+            why = "net_prefers_one_tick_behind"
+        else:
+            why = self.rn1_touch_hard(slug, mk, bbo, tick, rng)
+        was = joined.get(slug)
+        joined[slug] = why is None
+        if RN1_JOIN_TOUCH and was is not None and was != (why is None):
+            log("RN1_JOIN_TOUCH", slug=slug, joined=why is None, why=why,
+                bid=str(bbo["bid"]), ask=str(bbo["ask"]),
+                label="bids rest at the best bid while the spread is wide "
+                      "and the price is calm; one tick back otherwise")
+        return why
+
+    # ------------------------------------------------ RN1_TOUCH_EV
+    def rn1_touch_ev(self, slug: str, book: Optional[Mapping[str, Any]],
+                     per: Optional[Mapping[str, Any]],
+                     bbo: Mapping[str, Any], tick: Any, qty: Any,
+                     pos: Mapping[str, Any], cost: Mapping[str, Any],
+                     hard: Optional[str], own_y: Any = (), own_n: Any = (),
+                     risk_step_ticks: Any = None,
+                     completion_depth: Optional[int] = None
+                     ) -> Dict[str, Any]:
+        """See RN1_TOUCH_EV. Pure in its inputs (no request, no state
+        change): the same call scores a selection candidate and decides
+        where a tracked market's bids rest.
+
+        Per side that would OPEN or EXTEND, every placement d = 0 (the
+        touch) .. RN1_TOUCH_EV_MAX_DEPTH is scored
+            EV(d) = rn1_reward_mult x incremental THEORETICAL reward(d)
+                    - fill_rate(d) x qty x (fill_loss(d) + fee + risk)
+        and the best d with EV > 0 is chosen (ties: deeper). A side with
+        none rests at max(1, RN1.DEPTH_TICKS) ("fallback"). A COMPLETION
+        side is not decided here: it keeps `completion_depth` (today's
+        placement). Returns {"sides", "depth_side", "net_usd_per_hour",
+        "reward_usd_per_hour", "capital_usd", "touch", "hard"}. Every
+        figure is THEORETICAL."""
+        from src import pmus_sports_rewards as RW
+        t = D(str(tick))
+        q = D(str(qty))
+        yb, ya = D(str(bbo["bid"])), D(str(bbo["ask"]))
+        p = {s_: D(str(pos.get(s_) or 0)) for s_ in ("YES", "NO")}
+        c = {s_: D(str(cost.get(s_) or 0)) for s_ in ("YES", "NO")}
+        touch = {"YES": yb, "NO": ONE - ya}
+        opp_ask = {"YES": ya, "NO": ONE - yb}
+        fallback = max(1, int(RN1.DEPTH_TICKS))
+        comp_d = int(RN1.DEPTH_TICKS if completion_depth is None
+                     else completion_depth)
+        cap = D(str(RN1.PAIR_CAP))
+        rcap = D(str(RN1.RESIDUAL_CAP_USD))
+        pmin, pmax = D(str(RN1.PX_MIN)), D(str(RN1.PX_MAX))
+        mult = rn1_reward_mult(slug, per)
+        clip = D(str(RN1.QTY)) if D(str(RN1.QTY)) > 0 else q
+        sides: Dict[str, Any] = {}
+        role = {}
+        for s_, o_ in (("YES", "NO"), ("NO", "YES")):
+            role[s_] = "complete" if p[o_] > p[s_] else (
+                "open" if p[s_] == 0 else "extend")
+        for s_, o_ in (("YES", "NO"), ("NO", "YES")):
+            if role[s_] == "complete":
+                sides[s_] = {"role": "complete", "depth": comp_d,
+                             "why": "completion_keeps_placement"}
+                continue
+            held = max(D(0), p[s_] - p[o_])
+            clips = int((held / clip).to_integral_value(
+                rounding="ROUND_CEILING")) if clip > 0 else 0
+            risk = RN1.concentration_risk(tick=t, unpaired_clips=clips,
+                                          risk_step_ticks=risk_step_ticks)
+            # the other side's bid as it would rest, for the pair check and
+            # (with maxSpread, where both sides must qualify) the reward
+            o_d = comp_d if role[o_] == "complete" else fallback
+            o_px = touch[o_] - o_d * t
+            rows: Dict[int, Any] = {}
+            for d in range(0, RN1_TOUCH_EV_MAX_DEPTH + 1):
+                px = touch[s_] - d * t
+                row: Dict[str, Any] = {"px": str(px)}
+                rows[d] = row
+                if not (D(0) < px < ONE) or px < pmin or px > pmax:
+                    row["why"] = "price_band"
+                    continue
+                if px >= opp_ask[s_]:
+                    row["why"] = "would_cross_or_lock"   # post-only holds
+                    continue
+                if d == 0 and hard:
+                    row["why"] = "hard:" + str(hard)
+                    continue
+                avg = (c[s_] + px * q) / (p[s_] + q)
+                if max(D(0), p[s_] + q - p[o_]) * avg > rcap + \
+                        D("0.000001"):
+                    row["why"] = "residual_cap"
+                    continue
+                if role[o_] == "complete" and D(0) < o_px < ONE and \
+                        px + RN1.fee(px, RN1.MAKER_FEE_RATE) + o_px > \
+                        cap + D("0.0000001"):
+                    row["why"] = "pair_cap"
+                    continue
+                rew = 0.0
+                if per and book:
+                    try:
+                        ys = [(float(o_px), float(q))] if (
+                            o_ == "YES" and per.get("maxSpread")
+                            and D(0) < o_px < ONE) else []
+                        ns = [(float(o_px), float(q))] if (
+                            o_ == "NO" and per.get("maxSpread")
+                            and D(0) < o_px < ONE) else []
+                        m = RW.marginal_ladder_reward(
+                            book, per, ys, ns, float(t), list(own_y),
+                            list(own_n), s_, float(px), float(q))
+                        rew = max(0.0, float(
+                            m["incremental_reward_usd_per_hour"])) * mult
+                    except Exception as exc:              # noqa: BLE001
+                        row["reward_error"] = type(exc).__name__
+                        rew = 0.0
+                fr = rn1_fill_param(RN1_FILL_RATE, d, slug)
+                fl = rn1_fill_param(RN1_FILL_LOSS, d, slug)
+                fe = RN1.fee(px, RN1.MAKER_FEE_RATE)
+                cost_h = fr * float(q) * (fl + float(fe) + float(risk))
+                row.update(reward_usd_per_hour=round(rew, 6),
+                           fill_cost_usd_per_hour=round(cost_h, 6),
+                           ev_usd_per_hour=round(rew - cost_h, 6),
+                           fill_rate=fr, fill_loss=fl, risk=str(risk))
+            ok = [d for d, r in rows.items()
+                  if r.get("ev_usd_per_hour") is not None
+                  and r["ev_usd_per_hour"] > 0]
+            best = max(ok, key=lambda d: (rows[d]["ev_usd_per_hour"], d)) \
+                if ok else None
+            sides[s_] = {"role": role[s_], "rows": rows, "chosen": best,
+                         "depth": fallback if best is None else best,
+                         "why": None if best is not None
+                         else "no_positive_placement"}
+        # PAIR CAP for two simultaneous openings: the touch is left (the
+        # dearer touch bid first) until the pair of both bids fits
+        def _px(s_):
+            return touch[s_] - int(sides[s_]["depth"]) * t
+
+        def _over() -> bool:
+            if not all(sides[s_].get("role") != "complete"
+                       for s_ in ("YES", "NO")):
+                return False
+            y, n = _px("YES"), _px("NO")
+            return y + RN1.fee(y, RN1.MAKER_FEE_RATE) + n + \
+                RN1.fee(n, RN1.MAKER_FEE_RATE) > cap + D("0.0000001")
+        while _over():
+            at = [s_ for s_ in ("YES", "NO") if sides[s_]["depth"] == 0]
+            if not at:
+                break                     # the quoting rule reprices it
+            s_ = max(at, key=_px)
+            rows = sides[s_]["rows"]
+            rows[0]["why"] = "pair_cap"
+            ok = [d for d, r in rows.items() if d >= 1 and
+                  r.get("ev_usd_per_hour") is not None and
+                  r["ev_usd_per_hour"] > 0]
+            best = max(ok, key=lambda d: (rows[d]["ev_usd_per_hour"], d)) \
+                if ok else None
+            sides[s_].update(chosen=best,
+                             depth=fallback if best is None else best,
+                             why=None if best is not None
+                             else "no_positive_placement")
+        net = rew_t = cap_usd = 0.0
+        for s_ in ("YES", "NO"):
+            sd = sides[s_]
+            if sd.get("role") == "complete":
+                continue
+            r = sd["rows"].get(sd["depth"]) or {}
+            if r.get("ev_usd_per_hour") is None:
+                continue
+            net += float(r["ev_usd_per_hour"])
+            rew_t += float(r["reward_usd_per_hour"])
+            cap_usd += float(D(r["px"]) * q)
+        return {"sides": sides,
+                "depth_side": {s_: int(sides[s_]["depth"])
+                               for s_ in ("YES", "NO")},
+                "net_usd_per_hour": round(net, 6),
+                "reward_usd_per_hour": round(rew_t, 6),
+                "capital_usd": round(cap_usd, 4),
+                "touch": any(sides[s_]["depth"] == 0 and
+                             sides[s_].get("role") != "complete"
+                             for s_ in ("YES", "NO")),
+                "hard": hard, "qty": str(q), "reward_mult": mult,
+                "label": "THEORETICAL calibrated reward minus expected "
+                         "fill cost per resting hour; not a payment"}
+
+    def _rn1_book(self, slug: str) -> Optional[Mapping[str, Any]]:
+        """The public book, cached RN1_MARGINAL_BOOK_TTL_S (the marginal-EV
+        cache). None when it cannot be read (no reward is then credited)."""
+        try:
+            cache = getattr(self, "_mev_book", None)
+            if cache is None:
+                cache = self._mev_book = {}
+            hit = cache.get(slug)
+            if hit and time.monotonic() - hit[0] < RN1_MARGINAL_BOOK_TTL_S:
+                return hit[1]
+            book = (self._reward_get()(f"/v1/markets/{slug}/book") or {}
+                    ).get("marketData") or {}
+            cache[slug] = (time.monotonic(), book)
+            return book
+        except Exception:                                 # noqa: BLE001
+            return None
+
+    def rn1_touch_ev_quote(self, slug: str, mk: Dict[str, Any],
+                           bbo: Mapping[str, Any], tick: Any, rng: Any,
+                           qty: Any, qcfg: Mapping[str, Any],
+                           now: float) -> Dict[str, Any]:
+        """RN1_TOUCH_EV for a tracked market's quote this pass: the same
+        rn1_touch_ev the selection scored it with, on this pass's book,
+        inventory, hard protections and size. Records whether a bid rests
+        at the touch (the reactive pull reads it) and logs each change."""
+        per = self.rn1_reward(slug)
+        book = self._rn1_book(slug) if per else None
+        own_y, own_n = [], []
+        if book:
+            try:
+                own_y, own_n = self._rn1_visible_own(
+                    book, self._rn1_mature_own(mk, time.time()),
+                    D(str(tick)))
+            except Exception:                             # noqa: BLE001
+                own_y, own_n = [], []
+        hard = self.rn1_touch_hard(slug, mk, bbo, tick, rng)
+        out = self.rn1_touch_ev(
+            slug, book, per, bbo, tick, qty, mk["pos"], mk["cost"], hard,
+            own_y, own_n, risk_step_ticks=qcfg.get("risk_step_ticks"),
+            completion_depth=int(qcfg.get("depth_ticks", RN1.DEPTH_TICKS)))
+        out = self._touch_ev_qualified(
+            slug, out, lambda: self.rn1_touch_ev(
+                slug, None, None, bbo, tick, qty, mk["pos"], mk["cost"],
+                hard, own_y, own_n,
+                risk_step_ticks=qcfg.get("risk_step_ticks"),
+                completion_depth=int(qcfg.get("depth_ticks",
+                                              RN1.DEPTH_TICKS))))
+        joined = getattr(self, "_rn1_joined", None)
+        if joined is None:
+            joined = self._rn1_joined = {}
+        joined[slug] = bool(out["touch"]) or any(
+            out["sides"][s_].get("role") == "complete" and
+            out["depth_side"][s_] == 0 for s_ in ("YES", "NO"))
+        key = json.dumps([out["depth_side"], out["hard"]], sort_keys=True)
+        if mk.get("touch_ev_logged") != key:
+            mk["touch_ev_logged"] = key
+            log("RN1_TOUCH_EV", slug=slug, depth=out["depth_side"],
+                hard=out["hard"], qty=out["qty"],
+                net_usd_per_hour=out["net_usd_per_hour"],
+                reward_mult=out["reward_mult"],
+                qualification=out.get("qualification"),
+                unqualified_reward_usd_per_hour=out.get(
+                    "unqualified_reward_usd_per_hour"),
+                sides={s_: {k: v for k, v in sd.items() if k != "rows"} |
+                       {"rows": {str(d): {k2: r.get(k2) for k2 in (
+                           "px", "why", "ev_usd_per_hour",
+                           "reward_usd_per_hour",
+                           "fill_cost_usd_per_hour")}
+                           for d, r in (sd.get("rows") or {}).items()}}
+                       for s_, sd in out["sides"].items()},
+                label=out["label"])
+        return out
+
+    def _touch_ev_qualified(self, slug: str, out: Dict[str, Any],
+                            unrewarded: Any) -> Dict[str, Any]:
+        """RN1_REWARD_QUAL_SCOPE "account_day": RN1_TOUCH_EV's reward
+        counts only when the account/day qualification holds with this
+        market's scored bids added; otherwise the same scoring with no
+        reward (`unrewarded()`). Scope "market": unchanged."""
+        if RN1_REWARD_QUAL_SCOPE not in RN1_QUAL_UNIFIED or \
+                float(out.get("reward_usd_per_hour") or 0.0) <= 0.0:
+            return out
+        try:
+            q = self.rn1_reward_qualifies(
+                slug, extra_usd_h=float(out["reward_usd_per_hour"]))
+            if q["qualifies"]:
+                return dict(out, qualification=q)
+            alt = unrewarded()
+            return dict(alt, qualification=q,
+                        unqualified_reward_usd_per_hour=out[
+                            "reward_usd_per_hour"])
+        except Exception:                                 # noqa: BLE001
+            return out
+
+    def _touch_ev_score(self, slug: str, book: Mapping[str, Any],
+                        per: Mapping[str, Any], bb: D, ba: D, tick: D
+                        ) -> Dict[str, Any]:
+        """RN1_TOUCH_EV at selection: rn1_touch_ev on the candidate's book,
+        its inventory (none if untracked), its hard protections (the same
+        30 s mid range the controller reads) and each clip size the net
+        ranking compares (capped at the phase size the controller would
+        send). Stores the chosen size as the net ranking does."""
+        now = time.time()
+        mk = (self.b.d.get("markets") or {}).get(slug) or {}
+        pos = mk.get("pos") or {"YES": "0", "NO": "0"}
+        cost = mk.get("cost") or {"YES": "0", "NO": "0"}
+        bbo = {"bid": bb, "ask": ba}
+        rng = self._vol(slug, bbo, now)
+        hard = self.rn1_touch_hard(slug, mk, bbo, tick, rng)
+        own_y, own_n = [], []
+        if mk.get("orders"):
+            try:
+                own_y, own_n = self._rn1_visible_own(
+                    book, self._rn1_mature_own(mk, now), tick)
+            except Exception:                             # noqa: BLE001
+                own_y, own_n = [], []
+        top = rn1_live_qty() if self.event_live(slug) else rn1_pregame_qty()
+        top = min(top, rn1_max_clip())
+        sizes = [x for x in RN1_NET_SIZES if 0 < x <= top] or [top]
+        best = None
+        for q_ in sizes:
+            got = self.rn1_touch_ev(slug, book, per, bbo, tick, q_, pos,
+                                    cost, hard, own_y, own_n)
+            got = self._touch_ev_qualified(
+                slug, got, lambda q_=q_: self.rn1_touch_ev(
+                    slug, None, None, bbo, tick, q_, pos, cost, hard,
+                    own_y, own_n))
+            if best is None or got["net_usd_per_hour"] > \
+                    best["net_usd_per_hour"] + 1e-12:
+                best = got
+        cap_usd = float(best["capital_usd"])
+        dep = min(best["depth_side"].values())
+        out = {"usd_per_hour": best["reward_usd_per_hour"],
+               "net_usd_per_hour": best["net_usd_per_hour"],
+               "capital_usd": str(best["capital_usd"]),
+               "per_dollar_hour": round(best["net_usd_per_hour"] / cap_usd,
+                                        6) if cap_usd > 0 else 0.0,
+               "depth": dep, "depth_side": best["depth_side"],
+               "qty": best["qty"], "touch_ev": True, "hard": hard}
+        choice = getattr(self, "_net_choice", None)
+        if choice is None:
+            choice = self._net_choice = {}
+        choice[slug] = {"t": now, "depth": dep, "qty": D(best["qty"]),
+                        "reward_usd_per_hour":
+                            float(best.get("reward_usd_per_hour") or 0.0),
+                        "net_usd_per_hour": best["net_usd_per_hour"],
+                        "depth_side": best["depth_side"]}
+        return out
+
+    def duration_info(self, slug: str,
+                      now: Optional[float] = None) -> Dict[str, Any]:
+        """See RN1_DURATION_RANK: expected remaining quoting time (to the
+        late cut-off) and the ranking factor it gives this candidate."""
+        from src import pmus_duration_rank as DR
+        tab = getattr(self, "_dur_table", None)
+        if tab is None or tab[0] != RN1_DURATION_MIN:
+            tab = self._dur_table = (RN1_DURATION_MIN,
+                                     DR.parse_table(RN1_DURATION_MIN))
+        states = getattr(self.v, "states", {}) or {}
+        gs = (self.b.d["markets"].get(slug) or {}).get("game_start")
+        if gs is None:
+            gs = self._game_start.get(slug)
+        rem, why = DR.remaining_s(
+            slug, time.time() if now is None else now, gs,
+            states.get(slug), slug in states, tab[1])
+        return {"remaining_s": rem, "why": why,
+                "factor": DR.factor(rem, RN1_DURATION_HORIZON_S,
+                                    RN1_DURATION_UNKNOWN_FACTOR),
+                "excluded": DR.excluded(rem, RN1_MIN_REMAINING_S)}
+
+    def live_first_class(self, slug: str,
+                         now: Optional[float] = None) -> str:
+        """See RN1_LIVE_FIRST: live / near / distant / unknown."""
+        from src import pmus_duration_rank as DR
+        states = getattr(self.v, "states", {}) or {}
+        gs = (self.b.d["markets"].get(slug) or {}).get("game_start")
+        if gs is None:
+            gs = self._game_start.get(slug)
+        return DR.start_class(time.time() if now is None else now, gs,
+                              slug in states, RN1_NEAR_START_S)
+
+    def live_first_info(self, slug: str, per_dollar_hour: float,
+                        now: Optional[float] = None) -> Dict[str, Any]:
+        """See RN1_LIVE_FIRST: class, remaining time, turnover factor and
+        the ranking score for one per-dollar-hour estimate."""
+        from src import pmus_duration_rank as DR
+        di = self.duration_info(slug, now)
+        cls_ = self.live_first_class(slug, now)
+        rem = di["remaining_s"]
+        return {"class": cls_, "rank": DR.CLASS_RANK.get(cls_, 2),
+                "remaining_s": None if rem is None else int(rem),
+                "turnover": round(DR.turnover(
+                    rem, RN1_DURATION_HORIZON_S,
+                    RN1_DURATION_UNKNOWN_FACTOR), 4),
+                "score": round(DR.live_first_score(
+                    per_dollar_hour, rem, RN1_DURATION_HORIZON_S,
+                    RN1_DURATION_UNKNOWN_FACTOR), 8)}
+
+    def slot_claimants(self) -> list:
+        """Markets that hold, or are waiting for, a quoting slot: every
+        slot holder (_rn1_slot_holder, so RN1_SLOTS_COUNT_INVENTORY decides
+        whether a market carrying an unpaired leg counts), plus each active
+        market with no unpaired leg (it will try to open). With
+        RN1_SLOTS_COUNT_INVENTORY=0 a market carrying an unpaired leg and no
+        resting opening/extension bid is not a claimant; it stays tracked,
+        completed, audited and counted in every limit as before."""
+        out = []
+        for s_, m_ in (self.b.d.get("markets") or {}).items():
+            if m_.get("done"):
+                continue
+            try:
+                bal = D(str(m_["pos"]["YES"])) == D(str(m_["pos"]["NO"]))
+            except Exception:                             # noqa: BLE001
+                bal = False
+            if self._rn1_slot_holder(m_) or bal:
+                out.append(s_)
+        return out
+
+    def _lf_positive(self, slug: str) -> bool:
+        hit = (getattr(self, "_share_cache", None) or {}).get(slug)
+        if not hit or time.monotonic() - hit[0] > RANK_SHARE_TTL_S:
+            return False
+        o = hit[1]
+        v = o.get("net_usd_per_hour") if RN1_NET_RANK else \
+            o.get("usd_per_hour")
+        return float(v or 0.0) > 0 and \
+            float(o.get("per_dollar_hour") or 0.0) > 0
+
+    def _lf_note(self, kind: str, key: Any, **kw: Any) -> None:
+        seen = getattr(self, "_lf_logged", None)
+        if seen is None:
+            seen = self._lf_logged = {}
+        k = json.dumps(key, sort_keys=True, default=str)
+        if seen.get(kind) != k:
+            seen[kind] = k
+            log(kind, **kw)
+
+    def _lf_could_select(self, slug: str, acct: Mapping[str, Any]) -> bool:
+        """The side-effect-free preconditions of _try_select, so a market
+        is never released for a candidate that could not take its slot."""
+        if self.foreign_exposure(slug, acct):
+            return False
+        ek = event_key(slug)
+        if any(s_ != slug and event_key(s_) == ek for s_ in self.active()):
+            return False
+        spec = self.v.spec(slug)
+        bbo = self.v.bbo(slug) if spec else None
+        return bool(spec and bbo and open_prices(
+            bbo["bid"], bbo["ask"], spec["tick"]) is not None)
+
+    def _lf_yield_one(self, cand: str) -> Optional[str]:
+        """Release ONE flat distant market for a live/near candidate (see
+        RN1_LIVE_FIRST). Flat = no contracts on either side and no
+        completion bid resting. Its opening/extension bids are cancelled
+        through _cancel_legs; it is released only if it is still flat with
+        nothing open afterwards (a fill that raced the cancel keeps it,
+        managed as any market holding inventory). Returns the slug
+        released, or None."""
+        now = time.time()
+        pool = []
+        for s_, m_ in (self.b.d.get("markets") or {}).items():
+            if m_.get("done") or self.live_first_class(s_, now) != "distant":
+                continue
+            try:
+                if D(str(m_["pos"]["YES"])) != 0 or \
+                        D(str(m_["pos"]["NO"])) != 0:
+                    continue
+            except Exception:                             # noqa: BLE001
+                continue
+            opn = [(oid, o) for oid, o in (m_.get("orders") or {}).items()
+                   if o.get("open")]
+            if any(is_completion_stage(o.get("stage")) for _i, o in opn):
+                continue
+            hit = (getattr(self, "_share_cache", None) or {}).get(s_)
+            pdh = float(((hit or (0, {}))[1]).get("per_dollar_hour") or 0.0)
+            sc = self.live_first_info(s_, pdh, now)["score"] if pdh > 0 \
+                else pdh
+            pool.append((sc, s_, opn))
+        if not pool:
+            return None
+        pool.sort(key=lambda x: (x[0], x[1]))
+        _sc, slug, opn = pool[0]
+        mk = self.b.m(slug)
+        try:
+            self._cancel_legs(slug, opn)
+        except Exception as exc:                          # noqa: BLE001
+            log("live_first_yield_error", slug=slug, for_slug=cand,
+                err=str(exc)[:160])
+            return None
+        if D(str(mk["pos"]["YES"])) != 0 or D(str(mk["pos"]["NO"])) != 0 \
+                or any(o.get("open") for o in mk["orders"].values()):
+            log("live_first_yield_kept", slug=slug, for_slug=cand,
+                pos=mk["pos"], label="a fill raced the cancel or an order "
+                                     "is still open: market kept")
+            return None
+        mk["done"] = True
+        mk["released_flat"] = now
+        mk.pop("idle_since", None)
+        self.b.save()
+        log("released_flat_market", slug=slug, pos=mk["pos"], mode="rn1",
+            why="live_first_yield", for_slug=cand,
+            cancelled=len(opn), reselectable=RN1_RESELECT,
+            label="flat distant pre-game market yields its slot to a "
+                  "live/near-start market with a positive estimate")
+        return slug
+
+    def slot_gate(self, slug: str, acct: Mapping[str, Any]) -> bool:
+        """RN1_LIVE_FIRST / RN1_SELECT_NO_CHURN: may `slug` be selected
+        now? Off (both flags) this is never called."""
+        claim = self.slot_claimants()
+        cls_ = self.live_first_class(slug) if RN1_LIVE_FIRST else None
+        if RN1_LIVE_FIRST and cls_ == "distant":
+            dist = [s_ for s_ in claim
+                    if self.live_first_class(s_) == "distant"]
+            if len(dist) >= max(0, RN1_DISTANT_MAX_SLOTS):
+                self._lf_note("RN1_LIVE_FIRST_DISTANT_CAP", sorted(dist),
+                              distant=sorted(dist),
+                              max_slots=RN1_DISTANT_MAX_SLOTS,
+                              label="distant pre-game markets already "
+                                    "claim their maximum slots")
+                return False
+        if len(claim) < MAX_MARKETS:
+            return True
+        if RN1_LIVE_FIRST and cls_ in ("live", "near") and \
+                self._lf_positive(slug) and \
+                self._lf_could_select(slug, acct):
+            if self._lf_yield_one(slug) is not None and \
+                    len(self.slot_claimants()) < MAX_MARKETS:
+                return True
+        if RN1_SELECT_NO_CHURN:
+            self._lf_note("RN1_SELECT_NO_CHURN", sorted(claim),
+                          claimants=sorted(claim), max_markets=MAX_MARKETS,
+                          label="every slot is held by a market that "
+                                "cannot be released: nothing selected")
+            return False
+        return True
+
+    def rank_by_reward_share(self, scored: list,
+                             rn1_rw: Mapping[str, Any]) -> list:
+        """See RN1_RANK_SHARE. Order: programme markets with a positive
+        estimate (best per dollar first), then programme markets not yet
+        estimated (pool rate, as before), then those estimated at zero or
+        unreadable, then markets with no paying programme. Never drops a
+        candidate."""
+        cache = getattr(self, "_share_cache", None)
+        if cache is None:
+            cache = self._share_cache = {}
+        nowm = time.monotonic()
+        have = [r for r in scored if r[2] in rn1_rw]
+        todo = [r[2] for r in have
+                if not (cache.get(r[2]) and
+                        nowm - cache[r[2]][0] <= RANK_SHARE_TTL_S)]
+        # take the new ones in turn across competitions, so one deep
+        # competition with many markets cannot use up every read
+        by_comp: Dict[str, list] = {}
+        for s_ in todo:
+            by_comp.setdefault(s_.split("-")[1] if "-" in s_ else "", []
+                               ).append(s_)
+        pick: list = []
+        while by_comp and len(pick) < max(0, RANK_SHARE_NEW_PER_ROUND):
+            for comp in sorted(by_comp):
+                if len(pick) >= max(0, RANK_SHARE_NEW_PER_ROUND):
+                    break
+                pick.append(by_comp[comp].pop(0))
+                if not by_comp[comp]:
+                    del by_comp[comp]
+        for s_ in pick:
+            try:
+                got = self._reward_share_score(s_, rn1_rw[s_])
+            except Exception as exc:                      # noqa: BLE001
+                got = {"why": "share_error:%s" % type(exc).__name__}
+            cache[s_] = (nowm, got)
+
+        def cls(r: tuple) -> tuple:
+            slug = r[2]
+            if slug not in rn1_rw:
+                return (3, 0.0)
+            hit = cache.get(slug)
+            if not hit or nowm - hit[0] > RANK_SHARE_TTL_S:
+                return (1, -float(rn1_rw[slug]["pool_rate_usd_s"]))
+            v = float(hit[1].get("per_dollar_hour") or 0.0)
+            if RN1_RANK_BY == "net_per_hour":
+                # slots, not capital, bind: the absolute reward-adjusted
+                # net of the slot, no turnover / duration / live preference
+                nv = hit[1].get("net_usd_per_hour")
+                nv = float(nv if nv is not None else 0.0) if v > 0 else 0.0
+                return (0, -nv) if nv > 0 else (2, 0.0)
+            if RN1_LIVE_FIRST and v > 0:
+                lf = self.live_first_info(slug, v)
+                return (0, -lf["score"], lf["rank"])
+            if RN1_DURATION_RANK and v > 0:
+                v *= dur(slug)
+            return (0, -v) if v > 0 else (2, 0.0)
+        _dur: Dict[str, float] = {}
+
+        def dur(slug: str) -> float:
+            if slug not in _dur:
+                _dur[slug] = float(self.duration_info(slug)["factor"])
+            return _dur[slug]
+        out = sorted(scored, key=lambda r: (cls(r), r))
+        if RN1_NET_RANK:
+            # only markets with a fresh positive net estimate are selected
+            out = [r for r in out if cls(r)[0] == 0]
+        top = [(r[2], (cache.get(r[2]) or (0, {}))[1]) for r in out[:4]]
+        key = json.dumps([(s_, o.get("per_dollar_hour")) for s_, o in top])
+        if key != getattr(self, "_share_rank_logged", None):
+            self._share_rank_logged = key
+            log("RN1_SHARE_RANK", candidates=len(scored),
+                with_paying_programme=len(have),
+                estimated=sum(1 for r in have if cache.get(r[2])),
+                first=[{"slug": s_,
+                        "per_dollar_hour": o.get("per_dollar_hour"),
+                        "usd_per_hour": o.get("usd_per_hour"),
+                        "capital_usd": o.get("capital_usd"),
+                        "why": o.get("why"),
+                        **({"duration_factor": round(dur(s_), 4)}
+                           if RN1_DURATION_RANK else {}),
+                        **({"live_first": self.live_first_info(
+                            s_, float(o.get("per_dollar_hour") or 0.0))}
+                           if RN1_LIVE_FIRST else {})}
+                       for s_, o in top],
+                label="THEORETICAL reward of our own quote per dollar "
+                      "committed; ranking only, not a payment")
+        return out
+
+    def rank_net(self, scored: list) -> list:
+        """Reorder selection candidates by src/pmus_sports_phase.opportunity:
+        the marginal test's net for a first bid on the better side, plus the
+        theoretical reward per contract (haircut, and only when the day's
+        projection clears the minimum payout). Ranking only: every bid still
+        has to pass the marginal test and every cap when it is quoted."""
+        from src import pmus_sports_rewards as R
+        cache = getattr(self, "_rank_cache", None)
+        if cache is None:
+            cache = self._rank_cache = {}
+        nowm = time.monotonic()
+        fresh = 0
+        rows = []
+        self._rank_watch = [r[2] for r in scored[:max(0, RANK_WATCH_MAX)]]
+        for r in scored:
+            slug = r[2]
+            hit = cache.get(slug)
+            if hit and nowm - hit[0] <= (
+                    RANK_TTL_S if hit[1].get("net") is not None
+                    else min(RANK_TTL_S, RANK_NO_FAIR_TTL_S)):
+                rows.append((slug, hit[1]))
+                continue
+            if fresh >= max(0, RANK_NEW_PER_ROUND):
+                rows.append((slug, {"net": None, "why": "not_priced_yet"}))
+                continue
+            fresh += 1
+            try:
+                opp = self._opportunity(slug, R)
+            except Exception as exc:                  # noqa: BLE001
+                opp = {"net": None, "why": "rank_error:%s"
+                       % type(exc).__name__}
+            cache[slug] = (nowm, opp)
+            rows.append((slug, opp))
+        if RN1_DURATION_RANK:
+            rows = [(s, self._duration_opp(s, o)) for s, o in rows]
+        order = [s for s, _o in PH.rank(rows)]
+        by = {r[2]: r for r in scored}
+        top = [(s, dict(rows)[s]) for s in order[:4]]
+        key = json.dumps([(s, str(o.get("net"))) for s, o in top])
+        if key != getattr(self, "_rank_logged", None):
+            self._rank_logged = key
+            log("RN1_NET_RANK", candidates=len(scored),
+                first=[{"slug": s, "net": o.get("net"),
+                        "trade": o.get("trade"), "reward": o.get("reward"),
+                        "why": o.get("why"),
+                        **({"duration_factor": o.get("duration_factor")}
+                           if RN1_DURATION_RANK else {})}
+                       for s, o in top],
+                label="expected trading result plus haircut theoretical "
+                      "reward, per contract; an estimate, not a payment")
+        if RN1.EDGE_GATE:
+            priced = {s for s, o in rows if o.get("net") is not None}
+            order = [s for s in order if s in priced]
+        return [by[s] for s in order]
+
+    def _duration_opp(self, slug: str, o: Mapping[str, Any]
+                      ) -> Dict[str, Any]:
+        """RN1_RANK_NET under RN1_DURATION_RANK: the reward term counts
+        only for min(remaining, horizon), i.e. it is scaled by the factor.
+        The trading term (per fill, not per hour) is unchanged; a market
+        with no ranking number keeps none. The cached estimate is not
+        modified."""
+        f = float(self.duration_info(slug)["factor"])
+        if o.get("net") is None or o.get("trade") is None:
+            return dict(o, duration_factor=round(f, 4))
+        rw = D(str(o.get("reward") or 0)) * D(str(round(f, 6)))
+        return dict(o, net=D(str(o["trade"])) + rw, reward=rw,
+                    duration_factor=round(f, 4))
+
+    def guard_tracked(self) -> list:
+        """Markets the international feed should follow: the active ones,
+        plus the few candidates the ranking is trying to price."""
+        act = list(self.sports_active())      # never a crypto-lane market
+        return act + [s for s in getattr(self, "_rank_watch", ())
+                      if s not in act]
+
+    def _opportunity(self, slug: str, R: Any) -> Dict[str, Any]:
+        spec = self.v.spec(slug)
+        bbo = self.v.bbo(slug) if spec else None
+        fair = self.intl_fair(slug)
+        if not spec or not bbo or fair is None:
+            return PH.opportunity(edge_yes=None, edge_no=None)
+        tick = D(str(spec["tick"]))
+        live = self.event_live(slug)
+        qty = max(rn1_live_qty() if live else rn1_pregame_qty(),
+                  D(str(spec["min_qty"])))
+        ybid, nbid = D(str(bbo["bid"])), D("1") - D(str(bbo["ask"]))
+        e = {s: RN1.edge(side=s, px=p, tick=tick, fair_yes=fair,
+                         adds_exposure=True).get("net_edge")
+             for s, p in (("YES", ybid), ("NO", nbid))}
+        per_h, pays = 0.0, False
+        prog = (self._prog.get(slug) or (0, None))[1]
+        per = R.paying_period(prog, time.time(), event_live=live) \
+            if prog and reward_allowed(slug) else None
+        if per:
+            book = (self._reward_get()(f"/v1/markets/{slug}/book") or {}
+                    ).get("marketData") or {}
+            est = R.quote_estimate(book, per, float(ybid), float(nbid),
+                                   float(qty), float(tick))
+            usd_h = float(est.get("est_usd_per_hour") or 0.0)
+            per_h = usd_h / float(qty)
+            active = sum(float((self.b.m(s).get("rn1_reward_est") or {}
+                                ).get("est_usd_per_hour") or 0.0)
+                         for s in self.sports_active())
+            pays = (active + usd_h) * RN1_REWARD_PROJECT_H + 1e-9 >= \
+                RN1_REWARD_MIN_DAY_USD
+            if RN1_REWARD_QUAL_SCOPE in RN1_QUAL_UNIFIED:
+                pays = self.rn1_reward_qualifies(
+                    slug, extra_usd_h=usd_h * rn1_reward_cal(slug, per)
+                )["qualifies"]
+        return PH.opportunity(
+            edge_yes=e["YES"], edge_no=e["NO"],
+            reward_usd_per_contract_hour=per_h, horizon_h=RANK_HORIZON_H,
+            reward_haircut=(rn1_reward_mult(slug, per)
+                            if RN1_REWARD_CALIBRATION and per
+                            else RANK_REWARD_HAIRCUT), reward_pays=pays)
+
     def select(self, acct: Mapping[str, Any]) -> None:
         if os.getenv(ENABLED_ENV, "").upper() != "YES":
             return
         if self.b.total_unmatched() >= TOTAL_CAP:
             return
-        if self.full():
+        if self.full() and not (RN1.ON and RN1_LIVE_FIRST and
+                                len(self.sports_active()) < MAX_TRACKED):
+            # RN1_LIVE_FIRST: full slots may still yield to a live or
+            # near-start candidate (slot_gate); the tracked bound holds
             return
         try:
-            targets = (self.v.pregame_sports() if PREGAME
-                       else self.v.live_sports())
+            targets = self.slate_targets()
         except Exception as exc:                      # noqa: BLE001
             log("discovery_error", err=str(exc)[:160])
             return
-        if PREGAME:
+        if slate() != "live":
             self._game_start.update({t["slug"]: t["game_start"]
                                      for t in targets if "game_start" in t})
         scored = []
+        # LIVE 2026-11-23 14:30Z: a pinned market was never selected and the
+        # bot logged no reason. For a PINNED market every way of not becoming
+        # a candidate is now named (logged when it changes).
+        _pin_why: Dict[str, str] = {}
+        _pinned = rn1_pin() if RN1.ON else None
+        _seen = set()
+        _dur_out: list = []
         for tg in targets:
             slug = tg["slug"]
-            if slug in self.b.d["markets"]:
+            _seen.add(slug)
+            if slug in self.b.d["markets"] and \
+                    not self.reselectable(self.b.d["markets"][slug]):
+                if _pinned and slug in _pinned and \
+                        self.b.d["markets"][slug].get("done"):
+                    _pin_why[slug] = "already_traded_and_released"
                 continue
             meta = tg.get("market_meta") or {}
             b = self.v.gw._qnum(meta.get("bestBidQuote"))
             a = self.v.gw._qnum(meta.get("bestAskQuote"))
             if b is None or a is None:
+                _pin_why[slug] = "no_two_sided_quote_in_listing"
                 continue
-            if excluded(slug) or late_for(
-                    slug, (getattr(self.v, "states", {}) or {}).get(slug)):
+            _late = late_for(
+                slug, (getattr(self.v, "states", {}) or {}).get(slug))
+            if excluded(slug) or _late:
+                _pin_why[slug] = "excluded" if excluded(slug) \
+                    else "late:%s" % _late
                 continue
             b, a = D(str(b)), D(str(a))
             if not (BAND_LO <= b <= BAND_HI):
+                _pin_why[slug] = "bid_outside_band:%s not in %s..%s" % (
+                    b, BAND_LO, BAND_HI)
                 continue
+            if self.scope_block(slug):
+                _pin_why[slug] = "competition_not_permitted"
+                continue         # outside the owner's scope: no slot
             if OPEN_EV_GATE and OPEN_GATE_ALLOW_SPORTS and \
                     not self.open_gate(slug)["allow"]:
+                _pin_why[slug] = "competition_not_permitted"
                 continue         # would be gated at open: don't take a slot
+            if RN1_DURATION_RANK:
+                _di = self.duration_info(slug)
+                if _di["excluded"]:
+                    _pin_why[slug] = "remaining_below_min:%ds<%ds" % (
+                        int(_di["remaining_s"]), int(RN1_MIN_REMAINING_S))
+                    _dur_out.append((slug, int(_di["remaining_s"])))
+                    continue     # about to end: no slot
             scored.append((a - b, abs(b - D("0.5")), slug))
+        if RN1_DURATION_RANK:
+            _dk = json.dumps(sorted(s_ for s_, _r in _dur_out))
+            if _dk != getattr(self, "_dur_logged", None):
+                self._dur_logged = _dk
+                log("RN1_DURATION_RANK", excluded=len(_dur_out),
+                    min_remaining_s=RN1_MIN_REMAINING_S,
+                    horizon_s=RN1_DURATION_HORIZON_S,
+                    first=[{"slug": s_, "remaining_s": r_}
+                           for s_, r_ in sorted(_dur_out)[:20]],
+                    label="expected remaining quoting time below the "
+                          "minimum: not a candidate; ranking only")
+        _pin_why = {k: v for k, v in _pin_why.items()
+                    if _pinned and k in _pinned}
+        if _pinned:
+            for slug in _pinned:
+                if slug not in _seen and slug not in self.b.d["markets"]:
+                    _pin_why[slug] = "not_in_slate:%s" % slate()
+            key = json.dumps(_pin_why, sort_keys=True)
+            if key != getattr(self, "_pin_why_logged", None):
+                self._pin_why_logged = key
+                if _pin_why:
+                    log("PIN_NOT_CANDIDATE", reasons=_pin_why,
+                        targets=len(targets),
+                        label="why a pinned market is not being selected")
+        if RN1.ON and rn1_pin() is not None:
+            _pin = rn1_pin()
+            scored = [r for r in scored if r[2] in _pin]
         scored.sort()
         if self.guard is not None:
             self.guard.prefetch([s for *_x, s in scored])
             if self.guard.require:
                 # open only where intl can price the market (resolved in the
                 # guard's background thread; unresolved -> next round)
+                if _pinned:
+                    _no = sorted(r[2] for r in scored if r[2] in _pinned
+                                 and not self.guard.token(r[2]))
+                    if _no and _no != getattr(self, "_pin_noguard", None):
+                        log("PIN_NOT_CANDIDATE",
+                            reasons={x: "no_international_price_yet"
+                                     for x in _no})
+                    self._pin_noguard = _no
                 scored = [r for r in scored if self.guard.token(r[2])]
+        if RN1.ON and RN1_REWARD_RANK and scored:
+            rn1_rw: Dict[str, Any] = {}
+            try:
+                rn1_rw = self.reward_programs([s for *_x, s in scored])
+            except Exception as exc:                  # noqa: BLE001
+                log("reward_discovery_error", err=str(exc)[:160])
+            scored.sort(key=lambda r: (
+                0 if r[2] in rn1_rw else 1,
+                -rn1_rw[r[2]]["pool_rate_usd_s"] if r[2] in rn1_rw else 0,
+                r))
+            if RN1_RANK_SHARE:
+                scored = self.rank_by_reward_share(scored, rn1_rw)
+            n_all = len(scored)
+            if RN1_REWARD_ONLY:
+                scored = [r for r in scored if r[2] in rn1_rw]
+            key = (n_all, len(rn1_rw), RN1_REWARD_ONLY,
+                   scored[0][2] if scored else None)
+            if key != getattr(self, "_rn1_rank_logged", None):
+                self._rn1_rank_logged = key
+                log("RN1_REWARD_RANK", candidates=n_all,
+                    with_paying_programme=len(rn1_rw),
+                    reward_only=RN1_REWARD_ONLY,
+                    first=[{"slug": r[2],
+                            "pool_rate_usd_s": (rn1_rw.get(r[2]) or {}).get(
+                                "pool_rate_usd_s"),
+                            "period": (rn1_rw.get(r[2]) or {}).get("period")}
+                           for r in scored[:4]],
+                    label="published programme, not a payment")
+        if RN1.ON and RN1_RANK_NET and scored:
+            scored = self.rank_net(scored)
         rewarded: Dict[str, Any] = {}
         if rewards_on() and scored:
             try:
@@ -4441,12 +9939,43 @@ class Engine:
             return                     # no rewarded market in band right now
         for _sp, _c, slug in scored:
             if self.full():
-                break
+                if not (RN1.ON and RN1_LIVE_FIRST) or \
+                        len(self.sports_active()) >= MAX_TRACKED:
+                    break
+                # RN1_LIVE_FIRST: only a yield can make room
+                if self.slot_gate(slug, acct) and not self.full():
+                    self._try_select(slug, acct, rewarded.get(slug))
+                continue
+            if RN1.ON and (RN1_LIVE_FIRST or RN1_SELECT_NO_CHURN) and \
+                    not self.slot_gate(slug, acct):
+                continue
             self._try_select(slug, acct, rewarded.get(slug))
 
     def rewarded_active(self) -> int:
         return sum(1 for s in self.sports_active()
                    if self.b.m(s).get("reward"))
+
+    @staticmethod
+    def reselectable(mk: Mapping[str, Any],
+                     now: Optional[float] = None) -> bool:
+        """A market the bot released while FLAT may be picked again. Never
+        one that closed, settled, still holds contracts or has an order
+        resting, and not before the cooldown."""
+        if not RN1_RESELECT or not mk.get("done"):
+            return False
+        at = mk.get("released_flat")
+        if at is None or mk.get("settle_px") is not None or \
+                mk.get("closed"):
+            return False
+        try:
+            if D(str(mk["pos"]["YES"])) != 0 or D(str(mk["pos"]["NO"])) != 0:
+                return False
+        except Exception:                                 # noqa: BLE001
+            return False
+        if any(o.get("open") for o in (mk.get("orders") or {}).values()):
+            return False
+        now = time.time() if now is None else now
+        return now - float(at) >= RN1_RESELECT_COOLDOWN_S
 
     def _try_select(self, slug: str, acct: Mapping[str, Any],
                     rp: Optional[Mapping[str, Any]],
@@ -4467,6 +9996,16 @@ class Engine:
                                                spec["tick"]) is None:
             return False
         mk = self.b.m(slug)
+        if mk.get("done"):
+            if not self.reselectable(mk):
+                return False             # closed, settled or holding: never
+            mk["done"] = False
+            mk.pop("released_flat", None)
+            mk.pop("idle_since", None)
+            mk["reselected"] = int(mk.get("reselected") or 0) + 1
+            log("RESELECTED", slug=slug, times=mk["reselected"],
+                label="released flat earlier; eligible again; the same "
+                      "record, so its orders, fills and costs carry on")
         if slug in self._game_start:
             mk["game_start"] = self._game_start[slug]
         if rp:
@@ -4507,7 +10046,7 @@ class Engine:
         the position check is skipped and reported as such)."""
         try:
             from src import pmus_pilot_pnl as PP
-            r = PP.meter(markets, rows, since=PILOT_SINCE,
+            r = PP.meter(markets, rows, since=self.since,
                          venue_net=venue_net)
         except Exception as exc:                          # noqa: BLE001
             self._pilot = None                    # -> pilot_meter_unavailable
@@ -4516,7 +10055,9 @@ class Engine:
             return
         self._pilot = r
         self._pilot_at = time.monotonic()
-        log("PILOT_PNL", ok=True, since=PILOT_SINCE,
+        self.audit_result("fills_unconfirmed", bool(r.get("unconfirmed")),
+                          unconfirmed=r.get("unconfirmed"))
+        log("PILOT_PNL", ok=True, since=self.since,
             loss_stop_usd=str(PILOT_LOSS_USD),
             new_openings_block=self.pilot_block(),
             cash=self.pilot_cash(r), **r)
@@ -4524,7 +10065,7 @@ class Engine:
     def pilot_cash(self, r: Mapping[str, Any]) -> Dict[str, Any]:
         """Venue account cash next to what the campaign explains. READ-ONLY
         GET, report only (shared account). The baseline is taken once per
-        PILOT_SINCE, together with the campaign's expected cash at that
+        self.since, together with the campaign's expected cash at that
         moment, so a restart mid-campaign does not move it."""
         from src import pmus_pilot_pnl as PP
         try:
@@ -4535,7 +10076,7 @@ class Engine:
                     "why": f"{type(exc).__name__}:{str(exc)[:120]}"}
         exp = D(r["expected_cash_change_usd"])
         base = self.b.d.get("pilot_cash_base")
-        key = str(PILOT_SINCE)
+        key = str(self.since)
         if cash is not None and (not base or base.get("since") != key) \
                 and not r.get("unconfirmed"):
             base = {"since": key, "cash": str(cash), "expected": str(exp),
@@ -4544,6 +10085,111 @@ class Engine:
             self.b.save()
         return PP.cash_check(cash, exp, base if base and
                              base.get("since") == key else None)
+
+    def audit_result(self, kind: str, failed: bool, **detail: Any) -> None:
+        """Count consecutive failures of one of the audit's
+        reconciliations; see AUDIT_LATCH. A clean result clears its count."""
+        st = getattr(self, "_audit_strikes", None)
+        if st is None:
+            st = self._audit_strikes = {}
+        if not failed:
+            st.pop(kind, None)
+            return
+        if not AUDIT_LATCH:
+            return
+        n = st[kind] = int(st.get(kind, 0)) + 1
+        log("AUDIT_FAILED", check=kind, strikes=n,
+            latch_at=AUDIT_LATCH_STRIKES, **detail,
+            label="new exposure blocked; the next audit is brought forward")
+        if n >= AUDIT_LATCH_STRIKES:
+            self.latch("audit_" + kind, strikes=n, **detail)
+            return
+        # bring the next audit forward
+        self._last_reward = time.monotonic() - REWARD_CHECK_S + \
+            max(0.0, AUDIT_RECHECK_S)
+
+    def audit_age_s(self) -> Optional[float]:
+        """Seconds since the last COMPLETED audit; None = none since boot."""
+        at = getattr(self, "_audit_ok_at", None)
+        return None if at is None else max(0.0, time.monotonic() - at)
+
+    def audit_stale(self) -> bool:
+        if AUDIT_MAX_AGE_S <= 0:
+            return False
+        age = self.audit_age_s()
+        return age is None or age > AUDIT_MAX_AGE_S
+
+    def audit_blocks(self) -> Optional[str]:
+        st = getattr(self, "_audit_strikes", None)
+        if st:
+            return "audit_failed:" + ",".join(sorted(st))
+        return "audit_stale" if self.audit_stale() else None
+
+    def safety_reads(self) -> Any:
+        """Context for the audit's own venue reads: they take the request
+        budget's safety class (ahead of quote traffic)."""
+        b = getattr(getattr(self.v, "t", None), "budget", None)
+        return b.safety() if b is not None and hasattr(b, "safety") \
+            else contextlib.nullcontext()
+
+    def audit_round(self) -> bool:
+        """The periodic reward read and account audit. False = one of them
+        did not complete; the loop then retries after AUDIT_RETRY_S."""
+        r_ok = self.reward_check()
+        a_ok = self.account_audit()
+        ok = bool(r_ok) and bool(a_ok)
+        if ECONOMICS_REPORT:
+            try:
+                self.economics_report(bool(r_ok), bool(a_ok))
+            except Exception as exc:                      # noqa: BLE001
+                log("CAMPAIGN_ECONOMICS", ok=False,
+                    err=f"{type(exc).__name__}:{str(exc)[:160]}")
+        if not ok:
+            self._audit_incomplete = int(getattr(
+                self, "_audit_incomplete", 0)) + 1
+            # never later than a re-check an audit failure already asked for
+            self._last_reward = min(
+                self._last_reward,
+                time.monotonic() - REWARD_CHECK_S + max(0.0, AUDIT_RETRY_S))
+            log("AUDIT_RETRY", reward_ok=bool(r_ok), audit_ok=bool(a_ok),
+                retry_in_s=AUDIT_RETRY_S,
+                incomplete_in_a_row=self._audit_incomplete,
+                audit_age_s=self.audit_age_s(),
+                blocks_new_exposure=self.audit_stale())
+        else:
+            self._audit_incomplete = 0
+        return ok
+
+    def economics_report(self, reward_ok: bool, audit_ok: bool,
+                         force: bool = False) -> Optional[Dict[str, Any]]:
+        """See ECONOMICS_REPORT. READ-ONLY: joins what the audit round just
+        read (the pilot meter, the reward rows) and logs one bounded line.
+        No trading effect; nothing here is read by any gate."""
+        from src import pmus_campaign_economics as CE
+        nowm = time.monotonic()
+        last = getattr(self, "_econ_at", None)
+        if not force and last is not None and nowm - last < ECONOMICS_MIN_S:
+            return None
+        rr = getattr(self, "_reward_rows", None)
+        if not reward_ok or rr is None or not rr[1]:
+            return None              # no reward rows read: nothing to join
+        self._econ_at = nowm
+        pilot = getattr(self, "_pilot", None)
+        pat = getattr(self, "_pilot_at", None)
+        win = self.b.d.get("campaign_window") or None
+        camp = (self.b.d.get("campaign_auth") or {}).get("active") or {}
+        until = None
+        if win and self.since is not None and \
+                float(win[0]) == float(self.since):
+            until = float(win[1])
+        r = CE.economics(pilot, rr[2], since=self.since, until=until,
+                         our_markets=list(self.b.d.get("markets") or {}),
+                         campaign_id=camp.get("id"), rows_total=rr[3])
+        log("CAMPAIGN_ECONOMICS", ok=True, reward_ok=reward_ok,
+            audit_ok=audit_ok,
+            pilot_age_s=None if pat is None else round(nowm - pat, 1),
+            reward_rows_age_s=round(nowm - rr[0], 1), **r)
+        return r
 
     def pilot_block(self) -> Optional[str]:
         """Why the pilot's accounting forbids NEW RN1 exposure, or None.
@@ -4558,7 +10204,7 @@ class Engine:
         # every step, from the book: the hourly audit is too slow to be the
         # only at-risk check inside a 60-90 minute window
         from src import pmus_pilot_pnl as PP
-        if PP.book_worst_case(self.b.d.get("markets") or {}, PILOT_SINCE) \
+        if PP.book_worst_case(self.b.d.get("markets") or {}, self.since) \
                 <= -PILOT_LOSS_USD:
             return "pilot_loss_at_risk_book"
         r = getattr(self, "_pilot", None)
@@ -4597,7 +10243,94 @@ class Engine:
             return True
         return False
 
-    def account_audit(self) -> None:
+    def reconcile_orders_now(self) -> None:
+        """The 30-second orphan sweep and, over a fresh account read, the
+        release of reconciled reservations. One place, called from the
+        main loop and from service_pass, so a long read-only job cannot
+        hold either back."""
+        if time.monotonic() - getattr(self, "_last_orphan", 0) <= 30:
+            return
+        self._last_orphan = time.monotonic()
+        # reuse the account read's open orders when it is fresh (one
+        # signed GET instead of two)
+        fresh = self._acct_cache is not None and \
+            self._acct_ok_at is not None and \
+            time.monotonic() - self._acct_ok_at <= 30
+        read_at = self._acct_ok_at if fresh else None
+        self.orphan_sweep(self._acct_cache["open_orders"]
+                          if fresh else None)
+        if fresh and not getattr(self, "_orphan_sweep_failed", False):
+            # only over a fresh account read: its order list is the one
+            # the sweep has just reconciled
+            self.release_reconciled_reservations(read_at, self._acct_cache)
+
+    def service_pass(self) -> None:
+        """Order management in the middle of a long read-only job (the
+        audit): queued price events are drained every time, and every
+        LOOP_S the lock is enforced and each market gets its ordinary step
+        (fills read, stale bids pulled, quotes kept current). The account
+        read and position check run on their usual 20 s. Never re-enters."""
+        if getattr(self, "_in_service", False) or self.stop:
+            return
+        self._in_service = True
+        try:
+            self.drain_ws_events()
+            now = time.monotonic()
+            if now - float(getattr(self, "_last_service", 0.0)) < LOOP_S:
+                return
+            self._last_service = now
+            latched = str(self.enforce_lock() or "").startswith(
+                "safety_latch")
+            if now - float(getattr(self, "_svc_acct_at", 0.0)) > 20:
+                self._svc_acct_at = now
+                acc = self.read_account()
+                try:
+                    self.safety_check(acc)
+                except Exception as exc:                  # noqa: BLE001
+                    log("safety_check_error", at="service_pass",
+                        err=f"{type(exc).__name__}:{str(exc)[:160]}")
+                latched = latched or bool(self.b.d.get("safety_latch"))
+                # LIVE 2026-11-25: while the hourly audit ran (about ten
+                # minutes) the orphan sweep and the release of reconciled
+                # reservations waited for it, so capital stayed reserved
+                # for up to 402 s, and no heartbeat was logged. Both run
+                # here on their usual cadence; neither reads anything the
+                # audit depends on.
+                self.reconcile_orders_now()
+            if time.monotonic() - float(getattr(self, "_last_hb",
+                                                0.0)) > 60:
+                self._last_hb = time.monotonic()
+                try:
+                    self.report()
+                except Exception as exc:                  # noqa: BLE001
+                    log("report_error", at="service_pass",
+                        err=type(exc).__name__)
+            if latched:
+                self.enforce_lock()
+            for slug in ([] if latched else list(self.active())):
+                if self.stop:
+                    break
+                self.drain_ws_events()
+                try:
+                    self.step_market(slug)
+                except Exception as exc:                  # noqa: BLE001
+                    log("market_error", slug=slug, at="service_pass",
+                        err=f"{type(exc).__name__}:{str(exc)[:200]}")
+                loop_beat()
+            orders_served()
+        finally:
+            self._in_service = False
+
+    def audit_transport(self) -> Any:
+        """The transport the audit's long walk uses: the venue transport,
+        with order management run between its requests."""
+        from src import pmus_request_budget as RB
+        t = RB.SafetyTransport(self.v.t)
+        if not AUDIT_INTERLEAVE:
+            return t
+        return ServicedTransport(t, self.service_pass)
+
+    def account_audit(self) -> bool:
         """VENUE TRUTH for this bot's markets, from /v1/portfolio/activities:
         realizedPnl summed per market and per sport (trades + resolutions),
         and the commissions on OUR side of our trades (taker fees charged,
@@ -4605,12 +10338,12 @@ class Engine:
         try:
             from src import pmus_settlement_auditor as SA
             from src import pmus_incentive_audit as IA
-            walk = SA.activity_pages(self.v.t, since=self.AUDIT_SINCE,
-                                     max_pages=200)
+            walk = SA.activity_pages(self.audit_transport(),
+                                     since=self.AUDIT_SINCE, max_pages=200)
         except Exception as exc:                          # noqa: BLE001
             log("ACCOUNT_AUDIT", ok=False,
                 err=f"{type(exc).__name__}:{str(exc)[:160]}")
-            return
+            return False
         ours = set(self.b.d.get("markets") or {})
         types: Dict[str, int] = {}
         mine = []
@@ -4631,6 +10364,13 @@ class Engine:
             from src import pmus_sports_manual_study as MS
             log("MANUAL_FILL_STUDY", **MS.summarize(walk.get("rows") or [],
                                                     ours))
+            _mo = MS.manual_orders(walk.get("rows") or [], ours)
+            if _mo and _mo != getattr(self, "_manual_orders_logged", None):
+                self._manual_orders_logged = _mo
+                log("MANUAL_ORDER_IDS", orders=_mo,
+                    label="venue order ids behind the owner's manual sports "
+                          "trades, from the account activity feed; for the "
+                          "ledger's manual-order attestation. Read-only.")
         except Exception as exc:                          # noqa: BLE001
             log("MANUAL_FILL_STUDY", ok=False,
                 err=f"{type(exc).__name__}:{str(exc)[:160]}")
@@ -4641,30 +10381,13 @@ class Engine:
         except Exception as exc:                          # noqa: BLE001
             fees = {"error": repr(exc)[:120]}
         book = PNL.book_economics(self.b.d.get("markets") or {})
-        inv = self.inventory_reconcile()
+        with self.safety_reads():
+            inv = self.inventory_reconcile()
         # residual = what settled markets realized beyond their completed
         # pairs' gross margin (lone legs, exits; fees if the venue nets them)
         mk_all = self.b.d.get("markets") or {}
         # the venue's PUBLIC final settlement price per market (bounded)
-        looked = 0
-        from src import pmus_settlement_public_px as SP
-        for s_, mk_ in list(mk_all.items()):
-            if looked >= SETTLE_LOOKUPS_PER_AUDIT or self.stop:
-                break                       # shutdown: cancel first
-            if mk_.get("settle_px") is not None or not mk_.get("done") or (
-                    D(mk_["pos"]["YES"]) == 0 and D(mk_["pos"]["NO"]) == 0):
-                continue
-            looked += 1
-            if looked > 1 and SETTLE_LOOKUP_GAP_S > 0:
-                time.sleep(SETTLE_LOOKUP_GAP_S)
-            try:
-                ps = SP.public_settlement(self.v.t, s_)
-            except Exception:                             # noqa: BLE001
-                continue
-            if ps.get("final"):
-                mk_["settle_px"] = ps["px"]
-        if looked:
-            self.b.save()
+        self.settle_lookups(SETTLE_LOOKUPS_PER_AUDIT)
         bs = PNL.book_settled(mk_all)
         self.pilot_meter(mine, mk_all,
                          venue_net=getattr(self, "_venue_net", None))
@@ -4726,6 +10449,78 @@ class Engine:
                   "side per isAggressor and reported separately; 1-4 and "
                   "unmatched cost are the bot's own book. Rewards are "
                   "separate (REWARD_CHECK).")
+        # complete = the venue walk AND the position reconciliation read
+        if inv is None:
+            return False
+        self._audit_ok_at = time.monotonic()
+        return True
+
+    def settle_lookups(self, limit: int) -> Dict[str, int]:
+        """Record the venue's PUBLIC final settlement price for closed
+        markets that still hold contracts, at most `limit` lookups. Only a
+        final price of exactly 0 or 1 is recorded; anything else leaves the
+        market counted as it was."""
+        from src import pmus_settlement_public_px as SP
+        looked = found = 0
+        mk_all = self.b.d.get("markets") or {}
+        # resume after the last market looked at, so a short limit still
+        # reaches every market over successive passes
+        slugs = list(mk_all)
+        start = getattr(self, "_settle_cursor", 0) % max(1, len(slugs))
+        for s_ in slugs[start:] + slugs[:start]:
+            mk_ = mk_all[s_]
+            if looked >= limit or self.stop:
+                break                       # shutdown: cancel first
+            if mk_.get("settle_px") is not None or not mk_.get("done") or (
+                    D(mk_["pos"]["YES"]) == 0 and D(mk_["pos"]["NO"]) == 0):
+                continue
+            looked += 1
+            self._settle_cursor = slugs.index(s_) + 1
+            if looked > 1 and SETTLE_LOOKUP_GAP_S > 0:
+                time.sleep(SETTLE_LOOKUP_GAP_S)
+            try:
+                ps = SP.public_settlement(self.v.t, s_)
+            except Exception:                             # noqa: BLE001
+                continue
+            if ps.get("final"):
+                mk_["settle_px"] = ps["px"]
+                found += 1
+                log("SETTLEMENT_RECORDED", slug=s_, px=ps["px"],
+                    label="venue public final price; this market no longer "
+                          "counts toward the campaign spend ceiling")
+        if looked:
+            self.b.save()
+        return {"looked": looked, "found": found}
+
+    def capital_breakdown(self) -> Dict[str, str]:
+        """This campaign's dollars in four separate states. Only the last
+        is released; the first three all count toward the spend ceiling."""
+        from src import pmus_pilot_pnl as PP
+        markets = self.b.d.get("markets") or {}
+        rest = unp = paired = released = D(0)
+        for s_ in PP.pilot_slugs(markets, self.since):
+            mk_ = markets[s_]
+            qy, qn = D(str(mk_["pos"]["YES"])), D(str(mk_["pos"]["NO"]))
+            cy, cn = D(str(mk_["cost"]["YES"])), D(str(mk_["cost"]["NO"]))
+            pairs = min(qy, qn)
+            pair_cost = (pairs * cy / qy if qy else D(0)) + \
+                        (pairs * cn / qn if qn else D(0))
+            settled = mk_.get("settle_px") is not None
+            if settled:
+                released += cy + cn
+                continue
+            paired += pair_cost
+            unp += RN1.unmatched_usd(mk_["pos"], mk_["cost"])
+            for o in (mk_.get("orders") or {}).values():
+                if o.get("open"):
+                    rest += D(str(o["px"])) * (
+                        D(str(o["qty"])) - D(str(o.get("filled") or "0")))
+        return {"resting_orders_usd": str(rest),
+                "unpaired_inventory_usd": str(unp),
+                "paired_awaiting_settlement_usd": str(paired),
+                "settled_released_usd": str(released),
+                "label": "campaign markets only; settled = the venue's "
+                         "public final price is recorded"}
 
     def inventory_reconcile(self) -> Optional[Dict[str, Any]]:
         """Account-wide venue positions vs this bot's book; logged every
@@ -4755,6 +10550,10 @@ class Engine:
                             self.own(), walk_complete=snap["complete"])
         log("INVENTORY_RECONCILE", ok=True, pages=snap["pages"],
             book_open_unmatched_usd=str(self.b.total_unmatched()), **rep)
+        # only a COMPLETE walk can show a real difference
+        bad = bool(snap.get("complete")) and bool(rep.get("mismatches"))
+        self.audit_result("position_mismatch", bad,
+                          mismatches=(rep.get("mismatches") or [])[:5])
         return rep
 
     def orphan_sweep(self, orders: Optional[list] = None) -> None:
@@ -4771,7 +10570,9 @@ class Engine:
                           if isinstance(o, Mapping)]
             except Exception as exc:                      # noqa: BLE001
                 log("orphan_sweep_error", err=str(exc)[:160])
+                self._orphan_sweep_failed = True
                 return
+        self._orphan_sweep_failed = False
         mine = set(self.b.d.get("markets") or {})
         tracked = {oid for mk in self.b.d["markets"].values()
                    for oid, o in (mk.get("orders") or {}).items()
@@ -4821,16 +10622,34 @@ class Engine:
                 log("orphan_cancel_error", slug=slug, order_id=oid,
                     err=str(exc)[:160])
 
-    def reward_check(self) -> None:
+    def reward_check(self) -> bool:
         """OBSERVED reward earnings from the venue. Only rows the venue marks
         credited are money; pending/skipped are reported, never counted."""
         try:
             from src import pmus_incentive_audit as IA
-            e = IA.earnings(self.v.t)
+            with self.safety_reads():
+                e = IA.earnings(self.v.t, detail_max=max(
+                    50, ECONOMICS_REWARD_ROWS)) if (
+                    ECONOMICS_REPORT or RN1_REWARD_CALIBRATION) \
+                    else IA.earnings(self.v.t)
         except Exception as exc:                          # noqa: BLE001
             log("REWARD_CHECK", ok=False,
                 err=f"{type(exc).__name__}:{str(exc)[:160]}")
-            return
+            return False
+        if e.get("ok"):
+            rn1_set_paid_fraction(e.get("by_status"))
+        else:
+            rn1_set_paid_fraction(None)               # unreadable: unknown
+        if RN1_REWARD_CALIBRATION and e.get("ok"):
+            self.reward_calibration(list(e.get("rows_detail") or []))
+        if ECONOMICS_REPORT:
+            # the economics line reads every row; REWARD_CHECK below keeps
+            # reading the first 50 exactly as before
+            self._reward_rows = (time.monotonic(), bool(e.get("ok")),
+                                 list(e.get("rows_detail") or []),
+                                 e.get("rows"))
+        if ECONOMICS_REPORT or RN1_REWARD_CALIBRATION:
+            e = dict(e, rows_detail=list(e.get("rows_detail") or [])[:50])
         ours = set(self.b.d.get("markets") or {})
         mine = [r for r in (e.get("rows_detail") or [])
                 if str(r.get("marketSlug") or "") in ours]
@@ -4845,14 +10664,16 @@ class Engine:
             error=e.get("error"),
             label="venue /v1/incentives/earnings; ONLY credited_usd is money")
         self.crypto_reward_credits(e)
+        return bool(e.get("ok"))
 
     def report(self) -> None:
         pairs = self.b.d["pairs"]
         if self.guard is not None:
-            self.guard.track(self.sports_active())
+            self.guard.track(self.guard_tracked())
         extra = {} if self.ws is None else {
             "ws": self.ws.status(), "reactive_pulls": self.reactive_pulls,
             "orphan_stale_snapshot": self.orphan_stale,
+            "fill_poll": dict(self._fill_stats(), on=FILL_LIST_POLL),
             "jump_pauses": self.jump_pauses}
         if self.guard is not None:
             extra["intl_guard"] = self.guard.status()
@@ -4860,6 +10681,22 @@ class Engine:
         if _bud is not None:
             extra = dict(extra, venue_requests=_bud.report())
         _ls = lock_state()
+        extra = dict(extra, safety_latch=self.b.d.get("safety_latch") or None)
+        extra = dict(extra, loop=loop_report())
+        if RN1.ON:
+            try:
+                extra = dict(extra, markout=self.markout_summary(),
+                             phases=self.phase_summary(),
+                             capital=self.capital_breakdown(),
+                             account_limit=self.account_limit_status(),
+                             campaign=self.campaign_status(),
+                             audit={"last_complete_age_s": self.audit_age_s(),
+                                    "max_age_s": AUDIT_MAX_AGE_S,
+                                    "stale_blocks_new": self.audit_stale(),
+                                    "incomplete_in_a_row": int(getattr(
+                                        self, "_audit_incomplete", 0))})
+            except Exception:                             # noqa: BLE001
+                pass
         extra = dict(extra, submission_lock={
             "new_exposure_locked": _ls["new"], "completions_locked":
             _ls["all"], "why": _ls["why"],
@@ -4889,9 +10726,35 @@ class Engine:
             reward_first=reward_first_on(),
             reward_label="program rewards THEORETICAL; not in P&L")
 
+    def _hook_loop_beat(self) -> None:
+        """Every venue request the loop completes is progress (the hourly
+        audit is one long pass of them). Other threads' requests do not
+        count: loop_beat() checks the thread."""
+        t = getattr(self.v, "t", None)
+        if t is None or getattr(t, "_loop_beat_hooked", False) or \
+                not hasattr(t, "request"):
+            return
+        orig = t.request
+
+        def request(*a: Any, **k: Any) -> Any:
+            try:
+                return orig(*a, **k)
+            finally:
+                loop_beat()
+        try:
+            t.request = request
+            t._loop_beat_hooked = True
+        except Exception:                                 # noqa: BLE001
+            pass
+
     def run(self) -> int:
+        _LOOP["thread"] = threading.get_ident()
+        loop_beat()
+        self._hook_loop_beat()
         signal.signal(signal.SIGTERM, lambda *_: self.on_sigterm())
         self.require_fresh_account = True     # no new exposure on stale state
+        self.start_risk_reader()
+        self.start_campaign_reader()
         self.mark_recovery_start()
         seed = seed_drift(self.b.d, os.getenv("PMUS_TWO_SIDED_DRIFT_SEED"))
         if seed["seeded"] or seed["error"] or seed["kept_live"]:
@@ -4924,7 +10787,36 @@ class Engine:
                               "since": self.b.d.get("recovery_since"),
                               "shared_halt_url_set": bool((os.getenv(
                                   SHARED_HALT_URL_ENV) or "").strip())},
-            daily_loss_usd=DAILY_LOSS_USD, pregame={"on": PREGAME, "min_lead_s": PREGAME_MIN_LEAD_S,
+            daily_loss_usd=DAILY_LOSS_USD,
+            controller={"slate": slate(), "kickoff_pull_s": KICKOFF_PULL_S,
+                        "kickoff_resume_min_s": KICKOFF_RESUME_MIN_S,
+                        "kickoff_max_hold_s": KICKOFF_MAX_HOLD_S,
+                        "pregame_qty": rn1_pregame_qty(),
+                        "live_qty": rn1_live_qty(),
+                        "vol": {"window_s": VOL_WINDOW_S,
+                                "pause_usd": VOL_PAUSE_USD,
+                                "shrink_usd": VOL_SHRINK_USD,
+                                "calm_s": VOL_CALM_S},
+                        "at_risk_budget_usd": AT_RISK_BUDGET_USD,
+                        "at_risk_usd": self.own_exposure_usd(),
+                        "rank_net": RN1_RANK_NET,
+                        "net_rank": RN1_NET_RANK and {
+                            "sizes": [str(x) for x in RN1_NET_SIZES],
+                            "fill_rate": {str(k): v for k, v in
+                                          RN1_FILL_RATE.items()},
+                            "fill_loss": {str(k): v for k, v in
+                                          RN1_FILL_LOSS.items()}},
+                        "pin": rn1_pin(),
+                        "select": {"band_lo": BAND_LO, "band_hi": BAND_HI,
+                                   "max_spread_ticks": MAX_SPREAD_TICKS,
+                                   "max_markets": MAX_MARKETS,
+                                   "max_tracked": MAX_TRACKED,
+                                   "strict_sports": STRICT_SPORTS,
+                                   "exclude": os.getenv(
+                                       "PMUS_TWO_SIDED_EXCLUDE", "cr-"),
+                                   "allow_sports": sorted(
+                                       OPEN_GATE_ALLOW_SPORTS)}},
+            pregame={"on": PREGAME, "min_lead_s": PREGAME_MIN_LEAD_S,
                      "max_lead_s": PREGAME_MAX_LEAD_S,
                      "cutoff_s": PREGAME_CUTOFF_S}, **({"ws": True} if self.ws is not None else {}), caps={"per_market": PER_MARKET_CAP, "total": TOTAL_CAP,
                           "markets": MAX_MARKETS, "max_tracked": MAX_TRACKED, "open_offset_px": OPEN_OFFSET_PX, "depth_ticks": DEPTH_TICKS,
@@ -4940,12 +10832,15 @@ class Engine:
         last_hb = 0.0
         last_acc = time.monotonic()
         while not self.stop:
+            loop_beat()
             try:
                 if os.getenv(ENABLED_ENV, "").upper() != "YES":
                     self.cancel_all_own("disabled")
+                    orders_served()
                     time.sleep(30)
                     continue
-                self.enforce_lock()
+                latched = str(self.enforce_lock() or "").startswith(
+                    "safety_latch")
                 if time.monotonic() - last_sel > 20:
                     if self.full() and LATE_CUTOFF:
                         try:                       # keep game clocks fresh
@@ -4953,17 +10848,27 @@ class Engine:
                         except Exception:          # noqa: BLE001
                             pass
                     acc = self.read_account()
-                    if acc is not None:
+                    try:
+                        self.safety_check(acc)
+                    except Exception as exc:       # noqa: BLE001
+                        log("safety_check_error",
+                            err=f"{type(exc).__name__}:{str(exc)[:160]}")
+                    latched = latched or bool(self.b.d.get("safety_latch"))
+                    if acc is not None and latched:
+                        last_sel = time.monotonic()    # no new markets
+                    elif acc is not None:
                         self.select(acc)
                         self.select_crypto(acc)
                         last_sel = time.monotonic()
                     else:                          # retry sooner, not every pass
                         last_sel = time.monotonic() - 20 + ACCOUNT_RETRY_S
                     if self.guard is not None:
-                        self.guard.track(self.sports_active())
+                        self.guard.track(self.guard_tracked())
                     if rewards_on() and acc is not None:
                         self.refresh_active_rewards()
-                for slug in self.active():
+                if latched:
+                    self.enforce_lock()             # cancel what rests, now
+                for slug in ([] if latched else self.active()):
                     if self.stop:
                         break
                     self.drain_ws_events()          # no-op unless WS mode
@@ -4972,11 +10877,14 @@ class Engine:
                     except Exception as exc:          # noqa: BLE001
                         log("market_error", slug=slug,
                             err=f"{type(exc).__name__}:{str(exc)[:200]}")
+                    loop_beat()
+                if not self.stop:
+                    self._last_service = time.monotonic()
+                    orders_served()
                 if REWARD_CHECK_S > 0 and \
                         time.monotonic() - self._last_reward > REWARD_CHECK_S:
                     self._last_reward = time.monotonic()
-                    self.reward_check()
-                    self.account_audit()
+                    self.audit_round()
                 if SHARP_MODE == "shadow" and time.monotonic() - getattr(
                         self, "_last_sharp", -1e9) > SHARP_SHADOW_EVERY_S:
                     self._last_sharp = time.monotonic()
@@ -4985,32 +10893,64 @@ class Engine:
                     except Exception as exc:          # noqa: BLE001
                         log("sharp_shadow_error",
                             err=type(exc).__name__)
-                if time.monotonic() - getattr(self, "_last_orphan", 0) > 30:
-                    self._last_orphan = time.monotonic()
-                    # reuse the account read's open orders when it is fresh
-                    # (one signed GET instead of two)
-                    fresh = self._acct_cache is not None and \
-                        self._acct_ok_at is not None and \
-                        time.monotonic() - self._acct_ok_at <= 30
-                    self.orphan_sweep(self._acct_cache["open_orders"]
-                                      if fresh else None)
-                if time.monotonic() - last_hb > 60:
+                self.reconcile_orders_now()
+                if SETTLE_CHECK_S > 0 and time.monotonic() - getattr(
+                        self, "_last_settle", -1e9) > SETTLE_CHECK_S:
+                    self._last_settle = time.monotonic()
+                    try:
+                        self.settle_lookups(SETTLE_CHECK_MAX)
+                    except Exception as exc:              # noqa: BLE001
+                        log("settle_lookup_error",
+                            err=f"{type(exc).__name__}:{str(exc)[:160]}")
+                if time.monotonic() - max(last_hb, float(getattr(
+                        self, "_last_hb", 0.0))) > 60:
                     self.report()
-                    last_hb = time.monotonic()
+                    last_hb = self._last_hb = time.monotonic()
                 if reward_first_on() and \
                         time.monotonic() - last_acc > REWARD_ACCRUAL_LOG_S:
                     last_acc = time.monotonic()
                     self.reward_accrual_report()
                     self.b.save()
+                self._loop_errors = 0
             except Exception as exc:                  # noqa: BLE001
                 log("loop_error", err=f"{type(exc).__name__}:{str(exc)[:200]}")
+                self._loop_errors = getattr(self, "_loop_errors", 0) + 1
+                if self._loop_errors >= LOOP_ERROR_LATCH_N:
+                    try:
+                        self.latch("loop_errors", consecutive=self._loop_errors,
+                                   last=f"{type(exc).__name__}")
+                        self.enforce_lock()
+                    except Exception:                 # noqa: BLE001
+                        pass
             try:
                 self.drain_ws_events()
             except Exception as exc:                  # noqa: BLE001
                 log("loop_error", err=f"{type(exc).__name__}:{str(exc)[:200]}")
+            loop_beat()
+            death_drill_exit_if_due()
             self._sleep(LOOP_S)
+            self._stall_drill_hold()
         self.cancel_all_own("sigterm")
         return 0
+
+    def _stall_drill_hold(self) -> None:
+        """Hold the loop still for a configured drill window (see
+        STALL_DRILL_ENV). No beat, no read, no order, until the window ends
+        or the process is told to stop."""
+        d = stall_drill()
+        if not d or not d["active"]:
+            return
+        log("STALL_DRILL", phase="begin", end=_iso(d["end"]),
+            open_orders=sum(1 for mk in self.b.d["markets"].values()
+                            for o in mk["orders"].values() if o.get("open")),
+            label="deliberate drill: the loop stops acting and reporting "
+                  "progress until the window ends")
+        while not self.stop:
+            d = stall_drill()
+            if not d or not d["active"]:
+                break
+            time.sleep(1.0)
+        log("STALL_DRILL", phase="end", idle_s=loop_idle_s())
 
 
 _LAST_ACCESS_LOG = [0.0]
@@ -5056,16 +10996,90 @@ def registry_doc(book: "Book", clock=None) -> Dict[str, Any]:
             _REGISTRY_SEEN.pop(oid, None)
             continue
         rows.append({**row, "closing": True})
-    return {"readable": True, "lane": LANE, "manages_own_resting": True,
+    _idle = loop_idle_s(now)
+    _stalled = (_idle is not None and _idle > LOOP_STALL_S) or \
+        order_service_stalled(now)
+    return {"readable": True, "lane": LANE,
+            "manages_own_resting": not _stalled,
             "enabled": os.getenv(ENABLED_ENV, "").upper() == "YES",
             # True ONLY under the lane's own independent lock (above); the
             # shared halt is deliberately NOT counted, since a reset that
             # proved "disabled" via the very latch it clears proves nothing
-            "submission_disabled": fully_locked(),
-            "orders": rows, "as_of_utc": now_iso(),
+            "submission_disabled": fully_locked() or bool(
+                book.d.get("safety_latch")),
+            "safety_latch": book.d.get("safety_latch") or None,
+            "loop_idle_s": (None if _idle is None else round(_idle, 1)),
+            "loop_stalled": _stalled,
+            "order_service_idle_s": (
+                None if order_service_idle_s(now) is None
+                else round(order_service_idle_s(now), 1)),
+            "orders": rows,
+            "loop_last_progress_utc": (None if _LOOP["beat"] is None
+                                       else _iso_precise(_LOOP["beat"])),
+            "as_of_utc": now_iso(),
             "labels": ("venue order ids pmus_sports_two_sided placed and "
                        "still believes live; it cancels them itself on "
                        "requote, disable and SIGTERM")}
+
+
+# ------------------------------------------------- the ownership (fills) feed
+# OWNER 2026-11-22: "The BTC service must not adopt or settle positions
+# belonging to the sports controller. Every fill and position needs durable
+# ownership attribution." The account-wide ledger (l5-pmus-live) holds a
+# position it did not open at $1 a contract and books its settlement at that
+# bound; on 2026-11-22 that read -13.00 for a day whose cash moved -2.05.
+# It already restates another strategy's market when that strategy's own
+# order ledger and the venue's fills agree ORDER BY ORDER. This is the
+# sports ledger in the shape it reads (the BTC5m feed's shape): every order
+# of this bot that ever filled, by venue order id, from the durable book.
+# READ-ONLY. No credential, no account id, nothing but this bot's own orders.
+FILLS_KEY = "l5/sports_fills.json"
+FILLS_STRATEGY = "SPORTS"
+
+
+def fills_doc(book: "Book") -> Dict[str, Any]:
+    """{"readable", "strategy", "as_of_utc", "orders": [...]}. An order is
+    listed only once it has filled; `filled_cost` is the venue-reported cost
+    where this bot recorded it and quantity x limit price for an order that
+    filled before it did (`cost_from` says which). The reader checks every
+    figure against the venue itself and refuses on any difference, so a
+    wrong figure here can only leave its own bound in place."""
+    for _attempt in range(3):
+        try:
+            orders = []
+            for slug, mk in sorted((book.d.get("markets") or {}).items()):
+                for oid, o in sorted((mk.get("orders") or {}).items()):
+                    q = D(str(o.get("filled") or "0"))
+                    if q <= 0:
+                        continue
+                    px = D(str(o["px"]))
+                    side = str(o.get("side") or "")
+                    if side not in ("YES", "NO") or not str(oid).strip():
+                        return {"readable": False, "strategy": FILLS_STRATEGY,
+                                "orders": [], "why": "order_unreadable"}
+                    rec = o.get("fill_cost")
+                    cost = D(str(rec)) if rec is not None else q * px
+                    orders.append({
+                        "venue_order_id": str(oid), "market": slug,
+                        "side": side, "price": str(cost / q),
+                        "limit_price": str(px), "filled_qty": str(q),
+                        "filled_cost": str(cost),
+                        "cost_from": ("VENUE_REPORTED" if rec is not None
+                                      else "LIMIT_PRICE"),
+                        "state": "OPEN" if o.get("open") else "CLOSED"})
+            return {"readable": True, "strategy": FILLS_STRATEGY,
+                    "lane": LANE, "as_of_utc": now_iso(), "orders": orders,
+                    "labels": ("every order this bot placed that has filled, "
+                               "with its own outcome side (YES/NO), filled "
+                               "quantity and cost in that outcome's price. "
+                               "Not a P&L and not a position: the reader "
+                               "reconciles it against the venue's fills.")}
+        except RuntimeError:               # book changed size while iterating
+            time.sleep(0.01)
+        except Exception:                                     # noqa: BLE001
+            break
+    return {"readable": False, "strategy": FILLS_STRATEGY, "orders": [],
+            "why": "book_unreadable"}
 
 
 def serve_registry(book: "Book", port: int) -> None:
@@ -5075,9 +11089,10 @@ def serve_registry(book: "Book", port: int) -> None:
     class H(BaseHTTPRequestHandler):
         def do_GET(self):                               # noqa: N802
             path = self.path.split("?", 1)[0].lstrip("/")
-            if path not in (REGISTRY_KEY, "health"):
+            if path not in (REGISTRY_KEY, FILLS_KEY, "health"):
                 self.send_response(404); self.end_headers(); return
             body = json.dumps(registry_doc(book) if path == REGISTRY_KEY
+                              else fills_doc(book) if path == FILLS_KEY
                               else {"ok": True}, default=str).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -5122,6 +11137,7 @@ def serve_registry(book: "Book", port: int) -> None:
 
 
 def main() -> int:
+    death_drill_boot_hold()      # a drill window: stay down until it ends
     book = Book(STATE_DIR / "state.json")
     try:
         serve_registry(book, int(os.getenv("PMUS_TWO_SIDED_REGISTRY_PORT",
