@@ -1,0 +1,297 @@
+{
+ "aec-ahl-bel-man-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "aec-cbb-alcst-gtech-2026-11-28": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.01"
+ },
+ "aec-cbb-ballst-usi-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "aec-cbb-brown-airf-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "aec-cbb-cencon-navy-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "aec-cbb-chist-bradly-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "aec-cbb-cita-hpnt-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "aec-cbb-delst-ncat-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "aec-cbb-den-nmxst-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "aec-cbb-elon-ncst-2026-11-28": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.01"
+ },
+ "aec-cbb-fordm-harvrd-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "aec-cbb-gas-ncashe-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "aec-cbb-hamp-radf-2026-11-28": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.01"
+ },
+ "aec-cbb-lehi-pepp-2026-11-28": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.01"
+ },
+ "aec-cbb-librty-ncw-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "aec-cbb-manh-morgst-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "aec-cbb-marist-gmsn-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "aec-cbb-ncc-gardwb-2026-11-28": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.01"
+ },
+ "aec-cbb-nfl-colmb-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "aec-cbb-nill-eill-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "aec-cbb-prnce-stmn-2026-11-28": {
+  "closed": true,
+  "outcome_yes": 1,
+  "tick": "0.01"
+ },
+ "aec-cbb-robms-niowa-2026-11-28": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.01"
+ },
+ "aec-cbb-sacst-presb-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "aec-cbb-semst-umkc-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "aec-cbb-siena-seton-2026-11-28": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.01"
+ },
+ "aec-cbb-toledo-valp-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "aec-cbb-troy-chat-2026-11-28": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.01"
+ },
+ "aec-cbb-txamc-marsh-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "aec-cbb-utrgv-unlv-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "aec-cbb-will-coast-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "aec-cbb-woff-ipfw-2026-11-28": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.01"
+ },
+ "aec-cfb-albny-lehi-2026-11-28": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.005"
+ },
+ "aec-cfb-army-rice-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.005"
+ },
+ "aec-cfb-boscol-mia-2026-11-28": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.005"
+ },
+ "aec-cfb-cmich-ballst-2026-11-28": {
+  "closed": true,
+  "outcome_yes": 1,
+  "tick": "0.005"
+ },
+ "aec-cfb-coast-jmad-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.005"
+ },
+ "aec-cfb-flatl-ecar-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.005"
+ },
+ "aec-cfb-grmbst-south-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.005"
+ },
+ "aec-cfb-harv-monm-2026-11-28": {
+  "closed": true,
+  "outcome_yes": 1,
+  "tick": "0.005"
+ },
+ "aec-cfb-idhst-ndak-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.005"
+ },
+ "aec-cfb-ill-nw-2026-11-28": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.005"
+ },
+ "aec-cfb-kanst-iowast-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.005"
+ },
+ "aec-cfb-kenest-wkent-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.005"
+ },
+ "aec-cfb-librty-msrst-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.005"
+ },
+ "aec-cfb-lou-uk-2026-11-28": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.005"
+ },
+ "aec-cfb-loulaf-gast-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.005"
+ },
+ "aec-cfb-loutch-gas-2026-11-28": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.005"
+ },
+ "aec-cfb-lsu-ark-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.005"
+ },
+ "aec-cfb-marsh-lamon-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.005"
+ },
+ "aec-cfb-mich-ohiost-2026-11-28": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.005"
+ },
+ "aec-cfb-navy-charlt-2026-11-28": {
+  "closed": true,
+  "outcome_yes": 1,
+  "tick": "0.005"
+ },
+ "aec-cfb-ncst-ncar-2026-11-28": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.005"
+ },
+ "aec-cfb-nd-syra-2026-11-28": {
+  "closed": true,
+  "outcome_yes": 1,
+  "tick": "0.005"
+ },
+ "aec-cfb-nmxst-mtnst-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.005"
+ },
+ "aec-cfb-sc-clmsn-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.005"
+ },
+ "aec-cfb-smho-flint-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.005"
+ },
+ "aec-cfb-soumis-old-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.005"
+ },
+ "aec-cfb-ucf-col-2026-11-28": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.005"
+ },
+ "aec-cfb-uconn-wyom-2026-11-28": {
+  "closed": true,
+  "outcome_yes": 1,
+  "tick": "0.005"
+ }
+}

@@ -1,0 +1,176 @@
+Adaptive hedge (PMUS_RN1_TF_ADAPTIVE_HEDGE / policy `adaptive_hedge`) vs
+today's completion rules on recorded two-venue sports tapes.
+
+OFFLINE, THEORETICAL: recorded books + international fair, modelled fills
+(touch / through), 3 s latency, production pauses, maker fee 0, rewards NOT
+modelled (pre-reward settled trading P&L only). Nothing here is realized.
+
+  IN-SAMPLE      21 Nov two-venue tape (the tape every earlier trading-first
+                 grid was run on; the adaptive grid below is chosen here).
+  OUT-OF-SAMPLE  28 Nov recordings, closed games only. Nothing is tuned on
+                 it: the grid is fixed before it is read and the "chosen"
+                 row is the in-sample choice.
+
+usage: adaptive_hedge_eval.py [oos_dir]   (oos_dir holds
+       cross_venue_20261128_*.jsonl copies; omitted = in-sample only)
+
+columns: settled/matched/resid = pre-reward settled trading P&L $ and its matched-pair / residual parts; worstmk = worst single market settled P&L; wc_sum = sum over traded markets of the P&L had every residual lost (downside); paired = sum, mean ± SE per market of (policy - reference) over markets either traded. ALL THEORETICAL.
+grid (fixed before the out-of-sample tape was read): (give_min, edge_k) x (give_max, risk_aversion) = 12 rules; other knobs at defaults {"give_max": "0.01", "give_min": "-0.02", "weaken_k": "0.5", "weaken_dead": "0.01", "expo_usd": "0.01", "edge_k": "1", "risk_aversion": "0.005"}
+
+====================================================================================================
+IN-SAMPLE: 21 Nov two-venue tape
+
+[touch] settled markets replayed 65 (skipped 0: {})
+  policy                                                             settled matched   resid fills mkt worstmk   wc_sum | paired vs baseline     | paired vs fair+1c     
+  A baseline (production core, no trading-first)                       -5.87   +5.31  -11.18   138  19   -3.00   -10.57 |  +0.00 +0.000±0.000 n19 |                       
+  TF edge 2c | hedge at pair cap                                       +0.97   +0.71   +0.26    19   5   +0.02    +0.27 |  +6.84 +0.360±0.201 n19 |                       
+  TF edge 2c | hedge fair+1c reprice                                   +1.61   +1.35   +0.26    23   5   +0.02    +0.91 |  +7.48 +0.393±0.200 n19 |  +0.00 +0.000±0.000 n5 
+  TF edge 2c | adaptive give [-0.02,0.01] edge_k 1 lam 0.005           -0.01   +1.06   -1.07    19   5   -0.59    -0.71 |  +5.86 +0.308±0.214 n19 |  -1.62 -0.324±0.211 n5 
+  TF edge 2c | adaptive give [-0.02,0.03] edge_k 1 lam 0.005           -0.01   +1.06   -1.07    19   5   -0.59    -0.71 |  +5.86 +0.308±0.214 n19 |  -1.62 -0.324±0.211 n5 
+  TF edge 2c | adaptive give [-0.02,0.03] edge_k 1 lam 0.05            -0.01   +1.06   -1.07    19   5   -0.59    -0.71 |  +5.86 +0.308±0.214 n19 |  -1.62 -0.324±0.211 n5 
+  TF edge 2c | adaptive give [-0.01,0.01] edge_k 1 lam 0.005           -0.58   +1.19   -1.77    22   5   -1.95    -1.28 |  +5.29 +0.278±0.250 n19 |  -2.19 -0.438±0.433 n5 
+  TF edge 2c | adaptive give [-0.01,0.03] edge_k 1 lam 0.005           -0.58   +1.19   -1.77    22   5   -1.95    -1.28 |  +5.29 +0.278±0.250 n19 |  -2.19 -0.438±0.433 n5 
+  TF edge 2c | adaptive give [-0.01,0.03] edge_k 1 lam 0.05            -0.58   +1.19   -1.77    22   5   -1.95    -1.28 |  +5.29 +0.278±0.250 n19 |  -2.19 -0.438±0.433 n5 
+  TF edge 2c | adaptive give [0,0.01] edge_k 1 lam 0.005               +1.90   +1.64   +0.26    31   5   +0.02    +1.20 |  +7.77 +0.409±0.201 n19 |  +0.29 +0.058±0.069 n5 
+  TF edge 2c | adaptive give [0,0.03] edge_k 1 lam 0.005               +1.90   +1.64   +0.26    31   5   +0.02    +1.20 |  +7.77 +0.409±0.201 n19 |  +0.29 +0.058±0.069 n5 
+  TF edge 2c | adaptive give [0,0.03] edge_k 1 lam 0.05                +1.90   +1.64   +0.26    31   5   +0.02    +1.20 |  +7.77 +0.409±0.201 n19 |  +0.29 +0.058±0.069 n5 
+  TF edge 2c | adaptive give [0,0.01] edge_k 0 lam 0.005               +1.90   +1.64   +0.26    31   5   +0.02    +1.20 |  +7.77 +0.409±0.201 n19 |  +0.29 +0.058±0.069 n5 
+  TF edge 2c | adaptive give [0,0.03] edge_k 0 lam 0.005               +1.90   +1.64   +0.26    31   5   +0.02    +1.20 |  +7.77 +0.409±0.201 n19 |  +0.29 +0.058±0.069 n5 
+  TF edge 2c | adaptive give [0,0.03] edge_k 0 lam 0.05                +1.90   +1.64   +0.26    31   5   +0.02    +1.20 |  +7.77 +0.409±0.201 n19 |  +0.29 +0.058±0.069 n5 
+
+  policy                                                             settled matched   resid fills mkt worstmk   wc_sum | paired vs baseline     | paired vs fair+1c     
+  baseline admission | hedge at pair cap                               -5.87   +5.31  -11.18   138  19   -3.00   -10.57 |  +0.00 +0.000±0.000 n19 |                       
+  baseline admission | hedge fair+1c reprice                           -7.92   +5.80  -13.73   113  19   -4.59   -13.02 |  -2.05 -0.108±0.197 n19 |  +0.00 +0.000±0.000 n19
+  baseline admission | adaptive give [-0.02,0.01] edge_k 1 lam 0.005  -11.31   +5.56  -16.87    73  19   -4.59   -20.28 |  -5.44 -0.286±0.285 n19 |  -3.38 -0.178±0.292 n19
+  baseline admission | adaptive give [-0.02,0.03] edge_k 1 lam 0.005  -11.31   +5.56  -16.87    73  19   -4.59   -20.28 |  -5.44 -0.286±0.285 n19 |  -3.38 -0.178±0.292 n19
+  baseline admission | adaptive give [-0.02,0.03] edge_k 1 lam 0.05   -11.31   +5.56  -16.87    73  19   -4.59   -20.28 |  -5.44 -0.286±0.285 n19 |  -3.38 -0.178±0.292 n19
+  baseline admission | adaptive give [-0.01,0.01] edge_k 1 lam 0.005   -6.33   +5.12  -11.45    83  19   -4.59   -15.30 |  -0.46 -0.024±0.223 n19 |  +1.59 +0.084±0.198 n19
+  baseline admission | adaptive give [-0.01,0.03] edge_k 1 lam 0.005   -6.33   +5.12  -11.45    83  19   -4.59   -15.30 |  -0.46 -0.024±0.223 n19 |  +1.59 +0.084±0.198 n19
+  baseline admission | adaptive give [-0.01,0.03] edge_k 1 lam 0.05    -6.33   +5.12  -11.45    83  19   -4.59   -15.30 |  -0.46 -0.024±0.223 n19 |  +1.59 +0.084±0.198 n19
+  baseline admission | adaptive give [0,0.01] edge_k 1 lam 0.005       -9.97   +5.38  -15.36   101  19   -4.59   -14.94 |  -4.10 -0.216±0.180 n19 |  -2.05 -0.108±0.180 n19
+  baseline admission | adaptive give [0,0.03] edge_k 1 lam 0.005       -9.97   +5.38  -15.36   101  19   -4.59   -14.94 |  -4.10 -0.216±0.180 n19 |  -2.05 -0.108±0.180 n19
+  baseline admission | adaptive give [0,0.03] edge_k 1 lam 0.05        -9.97   +5.38  -15.36   101  19   -4.59   -14.94 |  -4.10 -0.216±0.180 n19 |  -2.05 -0.108±0.180 n19
+  baseline admission | adaptive give [0,0.01] edge_k 0 lam 0.005       -9.97   +5.38  -15.36   101  19   -4.59   -14.94 |  -4.10 -0.216±0.180 n19 |  -2.05 -0.108±0.180 n19
+  baseline admission | adaptive give [0,0.03] edge_k 0 lam 0.005       -9.97   +5.38  -15.36   101  19   -4.59   -14.94 |  -4.10 -0.216±0.180 n19 |  -2.05 -0.108±0.180 n19
+  baseline admission | adaptive give [0,0.03] edge_k 0 lam 0.05        -9.97   +5.38  -15.36   101  19   -4.59   -14.94 |  -4.10 -0.216±0.180 n19 |  -2.05 -0.108±0.180 n19
+
+
+[through] settled markets replayed 65 (skipped 0: {})
+  policy                                                             settled matched   resid fills mkt worstmk   wc_sum | paired vs baseline     | paired vs fair+1c     
+  A baseline (production core, no trading-first)                       -7.74   +5.47  -13.21    92  14   -3.65    -8.34 |  +0.00 +0.000±0.000 n14 |                       
+  TF edge 2c | hedge at pair cap                                       +0.82   +0.58   +0.24    14   3   +0.07    +0.22 |  +8.56 +0.612±0.330 n14 |                       
+  TF edge 2c | hedge fair+1c reprice                                   +1.06   +0.82   +0.24    14   3   +0.24    +0.46 |  +8.80 +0.629±0.332 n14 |  +0.00 +0.000±0.000 n3 
+  TF edge 2c | adaptive give [-0.02,0.01] edge_k 1 lam 0.005           +2.09   +0.49   +1.60    12   3   +0.24    -2.51 |  +9.83 +0.702±0.328 n14 |  +1.03 +0.343±0.299 n3 
+  TF edge 2c | adaptive give [-0.02,0.03] edge_k 1 lam 0.005           +2.09   +0.49   +1.60    12   3   +0.24    -2.51 |  +9.83 +0.702±0.328 n14 |  +1.03 +0.343±0.299 n3 
+  TF edge 2c | adaptive give [-0.02,0.03] edge_k 1 lam 0.05            +2.09   +0.49   +1.60    12   3   +0.24    -2.51 |  +9.83 +0.702±0.328 n14 |  +1.03 +0.343±0.299 n3 
+  TF edge 2c | adaptive give [-0.01,0.01] edge_k 1 lam 0.005           -0.21   +1.07   -1.28    18   3   -1.00    -0.81 |  +7.53 +0.538±0.326 n14 |  -1.27 -0.423±0.423 n3 
+  TF edge 2c | adaptive give [-0.01,0.03] edge_k 1 lam 0.005           -0.21   +1.07   -1.28    18   3   -1.00    -0.81 |  +7.53 +0.538±0.326 n14 |  -1.27 -0.423±0.423 n3 
+  TF edge 2c | adaptive give [-0.01,0.03] edge_k 1 lam 0.05            -0.21   +1.07   -1.28    18   3   -1.00    -0.81 |  +7.53 +0.538±0.326 n14 |  -1.27 -0.423±0.423 n3 
+  TF edge 2c | adaptive give [0,0.01] edge_k 1 lam 0.005               -0.27   +1.01   -1.28    18   3   -1.02    -0.87 |  +7.47 +0.534±0.327 n14 |  -1.33 -0.443±0.423 n3 
+  TF edge 2c | adaptive give [0,0.03] edge_k 1 lam 0.005               -0.27   +1.01   -1.28    18   3   -1.02    -0.87 |  +7.47 +0.534±0.327 n14 |  -1.33 -0.443±0.423 n3 
+  TF edge 2c | adaptive give [0,0.03] edge_k 1 lam 0.05                -0.27   +1.01   -1.28    18   3   -1.02    -0.87 |  +7.47 +0.534±0.327 n14 |  -1.33 -0.443±0.423 n3 
+  TF edge 2c | adaptive give [0,0.01] edge_k 0 lam 0.005               -0.27   +1.01   -1.28    18   3   -1.02    -0.87 |  +7.47 +0.534±0.327 n14 |  -1.33 -0.443±0.423 n3 
+  TF edge 2c | adaptive give [0,0.03] edge_k 0 lam 0.005               -0.27   +1.01   -1.28    18   3   -1.02    -0.87 |  +7.47 +0.534±0.327 n14 |  -1.33 -0.443±0.423 n3 
+  TF edge 2c | adaptive give [0,0.03] edge_k 0 lam 0.05                -0.27   +1.01   -1.28    18   3   -1.02    -0.87 |  +7.47 +0.534±0.327 n14 |  -1.33 -0.443±0.423 n3 
+
+  policy                                                             settled matched   resid fills mkt worstmk   wc_sum | paired vs baseline     | paired vs fair+1c     
+  baseline admission | hedge at pair cap                               -7.74   +5.47  -13.21    92  14   -3.65    -8.34 |  +0.00 +0.000±0.000 n14 |                       
+  baseline admission | hedge fair+1c reprice                          -13.57   +3.34  -16.91    71  14   -4.59   -14.17 |  -5.83 -0.416±0.305 n14 |  +0.00 +0.000±0.000 n14
+  baseline admission | adaptive give [-0.02,0.01] edge_k 1 lam 0.005  -11.52   +2.70  -14.23    48  14   -4.59   -20.39 |  -3.78 -0.270±0.608 n14 |  +2.05 +0.147±0.499 n14
+  baseline admission | adaptive give [-0.02,0.03] edge_k 1 lam 0.005  -11.52   +2.70  -14.23    48  14   -4.59   -20.39 |  -3.78 -0.270±0.608 n14 |  +2.05 +0.147±0.499 n14
+  baseline admission | adaptive give [-0.02,0.03] edge_k 1 lam 0.05   -11.52   +2.70  -14.23    48  14   -4.59   -20.39 |  -3.78 -0.270±0.608 n14 |  +2.05 +0.147±0.499 n14
+  baseline admission | adaptive give [-0.01,0.01] edge_k 1 lam 0.005   -9.61   +3.11  -12.72    55  14   -4.59   -16.48 |  -1.87 -0.134±0.531 n14 |  +3.96 +0.283±0.385 n14
+  baseline admission | adaptive give [-0.01,0.03] edge_k 1 lam 0.005   -9.61   +3.11  -12.72    55  14   -4.59   -16.48 |  -1.87 -0.134±0.531 n14 |  +3.96 +0.283±0.385 n14
+  baseline admission | adaptive give [-0.01,0.03] edge_k 1 lam 0.05    -9.61   +3.11  -12.72    55  14   -4.59   -16.48 |  -1.87 -0.134±0.531 n14 |  +3.96 +0.283±0.385 n14
+  baseline admission | adaptive give [0,0.01] edge_k 1 lam 0.005       -7.50   +3.93  -11.43    66  14   -4.59   -13.17 |  +0.24 +0.017±0.495 n14 |  +6.07 +0.434±0.318 n14
+  baseline admission | adaptive give [0,0.03] edge_k 1 lam 0.005       -7.50   +3.93  -11.43    66  14   -4.59   -13.17 |  +0.24 +0.017±0.495 n14 |  +6.07 +0.434±0.318 n14
+  baseline admission | adaptive give [0,0.03] edge_k 1 lam 0.05        -7.50   +3.93  -11.43    66  14   -4.59   -13.17 |  +0.24 +0.017±0.495 n14 |  +6.07 +0.434±0.318 n14
+  baseline admission | adaptive give [0,0.01] edge_k 0 lam 0.005       -7.50   +3.93  -11.43    66  14   -4.59   -13.17 |  +0.24 +0.017±0.495 n14 |  +6.07 +0.434±0.318 n14
+  baseline admission | adaptive give [0,0.03] edge_k 0 lam 0.005       -7.50   +3.93  -11.43    66  14   -4.59   -13.17 |  +0.24 +0.017±0.495 n14 |  +6.07 +0.434±0.318 n14
+  baseline admission | adaptive give [0,0.03] edge_k 0 lam 0.05        -7.50   +3.93  -11.43    66  14   -4.59   -13.17 |  +0.24 +0.017±0.495 n14 |  +6.07 +0.434±0.318 n14
+
+in-sample choice (largest summed paired P&L vs fair+1c over both fill models and both admission regimes): adaptive give [0,0.01] edge_k 1 lam 0.005  (+2.98)
+in-sample scores: {"adaptive give [-0.02,0.01] edge_k 1 lam 0.005": -1.92, "adaptive give [-0.02,0.03] edge_k 1 lam 0.005": -1.92, "adaptive give [-0.02,0.03] edge_k 1 lam 0.05": -1.92, "adaptive give [-0.01,0.01] edge_k 1 lam 0.005": 2.09, "adaptive give [-0.01,0.03] edge_k 1 lam 0.005": 2.09, "adaptive give [-0.01,0.03] edge_k 1 lam 0.05": 2.09, "adaptive give [0,0.01] edge_k 1 lam 0.005": 2.98, "adaptive give [0,0.03] edge_k 1 lam 0.005": 2.98, "adaptive give [0,0.03] edge_k 1 lam 0.05": 2.98, "adaptive give [0,0.01] edge_k 0 lam 0.005": 2.98, "adaptive give [0,0.03] edge_k 0 lam 0.005": 2.98, "adaptive give [0,0.03] edge_k 0 lam 0.05": 2.98}
+
+OUT-OF-SAMPLE snapshot: 8 files, 59 markets recorded, 22 closed with a settlement
+  cross_venue_20261128_1328.jsonl  3091752 bytes  sha256 7e5d805658b0dddd
+  cross_venue_20261128_1358.jsonl  1802793 bytes  sha256 9ea5f2686c749ee1
+  cross_venue_20261128_1758.jsonl  12694288 bytes  sha256 00b4a8ccb59fc138
+  cross_venue_20261128_1828.jsonl  12687797 bytes  sha256 f8a0fbff8c4725db
+  cross_venue_20261128_1858.jsonl  12293014 bytes  sha256 447e448ef68f0979
+  cross_venue_20261128_1928.jsonl  12175170 bytes  sha256 bb7dca25c140cb12
+  cross_venue_20261128_1958.jsonl  11590834 bytes  sha256 f31a3dd3b1df076b
+  cross_venue_20261128_2028.jsonl  8157336 bytes  sha256 7b74920c0c401d13
+
+====================================================================================================
+OUT-OF-SAMPLE: 28 Nov recordings, closed games only (n markets as shown; nothing tuned here)
+
+[touch] settled markets replayed 22 (skipped 37: {'no_settlement': 37})
+  policy                                                             settled matched   resid fills mkt worstmk   wc_sum | paired vs baseline     | paired vs fair+1c     
+  A baseline (production core, no trading-first)                       -7.11   +4.35  -11.47   106  15   -2.73   -17.11 |  +0.00 +0.000±0.000 n15 |                       
+  TF edge 2c | hedge at pair cap                                       +0.83   +1.86   -1.03    43   8   -0.60    +0.83 |  +7.94 +0.530±0.312 n15 |                       
+  TF edge 2c | hedge fair+1c reprice                                   +2.27   +2.98   -0.71    42   8   -0.15    +2.27 |  +9.39 +0.626±0.294 n15 |  +0.00 +0.000±0.000 n8 
+  TF edge 2c | adaptive give [-0.02,0.01] edge_k 1 lam 0.005           +9.76   +1.89   +7.87    29   8   +0.00   -10.04 | +16.87 +1.125±0.325 n15 |  +7.48 +0.935±0.328 n8 
+  TF edge 2c | adaptive give [-0.02,0.03] edge_k 1 lam 0.005           +9.76   +1.89   +7.87    29   8   +0.00   -10.04 | +16.87 +1.125±0.325 n15 |  +7.48 +0.935±0.328 n8 
+  TF edge 2c | adaptive give [-0.02,0.03] edge_k 1 lam 0.05            +9.76   +1.89   +7.87    29   8   +0.00   -10.04 | +16.87 +1.125±0.325 n15 |  +7.48 +0.935±0.328 n8 
+  TF edge 2c | adaptive give [-0.01,0.01] edge_k 1 lam 0.005           +7.14   +2.97   +4.17    34   8   -0.46    -4.86 | +14.25 +0.950±0.326 n15 |  +4.87 +0.608±0.297 n8 
+  TF edge 2c | adaptive give [-0.01,0.03] edge_k 1 lam 0.005           +7.14   +2.97   +4.17    34   8   -0.46    -4.86 | +14.25 +0.950±0.326 n15 |  +4.87 +0.608±0.297 n8 
+  TF edge 2c | adaptive give [-0.01,0.03] edge_k 1 lam 0.05            +7.14   +2.97   +4.17    34   8   -0.46    -4.86 | +14.25 +0.950±0.326 n15 |  +4.87 +0.608±0.297 n8 
+  TF edge 2c | adaptive give [0,0.01] edge_k 1 lam 0.005               +2.86   +3.35   -0.48    41   8   +0.04    +2.86 |  +9.98 +0.665±0.287 n15 |  +0.59 +0.074±0.026 n8  <== chosen in-sample
+  TF edge 2c | adaptive give [0,0.03] edge_k 1 lam 0.005               +2.86   +3.35   -0.48    41   8   +0.04    +2.86 |  +9.98 +0.665±0.287 n15 |  +0.59 +0.074±0.026 n8 
+  TF edge 2c | adaptive give [0,0.03] edge_k 1 lam 0.05                +2.86   +3.35   -0.48    41   8   +0.04    +2.86 |  +9.98 +0.665±0.287 n15 |  +0.59 +0.074±0.026 n8 
+  TF edge 2c | adaptive give [0,0.01] edge_k 0 lam 0.005               +2.86   +3.35   -0.48    41   8   +0.04    +2.86 |  +9.98 +0.665±0.287 n15 |  +0.59 +0.074±0.026 n8 
+  TF edge 2c | adaptive give [0,0.03] edge_k 0 lam 0.005               +2.86   +3.35   -0.48    41   8   +0.04    +2.86 |  +9.98 +0.665±0.287 n15 |  +0.59 +0.074±0.026 n8 
+  TF edge 2c | adaptive give [0,0.03] edge_k 0 lam 0.05                +2.86   +3.35   -0.48    41   8   +0.04    +2.86 |  +9.98 +0.665±0.287 n15 |  +0.59 +0.074±0.026 n8 
+
+  policy                                                             settled matched   resid fills mkt worstmk   wc_sum | paired vs baseline     | paired vs fair+1c     
+  baseline admission | hedge at pair cap                               -7.11   +4.35  -11.47   106  15   -2.73   -17.11 |  +0.00 +0.000±0.000 n15 |                       
+  baseline admission | hedge fair+1c reprice                           -1.64   +6.70   -8.33   101  15   -2.73   -11.64 |  +5.48 +0.365±0.186 n15 |  +0.00 +0.000±0.000 n15
+  baseline admission | adaptive give [-0.02,0.01] edge_k 1 lam 0.005   +7.04   +4.15   +2.89    62  15   -2.73   -29.76 | +14.16 +0.944±0.377 n15 |  +8.68 +0.579±0.440 n15
+  baseline admission | adaptive give [-0.02,0.03] edge_k 1 lam 0.005   +7.04   +4.15   +2.89    62  15   -2.73   -29.76 | +14.16 +0.944±0.377 n15 |  +8.68 +0.579±0.440 n15
+  baseline admission | adaptive give [-0.02,0.03] edge_k 1 lam 0.05    +7.04   +4.15   +2.89    62  15   -2.73   -29.76 | +14.16 +0.944±0.377 n15 |  +8.68 +0.579±0.440 n15
+  baseline admission | adaptive give [-0.01,0.01] edge_k 1 lam 0.005   +5.71   +7.72   -2.01    75  15   -2.73   -19.09 | +12.83 +0.855±0.295 n15 |  +7.35 +0.490±0.244 n15
+  baseline admission | adaptive give [-0.01,0.03] edge_k 1 lam 0.005   +5.71   +7.72   -2.01    75  15   -2.73   -19.09 | +12.83 +0.855±0.295 n15 |  +7.35 +0.490±0.244 n15
+  baseline admission | adaptive give [-0.01,0.03] edge_k 1 lam 0.05    +5.71   +7.72   -2.01    75  15   -2.73   -19.09 | +12.83 +0.855±0.295 n15 |  +7.35 +0.490±0.244 n15
+  baseline admission | adaptive give [0,0.01] edge_k 1 lam 0.005       -1.54   +7.00   -8.54    92  15   -2.73   -11.54 |  +5.57 +0.371±0.179 n15 |  +0.09 +0.006±0.029 n15 <== chosen in-sample
+  baseline admission | adaptive give [0,0.03] edge_k 1 lam 0.005       -1.54   +7.00   -8.54    92  15   -2.73   -11.54 |  +5.57 +0.371±0.179 n15 |  +0.09 +0.006±0.029 n15
+  baseline admission | adaptive give [0,0.03] edge_k 1 lam 0.05        -1.54   +7.00   -8.54    92  15   -2.73   -11.54 |  +5.57 +0.371±0.179 n15 |  +0.09 +0.006±0.029 n15
+  baseline admission | adaptive give [0,0.01] edge_k 0 lam 0.005       -1.54   +7.00   -8.54    92  15   -2.73   -11.54 |  +5.57 +0.371±0.179 n15 |  +0.09 +0.006±0.029 n15
+  baseline admission | adaptive give [0,0.03] edge_k 0 lam 0.005       -1.54   +7.00   -8.54    92  15   -2.73   -11.54 |  +5.57 +0.371±0.179 n15 |  +0.09 +0.006±0.029 n15
+  baseline admission | adaptive give [0,0.03] edge_k 0 lam 0.05        -1.54   +7.00   -8.54    92  15   -2.73   -11.54 |  +5.57 +0.371±0.179 n15 |  +0.09 +0.006±0.029 n15
+
+
+[through] settled markets replayed 22 (skipped 37: {'no_settlement': 37})
+  policy                                                             settled matched   resid fills mkt worstmk   wc_sum | paired vs baseline     | paired vs fair+1c     
+  A baseline (production core, no trading-first)                       -4.39   +3.96   -8.36    92  15   -2.73   -11.39 |  +0.00 +0.000±0.000 n15 |                       
+  TF edge 2c | hedge at pair cap                                       +1.52   +2.26   -0.74    40   8   -0.24    +1.52 |  +5.92 +0.394±0.300 n15 |                       
+  TF edge 2c | hedge fair+1c reprice                                   +3.47   +3.02   +0.45    39   8   -0.15    +1.47 |  +7.87 +0.524±0.297 n15 |  +0.00 +0.000±0.000 n8 
+  TF edge 2c | adaptive give [-0.02,0.01] edge_k 1 lam 0.005           +9.96   +1.51   +8.45    27   8   +0.00    -9.84 | +14.35 +0.957±0.336 n15 |  +6.48 +0.810±0.312 n8 
+  TF edge 2c | adaptive give [-0.02,0.03] edge_k 1 lam 0.005           +9.96   +1.51   +8.45    27   8   +0.00    -9.84 | +14.35 +0.957±0.336 n15 |  +6.48 +0.810±0.312 n8 
+  TF edge 2c | adaptive give [-0.02,0.03] edge_k 1 lam 0.05            +9.96   +1.51   +8.45    27   8   +0.00    -9.84 | +14.35 +0.957±0.336 n15 |  +6.48 +0.810±0.312 n8 
+  TF edge 2c | adaptive give [-0.01,0.01] edge_k 1 lam 0.005           +9.89   +1.46   +8.43    27   8   -0.04    -9.91 | +14.28 +0.952±0.337 n15 |  +6.41 +0.802±0.316 n8 
+  TF edge 2c | adaptive give [-0.01,0.03] edge_k 1 lam 0.005           +9.89   +1.46   +8.43    27   8   -0.04    -9.91 | +14.28 +0.952±0.337 n15 |  +6.41 +0.802±0.316 n8 
+  TF edge 2c | adaptive give [-0.01,0.03] edge_k 1 lam 0.05            +9.89   +1.46   +8.43    27   8   -0.04    -9.91 | +14.28 +0.952±0.337 n15 |  +6.41 +0.802±0.316 n8 
+  TF edge 2c | adaptive give [0,0.01] edge_k 1 lam 0.005               +6.51   +2.97   +3.54    33   8   -0.04    -1.49 | +10.90 +0.727±0.340 n15 |  +3.04 +0.380±0.258 n8  <== chosen in-sample
+  TF edge 2c | adaptive give [0,0.03] edge_k 1 lam 0.005               +6.51   +2.97   +3.54    33   8   -0.04    -1.49 | +10.90 +0.727±0.340 n15 |  +3.04 +0.380±0.258 n8 
+  TF edge 2c | adaptive give [0,0.03] edge_k 1 lam 0.05                +6.51   +2.97   +3.54    33   8   -0.04    -1.49 | +10.90 +0.727±0.340 n15 |  +3.04 +0.380±0.258 n8 
+  TF edge 2c | adaptive give [0,0.01] edge_k 0 lam 0.005               +6.51   +2.97   +3.54    33   8   -0.04    -1.49 | +10.90 +0.727±0.340 n15 |  +3.04 +0.380±0.258 n8 
+  TF edge 2c | adaptive give [0,0.03] edge_k 0 lam 0.005               +6.51   +2.97   +3.54    33   8   -0.04    -1.49 | +10.90 +0.727±0.340 n15 |  +3.04 +0.380±0.258 n8 
+  TF edge 2c | adaptive give [0,0.03] edge_k 0 lam 0.05                +6.51   +2.97   +3.54    33   8   -0.04    -1.49 | +10.90 +0.727±0.340 n15 |  +3.04 +0.380±0.258 n8 
+
+  policy                                                             settled matched   resid fills mkt worstmk   wc_sum | paired vs baseline     | paired vs fair+1c     
+  baseline admission | hedge at pair cap                               -4.39   +3.96   -8.36    92  15   -2.73   -11.39 |  +0.00 +0.000±0.000 n15 |                       
+  baseline admission | hedge fair+1c reprice                           -1.74   +5.68   -7.41    83  15   -2.73   -10.74 |  +2.66 +0.177±0.132 n15 |  +0.00 +0.000±0.000 n15
+  baseline admission | adaptive give [-0.02,0.01] edge_k 1 lam 0.005   +7.16   +3.36   +3.80    53  15   -2.73   -28.64 | +11.55 +0.770±0.419 n15 |  +8.90 +0.593±0.423 n15
+  baseline admission | adaptive give [-0.02,0.03] edge_k 1 lam 0.005   +7.16   +3.36   +3.80    53  15   -2.73   -28.64 | +11.55 +0.770±0.419 n15 |  +8.90 +0.593±0.423 n15
+  baseline admission | adaptive give [-0.02,0.03] edge_k 1 lam 0.05    +7.16   +3.36   +3.80    53  15   -2.73   -28.64 | +11.55 +0.770±0.419 n15 |  +8.90 +0.593±0.423 n15
+  baseline admission | adaptive give [-0.01,0.01] edge_k 1 lam 0.005   +6.15   +3.42   +2.73    54  15   -2.73   -27.65 | +10.54 +0.703±0.402 n15 |  +7.89 +0.526±0.405 n15
+  baseline admission | adaptive give [-0.01,0.03] edge_k 1 lam 0.005   +6.15   +3.42   +2.73    54  15   -2.73   -27.65 | +10.54 +0.703±0.402 n15 |  +7.89 +0.526±0.405 n15
+  baseline admission | adaptive give [-0.01,0.03] edge_k 1 lam 0.05    +6.15   +3.42   +2.73    54  15   -2.73   -27.65 | +10.54 +0.703±0.402 n15 |  +7.89 +0.526±0.405 n15
+  baseline admission | adaptive give [0,0.01] edge_k 1 lam 0.005       +5.32   +6.72   -1.40    65  15   -2.73   -13.68 |  +9.71 +0.647±0.261 n15 |  +7.06 +0.470±0.259 n15 <== chosen in-sample
+  baseline admission | adaptive give [0,0.03] edge_k 1 lam 0.005       +5.32   +6.72   -1.40    65  15   -2.73   -13.68 |  +9.71 +0.647±0.261 n15 |  +7.06 +0.470±0.259 n15
+  baseline admission | adaptive give [0,0.03] edge_k 1 lam 0.05        +5.32   +6.72   -1.40    65  15   -2.73   -13.68 |  +9.71 +0.647±0.261 n15 |  +7.06 +0.470±0.259 n15
+  baseline admission | adaptive give [0,0.01] edge_k 0 lam 0.005       +5.32   +6.72   -1.40    65  15   -2.73   -13.68 |  +9.71 +0.647±0.261 n15 |  +7.06 +0.470±0.259 n15
+  baseline admission | adaptive give [0,0.03] edge_k 0 lam 0.005       +5.32   +6.72   -1.40    65  15   -2.73   -13.68 |  +9.71 +0.647±0.261 n15 |  +7.06 +0.470±0.259 n15
+  baseline admission | adaptive give [0,0.03] edge_k 0 lam 0.05        +5.32   +6.72   -1.40    65  15   -2.73   -13.68 |  +9.71 +0.647±0.261 n15 |  +7.06 +0.470±0.259 n15
+
