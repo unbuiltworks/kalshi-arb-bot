@@ -312,3 +312,4 @@ release candidate for 046a63775 (expanded integrated + trading-first net bypass;
 release candidate for 646d591d3 (soccer three-way: intl + sportsbook 3-way fair, club aliases, match-level risk, cross-outcome hedge, coverage verification; on 9e6c2039f; all flags default off; not approved, not deployed)
 release candidate for 738af20f3 (trading-first eviction fix + reselection backoff + soccer three-way, on 9e6c2039f; soccer flags default off; not approved, not deployed)
 release candidate for 1fb87a179 (request audit counters + four default-off request reductions, on 97a22688d; not approved, not deployed)
+release candidate for d29cac4d4 (trading-first selection ranking corrected + request counters/reductions, on 97a22688d; not approved, not deployed)
