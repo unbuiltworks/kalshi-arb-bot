@@ -10833,6 +10833,7 @@ class Engine:
             _ls["all"], "why": _ls["why"],
             "window_end": _iso(_ls["end"]) if "end" in _ls else None})
         log("heartbeat", **extra, active=self.active(),
+            public_gateway_requests=dict(getattr(self.v, "_public_get_counts", {})),
             unmatched_cost_total=self.b.total_unmatched(),
             recovery=dict(self.recovery_metrics(), on=RECOVERY_ON,
                           taker=RECOVERY_TAKER),
