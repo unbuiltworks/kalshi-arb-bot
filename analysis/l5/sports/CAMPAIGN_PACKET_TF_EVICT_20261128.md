@@ -67,3 +67,19 @@ Reply with:
 - disarmed deployment of `97a22688d92e765fa62093ad08a5b462a5c8da9e` after close-out;
 - the window 28 Nov 22:15Z – 29 Nov 01:15Z plus 2 h grace;
 - the campaign stop rule in §5.
+
+## 8. Addendum (18:28Z): request-efficiency release option
+
+**Release B: `010af772943dd96d34bc67f5de5c30a070f7aba1`**, branch `release/pmus-sports-tf-evict-req-010af7729`. It is `97a22688d` plus commit `1fb87a179`.
+
+- **Always on, reporting only:** per-route request, deferral and 429 counters in the heartbeat, plus gateway-fallback causes. These replace today's estimates with counts.
+- **Four reductions, all default off.** With the flags unset the bot makes exactly the same requests as `97a22688d`.
+- **Regression:** 6,375 passed, 26 failed, the same failure set as the baseline. 30 new tests.
+
+**Recommended for the 22:15Z campaign:** Release B with only the two combo-shadow flags on. Neither is on any order path:
+- `PMUS_COMBO_SHADOW_POLL_S=60`
+- `PMUS_COMBO_QUOTE_BOOK_TTL_S=10`
+
+**Left off until the counters are read:** the events-page TTL and the fill-list seeding. Exact-order reads, cancel timing and priority, the account cadence and the fail-closed read are unchanged.
+
+To choose this option, authorize Release B in place of `97a22688d`, plus those two variables.
