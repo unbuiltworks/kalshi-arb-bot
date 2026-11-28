@@ -116,6 +116,9 @@ def _h2h(book: Mapping[str, Any]) -> Optional[Tuple[Dict[str, D], float]]:
         outs = [o for o in mk.get("outcomes") or [] if isinstance(o, Mapping)]
         if len(outs) != 2:                     # draws (3-way) are not ours
             return None
+        names = [norm(o.get("name")) for o in outs]
+        if not all(names) or len(set(names)) != 2:
+            return None
         probs = devig(o.get("price") for o in outs)
         if probs is None:
             return None
