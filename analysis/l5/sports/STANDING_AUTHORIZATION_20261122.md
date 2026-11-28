@@ -3063,3 +3063,22 @@ authorization."
 
 Owner, verbatim: "I confirm PMUS_RN1_NET_RANK=0 for the armed window." The
 arm sequence keeps `PMUS_RN1_NET_RANK=0`; every other §5 variable is unchanged.
+
+### 87a. Armed — 28 Nov 2026, 15:47 UTC
+
+- **Pre-arm gates, all passed (15:45–15:46Z, deployment `09fa46e2`):**
+  - `why: locked`;
+  - watchdog: 0 open orders, registries OK;
+  - INVENTORY_RECONCILE 0/0;
+  - audit fresh;
+  - PILOT_PNL `loss_stop_usd 6.50`;
+  - ledger lifetime −$68.1207, room $6.8793;
+  - `RN1_TF_SELECT` 31/31 with an independent fair;
+  - guard WebSocket connected (matched 2);
+  - no loop error or latch;
+  - `LIVE_FIRST=0`, `NET_RANK=0` (88a).
+- **Arming:** `PMUS_TWO_SIDED_SUBMISSION_LOCK=window:2026-11-28T16:15:00Z/2026-11-28T19:15:00Z`.
+  Deployment `3588dcb4` booted 15:48:20Z with `why: window_not_started`,
+  grace 7,200 s, `campaign_since` 1795882500 (16:15Z).
+- **In-window check:** at least 80% fair coverage by 16:35Z, otherwise relock.
+  Close-out at 21:17Z.
