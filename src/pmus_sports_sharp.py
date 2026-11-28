@@ -132,13 +132,13 @@ def fair_from_event(event: Mapping[str, Any], *, now: float,
     pref = [b for b in books if b.get("key") == prefer]
     for b in pref:
         got = _h2h(b)
-        if got and now - got[1] <= MAX_ODDS_AGE_S:
+        if got and 0 <= now - got[1] <= MAX_ODDS_AGE_S:
             return {"probs": got[0], "source": prefer,
                     "age_s": round(now - got[1], 1)}
     fresh = []
     for b in books:
         got = _h2h(b)
-        if got and now - got[1] <= MAX_ODDS_AGE_S:
+        if got and 0 <= now - got[1] <= MAX_ODDS_AGE_S:
             fresh.append(got)
     if not fresh:
         return None
@@ -149,7 +149,7 @@ def fair_from_event(event: Mapping[str, Any], *, now: float,
     s = sum(probs.values())
     return {"probs": {t: p / s for t, p in probs.items()},
             "source": "median_of_%d" % len(fresh),
-            "age_s": round(now - max(f[1] for f in fresh), 1)}
+            "age_s": round(now - min(f[1] for f in fresh), 1)}
 
 
 # --------------------------------------------------------------- matching
@@ -298,7 +298,7 @@ class OddsClient:
                  opener=None, clock=time.time):
         self._key = key if key is not None else os.getenv(KEY_ENV, "")
         self.poll_s = float(poll_s if poll_s is not None else
-                            os.getenv("PMUS_SHARP_POLL_S", "3600"))
+                            os.getenv("PMUS_SHARP_POLL_S", "300"))
         self.reserve = int(os.getenv("PMUS_SHARP_RESERVE", str(reserve)))
         self.opener = opener or urllib.request.urlopen
         self.clock = clock
@@ -315,7 +315,7 @@ class OddsClient:
     def fetch(self, sport_key: str) -> List[Mapping[str, Any]]:
         now = self.clock()
         hit = self.cache.get(sport_key)
-        if hit and now - hit[0] < self.poll_s:
+        if hit and now - hit[0] < min(self.poll_s, MAX_ODDS_AGE_S / 2):
             return hit[1]
         if not self.configured:
             self.last_error = "NO_KEY"
