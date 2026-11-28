@@ -138,7 +138,7 @@ def fair_from_event(event: Mapping[str, Any], *, now: float,
     fresh = []
     for b in books:
         got = _h2h(b)
-        if got and now - got[1] <= MAX_ODDS_AGE_S:
+        if got and 0 <= now - got[1] <= MAX_ODDS_AGE_S:
             fresh.append(got)
     if not fresh:
         return None
