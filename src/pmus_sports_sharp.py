@@ -88,7 +88,10 @@ def devig(decimal_odds: Iterable[Any]) -> Optional[List[D]]:
     """Multiplicative de-vig: implied 1/o, normalised to sum 1. None on any
     unusable price (<= 1.0, missing, unparsable)."""
     try:
-        inv = [ONE / D(str(o)) for o in decimal_odds]
+        prices = [D(str(o)) for o in decimal_odds]
+        if any(not p.is_finite() or p <= ONE for p in prices):
+            return None
+        inv = [ONE / p for p in prices]
     except Exception:                                    # noqa: BLE001
         return None
     if len(inv) < 2 or any(x <= 0 or x >= 1 for x in inv):
@@ -115,6 +118,9 @@ def _h2h(book: Mapping[str, Any]) -> Optional[Tuple[Dict[str, D], float]]:
             continue
         outs = [o for o in mk.get("outcomes") or [] if isinstance(o, Mapping)]
         if len(outs) != 2:                     # draws (3-way) are not ours
+            return None
+        names = [norm(o.get("name")) for o in outs]
+        if not all(names) or len(set(names)) != 2:
             return None
         probs = devig(o.get("price") for o in outs)
         if probs is None:
@@ -237,6 +243,10 @@ def match_event(market: Mapping[str, Any], events: Iterable[Mapping[str, Any]]
 
 def fair_yes(market: Mapping[str, Any], events: Iterable[Mapping[str, Any]],
              *, now: float) -> Optional[Dict[str, Any]]:
+    # Explicit non-moneyline contracts must never inherit h2h fair value.
+    kind = str(market.get("sportsMarketType") or "").strip().lower()
+    if kind and kind not in ("moneyline", "h2h"):
+        return None
     ev = match_event(market, events)
     if ev is None:
         return None
