@@ -1638,6 +1638,19 @@ RN1_LIVE_FIRST = os.getenv("PMUS_RN1_LIVE_FIRST", "0").strip() == "1"
 # positive one. Use with PMUS_RN1_LIVE_FIRST=0 (its distant-slot cap and
 # pre-emption are slot rules of their own).
 RN1_RANK_BY = os.getenv("PMUS_RN1_RANK_BY", "per_dollar").strip().lower()
+# LIVE SLOT CAP (28 Nov, default 0 = off: one cap, MAX_MARKETS, as before).
+# RN1 (30 d, 274,695 fills) works a median 21 conditions at once (p90 89);
+# L5 works MAX_MARKETS = 2. Our positive economics are pregame (day-of
+# programmes, fill rate 0.20 vs 3.0 per contract-hour, milder markouts);
+# live markets carry the negative markouts and 72% of quote decisions are
+# jump/vol paused. With PMUS_RN1_MAX_LIVE_MARKETS = k > 0, at most k LIVE
+# markets may hold a quoting slot (selection skips a live candidate and a
+# live market may add no new exposure while k other live markets hold
+# slots; completions are never blocked); MAX_MARKETS still bounds the total.
+# A pregame market that goes live while the live slots are full can only
+# complete until one frees. Every dollar cap, stop and gate is unchanged:
+# raising MAX_MARKETS itself remains an owner decision.
+RN1_MAX_LIVE_MARKETS = int(os.getenv("PMUS_RN1_MAX_LIVE_MARKETS") or "0")
 RN1_NEAR_START_S = float(os.getenv("PMUS_RN1_NEAR_START_S") or "1800")
 RN1_DISTANT_MAX_SLOTS = int(os.getenv("PMUS_RN1_DISTANT_MAX_SLOTS") or "1")
 # NO SELECT/RELEASE LOOP (owner 2026-11-27, default OFF). LIVE: with every
@@ -5726,10 +5739,29 @@ class Engine:
         exposure only while fewer than MAX_MARKETS OTHER markets hold some
         -- if more than MAX_MARKETS ever do (e.g. after a restart), each can
         only complete until they drain. Completions are never blocked."""
-        others = sum(1 for s_, m_ in (self.b.d.get("markets") or {}).items()
-                     if s_ != slug and not m_.get("done") and
-                     self._rn1_slot_holder(m_))
-        return others >= MAX_MARKETS
+        others = [s_ for s_, m_ in (self.b.d.get("markets") or {}).items()
+                  if s_ != slug and not m_.get("done") and
+                  self._rn1_slot_holder(m_)]
+        if len(others) >= MAX_MARKETS:
+            return True
+        return self.rn1_live_slots_full(slug, others)
+
+    def rn1_live_slots_full(self, slug: str,
+                            holders: Optional[list] = None) -> bool:
+        """RN1_MAX_LIVE_MARKETS: is `slug` live while that many OTHER live
+        markets already hold slots (or claim one, at selection)?"""
+        if RN1_MAX_LIVE_MARKETS <= 0:
+            return False
+        try:
+            if not self.event_live(slug):
+                return False
+            if holders is None:
+                holders = [s_ for s_ in self.slot_claimants() if s_ != slug]
+            live = sum(1 for s_ in holders if s_ != slug and
+                       self.event_live(s_))
+            return live >= RN1_MAX_LIVE_MARKETS
+        except Exception:                                 # noqa: BLE001
+            return True                                   # unknown: no
 
     def _rn1_slot_holder(self, mk: Mapping[str, Any]) -> bool:
         """Does this market hold one of the MAX_MARKETS quoting slots?
@@ -9113,6 +9145,8 @@ class Engine:
             if RN1.ON and (RN1_LIVE_FIRST or RN1_SELECT_NO_CHURN) and \
                     not self.slot_gate(slug, acct):
                 continue
+            if RN1.ON and self.rn1_live_slots_full(slug):
+                continue                  # RN1_MAX_LIVE_MARKETS: live full
             self._try_select(slug, acct, rewarded.get(slug))
 
     def rewarded_active(self) -> int:
