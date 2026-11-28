@@ -3082,3 +3082,28 @@ arm sequence keeps `PMUS_RN1_NET_RANK=0`; every other §5 variable is unchanged.
   grace 7,200 s, `campaign_since` 1795882500 (16:15Z).
 - **In-window check:** at least 80% fair coverage by 16:35Z, otherwise relock.
   Close-out at 21:17Z.
+
+## 89. Release 010af7729 and the 22:15Z campaign authorized — 28 Nov 2026, 18:40 UTC
+
+Owner, verbatim: "I authorize the disarmed deployment of SHA
+010af772943dd96d34bc67f5de5c30a070f7aba1 following successful current campaign
+reconciliation. I authorize the 22:15Z–01:15Z campaign with completion grace
+until 03:15Z, subject to all existing safety and preflight checks passing. Set
+PMUS_COMBO_SHADOW_POLL_S=60 and PMUS_COMBO_QUOTE_BOOK_TTL_S=10. Keep the other
+request reductions disabled. The campaign loss stop must be the lower of $6.50
+and reconciled remaining lifetime loss capacity, rounded down to $0.25. Confirm
+aggregate worst-case exposure remains within authorized loss capacity. If any
+safety check fails, remain disarmed. Preserve all other existing limits,
+maker-only execution and independent watchdog protections."
+
+- **Packet:** `CAMPAIGN_PACKET_FINAL_20261128_2215.md`.
+- **Sequence:**
+  1. close-out at 21:17Z (reconcile; lifetime room; stop computed);
+  2. deploy locked with the two combo variables and the stop;
+  3. verify locked;
+  4. arm at 22:15Z;
+  5. coverage check by 22:35Z;
+  6. close-out at 03:17Z.
+- **Any failed gate:** remain disarmed.
+- **Reporting:** venue-confirmed fills, settled trading P&L, verified rewards, fees
+  and total realized net, each separately.
