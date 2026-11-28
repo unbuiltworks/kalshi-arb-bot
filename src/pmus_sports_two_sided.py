@@ -1844,6 +1844,17 @@ RN1_DIR_SHARP_DRIFT = os.getenv("PMUS_RN1_DIR_SHARP_DRIFT", "0.00002")
 # Tape evidence (THEORETICAL, 21 Nov two-venue recording, pre-reward):
 # analysis/l5/sports/directional/TRADING_FIRST_*_20261128.txt.
 _TF_UNSET = object()
+# PMUS_RN1_TF_BYPASS_NET=1 (with RN1_TRADING_FIRST; default 0 = unchanged):
+# the reward-aware net estimate (RN1_NET_RANK block, RN1_MARGINAL_EV per-bid
+# drop) no longer decides openings and additions -- the pre-reward edge gate
+# does. Without it a market with no reward programme can never open, and in
+# a rewarded market the reward would still be what admits a bid. Every cap,
+# pause, guard, pair cap and loss stop is unchanged.
+RN1_TF_BYPASS_NET = os.getenv("PMUS_RN1_TF_BYPASS_NET", "0").strip() == "1"
+
+
+def tf_net_bypass() -> bool:
+    return bool(RN1_TRADING_FIRST and RN1_TF_BYPASS_NET)
 # EXPANDED MARKETS (28 Nov, PR #253 integration; all default off):
 #   PMUS_SHARP_LINES=1   price exact full-game spreads / game totals of each
 #                        sharp candidate's event (needs PMUS_SHARP_MARKETS to
@@ -7578,7 +7589,7 @@ class Engine:
         if not new_block and self.rn1_market_slots_full(slug, mk):
             new_block = "max_markets"
         net_neg = False
-        if not new_block and RN1_NET_RANK and \
+        if not new_block and RN1_NET_RANK and not tf_net_bypass() and \
                 not self.rn1_quote_qualifies(slug, mk):
             # no opening or extension while the fresh estimate (re-priced
             # after every fill) is not positive, flat or not; completions
@@ -7720,7 +7731,7 @@ class Engine:
                                             priced=bool(qcfg.get(
                                                 "adds_priced_externally")))
         self._gap_hold(slug, mk, q, want, bbo, new_block, now)
-        mev_on = RN1_MARGINAL_EV and not new_block
+        mev_on = RN1_MARGINAL_EV and not new_block and not tf_net_bypass()
         mev_pass = False
         if mev_on:
             # ECONOMIC PRIORITY for the campaign caps (finding 2)

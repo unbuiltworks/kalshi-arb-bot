@@ -253,3 +253,26 @@ def test_hedge_unchanged_without_fair_or_flag(en, monkeypatch):
     e.step_market(SLUG)
     comp = [px for s, px, st in _orders(e) if st == "two_sided_complete"]
     assert comp and max(comp) > D("0.45")      # pair cap alone governs
+
+
+def test_bypass_net_lets_an_unrewarded_market_open_on_edge(en, monkeypatch):
+    """Paying programme switched off: the reward-net estimate is not
+    positive. With the bypass, the pre-reward edge gate alone decides."""
+    e, v, feed = en
+    monkeypatch.setattr(M, "RN1_TRADING_FIRST", True)
+    _fair(e, monkeypatch, "0.60")
+    feed.projected_usd_h = 0.2          # under the minimum payout
+    monkeypatch.setattr(M, "RN1_TF_BYPASS_NET", False)
+    e.step_market(SLUG)
+    before = resting(v)
+    monkeypatch.setattr(M, "RN1_TF_BYPASS_NET", True)
+    e.step_market(SLUG)
+    after = resting(v)
+    assert not before
+    assert after and {s for s, _p, _q in after} == {"YES"}
+
+
+def test_bypass_requires_trading_first(monkeypatch):
+    monkeypatch.setattr(M, "RN1_TF_BYPASS_NET", True)
+    monkeypatch.setattr(M, "RN1_TRADING_FIRST", False)
+    assert not M.tf_net_bypass()
