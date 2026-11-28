@@ -3010,3 +3010,28 @@ weakened safety controls."
   bid plus the new order filling and losing. It refuses openings and
   extensions at −$6.50 (completions exempt; they reduce risk under the 0.97
   pair cap). The lifetime room is $6.88, so the bound fits.
+
+### 87-pre. Deployed locked and verified — 28 Nov 2026, 13:34–13:40 UTC
+
+- **Variables (§5):** set with the lock at 1 (skipDeploys). Source pinned to
+  `9e6c2039f`. Deployment `cb08deda`, SUCCESS 13:34:26Z.
+- **Gates passed while locked:**
+  - boot clean, `why: locked`, no loop or import errors;
+  - watchdog: 0 open orders, registries OK;
+  - INVENTORY_RECONCILE: 0 positions, 0 mismatches;
+  - ACCOUNT_AUDIT complete (stale block cleared 13:38Z);
+  - PILOT_PNL `loss_stop_usd 6.50`;
+  - lifetime room $6.88;
+  - SHARP: 15/15 NBA/NHL candidates priced (Pinnacle), 2 of 8 daily calls.
+- **Not observable while locked:**
+  - guard matching and fair coverage on the CBB/CFB candidates. Two flat,
+    out-of-scope markets carried over from the previous book hold both slots
+    under the account-wide lock (by design: account blocks keep slots).
+  - After the window opens, the scope block plus the 120 s idle release frees
+    them, and selection then takes only independently priced markets
+    (`TF_SELECT=only`, `INTL_GUARD_REQUIRE=1`, trading-first no-fair refusal:
+    all fail closed per bid).
+  - These gates are verified after 16:15Z. If the guard has not matched or
+    coverage is below 80% by 16:35Z, the service is relocked.
+- **Arming:** scheduled at 15:45Z (re-verify, then set the window).
+  Close-out scheduled at 21:17Z.
