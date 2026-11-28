@@ -1946,6 +1946,10 @@ RN1_TF_SELECT = os.getenv("PMUS_RN1_TF_SELECT", "off").strip().lower()
 # completion is unchanged (the pair cap alone governs it).
 _hg = os.getenv("PMUS_RN1_TF_HEDGE_GIVE_USD", "").strip()
 RN1_TF_HEDGE_GIVE_USD: Optional[D] = D(_hg) if _hg else None
+# Candidates whose KNOWN listing edge is below this are not selected
+# (unset = never dropped, only ranked last).
+_tsm = os.getenv("PMUS_RN1_TF_SELECT_MIN_EDGE", "").strip()
+RN1_TF_SELECT_MIN_EDGE: Optional[D] = D(_tsm) if _tsm else None
 RN1_TF_DOG_EXTRA_USD = D(os.getenv("PMUS_RN1_TF_DOG_EXTRA_USD", "0"))
 RN1_TF_CONC_USD = D(os.getenv("PMUS_RN1_TF_CONC_USD", "0"))
 RN1_TF_WEAKEN_USD = D(os.getenv("PMUS_RN1_TF_WEAKEN_USD", "0"))
@@ -6565,22 +6569,87 @@ class Engine:
                 return age <= RN1_DIR_SHARP_MAX_AGE_S
         return False
 
+    def rn1_tf_peek_fair(self, slug: str) -> Optional[D]:
+        """READ-ONLY independent YES fair for RANKING: the guard's fresh
+        international mid, else the fresh sportsbook shadow fair. It never
+        calls intl_fair_band, so the stability history the admission gate
+        uses (RN1_FAIR_STABLE_S) is neither extended nor cleared by
+        ranking. None = no usable fair right now."""
+        mid = self.intl_fair(slug)
+        if mid is not None:
+            return mid
+        if RN1_DIR_SHARP:
+            st = ((self.b.d.get("sharp_shadow") or {}).get(slug) or {})
+            if st.get("fair_yes") is not None and st.get("t"):
+                age = time.time() - float(st["t"]) + \
+                    float(st.get("odds_age_s") or 0.0)
+                if age <= RN1_DIR_SHARP_MAX_AGE_S:
+                    return D(str(st["fair_yes"]))
+        return None
+
+    def rn1_tf_listing_edge(self, slug: str) -> Optional[D]:
+        """Best-side pre-reward edge at the LISTING touch against the
+        peeked fair, net of the required edge; a ranking hint only (every
+        bid is still judged on the live book and the settled fair)."""
+        fair = self.rn1_tf_peek_fair(slug)
+        q = (getattr(self, "_tf_listing_quotes", None) or {}).get(slug)
+        if fair is None or q is None:
+            return None
+        bid, ask = q
+        out = []
+        for f_side, px in ((fair, bid), (ONE - fair, ONE - ask)):
+            need = RN1_TF_EDGE_USD + (
+                RN1_TF_DOG_EXTRA_USD if f_side < D("0.5") else D(0))
+            out.append(f_side - D(str(px)) - need)
+        return max(out)
+
     def rn1_tf_select(self, scored: list) -> list:
+        """Trading-first selection. ELIGIBILITY is unchanged: a market with
+        an independent fair SOURCE (rn1_has_independent_fair). ORDER:
+        known listing edge >= 0 (largest first), then eligible markets
+        whose fair is not readable right now (original order), then known
+        negative edge (least negative first; dropped below
+        RN1_TF_SELECT_MIN_EDGE when that is set). Markets without a source
+        come last ("first") or are dropped ("only"). Any error keeps the
+        previous behaviour for that market (eligible, unknown edge)."""
         try:
             has = {r[2]: self.rn1_has_independent_fair(r[2]) for r in scored}
         except Exception as exc:                          # noqa: BLE001
             log("RN1_TF_SELECT", error=type(exc).__name__, mode=RN1_TF_SELECT)
             return [] if RN1_TF_SELECT == "only" else scored
-        out = [r for r in scored if has[r[2]]] + \
+        pos, unk, neg, dropped = [], [], [], 0
+        for r in scored:
+            if not has[r[2]]:
+                continue
+            try:
+                e_ = self.rn1_tf_listing_edge(r[2])
+            except Exception:                             # noqa: BLE001
+                e_ = None
+            if e_ is None:
+                unk.append(r)
+            elif e_ >= 0:
+                pos.append((e_, r))
+            elif RN1_TF_SELECT_MIN_EDGE is not None and \
+                    e_ < RN1_TF_SELECT_MIN_EDGE:
+                dropped += 1
+            else:
+                neg.append((e_, r))
+        pos.sort(key=lambda x: -x[0])
+        neg.sort(key=lambda x: -x[0])
+        out = [r for _e, r in pos] + unk + [r for _e, r in neg] + \
             ([] if RN1_TF_SELECT == "only" else
              [r for r in scored if not has[r[2]]])
-        key = (RN1_TF_SELECT, len(scored), sum(has.values()))
+        key = (RN1_TF_SELECT, len(scored), sum(has.values()), len(pos),
+               len(neg), dropped)
         if key != getattr(self, "_tf_sel_logged", None):
             self._tf_sel_logged = key
             log("RN1_TF_SELECT", mode=RN1_TF_SELECT, candidates=len(scored),
                 with_independent_fair=sum(has.values()),
+                edge_nonneg=len(pos), edge_unknown=len(unk),
+                edge_negative=len(neg), dropped_below_min=dropped,
                 first=[r[2] for r in out[:4]],
-                label="trading-first selection: independent fair first")
+                label="trading-first selection: independent fair source, "
+                      "ranked by listing edge (hint only)")
         return out
 
     def rn1_tf_hedge_price(self, mk: Dict[str, Any], side: str,
@@ -9980,6 +10049,7 @@ class Engine:
         _pinned = rn1_pin() if RN1.ON else None
         _seen = set()
         _dur_out: list = []
+        self._tf_listing_quotes = {}
         for tg in targets:
             slug = tg["slug"]
             _seen.add(slug)
@@ -10020,6 +10090,7 @@ class Engine:
                         int(_di["remaining_s"]), int(RN1_MIN_REMAINING_S))
                     _dur_out.append((slug, int(_di["remaining_s"])))
                     continue     # about to end: no slot
+            self._tf_listing_quotes[slug] = (b, a)
             scored.append((a - b, abs(b - D("0.5")), slug))
         if RN1_DURATION_RANK:
             _dk = json.dumps(sorted(s_ for s_, _r in _dur_out))
@@ -10103,7 +10174,7 @@ class Engine:
                 rewarded = self.reward_programs([s for *_x, s in scored])
             except Exception as exc:                  # noqa: BLE001
                 log("reward_discovery_error", err=str(exc)[:160])
-            if not reward_first_on():
+            if not reward_first_on() and not (RN1.ON and RN1_TRADING_FIRST):
                 # rewarded in-band markets FIRST, richest pool rate first;
                 # the rest keep today's order (tightest spread, nearest 0.50)
                 scored.sort(key=lambda r: (
