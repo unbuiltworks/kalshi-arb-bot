@@ -306,3 +306,4 @@ release candidate for 52bec8021 (reward economics: paid_fraction rule, pregame f
 release candidate for e3ef7eb79 (reward economics v2: paid_fraction, per-sport pregame fill rates, rank by net per slot, release balanced; all flags default off; not approved, not deployed)
 release candidate for cc0a222c9 (integrated: threshold reward rule, live slot cap, completion hold, completion safety class (capped wait), fair-feed freshness, provider coverage report; all flags default off; not approved, not deployed)
 release candidate for a3e27b21d (trading-first: pre-reward edge vs independent fair for openings/additions/ladder, favourite-only and falling-side options; on ac1c1bbaf; all flags default off; not approved, not deployed)
+release candidate for f33b3da15 (trading-first v2: hybrid admission, economical hedge, fair-first selection, sharp nickname matching and on-demand refresh, coverage diagnostics; on 8f7cb2c36; all flags default off; not approved, not deployed)
