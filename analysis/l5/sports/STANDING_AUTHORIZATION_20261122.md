@@ -2837,3 +2837,16 @@ reconciliation and explicitly relock production."
   $0; unmatched open $0.
 - **Ledger 23:32:** day −$5.5756; lifetime −$66.5694 (room $8.4306);
   drawdown $6.1223 of $20; unresolved 0; unattributed 0.
+
+## 85. Release 6e6cc2d5d and one three-hour campaign authorized — 28 Nov 2026
+
+**Owner (verbatim):** "I authorize deployment of sports release
+6e6cc2d5d27d2e169010fc853760962707b1a2f2 with exactly the activation
+variables in AUTHORIZATION_PACKET_6e6cc2d5d_20261128 §3, lock held through
+verification, then one three-hour live campaign from the next quarter hour
+plus two hours of completions-only grace. All existing limits unchanged: $8
+campaign loss stop, maker-only, two markets, 2-contract orders, crypto
+disarmed, no automatic repeat. Verify fresh account reconciliation,
+lifetime loss allowance, reward data and independent watchdog health before
+arming. Report actual inventory accumulation, reward qualification, capital
+utilization and settled net profitability."
