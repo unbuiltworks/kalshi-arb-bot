@@ -1824,6 +1824,33 @@ RN1_DIR_SHARP_MAX_AGE_S = float(os.getenv("PMUS_RN1_DIR_SHARP_MAX_AGE_S",
                                           "900"))
 RN1_DIR_SHARP_DRIFT = os.getenv("PMUS_RN1_DIR_SHARP_DRIFT", "0.00002")
 
+# TRADING-FIRST ADMISSION (owner #251, 28 Nov; default 0 = unchanged).
+# Every bid that ADDS directional exposure -- an opening, a same-side
+# addition, or a deeper ladder level that is not a completion -- must pass a
+# PRE-REWARD trading test of its own:
+#   * an independent probability (rn1_directional_prob: the settled
+#     international fair, or with RN1_DIR_SHARP the age-limited sportsbook
+#     fair; never the traded market's own price) -- none = refused
+#     ("tf_no_fair");
+#   * the bid at least RN1_TF_EDGE_USD under the CONSERVATIVE fair for its
+#     side (band low for YES, 1 - band high for NO) -- otherwise refused
+#     ("tf_negative_ev"). Reward credit plays no part in this test, so a
+#     projected reward can never rescue a directional opening or addition.
+# Optional, default off: RN1_TF_FAV_ONLY (openings/additions only on the
+# side the independent fair makes >= RN1_TF_FAV_MIN) and RN1_TF_FALLING_S /
+# _TICKS (none on a side whose venue mid fell >= ticks over the window).
+# Completions are exempt (pair-cost limits govern them, unchanged); nothing
+# here adds, enlarges or reprices a bid. Any error refuses the bid.
+# Tape evidence (THEORETICAL, 21 Nov two-venue recording, pre-reward):
+# analysis/l5/sports/directional/TRADING_FIRST_*_20261128.txt.
+_TF_UNSET = object()
+RN1_TRADING_FIRST = os.getenv("PMUS_RN1_TRADING_FIRST", "0").strip() == "1"
+RN1_TF_EDGE_USD = D(os.getenv("PMUS_RN1_TF_EDGE_USD", "0.02"))
+RN1_TF_FAV_ONLY = os.getenv("PMUS_RN1_TF_FAV_ONLY", "0").strip() == "1"
+RN1_TF_FAV_MIN = D(os.getenv("PMUS_RN1_TF_FAV_MIN", "0.5"))
+RN1_TF_FALLING_S = float(os.getenv("PMUS_RN1_TF_FALLING_S", "0"))
+RN1_TF_FALLING_TICKS = int(os.getenv("PMUS_RN1_TF_FALLING_TICKS", "2"))
+
 
 # PREGAME FILL RATE (27 Nov, default 1.0 = unchanged). The fill rates above
 # were measured on live play. Lifetime heartbeat phases (27 Nov 19:20Z):
@@ -5912,6 +5939,51 @@ class Engine:
             return None
         return None
 
+    def rn1_tf_note_mid(self, slug: str, mk: Dict[str, Any],
+                        bbo: Mapping[str, Any], now: float) -> None:
+        """Venue YES-mid history for RN1_TF_FALLING_S (diagnostic input to
+        a refusal only; never a probability)."""
+        if RN1_TF_FALLING_S <= 0:
+            return
+        h = mk.setdefault("_tf_mid", [])
+        h.append((now, (D(str(bbo["bid"])) + D(str(bbo["ask"]))) / 2))
+        while h and now - h[0][0] > RN1_TF_FALLING_S:
+            h.pop(0)
+
+    def rn1_trading_first_why(self, slug: str, mk: Dict[str, Any],
+                              side: str, px: Any, tick: Any,
+                              prob: Optional[Mapping[str, Any]]
+                              ) -> Optional[str]:
+        """None = the exposure-adding bid passes RN1_TRADING_FIRST, else the
+        refusal reason. Records the pre-reward trading edge (reward EV is
+        never part of it)."""
+        try:
+            from src import pmus_directional_alloc as DA
+            if prob is None:
+                return "tf_no_fair"
+            fair_c = DA.fair_for(prob, side, conservative=True)
+            edge = fair_c - D(str(px))
+            rec = mk.setdefault("_tf_last", {})
+            rec[side] = {"px": str(px), "fair_conservative": str(fair_c),
+                         "trading_edge": str(edge),
+                         "source": prob.get("source")}
+            if edge < RN1_TF_EDGE_USD:
+                return "tf_negative_ev"
+            if RN1_TF_FAV_ONLY and \
+                    DA.fair_for(prob, side, conservative=False) < \
+                    RN1_TF_FAV_MIN:
+                return "tf_not_favourite"
+            h = mk.get("_tf_mid") or []
+            if RN1_TF_FALLING_S > 0 and h:
+                d = h[-1][1] - h[0][1]
+                if side == "NO":
+                    d = -d
+                if d <= -D(str(tick)) * RN1_TF_FALLING_TICKS:
+                    return "tf_falling"
+            return None
+        except Exception as exc:                          # noqa: BLE001
+            return "tf_error:%s" % type(exc).__name__   # fail closed
+
     def rn1_directional_inputs(self, slug: str, want: Mapping[str, Any],
                                bbo: Mapping[str, Any]) -> tuple:
         """(touch prices, fill loss per side): the competition's
@@ -7349,6 +7421,9 @@ class Engine:
                        last_fill_t=mk.get("last_fill_t"), now=now,
                        min_qty=spec["min_qty"], c=qcfg)
         want: Dict[str, Any] = {}
+        tf_prob: Any = _TF_UNSET
+        if RN1_TRADING_FIRST:
+            self.rn1_tf_note_mid(slug, mk, bbo, now)
         ks = mk.setdefault("keep_since", {})
         for side in ("YES", "NO"):
             tg = q.get(side)
@@ -7382,6 +7457,14 @@ class Engine:
                     self.guard.stats["blocked"] += 1
                     q["why_" + side] = "intl_guard:" + str(gv.get("why"))
                     tg = None
+            if tg and tg["role"] != "complete" and RN1_TRADING_FIRST:
+                if tf_prob is _TF_UNSET:
+                    tf_prob = self.rn1_directional_prob(slug)
+                twhy = self.rn1_trading_first_why(slug, mk, side, tg["px"],
+                                                  tick, tf_prob)
+                if twhy:
+                    q["why_" + side] = twhy
+                    tg = None
             want[side] = tg
         if RN1_DIRECTIONAL:
             dir_prob = self.rn1_directional(slug, mk, q, want, bbo, tick,
@@ -7412,6 +7495,22 @@ class Engine:
             ladder = self.rn1_directional_ladder(slug, mk, q, want, ladder,
                                                  bbo, tick, spec["min_qty"],
                                                  dir_prob)
+        if RN1_TRADING_FIRST and ladder:
+            if tf_prob is _TF_UNSET:
+                tf_prob = self.rn1_directional_prob(slug)
+            kept_l, ref_l = [], []
+            for l_ in ladder:
+                lw = None if l_.get("role") == "complete" else \
+                    self.rn1_trading_first_why(slug, mk, l_["side"],
+                                               l_["px"], tick, tf_prob)
+                if lw:
+                    ref_l.append({"side": l_["side"],
+                                  "level": l_.get("level"), "why": lw})
+                else:
+                    kept_l.append(l_)
+            if ref_l:
+                q["tf_ladder_refused"] = ref_l
+            ladder = kept_l
         mev_log = None
         if mev_on:
             # MARGINAL NET EV PER BID (finding 1): level-0 targets and every
@@ -7524,6 +7623,13 @@ class Engine:
                 edge=q.get("edge"),
                 marginal_ev=mev_log,
                 directional=q.get("directional"),
+                **({"trading_first": {
+                    "pre_reward_edge": mk.get("_tf_last"),
+                    "edge_min_usd": str(RN1_TF_EDGE_USD),
+                    "ladder_refused": q.get("tf_ladder_refused"),
+                    "label": "pre-reward trading edge vs independent "
+                             "fair; reward EV reported separately"}}
+                   if RN1_TRADING_FIRST else {}),
                 pause_depth=(None if not pause_reason else
                              {"reason": pause_reason,
                               "ticks": self.rn1_pause_depth(rng, tick)}),

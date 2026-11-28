@@ -133,6 +133,8 @@ class Market:
         self.jump_until = 0.0
         self.paused_s = 0.0
         self.last_t: Optional[float] = None
+        self.fair_now: Optional[D] = None    # international YES fair
+        self.vmid: deque = deque()           # (t, venue YES mid)
 
     # fair band exactly as Engine.intl_fair_band (on recorded samples)
     def band(self, t: float, mid: Optional[D]) -> Optional[dict]:
@@ -170,8 +172,13 @@ class Market:
         self.cost[side] += px * q
         self.spend += px * q
         self.last_fill_t[side] = t
+        vm = (f["yes_bid"] + f["yes_ask"]) / 2
+        fz = self.fair_now
         self.fills.append({"t": t, "side": side, "px": px, "qty": q,
-                           "role": o["role"], "level": o["level"]})
+                           "role": o["role"], "level": o["level"],
+                           "fair_side": None if fz is None else
+                           (fz if side == "YES" else ONE - fz),
+                           "bbo_side_mid": vm if side == "YES" else ONE - vm})
 
     def fills_at(self, f: dict) -> None:
         t = f["t"]
@@ -236,6 +243,12 @@ class Market:
             im = (f["ib"] + f["ia"]) / 2
             mid = (ONE - im) if flip else im
         band = self.band(t, mid)
+        self.fair_now = mid
+        vm_now = (f["yes_bid"] + f["yes_ask"]) / 2
+        self.vmid.append((t, vm_now))
+        fw = float(self.policy.get("falling_s") or 0)
+        while self.vmid and t - self.vmid[0][0] > max(fw, 1.0):
+            self.vmid.popleft()
         pause_ticks = None
         if self.sim.get("pauses"):
             m_now = (f["yes_bid"] + f["yes_ask"]) / 2
@@ -315,6 +328,20 @@ class Market:
             if tg["px"] > fair_s - margin:
                 want[s] = None
                 self.decisions["guard"] += 1
+        # trading-first admission (pre-reward marginal EV; offline knobs):
+        #   require_fair  no independent fair -> no opening/addition
+        #   edge_min      fair_side - px - ev_fill_loss >= edge_min
+        #   fav_side      "favorite" | "underdog": side by INTERNATIONAL fair
+        #   falling_s/_ticks  no opening/addition on a side whose venue mid
+        #                 fell by >= ticks over the last falling_s seconds
+        for s in ("YES", "NO"):
+            tg = want[s]
+            if tg is None or tg["role"] == "complete":
+                continue
+            why = self._tf_why(s, tg["px"], mid, vm_now, tick)
+            if why:
+                want[s] = None
+                self.decisions[why] += 1
         prob = None
         if self.policy.get("directional") and band and band["settled"]:
             prob = DA.probability(band["mid"], band["lo"], band["hi"],
@@ -340,6 +367,15 @@ class Market:
                     self.decisions["directional_refused"] += 1
                 want[s] = res.get(s) if want.get(s) is not None else None
         ladder = self._ladder(want)
+        kept = []
+        for l_ in ladder:
+            why = None if l_["role"] == "complete" else \
+                self._tf_why(l_["side"], l_["px"], mid, vm_now, tick)
+            if why:
+                self.decisions[why] += 1
+            else:
+                kept.append(l_)
+        ladder = kept
         if self.policy.get("directional") and prob is not None and ladder:
             fl_b = {s: D(str(self.policy.get("fill_loss_behind",
                                               self.sim["fill_loss_behind"])))
@@ -355,6 +391,29 @@ class Market:
         for l_ in ladder:
             targets[(l_["side"], l_["level"])] = dict(l_)
         self._replace(targets, t)
+
+    def _tf_why(self, s: str, px: D, mid: Optional[D], vm_now: D,
+                tick: D) -> Optional[str]:
+        pol = self.policy
+        fair_s = None if mid is None else (mid if s == "YES" else ONE - mid)
+        if pol.get("require_fair") and fair_s is None:
+            return "tf_no_fair"
+        if pol.get("edge_min") is not None and fair_s is not None and \
+                fair_s - px - D(str(pol.get("ev_fill_loss", "0"))) < \
+                D(str(pol["edge_min"])):
+            return "tf_negative_ev"
+        fs = pol.get("fav_side")
+        if fs and fair_s is not None and \
+                ((fs == "favorite" and
+                  fair_s < D(str(pol.get("fav_min", "0.5")))) or
+                 (fs == "underdog" and fair_s >= D("0.5"))):
+            return "tf_side"
+        if pol.get("falling_s") and self.vmid:
+            old = self.vmid[0][1]
+            d = (vm_now - old) if s == "YES" else (old - vm_now)
+            if d <= -tick * int(pol.get("falling_ticks", 2)):
+                return "tf_falling"
+        return None
 
     def _replace(self, targets: Mapping[tuple, dict], t: float) -> None:
         lat = float(self.sim["latency_s"])
@@ -405,7 +464,9 @@ class Market:
                 "residual_pnl": None if resid_pnl is None else str(resid_pnl),
                 "trading_pnl": None if resid_pnl is None and rs else
                 str(matched_pnl + (resid_pnl or ZERO)),
-                "decisions": dict(self.decisions)}
+                "decisions": dict(self.decisions),
+                **({"fill_list": list(self.fills)}
+                   if self.sim.get("keep_fills") else {})}
 
 
 def run(frames_by_slug: Mapping[str, List[dict]],
