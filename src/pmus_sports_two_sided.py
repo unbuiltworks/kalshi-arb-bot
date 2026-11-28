@@ -5030,6 +5030,14 @@ class Engine:
         now = time.time() if now is None else now
         if getattr(self, "_odds", None) is None:
             self._odds = SH.OddsClient()
+            if os.getenv("PMUS_SHARP_COVERAGE_LOG", "0").strip() == "1":
+                # read-only, once per process: what the provider offers for
+                # our allowlist and its measured quota cost (issue #251)
+                try:
+                    log("SHARP_COVERAGE", **self._odds.coverage())
+                except Exception as exc:                  # noqa: BLE001
+                    log("SHARP_COVERAGE", ok=False,
+                        why=type(exc).__name__)
         state = self.b.d.setdefault("sharp_shadow", {})
         rows, fills = 0, 0
         cands = self.sharp_candidates(now)

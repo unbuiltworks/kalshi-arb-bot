@@ -298,7 +298,7 @@ class OddsClient:
                  opener=None, clock=time.time):
         self._key = key if key is not None else os.getenv(KEY_ENV, "")
         self.poll_s = float(poll_s if poll_s is not None else
-                            os.getenv("PMUS_SHARP_POLL_S", "300"))
+                            os.getenv("PMUS_SHARP_POLL_S", "3600"))
         self.reserve = int(os.getenv("PMUS_SHARP_RESERVE", str(reserve)))
         self.opener = opener or urllib.request.urlopen
         self.clock = clock
@@ -315,7 +315,9 @@ class OddsClient:
     def fetch(self, sport_key: str) -> List[Mapping[str, Any]]:
         now = self.clock()
         hit = self.cache.get(sport_key)
-        if hit and now - hit[0] < min(self.poll_s, MAX_ODDS_AGE_S / 2):
+        # polling is unchanged until provider coverage and quota are
+        # reported (issue #251); stale odds are still refused downstream
+        if hit and now - hit[0] < self.poll_s:
             return hit[1]
         if not self.configured:
             self.last_error = "NO_KEY"
@@ -347,6 +349,58 @@ class OddsClient:
             self.last_error = type(exc).__name__
         self.cache[sport_key] = (now, hit[1] if hit else [])
         return hit[1] if hit else []
+
+    def coverage(self) -> Dict[str, Any]:
+        """READ-ONLY provider coverage (28 Nov, issue #251): the provider's
+        own sport list (GET /sports, the endpoint that lists keys; its quota
+        cost is MEASURED here from the usage headers before and after, not
+        assumed), with every key that could serve our allowlist (tennis,
+        table tennis) and the configured SPORT_KEYS that are and are not
+        offered. Never raises; the key is never logged."""
+        out: Dict[str, Any] = {"ok": False, "label": "provider coverage; "
+                               "read-only; no odds fetched"}
+        if not self.configured:
+            out["why"] = "NO_KEY"
+            return out
+        used_before = self.used
+        q = urllib.parse.urlencode({"apiKey": self._key.strip()})
+        try:
+            with self.opener("%s/sports?%s" % (ODDS_BASE, q),
+                             timeout=10) as r:                # noqa: S310
+                body = json.loads(r.read().decode("utf-8"))
+                hdr = getattr(r, "headers", {}) or {}
+                rem, used = (hdr.get("x-requests-remaining"),
+                             hdr.get("x-requests-used"))
+        except urllib.error.HTTPError as exc:
+            out["why"] = "HTTP_%s" % exc.code
+            return out
+        except Exception as exc:                         # noqa: BLE001
+            out["why"] = type(exc).__name__
+            return out
+        rows = [b for b in (body if isinstance(body, list) else [])
+                if isinstance(b, Mapping)]
+        keys = {str(b.get("key") or ""): b for b in rows}
+
+        def pick(word: str) -> list:
+            return sorted(k for k, b in keys.items()
+                          if word in k.lower() or word in str(
+                              b.get("group") or "").lower())
+        used_after = int(used) if used not in (None, "") else None
+        out.update(ok=True, sports=len(keys),
+                   tennis=pick("tennis"),
+                   table_tennis=pick("table") + [k for k in pick("tt_")
+                                                 if k not in pick("table")],
+                   configured_offered=sorted(v for v in SPORT_KEYS.values()
+                                             if v in keys),
+                   configured_missing=sorted(v for v in SPORT_KEYS.values()
+                                             if v not in keys),
+                   requests_remaining=int(rem) if rem not in (None, "")
+                   else None,
+                   requests_used=used_after,
+                   list_cost=(used_after - used_before) if (
+                       used_after is not None and used_before is not None)
+                   else None)
+        return out
 
     def status(self) -> Dict[str, Any]:
         return {"configured": self.configured, "calls": self.calls,

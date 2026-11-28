@@ -14,13 +14,21 @@ def test_consensus_age_is_oldest():
         book("one", 950), book("two", 990)]}, now=1000)
     assert result["age_s"] == 50
 
-def test_cache_refresh_bounded_by_freshness(monkeypatch):
+def test_cache_refresh_follows_poll_until_quota_is_reported(monkeypatch):
+    """Polling is unchanged (issue #251: report coverage and quota first).
+    A cache entry younger than poll_s is reused; stale ODDS inside it are
+    still refused by fair_from_event (fail closed)."""
     monkeypatch.setattr(SH, "MAX_ODDS_AGE_S", 900)
     calls = []
+
     def opener(*args, **kwargs):
         calls.append(1)
         raise RuntimeError("test")
-    client = SH.OddsClient(key="test", poll_s=3600, opener=opener, clock=lambda: 1000)
+    client = SH.OddsClient(key="test", poll_s=3600, opener=opener,
+                           clock=lambda: 1000)
     client.cache["sport"] = (500, [])
+    client.fetch("sport")
+    assert len(calls) == 0
+    client.clock = lambda: 500 + 3601
     client.fetch("sport")
     assert len(calls) == 1
