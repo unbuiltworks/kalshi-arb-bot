@@ -28,6 +28,13 @@ def e(tmp_path, monkeypatch):
     monkeypatch.setattr(M, "lock_window", lambda raw=None: None)
     monkeypatch.setattr(M, "RN1_REWARD_PROJECT_H", 3.0)
     monkeypatch.setattr(M, "RN1_REWARD_QUAL_SCOPE", "account_day")
+    # the venue reward day ends at ET midnight: put "now" at the start of a
+    # reward day so the 3 h horizon is never cut by the day end (the tests
+    # failed between 02:00 and 05:00 UTC)
+    _n = datetime.now(timezone.utc)
+    monkeypatch.setattr(M, "RN1_REWARD_CAL_DAY_OFFSET_H",
+                        -(_n.hour + _n.minute / 60.0 + _n.second / 3600.0)
+                        + 0.01)            # local reward-day time ~00:00:36
     eng.b.m(A)
     eng.b.m(B)
     return eng

@@ -1468,6 +1468,27 @@ ALLOW_TAKER = os.getenv("PMUS_TWO_SIDED_ALLOW_TAKER", "0").strip() == "1"
 # came toward us) is re-priced or pulled exactly as now, and so is a
 # completion. 0 = off (today).
 RN1_KEEP_DEEPER_TICKS = int(os.getenv("PMUS_RN1_KEEP_DEEPER_TICKS", "0"))
+# COMPLETION HOLD (28 Nov, default 0 = off). LIVE 28 Nov 00:16-03:15Z
+# (6e6cc2d5d): 76 completion orders for 8 completion fills, re-placed a
+# median 20 s apart; 49 re-places only moved the price (mostly 1 tick as the
+# touch moved) and 9 changed nothing, while 30 completion orders were
+# deferred by the shared request budget. With PMUS_RN1_COMPLETE_KEEP_TICKS
+# = k a RESTING completion bid is kept when the new completion target is
+# 0..k ticks ABOVE it (so the resting bid is never dearer than the target:
+# the pair-cost ceiling and every gate still hold) and its remaining size
+# fits the target. A lower target (cheaper completion), a larger shortfall
+# or any other change re-places it as before.
+RN1_COMPLETE_KEEP_TICKS = int(os.getenv("PMUS_RN1_COMPLETE_KEEP_TICKS")
+                              or "0")
+# COMPLETIONS IN THE SAFETY CLASS (28 Nov, default off). LIVE 28 Nov: 30 of
+# 33 budget deferrals were completion orders, queued behind 11 HTTP 429
+# cool-downs as "normal" like openings. With PMUS_RN1_COMPLETION_SAFETY_CLASS
+# =1 a completion placement (and its post-only preview) is a safety request:
+# the shared budget lets it wait up to its safety wait instead of deferring
+# it, and normal traffic yields to it. The rate, burst and cool-downs are
+# unchanged; openings and extensions stay normal.
+RN1_COMPLETION_SAFETY_CLASS = os.getenv("PMUS_RN1_COMPLETION_SAFETY_CLASS",
+                                        "0").strip() == "1"
 # INVENTORY AT SEVERAL PRICE LEVELS (owner 2026-11-25: "Build inventory at
 # different price levels", "Maintain multiple resting orders", "We want
 # sustained inventory accumulation, not isolated two-contract transactions
@@ -3134,6 +3155,17 @@ class Venue:
 
     def place(self, slug: str, side: str, px: D, qty: D, stage: str,
               post_only: bool = True) -> str:
+        b = getattr(self.t, "budget", None)
+        if RN1_COMPLETION_SAFETY_CLASS and b is not None and \
+                hasattr(b, "safety") and is_completion_stage(stage):
+            # a completion reduces risk: it waits its turn in the safety
+            # class (ahead of openings) instead of being deferred
+            with b.safety():
+                return self._place(slug, side, px, qty, stage, post_only)
+        return self._place(slug, side, px, qty, stage, post_only)
+
+    def _place(self, slug: str, side: str, px: D, qty: D, stage: str,
+               post_only: bool = True) -> str:
         gt = order_good_till()
         # records whether the order itself was handed to the venue, so a
         # failure BEFORE that point is known to have left nothing behind
@@ -7490,8 +7522,15 @@ class Engine:
                     tg["role"] != "complete" and \
                     not is_completion_stage(o.get("stage")) and \
                     D(0) < gap <= RN1_KEEP_DEEPER_TICKS * tick
-                if (near or deeper) and left <= tg["qty"]:
+                hold_c = RN1_COMPLETE_KEEP_TICKS > 0 and \
+                    tg["role"] == "complete" and \
+                    is_completion_stage(o.get("stage")) and \
+                    D(0) <= gap <= RN1_COMPLETE_KEEP_TICKS * tick
+                if (near or deeper or hold_c) and left <= tg["qty"]:
                     hit = i
+                    if hold_c and not near:
+                        self._kept_completion = int(getattr(
+                            self, "_kept_completion", 0)) + 1
                     if deeper and not near:
                         self._kept_deeper = int(getattr(
                             self, "_kept_deeper", 0)) + 1
