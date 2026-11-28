@@ -10000,7 +10000,7 @@ class Engine:
                 rewarded = self.reward_programs([s for *_x, s in scored])
             except Exception as exc:                  # noqa: BLE001
                 log("reward_discovery_error", err=str(exc)[:160])
-            if not reward_first_on():
+            if not reward_first_on() and not (RN1.ON and RN1_TRADING_FIRST):
                 # rewarded in-band markets FIRST, richest pool rate first;
                 # the rest keep today's order (tightest spread, nearest 0.50)
                 scored.sort(key=lambda r: (
