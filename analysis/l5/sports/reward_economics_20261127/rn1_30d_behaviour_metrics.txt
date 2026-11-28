@@ -1,0 +1,9 @@
+RN1 30d: trades 274695 conditions 36753
+concurrent conditions being worked (first..last fill spans), hourly: median 21.0 p10 4 p90 89
+fills per condition: median 3 mean 7.5 p90 16
+working span per condition (min, >1 fill): median 49.0 p90 124.1
+time between fills in a condition (s): median 33.0 p25 2 p75 283
+fill roles: opening 13.4%, same-side/heavier-side addition 51.5%, lighter-side (completion-like) 35.1%
+same-side buys before the second side appears: median 1.0
+fill $: median 30.0 p90 594.9
+fills per day 8893 $ per day 2075543

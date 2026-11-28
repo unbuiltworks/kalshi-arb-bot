@@ -1,0 +1,70 @@
+Trading-first vs current (underdog-heavy) accumulation on recorded sports
+tapes. OFFLINE, THEORETICAL: recorded books + international fair, modelled
+fills (touch / through), 3 s latency, maker fee 0, rewards NOT modelled
+(pre-reward trading P&L only). Nothing here is realized.
+
+[touch] A baseline: production pauses (6e6cc2d5d-like core)
+  pre-reward settled trading   -5.87 (matched  +5.31, residual  -11.18) fills 138 spend $114.00 traded 19 | paired vs A +0.000±0.000 (n 19) | refusals {}
+    complete dog    fills  22 qty    40 avg px 0.344 settle-cost  +9.29  markout 30s  -3.7c 120s  -2.2c 300s  -2.3c
+    complete fav    fills  26 qty    44 avg px 0.660 settle-cost -11.12  markout 30s  -1.1c 120s  -2.8c 300s  -5.2c
+    open/add dog    fills  49 qty    89 avg px 0.323 settle-cost +15.54  markout 30s  -2.8c 120s  -2.6c 300s  -2.6c
+    open/add fav    fills  41 qty    62 avg px 0.687 settle-cost -19.59  markout 30s  -0.4c 120s  -1.3c 300s  -3.6c
+
+[touch] B falling-side filter (30 s, 2 ticks)
+  pre-reward settled trading   -5.27 (matched  +4.29, residual   -9.56) fills 111 spend $88.40 traded 18 | paired vs A +0.032±0.122 (n 19) | refusals {'tf_falling': 7823}
+    complete dog    fills  20 qty    32 avg px 0.353 settle-cost  +8.85  markout 30s  -4.5c 120s  -5.0c 300s  -3.9c
+    complete fav    fills  20 qty    33 avg px 0.643 settle-cost  -7.21  markout 30s  -0.9c 120s  -1.8c 300s  -4.8c
+    open/add dog    fills  40 qty    72 avg px 0.339 settle-cost +10.06  markout 30s  -2.9c 120s  -5.5c 300s  -4.8c
+    open/add fav    fills  31 qty    45 avg px 0.703 settle-cost -16.97  markout 30s  -0.6c 120s  -0.2c 300s  -2.9c
+
+[touch] C require independent fair
+  pre-reward settled trading   -5.87 (matched  +5.31, residual  -11.18) fills 138 spend $114.00 traded 19 | paired vs A +0.000±0.000 (n 19) | refusals {'tf_no_fair': 57}
+    complete dog    fills  22 qty    40 avg px 0.344 settle-cost  +9.29  markout 30s  -3.7c 120s  -2.2c 300s  -2.3c
+    complete fav    fills  26 qty    44 avg px 0.660 settle-cost -11.12  markout 30s  -1.1c 120s  -2.8c 300s  -5.2c
+    open/add dog    fills  49 qty    89 avg px 0.323 settle-cost +15.54  markout 30s  -2.8c 120s  -2.6c 300s  -2.6c
+    open/add fav    fills  41 qty    62 avg px 0.687 settle-cost -19.59  markout 30s  -0.4c 120s  -1.3c 300s  -3.6c
+
+[touch] D trading-first: fair + EV>=0 after fill loss
+  pre-reward settled trading   +0.00 (matched  +0.00, residual   +0.00) fills 0 spend $0.00 traded 0 | paired vs A +0.309±0.208 (n 19) | refusals {'tf_negative_ev': 156766}
+
+[touch] E D + favourite-only openings/adds (fair>=0.5)
+  pre-reward settled trading   +0.00 (matched  +0.00, residual   +0.00) fills 0 spend $0.00 traded 0 | paired vs A +0.309±0.208 (n 19) | refusals {'tf_negative_ev': 156766, 'tf_side': 1637}
+
+[touch] F E + falling-side filter
+  pre-reward settled trading   +0.00 (matched  +0.00, residual   +0.00) fills 0 spend $0.00 traded 0 | paired vs A +0.309±0.208 (n 19) | refusals {'tf_negative_ev': 156766, 'tf_falling': 380, 'tf_side': 1637}
+
+[touch] G control: underdog-only openings/adds + EV
+  pre-reward settled trading   +0.00 (matched  +0.00, residual   +0.00) fills 0 spend $0.00 traded 0 | paired vs A +0.309±0.208 (n 19) | refusals {'tf_negative_ev': 156766, 'tf_side': 3827}
+
+[through] A baseline: production pauses (6e6cc2d5d-like core)
+  pre-reward settled trading   -7.74 (matched  +5.47, residual  -13.21) fills 92 spend $63.61 traded 14 | paired vs A +0.000±0.000 (n 14) | refusals {}
+    complete dog    fills  18 qty    26 avg px 0.354 settle-cost  +7.79  markout 30s -10.2c 120s  -8.6c 300s  -3.8c
+    complete fav    fills  11 qty    20 avg px 0.663 settle-cost  -5.04  markout 30s  -2.4c 120s  -3.0c 300s  -6.3c
+    open/add dog    fills  42 qty    71 avg px 0.331 settle-cost  +0.74  markout 30s  -7.5c 120s  -8.5c 300s  -6.5c
+    open/add fav    fills  21 qty    27 avg px 0.662 settle-cost -11.23  markout 30s  -0.2c 120s  +1.8c 300s  -3.5c
+
+[through] B falling-side filter (30 s, 2 ticks)
+  pre-reward settled trading   -4.55 (matched  +4.88, residual   -9.43) fills 86 spend $58.42 traded 12 | paired vs A +0.228±0.290 (n 14) | refusals {'tf_falling': 7634}
+    complete dog    fills  20 qty    30 avg px 0.352 settle-cost  +6.43  markout 30s  -9.3c 120s  -7.9c 300s  -4.2c
+    complete fav    fills  10 qty    18 avg px 0.645 settle-cost  -1.38  markout 30s  -3.2c 120s  -3.5c 300s  -8.1c
+    open/add dog    fills  37 qty    61 avg px 0.346 settle-cost  -0.84  markout 30s  -7.8c 120s  -9.5c 300s  -7.5c
+    open/add fav    fills  19 qty    23 avg px 0.670 settle-cost  -8.76  markout 30s  -1.1c 120s  +0.5c 300s  -7.1c
+
+[through] C require independent fair
+  pre-reward settled trading   -7.74 (matched  +5.47, residual  -13.21) fills 92 spend $63.61 traded 14 | paired vs A +0.000±0.000 (n 14) | refusals {'tf_no_fair': 54}
+    complete dog    fills  18 qty    26 avg px 0.354 settle-cost  +7.79  markout 30s -10.2c 120s  -8.6c 300s  -3.8c
+    complete fav    fills  11 qty    20 avg px 0.663 settle-cost  -5.04  markout 30s  -2.4c 120s  -3.0c 300s  -6.3c
+    open/add dog    fills  42 qty    71 avg px 0.331 settle-cost  +0.74  markout 30s  -7.5c 120s  -8.5c 300s  -6.5c
+    open/add fav    fills  21 qty    27 avg px 0.662 settle-cost -11.23  markout 30s  -0.2c 120s  +1.8c 300s  -3.5c
+
+[through] D trading-first: fair + EV>=0 after fill loss
+  pre-reward settled trading   +0.00 (matched  +0.00, residual   +0.00) fills 0 spend $0.00 traded 0 | paired vs A +0.553±0.341 (n 14) | refusals {'tf_negative_ev': 156766}
+
+[through] E D + favourite-only openings/adds (fair>=0.5)
+  pre-reward settled trading   +0.00 (matched  +0.00, residual   +0.00) fills 0 spend $0.00 traded 0 | paired vs A +0.553±0.341 (n 14) | refusals {'tf_negative_ev': 156766, 'tf_side': 1637}
+
+[through] F E + falling-side filter
+  pre-reward settled trading   +0.00 (matched  +0.00, residual   +0.00) fills 0 spend $0.00 traded 0 | paired vs A +0.553±0.341 (n 14) | refusals {'tf_negative_ev': 156766, 'tf_falling': 380, 'tf_side': 1637}
+
+[through] G control: underdog-only openings/adds + EV
+  pre-reward settled trading   +0.00 (matched  +0.00, residual   +0.00) fills 0 spend $0.00 traded 0 | paired vs A +0.553±0.341 (n 14) | refusals {'tf_negative_ev': 156766, 'tf_side': 3827}

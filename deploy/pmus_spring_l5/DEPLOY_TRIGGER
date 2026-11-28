@@ -304,3 +304,8 @@ release candidate for f4dfe9226 (integrated hybrid v2: program_period qualificat
 release candidate for 87e348730 (integrated hybrid v3: contract_period qualification, unknown programme terms fail closed, feasible ladder, allocator, pause options; all flags default off; not approved, not deployed)
 release candidate for 52bec8021 (reward economics: paid_fraction rule, pregame fill rate, release balanced; on hybrid v3; all flags default off; not approved, not deployed)
 release candidate for e3ef7eb79 (reward economics v2: paid_fraction, per-sport pregame fill rates, rank by net per slot, release balanced; all flags default off; not approved, not deployed)
+release candidate for cc0a222c9 (integrated: threshold reward rule, live slot cap, completion hold, completion safety class (capped wait), fair-feed freshness, provider coverage report; all flags default off; not approved, not deployed)
+release candidate for a3e27b21d (trading-first: pre-reward edge vs independent fair for openings/additions/ladder, favourite-only and falling-side options; on ac1c1bbaf; all flags default off; not approved, not deployed)
+release candidate for f33b3da15 (trading-first v2: hybrid admission, economical hedge, fair-first selection, sharp nickname matching and on-demand refresh, coverage diagnostics; on 8f7cb2c36; all flags default off; not approved, not deployed)
+release candidate for 0cc2f30ea (expanded integrated: PR #253 pricing reviewed and fixed, line-market adapter and shadow pricing, line slate, independent combo legs, trading-first v2; on 8f7cb2c36; all flags default off; not approved, not deployed)
+release candidate for 046a63775 (expanded integrated + trading-first net bypass; all flags default off; not approved, not deployed)

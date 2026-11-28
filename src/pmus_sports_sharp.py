@@ -88,7 +88,10 @@ def devig(decimal_odds: Iterable[Any]) -> Optional[List[D]]:
     """Multiplicative de-vig: implied 1/o, normalised to sum 1. None on any
     unusable price (<= 1.0, missing, unparsable)."""
     try:
-        inv = [ONE / D(str(o)) for o in decimal_odds]
+        prices = [D(str(o)) for o in decimal_odds]
+        if any(not p.is_finite() or p <= ONE for p in prices):
+            return None
+        inv = [ONE / p for p in prices]
     except Exception:                                    # noqa: BLE001
         return None
     if len(inv) < 2 or any(x <= 0 or x >= 1 for x in inv):
@@ -116,6 +119,9 @@ def _h2h(book: Mapping[str, Any]) -> Optional[Tuple[Dict[str, D], float]]:
         outs = [o for o in mk.get("outcomes") or [] if isinstance(o, Mapping)]
         if len(outs) != 2:                     # draws (3-way) are not ours
             return None
+        names = [norm(o.get("name")) for o in outs]
+        if not all(names) or len(set(names)) != 2:
+            return None
         probs = devig(o.get("price") for o in outs)
         if probs is None:
             return None
@@ -132,13 +138,13 @@ def fair_from_event(event: Mapping[str, Any], *, now: float,
     pref = [b for b in books if b.get("key") == prefer]
     for b in pref:
         got = _h2h(b)
-        if got and now - got[1] <= MAX_ODDS_AGE_S:
+        if got and 0 <= now - got[1] <= MAX_ODDS_AGE_S:
             return {"probs": got[0], "source": prefer,
                     "age_s": round(now - got[1], 1)}
     fresh = []
     for b in books:
         got = _h2h(b)
-        if got and now - got[1] <= MAX_ODDS_AGE_S:
+        if got and 0 <= now - got[1] <= MAX_ODDS_AGE_S:
             fresh.append(got)
     if not fresh:
         return None
@@ -149,12 +155,47 @@ def fair_from_event(event: Mapping[str, Any], *, now: float,
     s = sum(probs.values())
     return {"probs": {t: p / s for t, p in probs.items()},
             "source": "median_of_%d" % len(fresh),
-            "age_s": round(now - max(f[1] for f in fresh), 1)}
+            "age_s": round(now - min(f[1] for f in fresh), 1)}
 
 
 # --------------------------------------------------------------- matching
 def norm(name: Any) -> str:
-    return re.sub(r"[^a-z0-9]+", " ", str(name or "").lower()).strip()
+    import unicodedata
+    t = unicodedata.normalize("NFKD", str(name or ""))
+    t = "".join(c for c in t if not unicodedata.combining(c))
+    return re.sub(r"[^a-z0-9]+", " ", t.lower()).strip()
+
+
+#: "exact" (default, unchanged) or "words": a market team name also matches a
+#: feed name that contains it as whole words at its start or end ("Lightning"
+#: ~ "Tampa Bay Lightning", "Air Force" ~ "Air Force Falcons"). Both teams
+#: must pair one-to-one and the start time must agree, so a nickname shared by
+#: two feed teams of the same game is still refused.
+NAME_MATCH = os.getenv("PMUS_SHARP_NAME_MATCH", "exact").strip().lower()
+
+
+def name_match(market_name: Any, feed_name: Any, mode: Optional[str] = None
+               ) -> bool:
+    a, b = norm(market_name), norm(feed_name)
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    if (mode or NAME_MATCH) != "words":
+        return False
+    return b.startswith(a + " ") or b.endswith(" " + a) or \
+        a.startswith(b + " ") or a.endswith(" " + b)
+
+
+def teams_match(teams: Tuple[str, str], home: Any, away: Any,
+                mode: Optional[str] = None) -> Optional[Dict[str, str]]:
+    """{market team -> feed team} when both pair one-to-one, else None."""
+    y, n = teams
+    for fy, fn in ((home, away), (away, home)):
+        if name_match(y, fy, mode) and name_match(n, fn, mode) and \
+                not (name_match(y, fn, mode) or name_match(n, fy, mode)):
+            return {y: str(fy), n: str(fn)}
+    return None
 
 
 def sport_code(slug: str) -> str:
@@ -189,20 +230,40 @@ def match_event(market: Mapping[str, Any], events: Iterable[Mapping[str, Any]]
     start = _ts(market.get("gameStartTime"))
     if teams is None or start is None:
         return None
-    want = {norm(teams[0]), norm(teams[1])}
     hits = []
     for ev in events:
         if not isinstance(ev, Mapping):
             continue
-        got = {norm(ev.get("home_team")), norm(ev.get("away_team"))}
         t = _ts(ev.get("commence_time"))
-        if got == want and t is not None and abs(t - start) <= MATCH_TOL_S:
+        if teams_match(teams, ev.get("home_team"), ev.get("away_team")) \
+                and t is not None and abs(t - start) <= MATCH_TOL_S:
             hits.append(ev)
     return hits[0] if len(hits) == 1 else None
 
 
+def is_moneyline(market: Mapping[str, Any]) -> bool:
+    """True only for a two-way full-game / match winner. The venue labels
+    these `<sport>_team_full_game_winner` / `<sport>_match_winner` with
+    sportsMarketTypeV2 SPORTS_MARKET_TYPE_MONEYLINE (catalogue 28 Nov). A
+    period, half, quarter, set or regulation winner, a drawable (soccer
+    full-time) outcome, a spread, a total or a prop is NOT. A market with no
+    type at all keeps the previous behaviour (moneyline by construction of
+    the caller); any other label is refused."""
+    t = str(market.get("sportsMarketType") or "").strip().lower()
+    v2 = str(market.get("sportsMarketTypeV2") or "").strip().upper()
+    if not t and not v2:
+        return True
+    if v2 and v2 != "SPORTS_MARKET_TYPE_MONEYLINE":
+        return False
+    return t in ("moneyline", "h2h") or t.endswith("_team_full_game_winner") \
+        or t.endswith("_match_winner") or (not t and bool(v2))
+
+
 def fair_yes(market: Mapping[str, Any], events: Iterable[Mapping[str, Any]],
              *, now: float) -> Optional[Dict[str, Any]]:
+    # Explicit non-moneyline contracts must never inherit h2h fair value.
+    if not is_moneyline(market):
+        return None
     ev = match_event(market, events)
     if ev is None:
         return None
@@ -210,11 +271,77 @@ def fair_yes(market: Mapping[str, Any], events: Iterable[Mapping[str, Any]],
     if f is None:
         return None
     yes, _no = market_teams(market)
-    p = f["probs"].get(norm(yes))
+    pair = teams_match(market_teams(market), ev.get("home_team"),
+                       ev.get("away_team")) or {}
+    p = f["probs"].get(norm(pair.get(yes, yes)))
     if p is None:
         return None
     return {"fair_yes": p, "source": f["source"], "age_s": f["age_s"],
             "event_id": ev.get("id")}
+
+
+def diagnose(market: Mapping[str, Any], events: Iterable[Mapping[str, Any]],
+             *, now: float) -> Dict[str, Any]:
+    """READ-ONLY reason a market has no sportsbook fair (28 Nov, #251):
+    which step fails -- teams unreadable, no event in the feed, team names
+    that do not match exactly (with the nearest feed names, for the alias
+    table), start-time mismatch, no two-way h2h, Pinnacle absent, or odds
+    older than MAX_ODDS_AGE_S -- plus Pinnacle's and the freshest book's
+    odds age. Never raises."""
+    out: Dict[str, Any] = {}
+    try:
+        evs = [e for e in events if isinstance(e, Mapping)]
+        out["feed_events"] = len(evs)
+        teams = market_teams(market)
+        start = _ts(market.get("gameStartTime"))
+        if teams is None:
+            out["why"] = "market_teams_unreadable"
+            return out
+        out["teams"] = [teams[0], teams[1]]
+        want = {norm(teams[0]), norm(teams[1])}
+        exact = [e for e in evs if teams_match(teams, e.get("home_team"),
+                                               e.get("away_team"))]
+        if not exact:
+            words = set(" ".join(want).split())
+            near = sorted(evs, key=lambda e: -len(words & set(
+                ("%s %s" % (norm(e.get("home_team")),
+                            norm(e.get("away_team")))).split())))[:1]
+            out["why"] = "no_exact_team_match" if evs else "feed_empty"
+            if near:
+                out["nearest"] = [near[0].get("home_team"),
+                                  near[0].get("away_team")]
+            return out
+        timed = [e for e in exact if start is not None and
+                 _ts(e.get("commence_time")) is not None and
+                 abs(_ts(e.get("commence_time")) - start) <= MATCH_TOL_S]
+        if len(timed) != 1:
+            out["why"] = "start_time_mismatch" if not timed else \
+                "ambiguous_event"
+            return out
+        ev = timed[0]
+        ct = _ts(ev.get("commence_time"))
+        out["live"] = bool(ct is not None and ct <= now)
+        books = [b for b in ev.get("bookmakers") or []
+                 if isinstance(b, Mapping)]
+        out["books"] = len(books)
+        ages = {}
+        for b in books:
+            got = _h2h(b)
+            if got:
+                ages[str(b.get("key"))] = round(now - got[1], 1)
+        out["pinnacle"] = "pinnacle" in ages
+        out["pinnacle_age_s"] = ages.get("pinnacle")
+        out["freshest_age_s"] = min(ages.values()) if ages else None
+        if not ages:
+            out["why"] = "no_two_way_h2h"
+        elif out["freshest_age_s"] > MAX_ODDS_AGE_S:
+            out["why"] = "odds_stale"
+        else:
+            out["why"] = "ok"
+        return out
+    except Exception as exc:                             # noqa: BLE001
+        out["why"] = "diag_error:%s" % type(exc).__name__
+        return out
 
 
 # ----------------------------------------------------------------- window
@@ -307,6 +434,13 @@ class OddsClient:
         self.used: Optional[int] = None
         self.last_error: Optional[str] = None
         self.calls = 0
+        # PMUS_SHARP_REFRESH=on_demand (default "poll" = unchanged): a cached
+        # sport is refetched once its odds are older than MAX_ODDS_AGE_S,
+        # at most PMUS_SHARP_DAILY_CALLS times per UTC day, so the quota is
+        # spent only where a candidate needs fresh odds.
+        self.refresh = os.getenv("PMUS_SHARP_REFRESH", "poll").strip()
+        self.daily_calls = int(os.getenv("PMUS_SHARP_DAILY_CALLS", "8"))
+        self._day: Tuple[str, int] = ("", 0)
 
     @property
     def configured(self) -> bool:
@@ -315,7 +449,19 @@ class OddsClient:
     def fetch(self, sport_key: str) -> List[Mapping[str, Any]]:
         now = self.clock()
         hit = self.cache.get(sport_key)
-        if hit and now - hit[0] < self.poll_s:
+        # polling is unchanged until provider coverage and quota are
+        # reported (issue #251); stale odds are still refused downstream
+        if self.refresh == "on_demand":
+            day = time.strftime("%Y-%m-%d", time.gmtime(now))
+            if self._day[0] != day:
+                self._day = (day, 0)
+            if hit and now - hit[0] < MAX_ODDS_AGE_S:
+                return hit[1]
+            if self._day[1] >= self.daily_calls:
+                self.last_error = "DAILY_CALL_CAP"
+                return hit[1] if hit else []
+            self._day = (day, self._day[1] + 1)
+        elif hit and now - hit[0] < self.poll_s:
             return hit[1]
         if not self.configured:
             self.last_error = "NO_KEY"
@@ -324,7 +470,12 @@ class OddsClient:
             self.last_error = "BUDGET_RESERVE"
             return hit[1] if hit else []
         q = urllib.parse.urlencode({
-            "apiKey": self._key.strip(), "regions": "eu", "markets": "h2h",
+            "apiKey": self._key.strip(), "regions": "eu",
+            # PMUS_SHARP_MARKETS (default "h2h" = unchanged): e.g.
+            # "h2h,spreads,totals" -- the provider charges one request per
+            # market key per region, so three keys cost 3 per call.
+            "markets": os.getenv("PMUS_SHARP_MARKETS", "h2h").strip()
+            or "h2h",
             "oddsFormat": "decimal", "dateFormat": "iso"})
         url = "%s/sports/%s/odds?%s" % (ODDS_BASE, sport_key, q)
         try:
@@ -348,8 +499,66 @@ class OddsClient:
         self.cache[sport_key] = (now, hit[1] if hit else [])
         return hit[1] if hit else []
 
+    def coverage(self) -> Dict[str, Any]:
+        """READ-ONLY provider coverage (28 Nov, issue #251): the provider's
+        own sport list (GET /sports, the endpoint that lists keys; its quota
+        cost is MEASURED here from the usage headers before and after, not
+        assumed), with every key that could serve our allowlist (tennis,
+        table tennis) and the configured SPORT_KEYS that are and are not
+        offered. Never raises; the key is never logged."""
+        out: Dict[str, Any] = {"ok": False, "label": "provider coverage; "
+                               "read-only; no odds fetched"}
+        if not self.configured:
+            out["why"] = "NO_KEY"
+            return out
+        used_before = self.used
+        q = urllib.parse.urlencode({"apiKey": self._key.strip()})
+        try:
+            with self.opener("%s/sports?%s" % (ODDS_BASE, q),
+                             timeout=10) as r:                # noqa: S310
+                body = json.loads(r.read().decode("utf-8"))
+                hdr = getattr(r, "headers", {}) or {}
+                rem, used = (hdr.get("x-requests-remaining"),
+                             hdr.get("x-requests-used"))
+        except urllib.error.HTTPError as exc:
+            out["why"] = "HTTP_%s" % exc.code
+            return out
+        except Exception as exc:                         # noqa: BLE001
+            out["why"] = type(exc).__name__
+            return out
+        rows = [b for b in (body if isinstance(body, list) else [])
+                if isinstance(b, Mapping)]
+        keys = {str(b.get("key") or ""): b for b in rows}
+
+        def pick(word: str) -> list:
+            return sorted(k for k, b in keys.items()
+                          if word in k.lower() or word in str(
+                              b.get("group") or "").lower())
+        used_after = int(used) if used not in (None, "") else None
+        out.update(ok=True, sports=len(keys),
+                   tennis=pick("tennis"),
+                   table_tennis=pick("table") + [k for k in pick("tt_")
+                                                 if k not in pick("table")],
+                   configured_offered=sorted(v for v in SPORT_KEYS.values()
+                                             if v in keys),
+                   configured_missing=sorted(v for v in SPORT_KEYS.values()
+                                             if v not in keys),
+                   requests_remaining=int(rem) if rem not in (None, "")
+                   else None,
+                   requests_used=used_after,
+                   list_cost=(used_after - used_before) if (
+                       used_after is not None and used_before is not None)
+                   else None)
+        return out
+
+    def cache_age_s(self, sport_key: str) -> Optional[float]:
+        hit = self.cache.get(sport_key)
+        return None if not hit else round(self.clock() - hit[0], 1)
+
     def status(self) -> Dict[str, Any]:
         return {"configured": self.configured, "calls": self.calls,
+                "refresh": self.refresh, "calls_today": self._day[1],
+                "daily_calls": self.daily_calls,
                 "remaining": self.remaining, "used": self.used,
                 "last_error": self.last_error, "poll_s": self.poll_s,
                 "reserve": self.reserve}

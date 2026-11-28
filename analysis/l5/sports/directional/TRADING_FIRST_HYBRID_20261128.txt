@@ -1,0 +1,142 @@
+Trading-first vs current (underdog-heavy) accumulation on recorded sports
+tapes. OFFLINE, THEORETICAL: recorded books + international fair, modelled
+fills (touch / through), 3 s latency, maker fee 0, rewards NOT modelled
+(pre-reward trading P&L only). Nothing here is realized.
+
+[touch] A baseline: production pauses (6e6cc2d5d-like core)
+  pre-reward settled trading   -5.87 (matched  +5.31, residual  -11.18) fills 138 spend $114.00 traded 19 | paired vs A +0.000±0.000 (n 19) | refusals {}
+    complete dog    fills  22 qty    40 avg px 0.344 settle-cost  +9.29  markout 30s  -3.7c 120s  -2.2c 300s  -2.3c
+    complete fav    fills  26 qty    44 avg px 0.660 settle-cost -11.12  markout 30s  -1.1c 120s  -2.8c 300s  -5.2c
+    open/add dog    fills  49 qty    89 avg px 0.323 settle-cost +15.54  markout 30s  -2.8c 120s  -2.6c 300s  -2.6c
+    open/add fav    fills  41 qty    62 avg px 0.687 settle-cost -19.59  markout 30s  -0.4c 120s  -1.3c 300s  -3.6c
+
+[touch] hybrid edge>=0.02 dog+0 conc 0/ct weaken 0
+  pre-reward settled trading   +0.97 (matched  +0.71, residual   +0.26) fills 19 spend $11.73 traded 5 | paired vs A +0.360±0.201 (n 19) | refusals {'tf_negative_ev': 97723}
+    complete dog    fills   4 qty     8 avg px 0.278 settle-cost  -2.22  markout 30s  -1.2c 120s +18.6c 300s +24.2c
+    complete fav    fills   2 qty     4 avg px 0.635 settle-cost  +1.46  markout 30s -11.8c 120s -12.3c 300s -12.3c
+    open/add dog    fills   2 qty     4 avg px 0.330 settle-cost  -1.32  markout 30s  -1.3c 120s  -2.3c 300s  -1.3c
+    open/add fav    fills  11 qty     9 avg px 0.650 settle-cost  +3.05  markout 30s  -3.0c 120s  +4.3c 300s  -4.1c
+
+[touch] hybrid edge>=0.01 dog+0.01 conc 0/ct weaken 0
+  pre-reward settled trading   -9.70 (matched  +0.77, residual  -10.47) fills 36 spend $32.40 traded 11 | paired vs A -0.202±0.314 (n 19) | refusals {'tf_negative_ev': 56930}
+    complete dog    fills   8 qty    16 avg px 0.300 settle-cost  +3.20  markout 30s  -0.6c 120s  +8.0c 300s +12.8c
+    complete fav    fills   2 qty     4 avg px 0.635 settle-cost  +1.46  markout 30s -11.8c 120s -12.3c 300s -12.3c
+    open/add dog    fills   2 qty     4 avg px 0.330 settle-cost  -1.32  markout 30s  -1.3c 120s  -2.3c 300s  -1.3c
+    open/add fav    fills  24 qty    35 avg px 0.684 settle-cost -13.04  markout 30s  -1.0c 120s  +1.5c 300s  -5.2c
+
+[touch] hybrid edge>=0.01 dog+0.02 conc 0/ct weaken 0
+  pre-reward settled trading   -9.70 (matched  +0.77, residual  -10.47) fills 36 spend $32.40 traded 11 | paired vs A -0.202±0.314 (n 19) | refusals {'tf_negative_ev': 66061}
+    complete dog    fills   8 qty    16 avg px 0.300 settle-cost  +3.20  markout 30s  -0.6c 120s  +8.0c 300s +12.8c
+    complete fav    fills   2 qty     4 avg px 0.635 settle-cost  +1.46  markout 30s -11.8c 120s -12.3c 300s -12.3c
+    open/add dog    fills   2 qty     4 avg px 0.330 settle-cost  -1.32  markout 30s  -1.3c 120s  -2.3c 300s  -1.3c
+    open/add fav    fills  24 qty    35 avg px 0.684 settle-cost -13.04  markout 30s  -1.0c 120s  +1.5c 300s  -5.2c
+
+[touch] hybrid edge>=0.015 dog+0.01 conc 0/ct weaken 0
+  pre-reward settled trading   -1.85 (matched  +0.83, residual   -2.68) fills 25 spend $18.55 traded 9 | paired vs A +0.211±0.218 (n 19) | refusals {'tf_negative_ev': 73214}
+    complete dog    fills   6 qty    12 avg px 0.300 settle-cost  -1.60  markout 30s  -0.8c 120s +12.7c 300s +18.4c
+    complete fav    fills   2 qty     4 avg px 0.635 settle-cost  +1.46  markout 30s -11.8c 120s -12.3c 300s -12.3c
+    open/add dog    fills   2 qty     4 avg px 0.330 settle-cost  -1.32  markout 30s  -1.3c 120s  -2.3c 300s  -1.3c
+    open/add fav    fills  15 qty    17 avg px 0.664 settle-cost  -0.39  markout 30s  -2.3c 120s  +3.2c 300s  -2.5c
+
+[touch] hybrid edge>=0.01 dog+0.01 conc 0.005/ct weaken 0
+  pre-reward settled trading   +0.97 (matched  +0.71, residual   +0.26) fills 19 spend $11.73 traded 5 | paired vs A +0.360±0.201 (n 19) | refusals {'tf_negative_ev': 106814}
+    complete dog    fills   4 qty     8 avg px 0.278 settle-cost  -2.22  markout 30s  -1.2c 120s +18.6c 300s +24.2c
+    complete fav    fills   2 qty     4 avg px 0.635 settle-cost  +1.46  markout 30s -11.8c 120s -12.3c 300s -12.3c
+    open/add dog    fills   2 qty     4 avg px 0.330 settle-cost  -1.32  markout 30s  -1.3c 120s  -2.3c 300s  -1.3c
+    open/add fav    fills  11 qty     9 avg px 0.650 settle-cost  +3.05  markout 30s  -3.0c 120s  +4.3c 300s  -4.1c
+
+[touch] hybrid edge>=0.01 dog+0.01 conc 0/ct weaken 0.02
+  pre-reward settled trading   -4.51 (matched  +0.92, residual   -5.44) fills 23 spend $22.61 traded 7 | paired vs A +0.071±0.210 (n 19) | refusals {'tf_negative_ev': 57311, 'tf_weakening': 9891}
+    complete dog    fills   7 qty    14 avg px 0.288 settle-cost  +1.97  markout 30s  -2.0c 120s +10.0c 300s +20.0c
+    complete fav    fills   2 qty     4 avg px 0.635 settle-cost  +1.46  markout 30s -11.8c 120s -12.3c 300s -12.3c
+    open/add dog    fills   2 qty     4 avg px 0.330 settle-cost  -1.32  markout 30s  -1.3c 120s  -2.3c 300s  -1.3c
+    open/add fav    fills  12 qty    22 avg px 0.666 settle-cost  -6.62  markout 30s  -0.3c 120s  +6.2c 300s  -9.9c
+
+[touch] hybrid edge>=0.01 dog+0.01 conc 0.005/ct weaken 0.02
+  pre-reward settled trading   +0.67 (matched  +0.65, residual   +0.02) fills 11 spend $9.43 traded 3 | paired vs A +0.344±0.204 (n 19) | refusals {'tf_negative_ev': 107479, 'tf_weakening': 6978}
+    complete dog    fills   3 qty     6 avg px 0.255 settle-cost  -1.53  markout 30s  -1.8c 120s +22.5c 300s +36.4c
+    complete fav    fills   2 qty     4 avg px 0.635 settle-cost  +1.46  markout 30s -11.8c 120s -12.3c 300s -12.3c
+    open/add dog    fills   2 qty     4 avg px 0.330 settle-cost  -1.32  markout 30s  -1.3c 120s  -2.3c 300s  -1.3c
+    open/add fav    fills   4 qty     6 avg px 0.663 settle-cost  +2.06  markout 30s  -4.0c 120s +13.6c 300s  -9.3c
+
+[touch] hybrid edge>=0.015 dog+0.01 conc 0.005/ct weaken 0.02
+  pre-reward settled trading   +0.53 (matched  +0.51, residual   +0.02) fills 7 spend $5.57 traded 2 | paired vs A +0.337±0.204 (n 19) | refusals {'tf_negative_ev': 125367, 'tf_weakening': 4844}
+    complete dog    fills   3 qty     6 avg px 0.255 settle-cost  -1.53  markout 30s  -1.8c 120s +22.5c 300s +36.4c
+    open/add fav    fills   4 qty     6 avg px 0.663 settle-cost  +2.06  markout 30s  -4.0c 120s +13.6c 300s  -9.3c
+
+[touch] hybrid edge>=0.02 dog+0.01 conc 0.005/ct weaken 0.02
+  pre-reward settled trading   +0.00 (matched  +0.00, residual   +0.00) fills 0 spend $0.00 traded 0 | paired vs A +0.309±0.208 (n 19) | refusals {'tf_negative_ev': 150537, 'tf_weakening': 2621}
+
+[touch] hybrid edge>=0.005 dog+0.02 conc 0.005/ct weaken 0.02
+  pre-reward settled trading   -0.07 (matched  +0.63, residual   -0.70) fills 14 spend $14.17 traded 6 | paired vs A +0.305±0.232 (n 19) | refusals {'tf_negative_ev': 83274, 'tf_weakening': 8423}
+    complete dog    fills   5 qty    10 avg px 0.291 settle-cost  -0.91  markout 30s  -1.0c 120s +13.8c 300s +24.7c
+    open/add fav    fills   9 qty    16 avg px 0.700 settle-cost  +0.84  markout 30s  -2.1c 120s  +6.7c 300s  -2.2c
+
+[through] A baseline: production pauses (6e6cc2d5d-like core)
+  pre-reward settled trading   -7.74 (matched  +5.47, residual  -13.21) fills 92 spend $63.61 traded 14 | paired vs A +0.000±0.000 (n 14) | refusals {}
+    complete dog    fills  18 qty    26 avg px 0.354 settle-cost  +7.79  markout 30s -10.2c 120s  -8.6c 300s  -3.8c
+    complete fav    fills  11 qty    20 avg px 0.663 settle-cost  -5.04  markout 30s  -2.4c 120s  -3.0c 300s  -6.3c
+    open/add dog    fills  42 qty    71 avg px 0.331 settle-cost  +0.74  markout 30s  -7.5c 120s  -8.5c 300s  -6.5c
+    open/add fav    fills  21 qty    27 avg px 0.662 settle-cost -11.23  markout 30s  -0.2c 120s  +1.8c 300s  -3.5c
+
+[through] hybrid edge>=0.02 dog+0 conc 0/ct weaken 0
+  pre-reward settled trading   +0.82 (matched  +0.58, residual   +0.24) fills 14 spend $7.78 traded 3 | paired vs A +0.612±0.330 (n 14) | refusals {'tf_negative_ev': 98233}
+    complete dog    fills   3 qty     6 avg px 0.255 settle-cost  -1.53  markout 30s  -1.8c 120s +22.5c 300s +36.4c
+    complete fav    fills   1 qty     2 avg px 0.630 settle-cost  +0.74  markout 30s -11.8c 120s -11.8c 300s -11.8c
+    open/add dog    fills   1 qty     2 avg px 0.335 settle-cost  -0.67  markout 30s  -1.8c 120s  -2.8c 300s  -1.8c
+    open/add fav    fills   9 qty     7 avg px 0.655 settle-cost  +2.28  markout 30s  -3.6c 120s  +4.8c 300s  -5.6c
+
+[through] hybrid edge>=0.01 dog+0.01 conc 0/ct weaken 0
+  pre-reward settled trading   -7.53 (matched  +0.70, residual   -8.23) fills 24 spend $20.13 traded 7 | paired vs A +0.015±0.372 (n 14) | refusals {'tf_negative_ev': 58157}
+    complete dog    fills   5 qty    10 avg px 0.248 settle-cost  +1.52  markout 30s  -2.4c 120s +14.7c 300s +26.1c
+    complete fav    fills   1 qty     2 avg px 0.630 settle-cost  +0.74  markout 30s -11.8c 120s -11.8c 300s -11.8c
+    open/add dog    fills   1 qty     2 avg px 0.335 settle-cost  -0.67  markout 30s  -1.8c 120s  -2.8c 300s  -1.8c
+    open/add fav    fills  17 qty    23 avg px 0.696 settle-cost  -9.12  markout 30s  -1.4c 120s  +3.2c 300s  -8.9c
+
+[through] hybrid edge>=0.01 dog+0.02 conc 0/ct weaken 0
+  pre-reward settled trading   -7.53 (matched  +0.70, residual   -8.23) fills 24 spend $20.13 traded 7 | paired vs A +0.015±0.372 (n 14) | refusals {'tf_negative_ev': 67191}
+    complete dog    fills   5 qty    10 avg px 0.248 settle-cost  +1.52  markout 30s  -2.4c 120s +14.7c 300s +26.1c
+    complete fav    fills   1 qty     2 avg px 0.630 settle-cost  +0.74  markout 30s -11.8c 120s -11.8c 300s -11.8c
+    open/add dog    fills   1 qty     2 avg px 0.335 settle-cost  -0.67  markout 30s  -1.8c 120s  -2.8c 300s  -1.8c
+    open/add fav    fills  17 qty    23 avg px 0.696 settle-cost  -9.12  markout 30s  -1.4c 120s  +3.2c 300s  -8.9c
+
+[through] hybrid edge>=0.015 dog+0.01 conc 0/ct weaken 0
+  pre-reward settled trading   -0.30 (matched  +0.64, residual   -0.94) fills 17 spend $10.90 traded 5 | paired vs A +0.532±0.276 (n 14) | refusals {'tf_negative_ev': 74346}
+    complete dog    fills   4 qty     8 avg px 0.259 settle-cost  -0.07  markout 30s  -1.4c 120s +16.7c 300s +24.7c
+    complete fav    fills   1 qty     2 avg px 0.630 settle-cost  +0.74  markout 30s -11.8c 120s -11.8c 300s -11.8c
+    open/add dog    fills   1 qty     2 avg px 0.335 settle-cost  -0.67  markout 30s  -1.8c 120s  -2.8c 300s  -1.8c
+    open/add fav    fills  11 qty    11 avg px 0.651 settle-cost  -0.30  markout 30s  -3.2c 120s  +4.0c 300s  -4.3c
+
+[through] hybrid edge>=0.01 dog+0.01 conc 0.005/ct weaken 0
+  pre-reward settled trading   +0.82 (matched  +0.58, residual   +0.24) fills 14 spend $7.78 traded 3 | paired vs A +0.612±0.330 (n 14) | refusals {'tf_negative_ev': 107276}
+    complete dog    fills   3 qty     6 avg px 0.255 settle-cost  -1.53  markout 30s  -1.8c 120s +22.5c 300s +36.4c
+    complete fav    fills   1 qty     2 avg px 0.630 settle-cost  +0.74  markout 30s -11.8c 120s -11.8c 300s -11.8c
+    open/add dog    fills   1 qty     2 avg px 0.335 settle-cost  -0.67  markout 30s  -1.8c 120s  -2.8c 300s  -1.8c
+    open/add fav    fills   9 qty     7 avg px 0.655 settle-cost  +2.28  markout 30s  -3.6c 120s  +4.8c 300s  -5.6c
+
+[through] hybrid edge>=0.01 dog+0.01 conc 0/ct weaken 0.02
+  pre-reward settled trading   -3.54 (matched  +0.70, residual   -4.24) fills 15 spend $15.54 traded 5 | paired vs A +0.300±0.205 (n 14) | refusals {'tf_negative_ev': 58206, 'tf_weakening': 9684}
+    complete dog    fills   5 qty    10 avg px 0.248 settle-cost  +1.52  markout 30s  -2.4c 120s +14.7c 300s +26.1c
+    complete fav    fills   1 qty     2 avg px 0.630 settle-cost  +0.74  markout 30s -11.8c 120s -11.8c 300s -11.8c
+    open/add dog    fills   1 qty     2 avg px 0.335 settle-cost  -0.67  markout 30s  -1.8c 120s  -2.8c 300s  -1.8c
+    open/add fav    fills   8 qty    16 avg px 0.696 settle-cost  -5.13  markout 30s  +0.2c 120s  +9.3c 300s -15.2c
+
+[through] hybrid edge>=0.01 dog+0.01 conc 0.005/ct weaken 0.02
+  pre-reward settled trading   +0.58 (matched  +0.58, residual   +0.00) fills 8 spend $7.42 traded 2 | paired vs A +0.595±0.333 (n 14) | refusals {'tf_negative_ev': 107476, 'tf_weakening': 6977}
+    complete dog    fills   3 qty     6 avg px 0.255 settle-cost  -1.53  markout 30s  -1.8c 120s +22.5c 300s +36.4c
+    complete fav    fills   1 qty     2 avg px 0.630 settle-cost  +0.74  markout 30s -11.8c 120s -11.8c 300s -11.8c
+    open/add dog    fills   1 qty     2 avg px 0.335 settle-cost  -0.67  markout 30s  -1.8c 120s  -2.8c 300s  -1.8c
+    open/add fav    fills   3 qty     6 avg px 0.660 settle-cost  +2.04  markout 30s  -5.3c 120s +16.8c 300s -13.8c
+
+[through] hybrid edge>=0.015 dog+0.01 conc 0.005/ct weaken 0.02
+  pre-reward settled trading   +0.51 (matched  +0.51, residual   +0.00) fills 6 spend $5.49 traded 1 | paired vs A +0.590±0.332 (n 14) | refusals {'tf_negative_ev': 125477, 'tf_weakening': 4844}
+    complete dog    fills   3 qty     6 avg px 0.255 settle-cost  -1.53  markout 30s  -1.8c 120s +22.5c 300s +36.4c
+    open/add fav    fills   3 qty     6 avg px 0.660 settle-cost  +2.04  markout 30s  -5.3c 120s +16.8c 300s -13.8c
+
+[through] hybrid edge>=0.02 dog+0.01 conc 0.005/ct weaken 0.02
+  pre-reward settled trading   +0.00 (matched  +0.00, residual   +0.00) fills 0 spend $0.00 traded 0 | paired vs A +0.553±0.341 (n 14) | refusals {'tf_negative_ev': 150537, 'tf_weakening': 2621}
+
+[through] hybrid edge>=0.005 dog+0.02 conc 0.005/ct weaken 0.02
+  pre-reward settled trading   -0.31 (matched  +0.57, residual   -0.88) fills 10 spend $10.31 traded 4 | paired vs A +0.531±0.283 (n 14) | refusals {'tf_negative_ev': 83061, 'tf_weakening': 7793}
+    complete dog    fills   4 qty     8 avg px 0.259 settle-cost  -0.07  markout 30s  -1.4c 120s +16.7c 300s +24.7c
+    open/add fav    fills   6 qty    12 avg px 0.687 settle-cost  -0.24  markout 30s  -3.3c 120s  +8.9c 300s  -5.6c

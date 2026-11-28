@@ -95,16 +95,21 @@ class RequestBudget:
     def cooling(self) -> bool:
         return self.clock() < self._cool_until
 
-    def safety(self) -> "_Safety":
+    def safety(self, max_wait_s: Optional[float] = None) -> "_Safety":
         """Context: signed requests made by THIS thread inside it are
-        safety reads (see the module text). Re-entrant."""
-        return _Safety(self)
+        safety reads (see the module text). Re-entrant. `max_wait_s` caps
+        how long a request inside it may wait (default safety_wait_s): a
+        caller on the trading loop uses it so a cool-down cannot hold the
+        loop (and the cancels it issues) longer than a normal request."""
+        return _Safety(self, max_wait_s)
 
     def in_safety(self) -> bool:
         return getattr(self._tl, "depth", 0) > 0
 
     def _acquire_safety(self) -> None:
-        deadline = self.clock() + self.safety_wait_s
+        cap = getattr(self._tl, "max_wait", None)
+        deadline = self.clock() + (self.safety_wait_s if cap is None
+                                   else min(self.safety_wait_s, cap))
         with self._lock:
             self._safety_waiting += 1
         try:
@@ -187,15 +192,23 @@ class RequestBudget:
 
 
 class _Safety:
-    def __init__(self, budget: "RequestBudget"):
+    def __init__(self, budget: "RequestBudget",
+                 max_wait_s: Optional[float] = None):
         self._b = budget
+        self._cap = max_wait_s
+        self._prev = None
 
     def __enter__(self) -> "_Safety":
         self._b._tl.depth = getattr(self._b._tl, "depth", 0) + 1
+        self._prev = getattr(self._b._tl, "max_wait", None)
+        if self._cap is not None:
+            self._b._tl.max_wait = self._cap if self._prev is None \
+                else min(self._prev, self._cap)
         return self
 
     def __exit__(self, *exc: Any) -> None:
         self._b._tl.depth = max(0, getattr(self._b._tl, "depth", 1) - 1)
+        self._b._tl.max_wait = self._prev
 
 
 class SafetyTransport:

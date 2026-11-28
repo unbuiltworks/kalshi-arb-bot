@@ -56,6 +56,7 @@
       "src/l5_completion_policy.py",
       "src/l5_account_risk.py",
       "src/pmus_sports_sharp.py",
+      "src/pmus_sports_line_fair.py",
       "src/pmus_combo_maker.py",
       "src/pmus_rn1_replica.py",
       "src/pmus_crypto_rewards.py",
