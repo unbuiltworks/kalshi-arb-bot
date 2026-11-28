@@ -185,3 +185,43 @@ def test_fair_coverage_absent_by_default(en, monkeypatch, capsys):
     monkeypatch.delenv("PMUS_SHARP_COVERAGE_LOG", raising=False)
     e.step_market(SLUG)
     assert "fair_coverage" not in quotes(capsys)[-1]
+
+
+class _G:
+    def __init__(self, mapped):
+        self.mapped = mapped
+
+    def token(self, slug):
+        return "tok" if slug in self.mapped else None
+
+
+def test_select_fair_first_and_only(en, monkeypatch):
+    e, v, _ = en
+    monkeypatch.setattr(M, "RN1_TRADING_FIRST", True)
+    sc = [(D("0.01"), D("0"), "a"), (D("0.02"), D("0"), "b"),
+          (D("0.03"), D("0"), "c")]
+    monkeypatch.setattr(e, "guard", _G({"c"}))
+    monkeypatch.setattr(M, "RN1_TF_SELECT", "first")
+    assert [r[2] for r in e.rn1_tf_select(list(sc))] == ["c", "a", "b"]
+    monkeypatch.setattr(M, "RN1_TF_SELECT", "only")
+    assert [r[2] for r in e.rn1_tf_select(list(sc))] == ["c"]
+
+
+def test_select_only_fails_closed(en, monkeypatch):
+    e, v, _ = en
+    monkeypatch.setattr(M, "RN1_TF_SELECT", "only")
+    monkeypatch.setattr(e, "rn1_has_independent_fair",
+                        lambda slug: 1 / 0)
+    assert e.rn1_tf_select([(D("0"), D("0"), "a")]) == []
+
+
+def test_sportsbook_fair_counts_only_when_fresh(en, monkeypatch):
+    e, v, _ = en
+    monkeypatch.setattr(e, "guard", None)
+    monkeypatch.setattr(M, "RN1_DIR_SHARP", True)
+    e.b.d["sharp_shadow"] = {"x": {"fair_yes": "0.6", "t": time.time(),
+                                   "odds_age_s": 30},
+                             "y": {"fair_yes": "0.6", "t": time.time() - 5000,
+                                   "odds_age_s": 30}}
+    assert e.rn1_has_independent_fair("x")
+    assert not e.rn1_has_independent_fair("y")

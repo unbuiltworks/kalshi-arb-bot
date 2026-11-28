@@ -1861,6 +1861,10 @@ RN1_TF_FALLING_TICKS = int(os.getenv("PMUS_RN1_TF_FALLING_TICKS", "2"))
 #                  by >= WEAKEN_USD over WEAKEN_S (weakening favourite)
 # Underdog hedging is the existing completion path (pair cap unchanged): a
 # completion locks the pair whatever the fair, so it is never refused here.
+# Selection under RN1_TRADING_FIRST: "off" (default), "first" (markets with
+# an independent fair source rank ahead, order otherwise kept) or "only"
+# (markets without one take no slot; an error then selects nothing new).
+RN1_TF_SELECT = os.getenv("PMUS_RN1_TF_SELECT", "off").strip().lower()
 RN1_TF_DOG_EXTRA_USD = D(os.getenv("PMUS_RN1_TF_DOG_EXTRA_USD", "0"))
 RN1_TF_CONC_USD = D(os.getenv("PMUS_RN1_TF_CONC_USD", "0"))
 RN1_TF_WEAKEN_USD = D(os.getenv("PMUS_RN1_TF_WEAKEN_USD", "0"))
@@ -5983,6 +5987,38 @@ class Engine:
             out["error"] = type(exc).__name__
         return out
 
+    def rn1_has_independent_fair(self, slug: str) -> bool:
+        """An independent probability source exists for this market: the
+        international guard maps it, or (with RN1_DIR_SHARP) the sportsbook
+        shadow holds a fair within RN1_DIR_SHARP_MAX_AGE_S."""
+        if self.guard is not None and self.guard.token(slug):
+            return True
+        if RN1_DIR_SHARP:
+            st = ((self.b.d.get("sharp_shadow") or {}).get(slug) or {})
+            if st.get("fair_yes") is not None and st.get("t"):
+                age = time.time() - float(st["t"]) + \
+                    float(st.get("odds_age_s") or 0.0)
+                return age <= RN1_DIR_SHARP_MAX_AGE_S
+        return False
+
+    def rn1_tf_select(self, scored: list) -> list:
+        try:
+            has = {r[2]: self.rn1_has_independent_fair(r[2]) for r in scored}
+        except Exception as exc:                          # noqa: BLE001
+            log("RN1_TF_SELECT", error=type(exc).__name__, mode=RN1_TF_SELECT)
+            return [] if RN1_TF_SELECT == "only" else scored
+        out = [r for r in scored if has[r[2]]] + \
+            ([] if RN1_TF_SELECT == "only" else
+             [r for r in scored if not has[r[2]]])
+        key = (RN1_TF_SELECT, len(scored), sum(has.values()))
+        if key != getattr(self, "_tf_sel_logged", None):
+            self._tf_sel_logged = key
+            log("RN1_TF_SELECT", mode=RN1_TF_SELECT, candidates=len(scored),
+                with_independent_fair=sum(has.values()),
+                first=[r[2] for r in out[:4]],
+                label="trading-first selection: independent fair first")
+        return out
+
     def rn1_tf_note_mid(self, slug: str, mk: Dict[str, Any],
                         bbo: Mapping[str, Any], now: float) -> None:
         """Venue YES-mid history for RN1_TF_FALLING_S (diagnostic input to
@@ -9396,6 +9432,10 @@ class Engine:
                     label="published programme, not a payment")
         if RN1.ON and RN1_RANK_NET and scored:
             scored = self.rank_net(scored)
+        if RN1.ON and RN1_TRADING_FIRST and RN1_TF_SELECT in ("first",
+                                                             "only") \
+                and scored:
+            scored = self.rn1_tf_select(scored)
         rewarded: Dict[str, Any] = {}
         if rewards_on() and scored:
             try:
