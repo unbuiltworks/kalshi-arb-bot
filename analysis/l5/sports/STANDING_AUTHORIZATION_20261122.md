@@ -2984,3 +2984,29 @@ limits are authorized."
   - completions −$1.037 (attribution caveat in the review).
 - **Detail:** `campaign_20261128/PROFITABILITY_REVIEW.md` §8.
 - Production remains locked on `8f7cb2c36` (86a).
+
+## 87. Expanded trading-first release 9e6c2039f and one 3 h campaign — 28 Nov 2026, 13:33 UTC
+
+Owner, verbatim: "I explicitly authorize the conditional deployment and
+bounded live validation of release 9e6c2039fd1b31f281b5cbd1545b036b8604651b,
+using the activation variables in §5 of the revised campaign packet. Window:
+November 28, 16:15–19:15 UTC. Completions-only grace until 21:15 UTC.
+PMUS_RN1_PILOT_LOSS_USD=6.50. Maker-only, existing capital limits and
+independent watchdog. Trading-first accumulation with economical underdog
+hedging. Rewards supplemental to trading profitability. I accept that the
+out-of-sample replay will be reported after arming rather than serving as a
+prerequisite for this campaign. All remaining operational gates must pass.
+Verify that worst-case exposure, including resting orders and unsettled
+inventory, cannot breach the remaining lifetime loss allowance. Deploy locked
+first. No automatic repeat, capital increases, taker authorization or
+weakened safety controls."
+
+- **Release:** `9e6c2039f`, with the §5 variables of
+  `CAMPAIGN_PACKET_EXPANDED_20261129.md`.
+- **Window:** 16:15–19:15Z, grace to 21:15Z.
+- **Gates (packet §0, step 2):** all must pass, or nothing is armed.
+- **Worst-case bound:** the final gate's campaign stop counts realized results,
+  held unpaired contracts settling worthless, and every resting and reserved
+  bid plus the new order filling and losing. It refuses openings and
+  extensions at −$6.50 (completions exempt; they reduce risk under the 0.97
+  pair cap). The lifetime room is $6.88, so the bound fits.
