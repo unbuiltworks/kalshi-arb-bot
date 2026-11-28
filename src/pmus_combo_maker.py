@@ -77,6 +77,31 @@ except ValueError:
     QUOTE_TTL_S = 60.0                         # garbled -> the old short TTL
 QUOTE_MAX_TTL_S = float(os.getenv("PMUS_COMBO_QUOTE_MAX_TTL_S", "1800"))
 POLL_S = float(os.getenv("PMUS_COMBO_POLL_S", "3"))
+# REQUEST AUDIT 2026-11-28 (analysis/l5/sports/REQUEST_AUDIT_20261128.md).
+# Both default 0 = exactly the requests made before.
+#
+# SHADOW_POLL_S > 0: while the maker is configured "shadow" (it can write
+# nothing) one pass is made every this many seconds instead of every POLL_S.
+# "live" always keeps POLL_S: its last look has a deadline.
+#
+# QUOTE_BOOK_TTL_S > 0, mode "shadow" ONLY: a leg book read for pricing a
+# NEW RFQ is reused for this many seconds (popular legs repeat across RFQs;
+# every read is one public gateway request). A "live" maker reads every leg
+# for every quote, as before, and the LAST LOOK never uses the cache in any
+# mode: a confirm is always decided on books read at that moment. An
+# unreadable leg is not cached.
+SHADOW_POLL_S = float(os.getenv("PMUS_COMBO_SHADOW_POLL_S", "0") or 0)
+QUOTE_BOOK_TTL_S = float(os.getenv("PMUS_COMBO_QUOTE_BOOK_TTL_S", "0") or 0)
+QUOTE_BOOK_CACHE_MAX = 2000
+
+
+def poll_interval(mode: Optional[str] = None) -> float:
+    """Seconds between passes: POLL_S, or SHADOW_POLL_S when it is set and
+    the maker is in shadow (never shorter than POLL_S)."""
+    mode = MODE if mode is None else mode
+    if mode == "shadow" and SHADOW_POLL_S > 0:
+        return max(POLL_S, SHADOW_POLL_S)
+    return POLL_S
 # INDEPENDENT LEG PRICING (28 Nov; default "off" = unchanged venue mids).
 #   "prefer"  a leg whose book record carries an independent fair_yes (the
 #             engine's sportsbook / international shadow state, never the
@@ -230,6 +255,8 @@ class ComboMaker:
         self.s.setdefault("active", {})        # quoteId -> quote record
         self.s.setdefault("confirmed", [])     # confirm records
         self.s.setdefault("day", {"date": None, "confirms": 0})
+        self._leg_cache: Dict[str, Any] = {}   # symbol -> (t, book)
+        self.leg_reads = {"read": 0, "reused": 0}
 
     # ------------------------------------------------------- bookkeeping
     def _today(self) -> str:
@@ -271,6 +298,37 @@ class ComboMaker:
             self._quote_new(st, block, rfqs or [])
         return st
 
+    def _quote_books(self, syms: List[str]) -> Dict[str, Any]:
+        """Leg books for pricing a NEW RFQ. With QUOTE_BOOK_TTL_S > 0 a
+        book read less than that long ago is reused and only the others are
+        read; otherwise (and always when the maker is "live") every leg is
+        read, as before. Never used by the last look."""
+        ttl = QUOTE_BOOK_TTL_S
+        if ttl <= 0 or self.mode != "shadow":
+            self.leg_reads["read"] += len(syms)
+            return self.books(syms)
+        now = self.clock()
+        out: Dict[str, Any] = {}
+        need = []
+        for sy in syms:
+            hit = self._leg_cache.get(sy)
+            if hit is not None and 0 <= now - hit[0] < ttl:
+                out[sy] = hit[1]
+            elif sy not in need:
+                need.append(sy)
+        self.leg_reads["reused"] += len(out)
+        if need:
+            self.leg_reads["read"] += len(need)
+            got = self.books(need) or {}
+            if len(self._leg_cache) > QUOTE_BOOK_CACHE_MAX:
+                self._leg_cache = {k: v for k, v in self._leg_cache.items()
+                                   if 0 <= now - v[0] < ttl}
+            for sy in need:
+                out[sy] = got.get(sy)
+                if got.get(sy):                # an unreadable leg: re-read
+                    self._leg_cache[sy] = (now, got[sy])
+        return out
+
     def _open_rfqs(self) -> Optional[List[Mapping[str, Any]]]:
         """The open RFQ list, or None when it could not be read (then no
         quote is treated as closed; only the hard ceiling applies)."""
@@ -301,7 +359,7 @@ class ComboMaker:
                 q = {"ok": False, "why": "legs_out_of_range"
                      if not (2 <= len(legs) <= MAX_LEGS) else "same_game"}
             else:
-                books = self.books(syms) if syms else {}
+                books = self._quote_books(syms) if syms else {}
                 q = price_quote(r, legs, books, r.get("tickSize"))
             if not q["ok"]:
                 st["skipped"] += 1
@@ -437,6 +495,7 @@ class ComboMaker:
         return {"mode": self.mode, "active_quotes": len(self.s["active"]),
                 "open_worst_usd": str(self.open_worst()),
                 "confirms_today": self._day()["confirms"],
+                "leg_book_reads": dict(self.leg_reads),
                 "caps": {"max_loss_per_quote": str(MAX_LOSS_PER_QUOTE),
                          "max_open_quotes": MAX_OPEN_QUOTES,
                          "max_worst_total": str(MAX_WORST_TOTAL),

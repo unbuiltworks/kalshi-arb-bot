@@ -1393,6 +1393,29 @@ FILL_LIST_SETTLE_S = float(os.getenv(
     "PMUS_TWO_SIDED_FILL_LIST_SETTLE_S", "2"))
 FILL_EXACT_EVERY_S = float(os.getenv(
     "PMUS_TWO_SIDED_FILL_EXACT_EVERY_S", "60"))
+# REQUEST AUDIT 2026-11-28 (analysis/l5/sports/REQUEST_AUDIT_20261128.md).
+# Both default OFF = exactly the requests made before.
+#
+# ACCT_SEEDS_FILL_LIST: the account read (every 20 s) already fetches
+# GET /v1/orders/open, the same list FILL_LIST_POLL reads every
+# FILL_LIST_REFRESH_S. With "1", a SUCCESSFUL account read hands its list to
+# the fill poll, stamped with the moment just before that request was sent,
+# so the fill poll's next own read is due one refresh period later (about
+# one list read in five is not made). Nothing else changes: every proof the
+# list must give (age, settle time, state, filled quantity, the 60 s exact
+# read) is checked exactly as for a list the fill poll read itself, a fill
+# is still recorded only from the exact read, and a failed account read
+# seeds nothing (the fill poll reads the list itself, as before).
+ACCT_SEEDS_FILL_LIST = os.getenv(
+    "PMUS_TWO_SIDED_ACCT_SEEDS_FILL_LIST", "0").strip() == "1"
+# LIVE_EVENTS_TTL_S: Venue.live_sports() (one 500-row public events page,
+# plus the crypto page when configured) is read by selection every 20 s, a
+# second time in the SAME pass to keep game clocks fresh when the slots are
+# full, and again by a kick-off hold. With a value > 0 a read newer than
+# this many seconds is reused. 0 (default) = every call reads. Public
+# gateway only; never on the signed budget.
+LIVE_EVENTS_TTL_S = float(os.getenv(
+    "PMUS_TWO_SIDED_LIVE_EVENTS_TTL_S", "0") or 0)
 # A PAUSE IS NOT A REASON TO ABANDON A MARKET. LIVE 2026-11-24 01:20Z: a
 # flat market with nothing to quote for 120 s gives up its slot, a
 # price-move pause counted as "nothing to quote", and a released market was
@@ -3048,7 +3071,44 @@ class Venue:
         self._spec: Dict[str, Any] = {}
 
     def gget(self, path: str) -> Any:
-        return self.gw.http_get_json(path)
+        """One public (keyless) gateway GET. Counted per route family for
+        the heartbeat (`gateway_requests`); the count decides nothing."""
+        self._gw_note("by_route", path)
+        try:
+            return self.gw.http_get_json(path)
+        except Exception as exc:                          # noqa: BLE001
+            self._gw_note("errors_by_route", path)
+            if getattr(exc, "code", None) == 429:
+                self._gw_note("http_429_by_route", path)
+            raise
+
+    def _gw_note(self, table: str, path: str) -> None:
+        try:
+            from src import pmus_request_budget as RB
+            st = self.__dict__.get("_gw_stats")
+            if st is None:
+                st = self.__dict__.setdefault("_gw_stats", {
+                    "by_route": {}, "errors_by_route": {},
+                    "http_429_by_route": {}, "lock": threading.Lock(),
+                    "t0": time.monotonic()})
+            with st["lock"]:
+                RB.count_route(st[table], RB.route_family("GET", path))
+        except Exception:                                 # noqa: BLE001
+            pass
+
+    def gateway_report(self) -> Dict[str, Any]:
+        st = self.__dict__.get("_gw_stats")
+        if st is None:
+            return {"sent": 0, "by_route": {}}
+        with st["lock"]:
+            up = max(1e-9, time.monotonic() - st["t0"])
+            sent = sum(st["by_route"].values())
+            return {"sent": sent, "sent_rps": round(sent / up, 3),
+                    "by_route": dict(st["by_route"]),
+                    "errors_by_route": dict(st["errors_by_route"]),
+                    "http_429_by_route": dict(st["http_429_by_route"]),
+                    "label": "public keyless gateway reads since start; "
+                             "not on the signed budget"}
 
     states: Dict[str, Any] = {}
 
@@ -3079,6 +3139,17 @@ class Venue:
         return out
 
     def live_sports(self) -> list:
+        if LIVE_EVENTS_TTL_S > 0:
+            hit = self.__dict__.get("_live_cache")
+            if hit and time.monotonic() - hit[0] < LIVE_EVENTS_TTL_S:
+                return list(hit[1])
+            # an error is never cached: the next call reads again
+            out = self._live_sports_read()
+            self.__dict__["_live_cache"] = (time.monotonic(), out)
+            return list(out)
+        return self._live_sports_read()
+
+    def _live_sports_read(self) -> list:
         crypto = []
         try:
             crypto = self.crypto_targets()
@@ -3203,9 +3274,16 @@ class Venue:
                                    p.get("netPosition") or p.get("quantity"))
                     if v:
                         held[p["marketSlug"]] = v
+        # stamped BEFORE the request, like the fill poll's own list read:
+        # an order is only "in time to be listed" relative to this moment
+        oo_mono, oo_wall = time.monotonic(), time.time()
         oo = self.t.request("GET", "/v1/orders/open")
         orders = [o for o in (oo.get("orders") or []) if isinstance(o, Mapping)]
-        return {"positions": held, "open_orders": orders}
+        out = {"positions": held, "open_orders": orders}
+        if isinstance(oo, Mapping) and isinstance(oo.get("orders"), list):
+            # the list was readable in the form Venue.open_orders() demands
+            out["open_orders_read"] = {"mono": oo_mono, "wall": oo_wall}
+        return out
 
     def open_orders(self) -> Dict[str, Any]:
         """The venue's open-order list in ONE signed read, never deferred
@@ -4554,7 +4632,32 @@ class Engine:
         self._acct_fail = 0
         self._acct_ok_at = time.monotonic()
         self._acct_cache = acc
+        self._seed_fill_list(acc)
         return acc
+
+    def _seed_fill_list(self, acc: Mapping[str, Any]) -> None:
+        """ACCT_SEEDS_FILL_LIST: a successful account read's open-order
+        list becomes the fill poll's current list (same venue route, same
+        rows), dated to just before that request was sent. Only a list
+        NEWER than the one held replaces it. Never raises."""
+        if not (ACCT_SEEDS_FILL_LIST and FILL_LIST_POLL):
+            return
+        try:
+            at = acc.get("open_orders_read")
+            rows = acc.get("open_orders")
+            if not isinstance(at, Mapping) or not isinstance(rows, list):
+                return
+            mono, wall = float(at["mono"]), float(at["wall"])
+            cur = getattr(self, "_oo", None)
+            if cur is not None and float(cur.get("t") or 0) >= mono:
+                return
+            self._oo = {"t": mono, "wall": wall, "ok": True,
+                        "rows": {str(o.get("id")): o for o in rows
+                                 if isinstance(o, Mapping) and o.get("id")}}
+            st = self._fill_stats()
+            st["list_seeded"] = st.get("list_seeded", 0) + 1
+        except Exception:                                 # noqa: BLE001
+            pass
 
     def on_sigterm(self) -> None:
         """LIVE 2026-11-22T01:31Z: a SIGTERM arriving while the main loop
@@ -10782,6 +10885,12 @@ class Engine:
         _bud = getattr(getattr(self.v, "t", None), "budget", None)
         if _bud is not None:
             extra = dict(extra, venue_requests=_bud.report())
+        _gwr = getattr(self.v, "gateway_report", None)
+        if _gwr is not None:
+            try:
+                extra = dict(extra, gateway_requests=_gwr())
+            except Exception:                             # noqa: BLE001
+                pass
         _ls = lock_state()
         extra = dict(extra, safety_latch=self.b.d.get("safety_latch") or None)
         extra = dict(extra, loop=loop_report())
@@ -11436,7 +11545,7 @@ def start_combo_maker(venue: "Venue", eng: "Engine") -> Optional[Any]:
                     save()
             except Exception as exc:                     # noqa: BLE001
                 log("combo_maker_error", err=type(exc).__name__)
-            time.sleep(CM.POLL_S)
+            time.sleep(CM.poll_interval())
 
     th = threading.Thread(target=run, daemon=True, name="combo-maker")
     th.start()

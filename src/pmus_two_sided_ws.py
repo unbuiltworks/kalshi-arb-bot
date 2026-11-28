@@ -155,6 +155,13 @@ class TwoSidedWs:
         self.updates = 0
         self.ws_hits = 0
         self.fallbacks = 0
+        # REPORTING ONLY (2026-11-28 request audit): why the caller was sent
+        # to the gateway. "no_book" = this socket never carried the market
+        # (a candidate, a combo leg); "other_connection" = its last top came
+        # on an earlier connection and the market is no longer subscribed;
+        # "not_two_sided" = a one-sided or crossed top; "stale" = a
+        # subscribed market on a socket that has gone quiet.
+        self.fallback_why: Dict[str, int] = {}
         self.last_error: Optional[str] = None
         self._stale_logged: Dict[str, float] = {}
         self._stop = False
@@ -189,6 +196,13 @@ class TwoSidedWs:
                 self.ws_hits += 1
                 return {"bid": top["bid"], "ask": top["ask"]}
             self.fallbacks += 1
+            why = ("no_book" if top is None else
+                   "not_two_sided" if (top["bid"] is None or
+                                       top["ask"] is None or
+                                       top["ask"] <= top["bid"]) else
+                   "other_connection" if top["conn"] != self.conn_id
+                   else "stale")
+            self.fallback_why[why] = self.fallback_why.get(why, 0) + 1
         if top is not None and \
                 now - self._stale_logged.get(slug, -1e9) >= STALE_LOG_S:
             self._stale_logged[slug] = now
@@ -207,6 +221,7 @@ class TwoSidedWs:
                                          else round(now - self.last_frame_t, 2)),
                     "ws_bbo_hits": self.ws_hits,
                     "gateway_fallbacks": self.fallbacks,
+                    "gateway_fallbacks_by_cause": dict(self.fallback_why),
                     "last_error": self.last_error}
 
     # ---------------------------------------------------- feed side

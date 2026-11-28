@@ -58,6 +58,38 @@ def classify(method: str, path: str) -> str:
     return "research"
 
 
+_ROUTE_RULES = (
+    (re.compile(r"^/v1/order/[^/]+/cancel$"), "/v1/order/:id/cancel"),
+    (re.compile(r"^/v1/order/preview$"), "/v1/order/preview"),
+    (re.compile(r"^/v1/order/[^/]+$"), "/v1/order/:id"),
+    (re.compile(r"^/v1/markets/[^/]+/(bbo|book)$"), r"/v1/markets/:slug/\1"),
+    (re.compile(r"^/v1/market/slug/[^/]+$"), "/v1/market/slug/:slug"),
+    (re.compile(r"^/v1/rfqs/[^/]+/quotes/[^/]+/confirm$"),
+     "/v1/rfqs/:id/quotes/:id/confirm"),
+    (re.compile(r"^/v1/rfqs/[^/]+/quotes/[^/]+$"), "/v1/rfqs/:id/quotes/:id"),
+)
+ROUTE_FAMILIES_MAX = 64
+
+
+def route_family(method: str, path: str) -> str:
+    """"GET /v1/order/:id": the request's route with ids, slugs and the
+    query removed, so a counter per route stays small. Reporting only."""
+    p = str(path).split("?", 1)[0].rstrip("/") or "/"
+    for rx, rep in _ROUTE_RULES:
+        if rx.match(p):
+            p = rx.sub(rep, p)
+            break
+    return "%s %s" % (str(method).upper(), p)
+
+
+def count_route(table: Dict[str, int], key: str) -> None:
+    """Bounded counter: an unexpected flood of distinct routes lands in
+    "other" instead of growing the heartbeat."""
+    if key not in table and len(table) >= ROUTE_FAMILIES_MAX:
+        key = "other"
+    table[key] = table.get(key, 0) + 1
+
+
 def _is_429(exc: BaseException) -> bool:
     code = getattr(exc, "code", None) or getattr(exc, "status", None)
     return code == 429 or "429" in str(exc)
@@ -83,7 +115,12 @@ class RequestBudget:
         self.stats = {"sent": {"critical": 0, "safety": 0, "normal": 0,
                                "research": 0},
                       "deferred": {"safety": 0, "normal": 0, "research": 0},
-                      "http_429": 0, "cooldowns": 0, "critical_in_cooldown": 0}
+                      "http_429": 0, "cooldowns": 0, "critical_in_cooldown": 0,
+                      # REPORTING ONLY (2026-11-28 request audit): what was
+                      # handed to the venue, deferred, and answered 429, per
+                      # route family. Nothing reads these to decide anything.
+                      "by_route": {}, "deferred_by_route": {},
+                      "http_429_by_route": {}}
         self._t0 = clock()
 
     def _refill(self) -> None:
@@ -172,6 +209,15 @@ class RequestBudget:
                                      "(shared budget / 429 cool-down)")
             self.sleep(min(max(wait, 0.05), 0.5))
 
+    def note_route(self, table: str, method: str, path: str) -> None:
+        """Count one request in a per-route table. Never raises."""
+        try:
+            key = route_family(method, path)
+            with self._lock:
+                count_route(self.stats[table], key)
+        except Exception:                                 # noqa: BLE001
+            pass
+
     def note_429(self) -> None:
         with self._lock:
             self.stats["http_429"] += 1
@@ -247,12 +293,22 @@ class GovernedTransport:
         cls = "critical" if want == "critical" else classify(method, path)
         if cls != "critical" and self.budget.in_safety():
             cls = "safety"
-        self.budget.acquire(cls)
+        note = getattr(self.budget, "note_route", None)
+        try:
+            self.budget.acquire(cls)
+        except BudgetDeferred:
+            if note is not None:
+                note("deferred_by_route", method, path)
+            raise
+        if note is not None:
+            note("by_route", method, path)
         try:
             return self._inner.request(method, path, *a, **kw)
         except Exception as exc:                          # noqa: BLE001
             if _is_429(exc):
                 self.budget.note_429()
+                if note is not None:
+                    note("http_429_by_route", method, path)
             raise
 
     def __getattr__(self, name: str) -> Any:
