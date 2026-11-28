@@ -3048,6 +3048,14 @@ class Venue:
         self._spec: Dict[str, Any] = {}
 
     def gget(self, path: str) -> Any:
+        # Count actual public gateway attempts separately from WS misses
+        # and signed request-budget telemetry. No caching of execution BBO.
+        counts = self.__dict__.setdefault("_public_get_counts", {})
+        kind = ("bbo" if path.endswith("/bbo") else
+                "book" if path.endswith("/book") else
+                "events" if path.startswith("/v1/events?") else
+                "spec" if path.startswith("/v1/market/slug/") else "other")
+        counts[kind] = counts.get(kind, 0) + 1
         return self.gw.http_get_json(path)
 
     states: Dict[str, Any] = {}
