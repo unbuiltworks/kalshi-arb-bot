@@ -4,21 +4,21 @@
  "assets": {
   "btc": {
    "integrity": {
-    "windows": 505,
+    "windows": 506,
     "chain_settle_eq_next_ptb": [
-     503,
-     503
+     504,
+     504
     ],
     "outcome_matches_ge_rule": [
-     505,
-     505
+     506,
+     506
     ],
     "exact_ties": 0,
     "hourly_ptb_eq_5m_ptb": [
-     336,
-     336
+     337,
+     337
     ],
-    "up_rate": 0.4416
+    "up_rate": 0.4407
    },
    "vol_train": {
     "windows": 168,
@@ -26,116 +26,116 @@
     "train_end": "2026-11-14T17:00:00+00:00"
    },
    "vol_test": {
-    "windows": 337,
-    "realized_annual_vol": 0.6977,
-    "z_std": 1.556,
-    "frac_abs_z_lt_1": 0.685,
-    "frac_abs_z_lt_2": 0.884,
+    "windows": 338,
+    "realized_annual_vol": 0.6968,
+    "z_std": 1.554,
+    "frac_abs_z_lt_1": 0.686,
+    "frac_abs_z_lt_2": 0.885,
     "normal_ref": [
      0.683,
      0.954
     ],
-    "ewma_z_std": 1.106,
+    "ewma_z_std": 1.105,
     "ewma_frac_abs_z_lt_2": 0.95
    },
    "test_checkpoints": {
-    "windows": 336,
+    "windows": 337,
     "model_const_vol": {
-     "n": 3694,
-     "brier": 0.15802,
-     "log_loss": 0.48035
+     "n": 3705,
+     "brier": 0.15773,
+     "log_loss": 0.47968
     },
     "model_ewma_vol": {
-     "n": 3694,
-     "brier": 0.16197,
-     "log_loss": 0.48508
+     "n": 3705,
+     "brier": 0.16172,
+     "log_loss": 0.48455
     },
     "coin_flip_0.5": {
-     "n": 3694,
+     "n": 3705,
      "brier": 0.25,
      "log_loss": 0.69315
     },
     "by_minute_const": {
      "5": {
-      "n": 335,
-      "brier": 0.21926,
-      "log_loss": 0.6337
+      "n": 336,
+      "brier": 0.21935,
+      "log_loss": 0.63388
      },
      "10": {
-      "n": 335,
-      "brier": 0.20879,
-      "log_loss": 0.6058
+      "n": 336,
+      "brier": 0.20844,
+      "log_loss": 0.60506
      },
      "15": {
-      "n": 336,
-      "brier": 0.19763,
-      "log_loss": 0.57579
+      "n": 337,
+      "brier": 0.19721,
+      "log_loss": 0.57489
      },
      "20": {
-      "n": 336,
-      "brier": 0.19508,
-      "log_loss": 0.58231
+      "n": 337,
+      "brier": 0.19462,
+      "log_loss": 0.58122
      },
      "25": {
-      "n": 336,
-      "brier": 0.17858,
-      "log_loss": 0.54159
+      "n": 337,
+      "brier": 0.17827,
+      "log_loss": 0.54093
      },
      "30": {
-      "n": 336,
-      "brier": 0.16902,
-      "log_loss": 0.52132
+      "n": 337,
+      "brier": 0.16865,
+      "log_loss": 0.52047
      },
      "35": {
-      "n": 336,
-      "brier": 0.15041,
-      "log_loss": 0.46225
+      "n": 337,
+      "brier": 0.1501,
+      "log_loss": 0.46158
      },
      "40": {
-      "n": 336,
-      "brier": 0.13243,
-      "log_loss": 0.40231
+      "n": 337,
+      "brier": 0.13211,
+      "log_loss": 0.40163
      },
      "45": {
-      "n": 336,
-      "brier": 0.12015,
-      "log_loss": 0.39428
+      "n": 337,
+      "brier": 0.11985,
+      "log_loss": 0.39353
      },
      "50": {
-      "n": 336,
-      "brier": 0.09568,
-      "log_loss": 0.31206
+      "n": 337,
+      "brier": 0.09544,
+      "log_loss": 0.3115
      },
      "55": {
-      "n": 336,
-      "brier": 0.07149,
-      "log_loss": 0.25327
+      "n": 337,
+      "brier": 0.07128,
+      "log_loss": 0.25261
      }
     },
     "calibration_const": [
      {
       "bin": "0.0-0.1",
-      "n": 608,
+      "n": 609,
       "mean_p": 0.026,
       "freq_up": 0.043
      },
      {
       "bin": "0.1-0.2",
-      "n": 245,
+      "n": 249,
       "mean_p": 0.15,
-      "freq_up": 0.135
+      "freq_up": 0.133
      },
      {
       "bin": "0.2-0.3",
-      "n": 331,
+      "n": 335,
       "mean_p": 0.255,
-      "freq_up": 0.202
+      "freq_up": 0.2
      },
      {
       "bin": "0.3-0.4",
-      "n": 367,
+      "n": 368,
       "mean_p": 0.352,
-      "freq_up": 0.327
+      "freq_up": 0.326
      },
      {
       "bin": "0.4-0.5",
@@ -145,9 +145,9 @@
      },
      {
       "bin": "0.5-0.6",
-      "n": 438,
-      "mean_p": 0.545,
-      "freq_up": 0.498
+      "n": 439,
+      "mean_p": 0.544,
+      "freq_up": 0.497
      },
      {
       "bin": "0.6-0.7",
@@ -178,21 +178,21 @@
   },
   "eth": {
    "integrity": {
-    "windows": 505,
+    "windows": 506,
     "chain_settle_eq_next_ptb": [
-     503,
-     503
+     504,
+     504
     ],
     "outcome_matches_ge_rule": [
-     505,
-     505
+     506,
+     506
     ],
     "exact_ties": 0,
     "hourly_ptb_eq_5m_ptb": [
-     336,
-     336
+     337,
+     337
     ],
-    "up_rate": 0.4574
+    "up_rate": 0.4565
    },
    "vol_train": {
     "windows": 168,
@@ -200,90 +200,90 @@
     "train_end": "2026-11-14T17:00:00+00:00"
    },
    "vol_test": {
-    "windows": 337,
-    "realized_annual_vol": 0.8085,
-    "z_std": 1.264,
-    "frac_abs_z_lt_1": 0.795,
+    "windows": 338,
+    "realized_annual_vol": 0.8073,
+    "z_std": 1.262,
+    "frac_abs_z_lt_1": 0.796,
     "frac_abs_z_lt_2": 0.944,
     "normal_ref": [
      0.683,
      0.954
     ],
-    "ewma_z_std": 1.103,
-    "ewma_frac_abs_z_lt_2": 0.961
+    "ewma_z_std": 1.101,
+    "ewma_frac_abs_z_lt_2": 0.962
    },
    "test_checkpoints": {
-    "windows": 337,
+    "windows": 338,
     "model_const_vol": {
-     "n": 3694,
-     "brier": 0.15488,
-     "log_loss": 0.4686
+     "n": 3705,
+     "brier": 0.15478,
+     "log_loss": 0.46847
     },
     "model_ewma_vol": {
-     "n": 3694,
-     "brier": 0.1591,
-     "log_loss": 0.47926
+     "n": 3705,
+     "brier": 0.15897,
+     "log_loss": 0.47905
     },
     "coin_flip_0.5": {
-     "n": 3694,
+     "n": 3705,
      "brier": 0.25,
      "log_loss": 0.69315
     },
     "by_minute_const": {
      "5": {
-      "n": 336,
-      "brier": 0.21857,
-      "log_loss": 0.62758
+      "n": 337,
+      "brier": 0.21874,
+      "log_loss": 0.62793
      },
      "10": {
-      "n": 335,
-      "brier": 0.2072,
-      "log_loss": 0.60128
+      "n": 336,
+      "brier": 0.20707,
+      "log_loss": 0.60104
      },
      "15": {
-      "n": 335,
-      "brier": 0.20535,
-      "log_loss": 0.59302
+      "n": 336,
+      "brier": 0.20515,
+      "log_loss": 0.59265
      },
      "20": {
-      "n": 336,
-      "brier": 0.19642,
-      "log_loss": 0.58062
+      "n": 337,
+      "brier": 0.19612,
+      "log_loss": 0.58
      },
      "25": {
-      "n": 336,
-      "brier": 0.17556,
-      "log_loss": 0.52957
+      "n": 337,
+      "brier": 0.17551,
+      "log_loss": 0.52949
      },
      "30": {
-      "n": 336,
-      "brier": 0.16426,
-      "log_loss": 0.52486
+      "n": 337,
+      "brier": 0.16411,
+      "log_loss": 0.52453
      },
      "35": {
-      "n": 336,
-      "brier": 0.14846,
-      "log_loss": 0.44993
+      "n": 337,
+      "brier": 0.14828,
+      "log_loss": 0.44964
      },
      "40": {
-      "n": 336,
-      "brier": 0.12541,
-      "log_loss": 0.38774
+      "n": 337,
+      "brier": 0.12528,
+      "log_loss": 0.38758
      },
      "45": {
-      "n": 336,
-      "brier": 0.10618,
-      "log_loss": 0.35369
+      "n": 337,
+      "brier": 0.10611,
+      "log_loss": 0.35364
      },
      "50": {
-      "n": 336,
-      "brier": 0.09368,
-      "log_loss": 0.30098
+      "n": 337,
+      "brier": 0.0937,
+      "log_loss": 0.30122
      },
      "55": {
-      "n": 336,
-      "brier": 0.06292,
-      "log_loss": 0.20611
+      "n": 337,
+      "brier": 0.06287,
+      "log_loss": 0.2062
      }
     },
     "calibration_const": [
@@ -301,27 +301,27 @@
      },
      {
       "bin": "0.2-0.3",
-      "n": 285,
-      "mean_p": 0.248,
-      "freq_up": 0.14
+      "n": 289,
+      "mean_p": 0.249,
+      "freq_up": 0.138
      },
      {
       "bin": "0.3-0.4",
-      "n": 400,
+      "n": 405,
       "mean_p": 0.353,
-      "freq_up": 0.3
+      "freq_up": 0.296
      },
      {
       "bin": "0.4-0.5",
-      "n": 567,
+      "n": 568,
       "mean_p": 0.452,
-      "freq_up": 0.416
+      "freq_up": 0.415
      },
      {
       "bin": "0.5-0.6",
-      "n": 564,
+      "n": 565,
       "mean_p": 0.545,
-      "freq_up": 0.576
+      "freq_up": 0.575
      },
      {
       "bin": "0.6-0.7",
@@ -352,21 +352,21 @@
   },
   "sol": {
    "integrity": {
-    "windows": 505,
+    "windows": 506,
     "chain_settle_eq_next_ptb": [
-     503,
-     503
+     504,
+     504
     ],
     "outcome_matches_ge_rule": [
-     505,
-     505
+     506,
+     506
     ],
     "exact_ties": 0,
     "hourly_ptb_eq_5m_ptb": [
-     335,
-     335
+     336,
+     336
     ],
-    "up_rate": 0.4713
+    "up_rate": 0.4723
    },
    "vol_train": {
     "windows": 168,
@@ -374,90 +374,90 @@
     "train_end": "2026-11-14T17:00:00+00:00"
    },
    "vol_test": {
-    "windows": 337,
-    "realized_annual_vol": 0.8475,
-    "z_std": 1.267,
-    "frac_abs_z_lt_1": 0.733,
+    "windows": 338,
+    "realized_annual_vol": 0.8462,
+    "z_std": 1.265,
+    "frac_abs_z_lt_1": 0.734,
     "frac_abs_z_lt_2": 0.92,
     "normal_ref": [
      0.683,
      0.954
     ],
-    "ewma_z_std": 1.047,
-    "ewma_frac_abs_z_lt_2": 0.958
+    "ewma_z_std": 1.045,
+    "ewma_frac_abs_z_lt_2": 0.959
    },
    "test_checkpoints": {
-    "windows": 336,
+    "windows": 337,
     "model_const_vol": {
-     "n": 3695,
-     "brier": 0.148,
-     "log_loss": 0.44628
+     "n": 3706,
+     "brier": 0.1484,
+     "log_loss": 0.44722
     },
     "model_ewma_vol": {
-     "n": 3695,
-     "brier": 0.15182,
-     "log_loss": 0.45838
+     "n": 3706,
+     "brier": 0.15223,
+     "log_loss": 0.45931
     },
     "coin_flip_0.5": {
-     "n": 3695,
+     "n": 3706,
      "brier": 0.25,
      "log_loss": 0.69315
     },
     "by_minute_const": {
      "5": {
-      "n": 335,
-      "brier": 0.22319,
-      "log_loss": 0.63649
+      "n": 336,
+      "brier": 0.22309,
+      "log_loss": 0.63631
      },
      "10": {
-      "n": 336,
-      "brier": 0.21405,
-      "log_loss": 0.61547
+      "n": 337,
+      "brier": 0.21427,
+      "log_loss": 0.61591
      },
      "15": {
-      "n": 336,
-      "brier": 0.20004,
-      "log_loss": 0.57965
+      "n": 337,
+      "brier": 0.20042,
+      "log_loss": 0.58046
      },
      "20": {
-      "n": 336,
-      "brier": 0.18897,
-      "log_loss": 0.5582
+      "n": 337,
+      "brier": 0.1896,
+      "log_loss": 0.55952
      },
      "25": {
-      "n": 336,
-      "brier": 0.16786,
-      "log_loss": 0.50205
+      "n": 337,
+      "brier": 0.16827,
+      "log_loss": 0.50296
      },
      "30": {
-      "n": 336,
-      "brier": 0.14614,
-      "log_loss": 0.44851
+      "n": 337,
+      "brier": 0.14666,
+      "log_loss": 0.44966
      },
      "35": {
-      "n": 336,
-      "brier": 0.13178,
-      "log_loss": 0.40708
+      "n": 337,
+      "brier": 0.13228,
+      "log_loss": 0.40822
      },
      "40": {
-      "n": 336,
-      "brier": 0.11578,
-      "log_loss": 0.36438
+      "n": 337,
+      "brier": 0.11628,
+      "log_loss": 0.36556
      },
      "45": {
-      "n": 336,
-      "brier": 0.1094,
-      "log_loss": 0.36699
+      "n": 337,
+      "brier": 0.10991,
+      "log_loss": 0.36815
      },
      "50": {
-      "n": 336,
-      "brier": 0.07905,
-      "log_loss": 0.2583
+      "n": 337,
+      "brier": 0.07948,
+      "log_loss": 0.25945
      },
      "55": {
-      "n": 336,
-      "brier": 0.05192,
-      "log_loss": 0.17254
+      "n": 337,
+      "brier": 0.05238,
+      "log_loss": 0.17383
      }
     },
     "calibration_const": [
@@ -481,21 +481,21 @@
      },
      {
       "bin": "0.3-0.4",
-      "n": 405,
+      "n": 406,
       "mean_p": 0.352,
-      "freq_up": 0.259
+      "freq_up": 0.261
      },
      {
       "bin": "0.4-0.5",
-      "n": 504,
+      "n": 511,
       "mean_p": 0.451,
-      "freq_up": 0.395
+      "freq_up": 0.403
      },
      {
       "bin": "0.5-0.6",
-      "n": 507,
+      "n": 510,
       "mean_p": 0.548,
-      "freq_up": 0.55
+      "freq_up": 0.553
      },
      {
       "bin": "0.6-0.7",
@@ -526,21 +526,21 @@
   },
   "xrp": {
    "integrity": {
-    "windows": 505,
+    "windows": 506,
     "chain_settle_eq_next_ptb": [
-     503,
-     503
+     504,
+     504
     ],
     "outcome_matches_ge_rule": [
-     505,
-     505
+     506,
+     506
     ],
     "exact_ties": 0,
     "hourly_ptb_eq_5m_ptb": [
-     335,
-     335
+     336,
+     336
     ],
-    "up_rate": 0.4713
+    "up_rate": 0.4704
    },
    "vol_train": {
     "windows": 168,
@@ -548,90 +548,90 @@
     "train_end": "2026-11-14T17:00:00+00:00"
    },
    "vol_test": {
-    "windows": 337,
-    "realized_annual_vol": 0.8017,
-    "z_std": 1.253,
-    "frac_abs_z_lt_1": 0.724,
+    "windows": 338,
+    "realized_annual_vol": 0.8006,
+    "z_std": 1.251,
+    "frac_abs_z_lt_1": 0.725,
     "frac_abs_z_lt_2": 0.926,
     "normal_ref": [
      0.683,
      0.954
     ],
-    "ewma_z_std": 1.057,
+    "ewma_z_std": 1.055,
     "ewma_frac_abs_z_lt_2": 0.953
    },
    "test_checkpoints": {
-    "windows": 336,
+    "windows": 337,
     "model_const_vol": {
-     "n": 3695,
-     "brier": 0.139,
-     "log_loss": 0.42627
+     "n": 3706,
+     "brier": 0.13908,
+     "log_loss": 0.42655
     },
     "model_ewma_vol": {
-     "n": 3695,
-     "brier": 0.14387,
-     "log_loss": 0.44342
+     "n": 3706,
+     "brier": 0.14391,
+     "log_loss": 0.4436
     },
     "coin_flip_0.5": {
-     "n": 3695,
+     "n": 3706,
      "brier": 0.25,
      "log_loss": 0.69315
     },
     "by_minute_const": {
      "5": {
-      "n": 335,
-      "brier": 0.21792,
-      "log_loss": 0.62608
+      "n": 336,
+      "brier": 0.21818,
+      "log_loss": 0.6266
      },
      "10": {
-      "n": 336,
-      "brier": 0.20073,
-      "log_loss": 0.58864
+      "n": 337,
+      "brier": 0.2007,
+      "log_loss": 0.5886
      },
      "15": {
-      "n": 336,
-      "brier": 0.18224,
-      "log_loss": 0.54247
+      "n": 337,
+      "brier": 0.18218,
+      "log_loss": 0.5424
      },
      "20": {
-      "n": 336,
-      "brier": 0.1709,
-      "log_loss": 0.51409
+      "n": 337,
+      "brier": 0.17077,
+      "log_loss": 0.51388
      },
      "25": {
-      "n": 336,
-      "brier": 0.15594,
-      "log_loss": 0.47249
+      "n": 337,
+      "brier": 0.15609,
+      "log_loss": 0.47289
      },
      "30": {
-      "n": 336,
-      "brier": 0.14388,
-      "log_loss": 0.44081
+      "n": 337,
+      "brier": 0.14396,
+      "log_loss": 0.44109
      },
      "35": {
-      "n": 336,
-      "brier": 0.12301,
-      "log_loss": 0.39231
+      "n": 337,
+      "brier": 0.12309,
+      "log_loss": 0.39261
      },
      "40": {
-      "n": 336,
-      "brier": 0.10734,
-      "log_loss": 0.35432
+      "n": 337,
+      "brier": 0.10743,
+      "log_loss": 0.35464
      },
      "45": {
-      "n": 336,
-      "brier": 0.09449,
-      "log_loss": 0.32457
+      "n": 337,
+      "brier": 0.09467,
+      "log_loss": 0.32509
      },
      "50": {
-      "n": 336,
-      "brier": 0.07715,
-      "log_loss": 0.25608
+      "n": 337,
+      "brier": 0.07736,
+      "log_loss": 0.25676
      },
      "55": {
-      "n": 336,
-      "brier": 0.05558,
-      "log_loss": 0.17773
+      "n": 337,
+      "brier": 0.05563,
+      "log_loss": 0.17813
      }
     },
     "calibration_const": [
@@ -649,27 +649,27 @@
      },
      {
       "bin": "0.2-0.3",
-      "n": 303,
+      "n": 304,
       "mean_p": 0.252,
-      "freq_up": 0.162
+      "freq_up": 0.161
      },
      {
       "bin": "0.3-0.4",
-      "n": 405,
+      "n": 410,
       "mean_p": 0.352,
-      "freq_up": 0.281
+      "freq_up": 0.278
      },
      {
       "bin": "0.4-0.5",
-      "n": 458,
+      "n": 462,
       "mean_p": 0.45,
-      "freq_up": 0.437
+      "freq_up": 0.433
      },
      {
       "bin": "0.5-0.6",
-      "n": 434,
+      "n": 435,
       "mean_p": 0.548,
-      "freq_up": 0.604
+      "freq_up": 0.602
      },
      {
       "bin": "0.6-0.7",
@@ -700,23 +700,23 @@
   }
  },
  "venue_compare": {
-  "windows": 4,
-  "checkpoints": 37,
+  "windows": 8,
+  "checkpoints": 80,
   "model": {
-   "n": 37,
-   "brier": 0.18237,
-   "log_loss": 0.55042
+   "n": 80,
+   "brier": 0.17121,
+   "log_loss": 0.52383
   },
   "venue_mid": {
-   "n": 37,
-   "brier": 0.13566,
-   "log_loss": 0.4235
+   "n": 80,
+   "brier": 0.13111,
+   "log_loss": 0.40911
   },
-  "mean_abs_model_minus_mid": 0.107,
+  "mean_abs_model_minus_mid": 0.1165,
   "maker_edge_THEORETICAL": {
    "edge_min": 0.03,
-   "signals": 34,
-   "mean_payoff_per_contract": -0.05,
+   "signals": 76,
+   "mean_payoff_per_contract": 0.0022,
    "assumptions": "every signal filled at our best price, no queue, no adverse selection, maker fee 0, no rebate/reward; upper bound, NOT P&L"
   },
   "labels": "THEORETICAL"

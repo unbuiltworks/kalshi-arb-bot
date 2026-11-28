@@ -4,7 +4,7 @@
  "files": {
   "hourly_<asset>.jsonl.gz": "GET /v1/market/slug/<p>-updown-1h-<YYYY-MM-DD-HHMM>z for every hour 2026-11-07T17Z .. 2026-11-28 (resolved); fields from market.assetPriceTerms: windowStart (ws), windowEnd (we), indexSymbol (idx), priceToBeat (ptb), settlementPrice (settle); market.outcomePrices ([1,0] = Up). 'desc' kept on a sample of rows.",
   "5m_<asset>.jsonl.gz": "same read for the 5m series every 5 minutes 2026-11-14T17Z .. ; their ptb is the venue's official 60-print CF Benchmarks average at each 5-minute mark. rows with http=404: the venue listed no market for that slot.",
-  "hourly_books_live.jsonl.gz": "bounded live capture, about every 20 s, of GET /v1/markets/<hourly slug>/book top of book for the current hour (gap ~18:33-18:36Z while the capture restarted)."
+  "hourly_books_live.jsonl.gz": "bounded live capture, about every 20 s, of GET /v1/markets/<hourly slug>/book top of book for the current hour (18:03-19:57Z; gap ~18:33-18:36Z while the capture restarted)."
  },
  "assets": {"btc": "cpc-btc / BRTI", "eth": "cpceth-eth / ETHUSD_RTI", "sol": "cpcsol-sol / SOLUSD_RTI", "xrp": "cpcxrp-xrp / XRPUSD_RTI"},
  "not_available": "CF Benchmarks RTI prints themselves (cfbenchmarks.com and exchange spot APIs are refused by this sandbox's proxy); historical venue books for hourly windows before this capture"
