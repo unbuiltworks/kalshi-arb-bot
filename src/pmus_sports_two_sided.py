@@ -6060,6 +6060,7 @@ class Engine:
         r = getattr(self, "_crypto_meter", None) or {}
         log("CRYPTO_PNL", ok=True, loss_stop=self._crypto_state()["loss_stop"],
             loss_stop_usd=str(CR.LOSS_STOP_USD), **rep,
+            attribution=self.crypto_attribution(),
             by_market=r.get("by_market"),
             modelled_by_market={s: mk.get("crypto_model") for s, mk in
                                 CR.lane_markets(markets).items()
@@ -6095,6 +6096,7 @@ class Engine:
                 "feed": self._crypto_feed().stats(),
                 "tape": (self._crypto_tape().stats()
                          if self._crypto_tape() is not None else None),
+                "attribution": self.crypto_attribution(),
                 "label": "modelled reward is not money; see CRYPTO_PNL"}
 
     def crypto_block(self, slug: str, mk: Mapping[str, Any],
@@ -6136,11 +6138,41 @@ class Engine:
         days = self._crypto_state()["days"]
         if CR.day_key(slug) not in days and len(days) >= CR.MARKET_DAYS:
             return "pilot_market_days_used"
-        why = CR.late(mk.get("end"), now)
+        why = CR.late_for(slug, mk, now)
         if why:
             return "late:" + why
         if not mk.get("reward"):
             return "no_paying_program"
+        if CR.RA_ON:
+            return self.crypto_ra_block(slug, mk, now)
+        return None
+
+    def crypto_ra_block(self, slug: str, mk: Mapping[str, Any],
+                        now: float) -> Optional[str]:
+        """Reward-aware mode's own reasons to hold NEW quotes back: the
+        window has only just started, a jump pause is running, or the
+        venue's reference index (read by the feed thread; a cache lookup
+        here) is missing or has just moved. No fair value, no forecast:
+        the hourly directional model takes no part."""
+        try:
+            ws = CR._ts(mk.get("window_start"))
+            if ws is None:
+                return "crypto_window_start_unknown"
+            if now < ws + CR.RA_OPEN_DELAY_S:
+                return "ra_open_delay"
+            if now < float(mk.get("jump_pause_until") or 0):
+                return "jump_pause"
+            series, _age = self._crypto_feed().index(
+                CR.asset_of(slug) or "")
+            why = CR.index_jump(series, now)
+            if why == "index_stale":
+                return why if CR.RA_REQUIRE_INDEX else None
+            if why:
+                if isinstance(mk, dict):
+                    mk["jump_pause_until"] = now + CR.RA_JUMP_PAUSE_S
+                return why
+        except Exception as exc:                          # noqa: BLE001
+            return "ra_state_unreadable:" + type(exc).__name__
         return None
 
     def crypto_place_block(self, slug: str, side: str, px: D, qty: D,
@@ -6177,8 +6209,10 @@ class Engine:
             if need <= 0 or resting + D(str(qty)) > need + D("0.01"):
                 return "completion_would_not_reduce"
             return None
-        if y != n:
-            return "opening_while_unpaired"
+        if y != n and not (CR.RA_ON and CR.ra_extend_ok(
+                {"YES": y, "NO": n}, side, qty)):
+            return "ra_unpaired_cap" if CR.RA_ON \
+                else "opening_while_unpaired"
         if D(str(qty)) > CR.QTY:
             return "qty_over_cap"
         gl = self.crypto_global_limits()
@@ -6255,6 +6289,8 @@ class Engine:
                 why = "foreign_exposure"
             elif not progs.get(slug):
                 why = "no_paying_program"
+            elif CR.RA_ON:
+                why = CR.ra_identity_block(slug, tg.get("terms"))
             if why:
                 seen = self.__dict__.setdefault("_crypto_skip", {})
                 if seen.get(slug) != why:
@@ -6265,12 +6301,24 @@ class Engine:
             mk["lane"] = CR.LANE
             mk["reward"] = progs[slug]
             mk["end"] = tg.get("end")
+            mk["window_start"] = tg.get("window_start")
+            mk["window_end"] = tg.get("window_end")
             log("CRYPTO_SELECTED", slug=slug, end=mk["end"],
+                window_end=mk["window_end"],
                 program=progs[slug], arm=CR.arm_state(time.time()),
                 label="selected into the crypto lane; orders only if armed "
                       "and every gate allows")
         feed.watch(s for s in self.active() if CR.tradable(s))
         self.b.save()
+
+    def crypto_attribution(self) -> Dict[str, Any]:
+        """The crypto lane's own economics by series, apart from sports
+        (CR.attribution). Never raises."""
+        try:
+            return CR.attribution(self.b.d.get("markets") or {},
+                                  getattr(self, "_crypto_rewards", None))
+        except Exception as exc:                          # noqa: BLE001
+            return {"lane": CR.LANE, "error": type(exc).__name__}
 
     def _crypto_quote_cfg(self) -> Optional[Dict[str, Any]]:
         """Pair ceilings no looser than the account's global pair cap, so a
@@ -6281,7 +6329,10 @@ class Engine:
             return None
         return {"pair_cap": str(min(CR.PAIR_CAP, gl["pair_cap"])),
                 "complete_max_pair": str(min(CR.COMPLETE_MAX_PAIR,
-                                             gl["pair_cap"]))}
+                                             gl["pair_cap"])),
+                # reward-aware sizing reads the account's clip; the older
+                # mode ignores this key and refuses a QTY above the clip
+                "clip": str(gl["clip"])}
 
     def _crypto_stale(self, slug: str, mk: Dict[str, Any], why: str,
                       age: Optional[float] = None, pull_all: bool = False
@@ -6492,6 +6543,16 @@ class Engine:
                 locked_edge_per_pair=ONE - cpair, mode="crypto",
                 label="locked pair economics; realized at settlement")
         mid = (D(str(bbo["bid"])) + D(str(bbo["ask"]))) / 2
+        if CR.RA_ON and mk.get("crypto_mid") is not None:
+            # venue-mid jump, with the engine's existing jump thresholds
+            # and pause (crypto books do not pass through on_bbo)
+            moved = abs(mid - D(str(mk["crypto_mid"])))
+            if moved >= JUMP_TICKS * D(str(tick)) and moved >= JUMP_MIN_PX:
+                mk["jump_pause_until"] = now + JUMP_PAUSE_S
+                self.jump_pauses += 1
+                log("jump_pause", slug=slug, mode="crypto",
+                    prev=mk["crypto_mid"], new=str(mid),
+                    pause_s=JUMP_PAUSE_S)
         mk["crypto_mid"] = str(mid)
         CR.update_markouts(mk, mid, now)
         self._crypto_accrue(mk, now)
@@ -6516,12 +6577,21 @@ class Engine:
             # the budget cannot be computed from the book: no new risk
             leg, block = D(0), block or (
                 "crypto_loss_budget_unreadable:" + type(exc).__name__)
-        q = CR.quotes(book_md=book, program=mk.get("reward"), tick=tick,
-                      pos=mk["pos"], cost=mk["cost"], resting=resting,
-                      min_qty=spec["min_qty"],
-                      capital_used=CR.market_capital(
-                          {**mk, "orders": {}})["filled"],
-                      max_leg_usd=leg, c=self._crypto_quote_cfg())
+        qargs = dict(book_md=book, program=mk.get("reward"), tick=tick,
+                     pos=mk["pos"], cost=mk["cost"], resting=resting,
+                     min_qty=spec["min_qty"],
+                     capital_used=CR.market_capital(
+                         {**mk, "orders": {}})["filled"],
+                     max_leg_usd=leg, c=self._crypto_quote_cfg())
+        if CR.RA_ON:
+            # reward-aware mode: same controller, its own pricing rule.
+            # The paid fraction is the account's measured PAID share of
+            # resolved reward value; unknown credits nothing.
+            q = CR.ra_quotes(slug=slug, seconds_left=CR.seconds_left(
+                mk.get("window_end"), now),
+                paid_fraction=rn1_paid_fraction() or 0, **qargs)
+        else:
+            q = CR.quotes(**qargs)
         self._crypto_observe(slug, mk, book, tick, resting, q, block,
                              arm["armed"])
         want: Dict[str, Any] = {}
@@ -6563,8 +6633,9 @@ class Engine:
                 dw = self.depth_block(slug, s_)
                 if dw:
                     want[s_], why[s_] = None, "depth:" + dw
-        if CR.REQUIRE_BOTH and sum(1 for t_ in want.values() if t_ and
-                                   t_["role"] == "open") == 1:
+        if CR.REQUIRE_BOTH and not (CR.RA_ON and y != n) and \
+                sum(1 for t_ in want.values() if t_ and
+                    t_["role"] == "open") == 1:
             for side in ("YES", "NO"):
                 if want[side] and want[side]["role"] == "open":
                     want[side] = None
@@ -6592,6 +6663,7 @@ class Engine:
                           "usd_day": model.get("usd_day"),
                           "markets_sharing_pool":
                               model.get("markets_sharing_pool")},
+                reward_aware=q.get("ra") if CR.RA_ON else None,
                 label="crypto reward lane decision; orders only if armed "
                       "and every gate allows. Modelled figures are not "
                       "money")

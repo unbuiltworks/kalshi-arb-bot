@@ -16,6 +16,10 @@ Reads (all public, unsigned, GET):
   events list + incentive programmes   every DISCOVER_S
   market spec (open / tick / min qty)  every SPEC_S per watched market
   depth                                every BOOK_S per watched market
+  reference index, 1-second candles    every BOOK_S, reward-aware mode only
+                                       (/v1/asset-prices/history: the venue's
+                                       own public copy of the settlement
+                                       index; no exchange or vendor feed)
 
 No orders, no credentials, no signed transport. Nothing here can place or
 cancel.
@@ -48,6 +52,8 @@ class CryptoFeed:
         self._spec: Dict[str, tuple] = {}       # slug -> (t, spec | None)
         self._targets: Optional[tuple] = None   # (t, [targets])
         self._progs: Optional[tuple] = None     # (t, {slug: period})
+        self._index: Dict[str, tuple] = {}      # asset -> (t, [(ts, px)])
+        self._index_at = -1e18
         self._thread: Optional[threading.Thread] = None
         self.stop = False
         self.errors = 0
@@ -92,6 +98,41 @@ class CryptoFeed:
         return ({}, float("inf")) if hit is None else \
             (dict(hit[1]), self._age(hit[0]))
 
+    def index(self, asset: str) -> tuple:
+        """([(unix seconds, price)], age seconds) of the reference index
+        for one asset, as last read. Empty and infinitely old when never
+        read."""
+        with self._lock:
+            hit = self._index.get(str(asset).lower())
+        return ([], float("inf")) if hit is None else \
+            (list(hit[1]), self._age(hit[0]))
+
+    def _read_index(self) -> None:
+        """One request for every pilot asset: the last two minutes of
+        1-second index candles (gap-filled seconds, tickCount 0, dropped)."""
+        frm = int(time.time()) - 120
+        d = self._call(self._get, "/v1/asset-prices/history?" + "&".join(
+            "assets=crypto:%s" % a for a in CR.ASSETS) +
+            "&from=%d&to=0&bucket=ASSET_PRICE_BUCKET_1S" % frm) or {}
+        now = self._clock()
+        got: Dict[str, list] = {}
+        for ser in (d.get("series") or []) if isinstance(d, Mapping) else []:
+            sym = str(((ser or {}).get("asset") or {}).get("symbol")
+                      or "").lower()
+            pts = []
+            for c in (ser or {}).get("candles") or []:
+                try:
+                    if int(c.get("tickCount") or 0) <= 0:
+                        continue
+                    pts.append((float(c["timestamp"]), float(c["close"])))
+                except (TypeError, ValueError, KeyError):
+                    continue
+            if sym in CR.ASSETS and pts:
+                got[sym] = pts
+        with self._lock:
+            for sym, pts in got.items():
+                self._index[sym] = (now, pts)
+
     def stats(self) -> Dict[str, Any]:
         with self._lock:
             ages = {s: round(self._age(v[0]), 1)
@@ -103,7 +144,9 @@ class CryptoFeed:
                 "cycles": self.cycles, "requests": self.requests,
                 "errors": self.errors, "last_error": self.last_error,
                 "last_cycle_s": round(self.last_cycle_s, 2),
-                "book_age_s": ages, "discovery_age_s": disc}
+                "book_age_s": ages, "discovery_age_s": disc,
+                "index_age_s": {a: round(self._age(v[0]), 1)
+                                for a, v in list(self._index.items())}}
 
     # ------------------------------------------------ feed thread (I/O)
     def _call(self, fn: Callable, *a: Any) -> Any:
@@ -129,8 +172,15 @@ class CryptoFeed:
                     if isinstance(ev, Mapping) else []:
                 slug = str((m or {}).get("slug") or "")
                 if CR.tradable(slug):
+                    apt = (m or {}).get("assetPriceTerms")
+                    apt = apt if isinstance(apt, Mapping) else {}
                     tg.append({"slug": slug, "end": m.get("endDate")
-                               or ev.get("endDate")})
+                               or ev.get("endDate"),
+                               # the fixing instants, from the venue's own
+                               # terms (endDate is 30 minutes later)
+                               "window_start": apt.get("windowStart"),
+                               "window_end": apt.get("windowEnd"),
+                               "terms": dict(apt) or None})
         now = self._clock()
         with self._lock:
             self._targets = (now, tg)
@@ -191,6 +241,13 @@ class CryptoFeed:
                             self._book[slug] = (self._clock(), md)
                 except Exception as exc:                  # noqa: BLE001
                     self._fail("book", exc)
+        if CR.RA_ON and (force or self._clock() - self._index_at
+                         >= CR.BOOK_S):
+            self._index_at = self._clock()
+            try:
+                self._read_index()
+            except Exception as exc:                      # noqa: BLE001
+                self._fail("index", exc)
         with self._lock:
             for d in (self._book, self._spec):
                 for s in [s for s in d if s not in watch and s not in tg]:

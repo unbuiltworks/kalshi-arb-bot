@@ -152,6 +152,92 @@ HARD_LOSS_BUDGET = os.getenv("PMUS_CRYPTO_HARD_LOSS_BUDGET",
 MARKOUT_S = (60, 300, 1800)
 PAYOUT_FLOOR_USD = D("1.00")
 
+# ----------------------------------------------------------- reward-aware
+# REWARD-AWARE MODE (default OFF; needs PMUS_CRYPTO_REWARDS=1 as well, and
+# places nothing without the arm key and a signed approval that repeats
+# every setting below). Same lane, same controller, same choke point:
+#   * both sides quoted INSIDE the scoring walk (so inside Max Spread), the
+#     pair of bids stepped back until it fits the pair cap;
+#   * controlled asymmetric inventory: the heavier side may keep quoting
+#     until the market's unpaired contracts reach RA_MAX_UNPAIRED_QTY;
+#   * the lighter side is an economical completion: priced no higher than
+#     the pair cap allows, never forced, never a taker;
+#   * replenished only while the reward-adjusted net estimate is positive
+#     (src/pmus_crypto_reward_economics.py). With the allocation of the
+#     pool unknown NO reward is credited and nothing opens, unless the
+#     owner names one hypothesis (RA_ALLOCATION) for a bounded probe;
+#   * quotes are pulled RA_PULL_S before the window's fixing minute ends,
+#     held back RA_OPEN_DELAY_S after it starts, and paused on a jump of the
+#     venue's own reference index or of the venue mid.
+# The hourly directional model (src/pmus_crypto_hourly_fair.py) is NOT used:
+# nothing here reads a fair value, priceToBeat or a forecast.
+RA_ENV = "PMUS_CRYPTO_RA"
+RA_ON = ON and os.getenv(RA_ENV, "0").strip() == "1"
+#: market windows the mode may quote. "1d" (default) or "1d,1h".
+RA_SERIES = tuple(x for x in (y.strip().lower() for y in os.getenv(
+    "PMUS_CRYPTO_RA_SERIES", "1d").split(",")) if x in ("1d", "1h"))
+#: allocation hypothesis credited for a bounded probe ("" = credit nothing)
+RA_ALLOCATION = os.getenv("PMUS_CRYPTO_RA_ALLOCATION", "").strip().lower()
+#: the hypothesis PAID earnings rows have confirmed ("" = none; 28 Nov)
+RA_PAID_VERIFIED = os.getenv("PMUS_CRYPTO_RA_PAID_VERIFIED",
+                             "").strip().lower()
+#: bounded evidence probe: quote although the net estimate is not positive
+#: (its purpose is a PAID row, not profit). Loss stop and every cap apply.
+RA_PROBE = os.getenv("PMUS_CRYPTO_RA_PROBE", "0").strip() == "1"
+RA_MAX_UNPAIRED_QTY = _d("PMUS_CRYPTO_RA_MAX_UNPAIRED_QTY", "4")
+RA_DEPTH_MAX = _i("PMUS_CRYPTO_RA_DEPTH_MAX", "4")
+RA_PULL_S = _f("PMUS_CRYPTO_RA_PULL_S", "90")
+RA_OPEN_DELAY_S = _f("PMUS_CRYPTO_RA_OPEN_DELAY_S", "60")
+#: lower bound on the fraction of the remaining period that will qualify
+RA_QUALIFY_FRAC = _d("PMUS_CRYPTO_RA_QUALIFY_FRAC", "0.5")
+#: expected trading cost, upper bounds measured from recorded books: loss
+#: per filled contract and contracts filled per hour per market. Unset
+#: ("") = cost unknown = nothing opens outside a probe.
+RA_FILL_COST_USD = os.getenv("PMUS_CRYPTO_RA_FILL_COST_USD", "").strip()
+RA_FILLS_PER_HOUR = os.getenv("PMUS_CRYPTO_RA_FILLS_PER_HOUR", "").strip()
+RA_MIN_NET_USD = _d("PMUS_CRYPTO_RA_MIN_NET_USD", "0")
+#: reference-index jump: a move of RA_JUMP_BPS inside RA_JUMP_WINDOW_S
+RA_JUMP_BPS = _f("PMUS_CRYPTO_RA_JUMP_BPS", "10")
+RA_JUMP_WINDOW_S = _f("PMUS_CRYPTO_RA_JUMP_WINDOW_S", "10")
+RA_JUMP_PAUSE_S = _f("PMUS_CRYPTO_RA_JUMP_PAUSE_S", "30")
+RA_INDEX_MAX_AGE_S = _f("PMUS_CRYPTO_RA_INDEX_MAX_AGE_S", "20")
+#: 1 = no index, no quote. 0 = fall back to the venue-mid jump pause alone.
+RA_REQUIRE_INDEX = os.getenv("PMUS_CRYPTO_RA_REQUIRE_INDEX",
+                             "1").strip() != "0"
+ASSET_PREFIX_1H = {"eth": "cpceth-eth-updown-1h-",
+                   "sol": "cpcsol-sol-updown-1h-",
+                   "xrp": "cpcxrp-xrp-updown-1h-"}
+
+
+def ra_cfg() -> Optional[Dict[str, Any]]:
+    """The reward-aware settings the approval must repeat, or None (off)."""
+    if not RA_ON:
+        return None
+    return {"series": list(RA_SERIES), "allocation": RA_ALLOCATION,
+            "paid_verified": RA_PAID_VERIFIED, "probe": RA_PROBE,
+            "max_unpaired_qty": str(RA_MAX_UNPAIRED_QTY),
+            "depth_max": RA_DEPTH_MAX, "pull_s": RA_PULL_S,
+            "open_delay_s": RA_OPEN_DELAY_S,
+            "qualify_frac": str(RA_QUALIFY_FRAC),
+            "fill_cost_usd": RA_FILL_COST_USD,
+            "fills_per_hour": RA_FILLS_PER_HOUR,
+            "min_net_usd": str(RA_MIN_NET_USD),
+            "jump_bps": RA_JUMP_BPS, "jump_window_s": RA_JUMP_WINDOW_S,
+            "jump_pause_s": RA_JUMP_PAUSE_S,
+            "require_index": RA_REQUIRE_INDEX}
+
+
+def series_of(slug: str) -> Optional[str]:
+    """"1d" / "1h" for a slug this lane may quote, else None. Hourly only
+    in reward-aware mode with "1h" in RA_SERIES."""
+    s = str(slug)
+    for a in ASSETS:
+        if s.startswith(ASSET_PREFIX[a]):
+            return "1d"
+        if RA_ON and "1h" in RA_SERIES and s.startswith(ASSET_PREFIX_1H[a]):
+            return "1h"
+    return None
+
 
 def cfg() -> Dict[str, Any]:
     return {"assets": list(ASSETS), "qty": str(QTY), "min_qty": str(MIN_QTY),
@@ -168,7 +254,8 @@ def cfg() -> Dict[str, Any]:
             "px_min": str(PX_MIN), "px_max": str(PX_MAX),
             "maker_fee_rate": str(MAKER_FEE_RATE), "cutoff_s": CUTOFF_S,
             "market_days": MARKET_DAYS, "count_paired": COUNT_PAIRED,
-            "taker": "none: this lane has no taker path"}
+            "taker": "none: this lane has no taker path",
+            "reward_aware": ra_cfg()}
 
 
 # ------------------------------------------------------------- identity
@@ -186,6 +273,8 @@ def asset_of(slug: str) -> Optional[str]:
     s = str(slug)
     for a in ASSETS:
         if s.startswith(ASSET_PREFIX[a]):
+            return a
+        if RA_ON and "1h" in RA_SERIES and s.startswith(ASSET_PREFIX_1H[a]):
             return a
     return None
 
@@ -233,21 +322,51 @@ def late(end: Any, now: float) -> Optional[str]:
     return "crypto_last_%ds" % int(CUTOFF_S) if left <= CUTOFF_S else None
 
 
+def window_end(tg: Mapping[str, Any]) -> Any:
+    """When the market's window ends: the venue's assetPriceTerms.windowEnd
+    when the feed carried it. The market's `end` (endDate) is 30 minutes
+    LATER than the fixing and is only the fallback of the older mode."""
+    return tg.get("window_end") or tg.get("end")
+
+
+def cutoff_s(slug: str) -> float:
+    """Seconds before the window end after which no NEW quote may open.
+    Reward-aware: the fixing minute plus a margin (RA_PULL_S, never under
+    60). Otherwise the lane's long-standing CUTOFF_S."""
+    return max(60.0, RA_PULL_S) if RA_ON else CUTOFF_S
+
+
+def late_for(slug: str, mk: Mapping[str, Any], now: float) -> Optional[str]:
+    """`late` for one market, on its own window end and cutoff. In
+    reward-aware mode an unknown venue window end is late (fail closed):
+    the endDate fallback would be half an hour wrong."""
+    if not RA_ON:
+        return late(mk.get("end"), now)
+    left = seconds_left(mk.get("window_end"), now)
+    if left is None:
+        return "crypto_window_end_unknown"
+    cut = cutoff_s(slug)
+    return "crypto_last_%ds" % int(cut) if left <= cut else None
+
+
 def pick_targets(targets: Iterable[Mapping[str, Any]], now: float
                  ) -> List[Mapping[str, Any]]:
-    """One market per pilot asset: the one ending soonest that is not yet
-    inside the cutoff (two daily markets of an asset overlap for hours)."""
-    best: Dict[str, Tuple[float, Mapping[str, Any]]] = {}
+    """One market per pilot asset and series: the one ending soonest that
+    is not yet inside the cutoff (two daily markets of an asset overlap for
+    hours)."""
+    best: Dict[Tuple[str, str], Tuple[float, Mapping[str, Any]]] = {}
     for tg in targets:
-        a = asset_of(str(tg.get("slug") or ""))
-        if a is None:
+        slug = str(tg.get("slug") or "")
+        a, ser = asset_of(slug), series_of(slug)
+        if a is None or ser is None:
             continue
-        left = seconds_left(tg.get("end"), now)
-        if left is None or left <= CUTOFF_S:
+        left = seconds_left(window_end(tg) if RA_ON else tg.get("end"), now)
+        if left is None or left <= cutoff_s(slug):
             continue
-        if a not in best or left < best[a][0]:
-            best[a] = (left, tg)
-    return [best[a][1] for a in ASSETS if a in best]
+        if (a, ser) not in best or left < best[(a, ser)][0]:
+            best[(a, ser)] = (left, tg)
+    return [best[(a, ser)][1] for ser in ("1d", "1h") for a in ASSETS
+            if (a, ser) in best]
 
 
 # ------------------------------------------------------------- venue scoring
@@ -603,6 +722,295 @@ def quotes(*, book_md: Optional[Mapping[str, Any]],
     return out
 
 
+# ------------------------------------------------------------- reward-aware
+
+def ra_identity_block(slug: str, terms: Any) -> Optional[str]:
+    """Why a market may not enter the reward-aware lane on identity alone,
+    or None: its slug must be a pilot-asset hourly/daily up/down identity
+    AND the venue's own assetPriceTerms must confirm asset, index, horizon
+    and both window instants (src/pmus_crypto_period_identity.py)."""
+    from src import pmus_crypto_period_identity as PI
+    ident = PI.identify(slug)
+    if ident is None:
+        return "identity_unknown"
+    if not ident["pilot_asset"] or ident["duration"] != series_of(slug):
+        return "identity_not_pilot"
+    why = PI.verify(ident, terms if isinstance(terms, Mapping) else None)
+    return None if why is None else "identity_unverified:" + why
+
+
+def ra_extend_ok(pos: Mapping[str, Any], side: str, qty: Any) -> bool:
+    """May an OPENING bid of `qty` rest on `side`? Flat or paired: yes. On
+    the heavier side: only while a full fill leaves the market's unpaired
+    contracts inside RA_MAX_UNPAIRED_QTY. Never on the lighter side (that
+    side is a completion)."""
+    y, n = D(str(pos.get("YES") or 0)), D(str(pos.get("NO") or 0))
+    mine, other = (y, n) if str(side).upper() == "YES" else (n, y)
+    if mine < other:
+        return False
+    return mine + D(str(qty)) - other <= RA_MAX_UNPAIRED_QTY
+
+
+def index_jump(series: Iterable[Tuple[Any, Any]], now: float,
+               window_s: Optional[float] = None,
+               bps: Optional[float] = None,
+               max_age_s: Optional[float] = None) -> Optional[str]:
+    """Why the venue's reference index forbids a new quote right now, or
+    None. `series` is [(unix seconds, price)] as the feed last read it from
+    the venue's public /v1/asset-prices/history (1-second candles).
+    "index_stale" when the newest print is older than max_age_s (or there
+    is none); "index_jump:<bps>" when the index moved `bps` or more between
+    any print inside the last window_s and the newest one."""
+    w = RA_JUMP_WINDOW_S if window_s is None else window_s
+    lim = RA_JUMP_BPS if bps is None else bps
+    age = RA_INDEX_MAX_AGE_S if max_age_s is None else max_age_s
+    pts = []
+    for row in series or ():
+        try:
+            t, px = float(row[0]), float(row[1])
+        except (TypeError, ValueError, IndexError):
+            continue
+        if px > 0:
+            pts.append((t, px))
+    if not pts:
+        return "index_stale"
+    pts.sort()
+    t1, p1 = pts[-1]
+    if now - t1 > age:
+        return "index_stale"
+    worst = 0.0
+    for t, px in pts:
+        if t1 - t <= w:
+            worst = max(worst, abs(p1 / px - 1.0) * 1e4)
+    return "index_jump:%.1fbps" % worst if worst >= lim else None
+
+
+def ra_net(*, slug: str, program: Optional[Mapping[str, Any]], share: Any,
+           seconds_left: Optional[float], paid_fraction: Any = None,
+           accrued: Any = 0) -> Dict[str, Any]:
+    """The reward-adjusted net estimate that decides whether openings are
+    (re)placed, from src/pmus_crypto_reward_economics.py. Reports EVERY
+    allocation hypothesis; credits only the one the owner named
+    (RA_ALLOCATION) -- none named, or cost unknown, is not positive.
+
+    reward   pool x allocation x remaining / period x our modelled share x
+             RA_QUALIFY_FRAC x paid fraction, zero under the $1 floor
+    cost     RA_FILLS_PER_HOUR x hours left x RA_FILL_COST_USD (measured
+             upper bounds; settlement basis, so pair edge is inside it)
+    Evidence: PUBLISHED pool, INFERRED allocation, never PAID unless
+    RA_PAID_VERIFIED names the same hypothesis."""
+    from src import pmus_crypto_reward_economics as RE
+    out: Dict[str, Any] = {"ok": False, "why": None, "probe": RA_PROBE,
+                           "allocation": RA_ALLOCATION or None,
+                           "label": "MODELLED estimate; not earned, not "
+                                    "credited", "by_hypothesis": {}}
+    if not program or seconds_left is None:
+        out["why"] = "no_program_or_window"
+        return out
+    ser = series_of(slug)
+    window = 3600 if ser == "1h" else 86400
+    remaining = max(0.0, float(seconds_left) - cutoff_s(slug))
+    cost = None
+    try:
+        if RA_FILL_COST_USD != "" and RA_FILLS_PER_HOUR != "":
+            fc, fh = D(RA_FILL_COST_USD), D(RA_FILLS_PER_HOUR)
+            if fc.is_finite() and fh.is_finite() and fc >= 0 and fh >= 0:
+                cost = fh * D(str(remaining)) / D(3600) * fc
+    except Exception:                                    # noqa: BLE001
+        cost = None
+    pf = D(1) if paid_fraction is None else D(str(paid_fraction))
+    common = dict(
+        pool=program.get("pool") if program.get("pool") is not None
+        else program.get("rewardPool"),
+        window_seconds=window,
+        sharing_contracts=max(1, int(program.get("M_program") or 1)),
+        remaining_seconds=min(remaining, window), share_lower=share,
+        qualifying_fraction_lower=RA_QUALIFY_FRAC, accrued_lower=accrued,
+        incremental_cost_upper=ZERO if cost is None else cost,
+        payout_floor=PAYOUT_FLOOR_USD, paid_fraction_lower=pf,
+        paid_verified_hypothesis=RA_PAID_VERIFIED or None)
+    for h in RE.HYPOTHESES:
+        r = RE.evaluate_row(hypothesis=h, **common)
+        out["by_hypothesis"][h] = {
+            "reward_usd": str(r["incremental_reward"]),
+            "before_floor_usd": None if r.get("projected_before_floor")
+            is None else str(r["projected_before_floor"]),
+            "net_usd": None if r["net_lower"] is None
+            else str(r["net_lower"]),
+            "evidence": r["evidence"], "reason": r.get("reason")}
+    sel = RE.evaluate_row(hypothesis=RA_ALLOCATION or None, **common)
+    out.update(cost_usd=None if cost is None else str(cost),
+               reward_usd=str(sel["incremental_reward"]),
+               net_usd=None if sel["net_lower"] is None
+               else str(sel["net_lower"]),
+               evidence=sel["evidence"], remaining_s=remaining,
+               paid_fraction=str(pf))
+    if sel.get("reason") == "unknown_pool_scope":
+        out["why"] = "unknown_pool_scope"
+    elif cost is None:
+        out["why"] = "cost_unknown"
+    elif sel["net_lower"] is None:
+        out["why"] = str(sel.get("reason"))
+    elif not sel["eligible"] or sel["net_lower"] <= RA_MIN_NET_USD:
+        out["why"] = "net_not_positive:" + str(sel.get("reason"))
+    else:
+        out["ok"] = True
+    return out
+
+
+def ra_quotes(*, book_md: Optional[Mapping[str, Any]],
+              program: Optional[Mapping[str, Any]], tick: Any,
+              pos: Mapping[str, Any], cost: Mapping[str, Any],
+              resting: Iterable[Tuple[str, Any, Any]] = (),
+              min_qty: Any = "0.01", capital_used: Any = 0,
+              max_leg_usd: Any = None, slug: str = "",
+              seconds_left: Optional[float] = None,
+              paid_fraction: Any = None,
+              c: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
+    """Reward-aware resting maker bids for one crypto market; the same
+    shape as `quotes` plus "ra" (the net estimate).
+
+    Flat or paired -> OPEN both sides, at the shallowest depth (from
+    DEPTH_TICKS out to RA_DEPTH_MAX ticks behind the best price that is not
+    ours) at which BOTH bids score under the venue rule -- inside the Target
+    Size walk of a second that pays, hence inside Max Spread -- and the pair
+    of bids fits the pair cap.
+    One side heavier -> the lighter side is a COMPLETION of at most the
+    clip, priced no higher than the pair cap leaves (none when that is
+    under a tick: never forced). The heavier side may keep an OPENING bid
+    while a full fill leaves the unpaired contracts inside
+    RA_MAX_UNPAIRED_QTY and its price pairs with the completion.
+    Openings are dropped unless the reward-adjusted net estimate is
+    positive (or RA_PROBE is on). Never a sell, never a taker."""
+    k = dict(c or {})
+    clip = D(str(k["clip"])) if k.get("clip") is not None else None
+    qty0 = D(str(k.get("qty", QTY)))
+    if clip is not None:
+        qty0 = min(qty0, clip)
+    qmin = D(str(k.get("min_qty", MIN_QTY)))
+    depth = int(k.get("depth_ticks", DEPTH_TICKS))
+    touch_ok = bool(k.get("allow_touch", ALLOW_TOUCH))
+    pcap = D(str(k.get("pair_cap", PAIR_CAP)))
+    ccap = D(str(k.get("complete_max_pair", COMPLETE_MAX_PAIR)))
+    pmin, pmax = D(str(k.get("px_min", PX_MIN))), D(str(k.get("px_max", PX_MAX)))
+    mcap = D(str(k.get("per_market_usd", PER_MARKET_USD)))
+    frate = D(str(k.get("maker_fee_rate", MAKER_FEE_RATE)))
+    t = D(str(tick))
+    resting = list(resting)
+    out: Dict[str, Any] = {"YES": None, "NO": None, "model": None,
+                           "ra": None}
+    base = assess(book_md, program or {"df": 1, "targetSize": 0},
+                  tick, (), resting)
+    bb, ba = base["best_bid_ex_own"], base["best_ask_ex_own"]
+    if bb is None or ba is None or not 0 < bb < ba < 1:
+        out["why"] = "no_two_sided_book"
+        return out
+    yb = _floor(D(str(round(bb, 6))) + t / 2, t)
+    ya = _floor(D(str(round(ba, 6))) + t / 2, t)
+    out["best"] = {"bid": str(yb), "ask": str(ya)}
+    p = {s: D(str(pos.get(s) or 0)) for s in ("YES", "NO")}
+    cs = {s: D(str(cost.get(s) or 0)) for s in ("YES", "NO")}
+    touch = {"YES": yb, "NO": ONE - ya}
+    opp = {"YES": ya, "NO": ONE - yb}        # price at which a bid would cross
+    comp: Optional[Tuple[str, D, D]] = None
+    open_sides = ["YES", "NO"]
+    if p["YES"] != p["NO"]:
+        heavy = "YES" if p["YES"] > p["NO"] else "NO"
+        light = "NO" if heavy == "YES" else "YES"
+        a_h = cs[heavy] / p[heavy]
+        px = _floor(touch[light] - depth * t, t)
+        ceiling = _floor(ccap - a_h, t)
+        while ceiling > ZERO and ceiling + fee(ceiling, frate) + a_h > ccap:
+            ceiling -= t
+        px = min(px, ceiling)
+        need = p[heavy] - p[light]
+        if clip is not None:
+            need = min(need, clip)
+        if px < t:
+            out["why_" + light] = "no_breakeven_price"
+        elif px >= opp[light]:
+            out["why_" + light] = "would_cross"
+        else:
+            out[light] = {"px": px, "qty": max(need, D(str(min_qty))),
+                          "role": "complete"}
+            comp = (light, px, out[light]["qty"])
+        open_sides = [heavy]
+        if not ra_extend_ok(p, heavy, qty0):
+            out["why_" + heavy] = "ra_unpaired_cap"
+            open_sides = []
+    if not program:
+        out["why"] = "no_paying_program"
+        for s in open_sides:
+            out["why_" + s] = "no_paying_program"
+        return out
+    if not open_sides:
+        return out
+    order = list(range(depth, max(depth, RA_DEPTH_MAX) + 1))
+    if touch_ok:
+        order += list(range(depth - 1, -1, -1))
+    chosen: Optional[Dict[str, D]] = None
+    m: Dict[str, Any] = {}
+    first_why: Dict[str, str] = {}
+    for d in order:
+        want = {s: _floor(touch[s] - d * t, t) for s in open_sides}
+        qs = [(s, want[s], qty0) for s in open_sides]
+        if comp:
+            qs.append(comp)
+        m = assess(book_md, program, tick, qs, resting)
+        inside = {"YES": m["yes_inside"], "NO": m["no_inside"]}
+        why: Dict[str, str] = {}
+        for s in open_sides:
+            if want[s] < pmin or want[s] > pmax:
+                why[s] = "price_band"
+            elif want[s] >= opp[s]:
+                why[s] = "would_cross"
+            elif not m["pays"]:
+                why[s] = "second_not_paying:" + str(m["why_not"])
+            elif not inside[s]:
+                why[s] = "outside_scoring_walk"
+        if not why:
+            legs = [want[s] + fee(want[s], frate) for s in open_sides]
+            if comp:
+                legs.append(comp[1] + fee(comp[1], frate))
+            if len(legs) == 2 and sum(legs, ZERO) > pcap:
+                why = {s: "pair_cap" for s in open_sides}
+        if not why:
+            chosen = want
+            out["depth_ticks"] = d
+            break
+        for s, w in why.items():
+            first_why.setdefault(s, w)
+    out["model"] = m
+    if chosen is None:
+        for s in open_sides:
+            out["why_" + s] = first_why.get(s) or "other_side_not_eligible"
+        return out
+    per_contract = sum(chosen.values(), ZERO)
+    room = mcap - D(str(capital_used or 0))
+    q = min(qty0, _floor(room / per_contract, D("1"))) \
+        if per_contract > 0 else ZERO
+    short = "per_market_cap"
+    if max_leg_usd is not None:
+        dear = max(chosen.values())
+        ql = _floor(max(ZERO, D(str(max_leg_usd))) / dear, D("1"))
+        if ql < q:
+            q, short = ql, "loss_budget"
+    if q < max(qmin, D(str(min_qty))):
+        for s in open_sides:
+            out["why_" + s] = short
+        return out
+    net = ra_net(slug=slug, program=program, share=m.get("share") or 0,
+                 seconds_left=seconds_left, paid_fraction=paid_fraction)
+    out["ra"] = net
+    if not net["ok"] and not RA_PROBE:
+        for s in open_sides:
+            out["why_" + s] = "ra_net:" + str(net["why"])
+        return out
+    for s in open_sides:
+        out[s] = {"px": chosen[s], "qty": q, "role": "open"}
+    return out
+
+
 def fit_caps(markets: Mapping[str, Mapping[str, Any]], slug: str,
              want: Dict[str, Any], why: Dict[str, Any]) -> None:
     """Drop this market's OPENING targets unless the whole lane, with them
@@ -709,7 +1117,8 @@ def approval_template(sha: str = "<release sha>") -> Dict[str, Any]:
             "market_days": MARKET_DAYS, "depth_ticks": DEPTH_TICKS,
             "max_markets": MAX_MARKETS,
             "hard_loss_budget": HARD_LOSS_BUDGET,
-            "combined_max_exposure_usd": "", "taker": False}
+            "combined_max_exposure_usd": "", "taker": False,
+            "reward_aware": ra_cfg()}
 
 
 def combined_cap(env: Optional[Mapping[str, str]] = None) -> Optional[D]:
@@ -776,6 +1185,10 @@ def arm_state(now: float, env: Optional[Mapping[str, str]] = None
             return no("approval_mismatch:" + f)
     if a.get("hard_loss_budget") is not HARD_LOSS_BUDGET:
         return no("approval_mismatch:hard_loss_budget")
+    if a.get("reward_aware") != ra_cfg():
+        # reward-aware mode on: the approval must repeat every setting of
+        # it. Off: an approval that names the mode does not arm the old one.
+        return no("approval_mismatch:reward_aware")
     cap = combined_cap(env)
     try:
         if cap is None or D(str(a.get("combined_max_exposure_usd"))) != cap:
@@ -890,7 +1303,7 @@ def venue_rewards(rows: Iterable[Mapping[str, Any]],
     with an unrecognised or missing status is pending, never income."""
     paid = {str(s).upper() for s in credited_statuses}
     per: Dict[str, Dict[str, Any]] = {}
-    cred = pend = ZERO
+    cred = pend = skip = ZERO
     n = 0
     for r in rows:
         if not isinstance(r, Mapping):
@@ -902,8 +1315,13 @@ def venue_rewards(rows: Iterable[Mapping[str, Any]],
         amt = _amount(r)
         st = str(r.get("status") or "STATUS_ABSENT").upper()
         m = per.setdefault(slug, {"credited": ZERO, "pending": ZERO,
-                                  "statuses": {}})
+                                  "skipped": ZERO, "statuses": {}})
         m["statuses"][st] = m["statuses"].get(st, 0) + 1
+        if st == "SKIPPED":
+            # resolved and NOT paid: still inside `pending` (never income),
+            # reported on its own so paid / awaiting / skipped are separate
+            m["skipped"] += amt
+            skip += amt
         if st in paid:
             m["credited"] += amt
             cred += amt
@@ -911,12 +1329,91 @@ def venue_rewards(rows: Iterable[Mapping[str, Any]],
             m["pending"] += amt
             pend += amt
     return {"rows": n, "credited_usd": str(cred), "pending_usd": str(pend),
+            "paid_usd": str(cred), "skipped_usd": str(skip),
+            "awaiting_usd": str(pend - skip),
             "by_market": {s: {"credited_usd": str(m["credited"]),
                               "pending_usd": str(m["pending"]),
+                              "skipped_usd": str(m["skipped"]),
                               "statuses": m["statuses"]}
                           for s, m in sorted(per.items())},
             "label": "venue reward rows naming a crypto market; ONLY "
                      "credited_usd is money"}
+
+
+def attribution(markets: Mapping[str, Mapping[str, Any]],
+                rewards: Optional[Mapping[str, Any]] = None
+                ) -> Dict[str, Any]:
+    """The crypto lane's own economics, by series ("1d" / "1h"), kept apart
+    from sports: fills, pair edge, residual, maker fees, and venue reward
+    rows split paid / awaiting / skipped. Book figures are the bot's own
+    ESTIMATE (the venue-reconciled cash meter is CRYPTO_PNL); only
+    rewards.paid_usd is reward money."""
+    def blank() -> Dict[str, Any]:
+        return {"markets": 0, "fills": 0, "contracts": ZERO,
+                "cost_usd": ZERO, "pairs": ZERO, "pair_edge_usd": ZERO,
+                "residual_contracts": ZERO, "residual_cost_usd": ZERO,
+                "residual_settled_usd": ZERO, "residual_open_contracts": ZERO,
+                "maker_fees_modelled_usd": ZERO,
+                "modelled_reward_usd": ZERO,
+                "rewards": {"paid_usd": ZERO, "awaiting_usd": ZERO,
+                            "skipped_usd": ZERO, "rows": 0}}
+    per: Dict[str, Dict[str, Any]] = {}
+
+    def ser_of(slug: str) -> str:
+        for tag in ("1d", "1h"):
+            if "-updown-%s-" % tag in slug:
+                return tag
+        return "other"
+    for slug, mk in lane_markets(markets).items():
+        y, n = D(str(mk["pos"]["YES"])), D(str(mk["pos"]["NO"]))
+        cy, cn = D(str(mk["cost"]["YES"])), D(str(mk["cost"]["NO"]))
+        cm = D(str((mk.get("crypto_model") or {}).get("usd") or 0))
+        fills = mk.get("crypto_fills") or ()
+        if y == 0 and n == 0 and not fills and cm == 0:
+            continue
+        a = per.setdefault(ser_of(str(slug)), blank())
+        a["markets"] += 1
+        a["fills"] += len(fills)
+        a["contracts"] += y + n
+        a["cost_usd"] += cy + cn
+        a["modelled_reward_usd"] += cm
+        for f in fills:
+            a["maker_fees_modelled_usd"] += fee(D(f["px"]), MAKER_FEE_RATE) \
+                * D(f["qty"])
+        pairs = min(y, n)
+        heavy = "YES" if y > n else "NO"
+        hq, hc = (y, cy) if heavy == "YES" else (n, cn)
+        lc = cn if heavy == "YES" else cy
+        res = hq - pairs
+        res_cost = hc * res / hq if hq > 0 else ZERO
+        a["pairs"] += pairs
+        a["pair_edge_usd"] += pairs - (hc - res_cost) - lc
+        a["residual_contracts"] += res
+        a["residual_cost_usd"] += res_cost
+        px = mk.get("settle_px")
+        if px is None:
+            a["residual_open_contracts"] += res
+        elif res > 0:
+            pay = D(str(px)) if heavy == "YES" else ONE - D(str(px))
+            a["residual_settled_usd"] += res * pay - res_cost
+    for slug, r in ((rewards or {}).get("by_market") or {}).items():
+        a = per.setdefault(ser_of(str(slug)), blank())["rewards"]
+        paid = D(str(r.get("credited_usd") or 0))
+        skipped = D(str(r.get("skipped_usd") or 0))
+        a["paid_usd"] += paid
+        a["skipped_usd"] += skipped
+        a["awaiting_usd"] += D(str(r.get("pending_usd") or 0)) - skipped
+        a["rows"] += sum((r.get("statuses") or {}).values())
+
+    def flat(v: Any) -> Any:
+        if isinstance(v, dict):
+            return {k_: flat(x) for k_, x in v.items()}
+        return str(v) if isinstance(v, D) else v
+    return {"lane": LANE, "by_series": flat(per),
+            "reward_rows_read": rewards is not None,
+            "label": "crypto lane only, never mixed with sports; book "
+                     "ESTIMATES except rewards (venue rows); only "
+                     "rewards.paid_usd is reward money"}
 
 
 def net_report(meter: Optional[Mapping[str, Any]],
