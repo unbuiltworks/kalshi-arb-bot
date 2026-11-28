@@ -1471,6 +1471,27 @@ ALLOW_TAKER = os.getenv("PMUS_TWO_SIDED_ALLOW_TAKER", "0").strip() == "1"
 # came toward us) is re-priced or pulled exactly as now, and so is a
 # completion. 0 = off (today).
 RN1_KEEP_DEEPER_TICKS = int(os.getenv("PMUS_RN1_KEEP_DEEPER_TICKS", "0"))
+# COMPLETION HOLD (28 Nov, default 0 = off). LIVE 28 Nov 00:16-03:15Z
+# (6e6cc2d5d): 76 completion orders for 8 completion fills, re-placed a
+# median 20 s apart; 49 re-places only moved the price (mostly 1 tick as the
+# touch moved) and 9 changed nothing, while 30 completion orders were
+# deferred by the shared request budget. With PMUS_RN1_COMPLETE_KEEP_TICKS
+# = k a RESTING completion bid is kept when the new completion target is
+# 0..k ticks ABOVE it (so the resting bid is never dearer than the target:
+# the pair-cost ceiling and every gate still hold) and its remaining size
+# fits the target. A lower target (cheaper completion), a larger shortfall
+# or any other change re-places it as before.
+RN1_COMPLETE_KEEP_TICKS = int(os.getenv("PMUS_RN1_COMPLETE_KEEP_TICKS")
+                              or "0")
+# COMPLETIONS IN THE SAFETY CLASS (28 Nov, default off). LIVE 28 Nov: 30 of
+# 33 budget deferrals were completion orders, queued behind 11 HTTP 429
+# cool-downs as "normal" like openings. With PMUS_RN1_COMPLETION_SAFETY_CLASS
+# =1 a completion placement (and its post-only preview) is a safety request:
+# the shared budget lets it wait up to its safety wait instead of deferring
+# it, and normal traffic yields to it. The rate, burst and cool-downs are
+# unchanged; openings and extensions stay normal.
+RN1_COMPLETION_SAFETY_CLASS = os.getenv("PMUS_RN1_COMPLETION_SAFETY_CLASS",
+                                        "0").strip() == "1"
 # INVENTORY AT SEVERAL PRICE LEVELS (owner 2026-11-25: "Build inventory at
 # different price levels", "Maintain multiple resting orders", "We want
 # sustained inventory accumulation, not isolated two-contract transactions
@@ -1641,6 +1662,19 @@ RN1_LIVE_FIRST = os.getenv("PMUS_RN1_LIVE_FIRST", "0").strip() == "1"
 # positive one. Use with PMUS_RN1_LIVE_FIRST=0 (its distant-slot cap and
 # pre-emption are slot rules of their own).
 RN1_RANK_BY = os.getenv("PMUS_RN1_RANK_BY", "per_dollar").strip().lower()
+# LIVE SLOT CAP (28 Nov, default 0 = off: one cap, MAX_MARKETS, as before).
+# RN1 (30 d, 274,695 fills) works a median 21 conditions at once (p90 89);
+# L5 works MAX_MARKETS = 2. Our positive economics are pregame (day-of
+# programmes, fill rate 0.20 vs 3.0 per contract-hour, milder markouts);
+# live markets carry the negative markouts and 72% of quote decisions are
+# jump/vol paused. With PMUS_RN1_MAX_LIVE_MARKETS = k > 0, at most k LIVE
+# markets may hold a quoting slot (selection skips a live candidate and a
+# live market may add no new exposure while k other live markets hold
+# slots; completions are never blocked); MAX_MARKETS still bounds the total.
+# A pregame market that goes live while the live slots are full can only
+# complete until one frees. Every dollar cap, stop and gate is unchanged:
+# raising MAX_MARKETS itself remains an owner decision.
+RN1_MAX_LIVE_MARKETS = int(os.getenv("PMUS_RN1_MAX_LIVE_MARKETS") or "0")
 RN1_NEAR_START_S = float(os.getenv("PMUS_RN1_NEAR_START_S") or "1800")
 RN1_DISTANT_MAX_SLOTS = int(os.getenv("PMUS_RN1_DISTANT_MAX_SLOTS") or "1")
 # NO SELECT/RELEASE LOOP (owner 2026-11-27, default OFF). LIVE: with every
@@ -1793,6 +1827,80 @@ RN1_DIR_SHARP_MAX_AGE_S = float(os.getenv("PMUS_RN1_DIR_SHARP_MAX_AGE_S",
                                           "900"))
 RN1_DIR_SHARP_DRIFT = os.getenv("PMUS_RN1_DIR_SHARP_DRIFT", "0.00002")
 
+# TRADING-FIRST ADMISSION (owner #251, 28 Nov; default 0 = unchanged).
+# Every bid that ADDS directional exposure -- an opening, a same-side
+# addition, or a deeper ladder level that is not a completion -- must pass a
+# PRE-REWARD trading test of its own:
+#   * an independent probability (rn1_directional_prob: the settled
+#     international fair, or with RN1_DIR_SHARP the age-limited sportsbook
+#     fair; never the traded market's own price) -- none = refused
+#     ("tf_no_fair");
+#   * the bid at least RN1_TF_EDGE_USD under the CONSERVATIVE fair for its
+#     side (band low for YES, 1 - band high for NO) -- otherwise refused
+#     ("tf_negative_ev"). Reward credit plays no part in this test, so a
+#     projected reward can never rescue a directional opening or addition.
+# Optional, default off: RN1_TF_FAV_ONLY (openings/additions only on the
+# side the independent fair makes >= RN1_TF_FAV_MIN) and RN1_TF_FALLING_S /
+# _TICKS (none on a side whose venue mid fell >= ticks over the window).
+# Completions are exempt (pair-cost limits govern them, unchanged); nothing
+# here adds, enlarges or reprices a bid. Any error refuses the bid.
+# Tape evidence (THEORETICAL, 21 Nov two-venue recording, pre-reward):
+# analysis/l5/sports/directional/TRADING_FIRST_*_20261128.txt.
+_TF_UNSET = object()
+# PMUS_RN1_TF_BYPASS_NET=1 (with RN1_TRADING_FIRST; default 0 = unchanged):
+# the reward-aware net estimate (RN1_NET_RANK block, RN1_MARGINAL_EV per-bid
+# drop) no longer decides openings and additions -- the pre-reward edge gate
+# does. Without it a market with no reward programme can never open, and in
+# a rewarded market the reward would still be what admits a bid. Every cap,
+# pause, guard, pair cap and loss stop is unchanged.
+RN1_TF_BYPASS_NET = os.getenv("PMUS_RN1_TF_BYPASS_NET", "0").strip() == "1"
+
+
+def tf_net_bypass() -> bool:
+    return bool(RN1_TRADING_FIRST and RN1_TF_BYPASS_NET)
+# EXPANDED MARKETS (28 Nov, PR #253 integration; all default off):
+#   PMUS_SHARP_LINES=1   price exact full-game spreads / game totals of each
+#                        sharp candidate's event (needs PMUS_SHARP_MARKETS to
+#                        include spreads,totals) into the shadow state
+#   PMUS_RN1_LINE_MARKETS=1  priced line markets join the selection slate
+SHARP_LINES = os.getenv("PMUS_SHARP_LINES", "0").strip() == "1"
+SHARP_LINE_REFRESH_S = float(os.getenv("PMUS_SHARP_LINE_REFRESH_S", "600"))
+SHARP_LINE_GAP_S = float(os.getenv("PMUS_SHARP_LINE_GAP_S", "0.5"))
+RN1_LINE_MARKETS = os.getenv("PMUS_RN1_LINE_MARKETS", "0").strip() == "1"
+RN1_TRADING_FIRST = os.getenv("PMUS_RN1_TRADING_FIRST", "0").strip() == "1"
+RN1_TF_EDGE_USD = D(os.getenv("PMUS_RN1_TF_EDGE_USD", "0.02"))
+RN1_TF_FAV_ONLY = os.getenv("PMUS_RN1_TF_FAV_ONLY", "0").strip() == "1"
+RN1_TF_FAV_MIN = D(os.getenv("PMUS_RN1_TF_FAV_MIN", "0.5"))
+RN1_TF_FALLING_S = float(os.getenv("PMUS_RN1_TF_FALLING_S", "0"))
+RN1_TF_FALLING_TICKS = int(os.getenv("PMUS_RN1_TF_FALLING_TICKS", "2"))
+# Hybrid refinements (all inside RN1_TRADING_FIRST; 0 = off):
+#   DOG_EXTRA_USD  favourite bias: a bid on the side the independent fair
+#                  makes < 0.5 needs this much MORE edge (value underdogs
+#                  remain admissible; underdogs without value are not)
+#   CONC_USD       replenishment: required edge rises by this much per
+#                  contract that would be left unpaired on the side after
+#                  the bid fills (marginal EV falls as inventory concentrates)
+#   WEAKEN_USD/_S  no opening/addition on a side whose INDEPENDENT fair fell
+#                  by >= WEAKEN_USD over WEAKEN_S (weakening favourite)
+# Underdog hedging is the existing completion path (pair cap unchanged): a
+# completion locks the pair whatever the fair, so it is never refused here.
+# Selection under RN1_TRADING_FIRST: "off" (default), "first" (markets with
+# an independent fair source rank ahead, order otherwise kept) or "only"
+# (markets without one take no slot; an error then selects nothing new).
+RN1_TF_SELECT = os.getenv("PMUS_RN1_TF_SELECT", "off").strip().lower()
+# ECONOMICAL HEDGE under RN1_TRADING_FIRST (unset = off): a completion bid is
+# priced no higher than the independent fair for its side + HEDGE_GIVE_USD
+# (and never above the pair-cap ceiling, which still applies). Completing
+# above fair converts a favourable residual into a locked pair at an EV cost;
+# below it the hedge is EV-neutral or better. Without an independent fair the
+# completion is unchanged (the pair cap alone governs it).
+_hg = os.getenv("PMUS_RN1_TF_HEDGE_GIVE_USD", "").strip()
+RN1_TF_HEDGE_GIVE_USD: Optional[D] = D(_hg) if _hg else None
+RN1_TF_DOG_EXTRA_USD = D(os.getenv("PMUS_RN1_TF_DOG_EXTRA_USD", "0"))
+RN1_TF_CONC_USD = D(os.getenv("PMUS_RN1_TF_CONC_USD", "0"))
+RN1_TF_WEAKEN_USD = D(os.getenv("PMUS_RN1_TF_WEAKEN_USD", "0"))
+RN1_TF_WEAKEN_S = float(os.getenv("PMUS_RN1_TF_WEAKEN_S", "300"))
+
 
 # PREGAME FILL RATE (27 Nov, default 1.0 = unchanged). The fill rates above
 # were measured on live play. Lifetime heartbeat phases (27 Nov 19:20Z):
@@ -1880,7 +1988,25 @@ def rn1_paid_fraction(now: Optional[float] = None) -> Optional[float]:
 
 
 def rn1_paid_rule() -> bool:
-    return RN1_REWARD_MIN_RULE == "paid_fraction"
+    """The paid fraction is applied as a calibration multiplier (both the
+    "paid_fraction" and the "threshold" rule)."""
+    return RN1_REWARD_MIN_RULE in ("paid_fraction", "threshold")
+
+
+# THRESHOLD RULE (28 Nov, issue #251; PMUS_RN1_REWARD_MIN_RULE=threshold).
+# The venue documents "Rewards under $1.00 are not paid out" per programme
+# and time period. Our sub-$1 PAID rows cannot be reconciled to programme ids
+# (earnings rows carry none; the venue no longer serves programme records
+# for settled markets; our logs from 15-18 Nov are no longer retained), so
+# the minimum is NOT treated as waived. Expected payable reward of a bid =
+# its own calibrated incremental reward x the venue paid fraction, credited
+# only when our projected total for that PROGRAMME AND PERIOD (accrual plus
+# every active market paying from it plus the candidate, over min(3 h, time
+# left)) reaches $1; otherwise $0. Score share stays per contract
+# (contract_period pool scope); only the threshold aggregates per programme.
+# Unknown paid fraction or programme: no reward credited (fail closed).
+def rn1_threshold_rule() -> bool:
+    return RN1_REWARD_MIN_RULE == "threshold"
 
 
 def rn1_comp_value(table: Mapping[str, float], slug: str) -> float:
@@ -3109,6 +3235,20 @@ class Venue:
 
     def place(self, slug: str, side: str, px: D, qty: D, stage: str,
               post_only: bool = True) -> str:
+        b = getattr(self.t, "budget", None)
+        if RN1_COMPLETION_SAFETY_CLASS and b is not None and \
+                hasattr(b, "safety") and is_completion_stage(stage):
+            # a completion reduces risk: it waits its turn in the safety
+            # class (ahead of openings) instead of being deferred
+            # capped at the normal wait: a cool-down must not hold the
+            # trading loop (and the cancels it issues) any longer than it
+            # holds a normal order
+            with b.safety(max_wait_s=getattr(b, "normal_wait_s", 3.0)):
+                return self._place(slug, side, px, qty, stage, post_only)
+        return self._place(slug, side, px, qty, stage, post_only)
+
+    def _place(self, slug: str, side: str, px: D, qty: D, stage: str,
+               post_only: bool = True) -> str:
         gt = order_good_till()
         # records whether the order itself was handed to the venue, so a
         # failure BEFORE that point is known to have left nothing behind
@@ -4969,6 +5109,14 @@ class Engine:
         now = time.time() if now is None else now
         if getattr(self, "_odds", None) is None:
             self._odds = SH.OddsClient()
+            if os.getenv("PMUS_SHARP_COVERAGE_LOG", "0").strip() == "1":
+                # read-only, once per process: what the provider offers for
+                # our allowlist and its measured quota cost (issue #251)
+                try:
+                    log("SHARP_COVERAGE", **self._odds.coverage())
+                except Exception as exc:                  # noqa: BLE001
+                    log("SHARP_COVERAGE", ok=False,
+                        why=type(exc).__name__)
         state = self.b.d.setdefault("sharp_shadow", {})
         rows, fills = 0, 0
         cands = self.sharp_candidates(now)
@@ -5001,9 +5149,16 @@ class Engine:
                             label="MODELLED touch-fill of a shadow quote; "
                                   "nothing was placed; not P&L")
                 if fy is None or not bbo:
+                    diag = {}
+                    if fy is None and os.getenv(
+                            "PMUS_SHARP_COVERAGE_LOG", "0").strip() == "1":
+                        diag = dict(SH.diagnose(m, events, now=now),
+                                    feed_cache_age_s=self._odds.cache_age_s(
+                                        SH.SPORT_KEYS[code]))
                     log("SHARP_SHADOW", slug=slug, sport=code,
                         start=m.get("gameStartTime"),
-                        skipped="no_fair" if fy is None else "no_book")
+                        skipped="no_fair" if fy is None else "no_book",
+                        **({"diag": diag} if diag else {}))
                     state.pop(slug, None)
                     continue
                 tick = (self.v.spec(slug) or {}).get("tick") or D("0.01")
@@ -5026,6 +5181,8 @@ class Engine:
                                      else str(q["YES"]),
                                      "NO": None if q["NO"] is None
                                      else str(q["NO"])}}
+        if SHARP_LINES:
+            rows += self.sharp_line_shadow(cands, by_sport, state, now)
         for slug in [k for k, v in state.items()
                      if now - float(v.get("t") or 0) > 6 * 3600]:
             state.pop(slug, None)
@@ -5033,6 +5190,89 @@ class Engine:
                   modelled_fills=fills)
         log("SHARP_STATUS", **st)
         return st
+
+    # ------------------------------------------------ line markets (shadow)
+    def sharp_line_events(self, siblings: List[Mapping[str, Any]]) -> None:
+        """Hand the moneyline candidates to the background line refresher
+        (started once). The loop never fetches event listings itself."""
+        self._line_want = {str(m.get("slug")): dict(m) for m in siblings
+                           if str(m.get("slug") or "").startswith("aec-")}
+        if getattr(self, "_line_thread", None) is None:
+            self._line_cache = getattr(self, "_line_cache", {})
+            th = threading.Thread(target=self._line_refresh_loop,
+                                  name="sharp-lines", daemon=True)
+            self._line_thread = th
+            th.start()
+
+    def _line_refresh_loop(self) -> None:
+        from src import pmus_sports_line_fair as LF
+        while not getattr(self, "stop", False):
+            for sib, m in list((getattr(self, "_line_want", None) or {}
+                                ).items()):
+                ev = sib[4:]
+                hit = self._line_cache.get(ev)
+                if hit and time.time() - hit["t"] < SHARP_LINE_REFRESH_S:
+                    continue
+                try:
+                    d = self.v.gget("/v1/events?slug=%s" % ev)
+                    evs = d.get("events") if isinstance(d, Mapping) else None
+                    ms = [x for e in (evs or []) if isinstance(e, Mapping)
+                          for x in e.get("markets") or []
+                          if isinstance(x, Mapping) and str(
+                              x.get("sportsMarketType") or "") in
+                          LF.LINE_TYPES]
+                    self._line_cache[ev] = {"t": time.time(), "markets": ms,
+                                            "sibling": m}
+                except Exception as exc:                  # noqa: BLE001
+                    log("sharp_line_refresh_error", event=ev,
+                        err=type(exc).__name__)
+                time.sleep(SHARP_LINE_GAP_S)
+            time.sleep(max(5.0, SHARP_LINE_REFRESH_S / 10))
+
+    def sharp_line_shadow(self, cands: List[Mapping[str, Any]],
+                          by_sport: Mapping[str, List[Mapping[str, Any]]],
+                          state: Dict[str, Any], now: float) -> int:
+        """Exact full-game spread / game total fairs (pmus_sports_line_fair)
+        from the odds ALREADY fetched this tick for the sibling moneyline's
+        sport; stored in the same sharp_shadow state the trading-first gate
+        reads (RN1_DIR_SHARP). Logs every refusal reason. Places nothing."""
+        from src import pmus_sports_line_fair as LF
+        from src import pmus_sports_sharp as SH
+        self.sharp_line_events(cands)
+        rows = 0
+        why_n: Dict[str, int] = {}
+        for code, ms in by_sport.items():
+            events = self._odds.cache.get(SH.SPORT_KEYS[code],
+                                          (0, []))[1]
+            for sib in ms:
+                hit = (getattr(self, "_line_cache", None) or {}).get(
+                    str(sib.get("slug"))[4:])
+                for lm in (hit or {}).get("markets") or []:
+                    f, why = LF.line_market_fair(lm, sib, events, now=now)
+                    why_n[why] = why_n.get(why, 0) + 1
+                    slug = str(lm.get("slug"))
+                    if f is None:
+                        state.pop(slug, None)
+                        continue
+                    rows += 1
+                    state[slug] = {"t": now, "fair_yes": str(f["fair_yes"]),
+                                   "odds_age_s": f.get("age_s") or 0.0,
+                                   "source": f["source"], "kind": f["kind"],
+                                   "point": f["point"],
+                                   "sibling": str(sib.get("slug")),
+                                   "q": {"YES": None, "NO": None}}
+                    self._line_targets = getattr(self, "_line_targets", {})
+                    self._line_targets[slug] = {
+                        "slug": slug, "game_start": parse_start(
+                            sib.get("gameStartTime")),
+                        "market_meta": {k: lm.get(k) for k in
+                                        ("bestBidQuote", "bestAskQuote")
+                                        if lm.get(k) is not None}}
+        log("SHARP_LINES", priced=rows, reasons=why_n,
+            events_cached=len(getattr(self, "_line_cache", {}) or {}),
+            label="exact full-game spread/total fairs (shadow state); "
+                  "nothing placed")
+        return rows
 
     # ------------------------------------------- account-wide risk (shared)
     def own_exposure_usd(self) -> D:
@@ -6554,11 +6794,30 @@ class Engine:
         exposure only while fewer than MAX_MARKETS OTHER markets hold some
         -- if more than MAX_MARKETS ever do (e.g. after a restart), each can
         only complete until they drain. Completions are never blocked."""
-        others = sum(1 for s_, m_ in (self.b.d.get("markets") or {}).items()
-                     if s_ != slug and not m_.get("done") and
-                     not CR.is_crypto_market(s_, m_) and
-                     self._rn1_slot_holder(m_))
-        return others >= MAX_MARKETS
+        others = [s_ for s_, m_ in (self.b.d.get("markets") or {}).items()
+                  if s_ != slug and not m_.get("done") and
+                  not CR.is_crypto_market(s_, m_) and
+                  self._rn1_slot_holder(m_)]
+        if len(others) >= MAX_MARKETS:
+            return True
+        return self.rn1_live_slots_full(slug, others)
+
+    def rn1_live_slots_full(self, slug: str,
+                            holders: Optional[list] = None) -> bool:
+        """RN1_MAX_LIVE_MARKETS: is `slug` live while that many OTHER live
+        markets already hold slots (or claim one, at selection)?"""
+        if RN1_MAX_LIVE_MARKETS <= 0:
+            return False
+        try:
+            if not self.event_live(slug):
+                return False
+            if holders is None:
+                holders = [s_ for s_ in self.slot_claimants() if s_ != slug]
+            live = sum(1 for s_ in holders if s_ != slug and
+                       self.event_live(s_))
+            return live >= RN1_MAX_LIVE_MARKETS
+        except Exception:                                 # noqa: BLE001
+            return True                                   # unknown: no
 
     def _rn1_slot_holder(self, mk: Mapping[str, Any]) -> bool:
         """Does this market hold one of the MAX_MARKETS quoting slots?
@@ -6647,6 +6906,163 @@ class Engine:
         except Exception:                                 # noqa: BLE001
             return None
         return None
+
+    def rn1_fair_coverage(self, slug: str) -> Dict[str, Any]:
+        """READ-ONLY (with PMUS_SHARP_COVERAGE_LOG): which independent
+        probability sources this market has right now -- the international
+        guard (configured, token mapped, fresh mid) and the sportsbook shadow
+        state (fair and its age). Never the market's own price."""
+        out: Dict[str, Any] = {"guard_configured": self.guard is not None}
+        try:
+            if self.guard is not None:
+                tok = self.guard.token(slug)
+                out["intl_token"] = bool(tok)
+                mid = self.intl_fair(slug)
+                out["intl_mid"] = None if mid is None else str(mid)
+            st = ((self.b.d.get("sharp_shadow") or {}).get(slug) or {})
+            out["sportsbook_fair"] = st.get("fair_yes")
+            out["sportsbook_age_s"] = None if not st.get("t") else round(
+                time.time() - float(st["t"]) +
+                float(st.get("odds_age_s") or 0.0), 1)
+            out["any"] = bool(out.get("intl_mid") or out["sportsbook_fair"])
+        except Exception as exc:                          # noqa: BLE001
+            out["error"] = type(exc).__name__
+        return out
+
+    def rn1_has_independent_fair(self, slug: str) -> bool:
+        """An independent probability source exists for this market: the
+        international guard maps it, or (with RN1_DIR_SHARP) the sportsbook
+        shadow holds a fair within RN1_DIR_SHARP_MAX_AGE_S."""
+        if self.guard is not None and self.guard.token(slug):
+            return True
+        if RN1_DIR_SHARP:
+            st = ((self.b.d.get("sharp_shadow") or {}).get(slug) or {})
+            if st.get("fair_yes") is not None and st.get("t"):
+                age = time.time() - float(st["t"]) + \
+                    float(st.get("odds_age_s") or 0.0)
+                return age <= RN1_DIR_SHARP_MAX_AGE_S
+        return False
+
+    def rn1_tf_select(self, scored: list) -> list:
+        try:
+            has = {r[2]: self.rn1_has_independent_fair(r[2]) for r in scored}
+        except Exception as exc:                          # noqa: BLE001
+            log("RN1_TF_SELECT", error=type(exc).__name__, mode=RN1_TF_SELECT)
+            return [] if RN1_TF_SELECT == "only" else scored
+        out = [r for r in scored if has[r[2]]] + \
+            ([] if RN1_TF_SELECT == "only" else
+             [r for r in scored if not has[r[2]]])
+        key = (RN1_TF_SELECT, len(scored), sum(has.values()))
+        if key != getattr(self, "_tf_sel_logged", None):
+            self._tf_sel_logged = key
+            log("RN1_TF_SELECT", mode=RN1_TF_SELECT, candidates=len(scored),
+                with_independent_fair=sum(has.values()),
+                first=[r[2] for r in out[:4]],
+                label="trading-first selection: independent fair first")
+        return out
+
+    def rn1_tf_hedge_price(self, mk: Dict[str, Any], side: str,
+                           tg: Dict[str, Any], tick: Any,
+                           prob: Optional[Mapping[str, Any]]
+                           ) -> Dict[str, Any]:
+        """See RN1_TF_HEDGE_GIVE_USD: the completion repriced down to
+        fair + give (never up). No fair or any error: unchanged."""
+        if prob is None:
+            return tg
+        try:
+            from src import pmus_directional_alloc as DA
+            t = D(str(tick))
+            cap = DA.fair_for(prob, side, conservative=False) + \
+                RN1_TF_HEDGE_GIVE_USD
+            cap = (cap / t).to_integral_value(rounding="ROUND_FLOOR") * t
+            rec = mk.setdefault("_tf_last", {})
+            rec["hedge_" + side] = {"px": str(tg["px"]), "cap": str(cap)}
+            if D(str(tg["px"])) > cap:
+                if cap <= 0:
+                    return None
+                return dict(tg, px=cap, hedge_capped=True)
+            return tg
+        except Exception:                                 # noqa: BLE001
+            return tg
+
+    def rn1_tf_note_mid(self, slug: str, mk: Dict[str, Any],
+                        bbo: Mapping[str, Any], now: float) -> None:
+        """Venue YES-mid history for RN1_TF_FALLING_S (diagnostic input to
+        a refusal only; never a probability)."""
+        if RN1_TF_FALLING_S <= 0:
+            return
+        h = mk.setdefault("_tf_mid", [])
+        h.append((now, (D(str(bbo["bid"])) + D(str(bbo["ask"]))) / 2))
+        while h and now - h[0][0] > RN1_TF_FALLING_S:
+            h.pop(0)
+
+    def rn1_tf_note_fair(self, mk: Dict[str, Any],
+                         prob: Optional[Mapping[str, Any]],
+                         now: float) -> None:
+        """Independent-fair history for RN1_TF_WEAKEN_USD. A missing fair
+        clears it (weakening is measured on an unbroken series only)."""
+        if RN1_TF_WEAKEN_USD <= 0:
+            return
+        h = mk.setdefault("_tf_fair", [])
+        if prob is None:
+            h.clear()
+            return
+        try:
+            h.append((now, D(str(prob["p"]))))
+        except Exception:                                 # noqa: BLE001
+            h.clear()
+            return
+        while len(h) > 1 and now - h[0][0] > RN1_TF_WEAKEN_S:
+            h.pop(0)
+
+    def rn1_trading_first_why(self, slug: str, mk: Dict[str, Any],
+                              side: str, px: Any, tick: Any,
+                              prob: Optional[Mapping[str, Any]],
+                              qty: Any = 0) -> Optional[str]:
+        """None = the exposure-adding bid passes RN1_TRADING_FIRST, else the
+        refusal reason. Records the pre-reward trading edge (reward EV is
+        never part of it)."""
+        try:
+            from src import pmus_directional_alloc as DA
+            if prob is None:
+                return "tf_no_fair"
+            fair_c = DA.fair_for(prob, side, conservative=True)
+            fair_m = DA.fair_for(prob, side, conservative=False)
+            edge = fair_c - D(str(px))
+            other = "NO" if side == "YES" else "YES"
+            pos = mk.get("pos") or {}
+            unp = max(D(0), D(str(pos.get(side) or 0)) + D(str(qty or 0)) -
+                      D(str(pos.get(other) or 0)))
+            need = RN1_TF_EDGE_USD + RN1_TF_CONC_USD * unp + (
+                RN1_TF_DOG_EXTRA_USD if fair_m < D("0.5") else D(0))
+            rec = mk.setdefault("_tf_last", {})
+            rec[side] = {"px": str(px), "fair_conservative": str(fair_c),
+                         "trading_edge": str(edge), "required": str(need),
+                         "favourite": fair_m >= D("0.5"),
+                         "source": prob.get("source")}
+            if edge < need:
+                return "tf_negative_ev"
+            fh = mk.get("_tf_fair") or []
+            if RN1_TF_WEAKEN_USD > 0 and len(fh) > 1:
+                d = fh[-1][1] - fh[0][1]
+                if side == "NO":
+                    d = -d
+                if d <= -RN1_TF_WEAKEN_USD:
+                    return "tf_weakening"
+            if RN1_TF_FAV_ONLY and \
+                    DA.fair_for(prob, side, conservative=False) < \
+                    RN1_TF_FAV_MIN:
+                return "tf_not_favourite"
+            h = mk.get("_tf_mid") or []
+            if RN1_TF_FALLING_S > 0 and h:
+                d = h[-1][1] - h[0][1]
+                if side == "NO":
+                    d = -d
+                if d <= -D(str(tick)) * RN1_TF_FALLING_TICKS:
+                    return "tf_falling"
+            return None
+        except Exception as exc:                          # noqa: BLE001
+            return "tf_error:%s" % type(exc).__name__   # fail closed
 
     def rn1_directional_inputs(self, slug: str, want: Mapping[str, Any],
                                bbo: Mapping[str, Any]) -> tuple:
@@ -7586,7 +8002,8 @@ class Engine:
 
     def rn1_reward_pool_projection(self, slug: Optional[str],
                                    extra_usd_h: float = 0.0,
-                                   now: Optional[float] = None
+                                   now: Optional[float] = None,
+                                   program_level: bool = False
                                    ) -> Dict[str, Any]:
         """RN1_REWARD_QUAL_SCOPE "program_period": the THEORETICAL,
         calibrated total of `slug`'s own reward pool (programId|period):
@@ -7603,7 +8020,10 @@ class Engine:
                "label": "THEORETICAL reward projection; not a payment"}
         try:
             per = self.rn1_reward(slug) if slug else None
-            contract = out["scope"] == "contract_period"
+            contract = out["scope"] == "contract_period" and \
+                not program_level
+            if program_level:
+                out["scope"] = "program_period"
             pk = rn1_pool_key(per, slug) if contract else rn1_pool_key(per)
             if not pk:
                 out["why"] = "no_paying_pool"
@@ -7682,6 +8102,16 @@ class Engine:
         """The one qualification every site uses (see RN1_REWARD_QUAL_SCOPE):
         "program_period" tests `slug`'s own pool; "account_day" the
         account's day total."""
+        if rn1_threshold_rule():
+            pj = self.rn1_reward_pool_projection(slug, extra_usd_h,
+                                                 program_level=True)
+            pf = rn1_paid_fraction()
+            pj["min_payout_usd"] = RN1_REWARD_MIN_DAY_USD
+            pj["rule"] = "threshold"
+            pj["paid_fraction"] = pf
+            pj["qualifies"] = bool(pf) and bool(pj.get("pool")) and \
+                pj["projected_usd"] + 1e-9 >= RN1_REWARD_MIN_DAY_USD
+            return pj
         if RN1_REWARD_QUAL_SCOPE in RN1_POOL_SCOPES:
             pj = self.rn1_reward_pool_projection(slug, extra_usd_h)
         else:
@@ -7714,6 +8144,24 @@ class Engine:
             mk = self.b.m(slug) if mk is None else mk
             if tick is not None:
                 self._rn1_reward_estimate(slug, mk, per, D(str(tick)))
+            if rn1_threshold_rule():
+                pf = rn1_paid_fraction()
+                pj = self.rn1_reward_qualifies(slug)
+                out.update(rule="threshold", paid_fraction=pf,
+                           projected_usd=pj.get("projected_usd"),
+                           min_payout_usd=RN1_REWARD_MIN_DAY_USD,
+                           pool=pj.get("pool"), horizon_h=pj.get("horizon_h"),
+                           label="THEORETICAL reward x venue paid fraction, "
+                                 "credited only above the programme-period "
+                                 "minimum; not a payment")
+                if not pf:
+                    out["why"] = "paid_fraction_unavailable"
+                    return out
+                if not pj.get("qualifies"):
+                    out["why"] = "below_minimum_payout"
+                    return out
+                out.update(ticks=RN1_REWARD_CREDIT_TICKS, why="qualifies")
+                return out
             if rn1_paid_rule():
                 pf = rn1_paid_fraction()
                 out.update(rule="paid_fraction", paid_fraction=pf,
@@ -7970,7 +8418,7 @@ class Engine:
         if not new_block and self.rn1_market_slots_full(slug, mk):
             new_block = "max_markets"
         net_neg = False
-        if not new_block and RN1_NET_RANK and \
+        if not new_block and RN1_NET_RANK and not tf_net_bypass() and \
                 not self.rn1_quote_qualifies(slug, mk):
             # no opening or extension while the fresh estimate (re-priced
             # after every fill) is not positive, flat or not; completions
@@ -8053,6 +8501,9 @@ class Engine:
                        last_fill_t=mk.get("last_fill_t"), now=now,
                        min_qty=spec["min_qty"], c=qcfg)
         want: Dict[str, Any] = {}
+        tf_prob: Any = _TF_UNSET
+        if RN1_TRADING_FIRST:
+            self.rn1_tf_note_mid(slug, mk, bbo, now)
         ks = mk.setdefault("keep_since", {})
         for side in ("YES", "NO"):
             tg = q.get(side)
@@ -8086,6 +8537,22 @@ class Engine:
                     self.guard.stats["blocked"] += 1
                     q["why_" + side] = "intl_guard:" + str(gv.get("why"))
                     tg = None
+            if tg and tg["role"] == "complete" and RN1_TRADING_FIRST and \
+                    RN1_TF_HEDGE_GIVE_USD is not None:
+                if tf_prob is _TF_UNSET:
+                    tf_prob = self.rn1_directional_prob(slug)
+                    self.rn1_tf_note_fair(mk, tf_prob, now)
+                tg = self.rn1_tf_hedge_price(mk, side, tg, tick, tf_prob)
+            if tg and tg["role"] != "complete" and RN1_TRADING_FIRST:
+                if tf_prob is _TF_UNSET:
+                    tf_prob = self.rn1_directional_prob(slug)
+                    self.rn1_tf_note_fair(mk, tf_prob, now)
+                twhy = self.rn1_trading_first_why(slug, mk, side, tg["px"],
+                                                  tick, tf_prob,
+                                                  tg.get("qty", 0))
+                if twhy:
+                    q["why_" + side] = twhy
+                    tg = None
             want[side] = tg
         if RN1_DIRECTIONAL:
             dir_prob = self.rn1_directional(slug, mk, q, want, bbo, tick,
@@ -8093,7 +8560,7 @@ class Engine:
                                             priced=bool(qcfg.get(
                                                 "adds_priced_externally")))
         self._gap_hold(slug, mk, q, want, bbo, new_block, now)
-        mev_on = RN1_MARGINAL_EV and not new_block
+        mev_on = RN1_MARGINAL_EV and not new_block and not tf_net_bypass()
         mev_pass = False
         if mev_on:
             # ECONOMIC PRIORITY for the campaign caps (finding 2)
@@ -8116,6 +8583,30 @@ class Engine:
             ladder = self.rn1_directional_ladder(slug, mk, q, want, ladder,
                                                  bbo, tick, spec["min_qty"],
                                                  dir_prob)
+        if RN1_TRADING_FIRST and ladder:
+            if tf_prob is _TF_UNSET:
+                tf_prob = self.rn1_directional_prob(slug)
+                self.rn1_tf_note_fair(mk, tf_prob, now)
+            kept_l, ref_l = [], []
+            # each level is judged with the levels in front of it filled
+            lq = {sd: D(str((want.get(sd) or {}).get("qty") or 0))
+                  if (want.get(sd) or {}).get("role") != "complete" else D(0)
+                  for sd in ("YES", "NO")}
+            for l_ in ladder:
+                lw = None
+                if l_.get("role") != "complete":
+                    lq[l_["side"]] += D(str(l_.get("qty") or 0))
+                    lw = self.rn1_trading_first_why(
+                        slug, mk, l_["side"], l_["px"], tick, tf_prob,
+                        lq[l_["side"]])
+                if lw:
+                    ref_l.append({"side": l_["side"],
+                                  "level": l_.get("level"), "why": lw})
+                else:
+                    kept_l.append(l_)
+            if ref_l:
+                q["tf_ladder_refused"] = ref_l
+            ladder = kept_l
         mev_log = None
         if mev_on:
             # MARGINAL NET EV PER BID (finding 1): level-0 targets and every
@@ -8228,6 +8719,16 @@ class Engine:
                 edge=q.get("edge"),
                 marginal_ev=mev_log,
                 directional=q.get("directional"),
+                **({"fair_coverage": self.rn1_fair_coverage(slug)}
+                   if os.getenv("PMUS_SHARP_COVERAGE_LOG", "0").strip() ==
+                   "1" else {}),
+                **({"trading_first": {
+                    "pre_reward_edge": mk.get("_tf_last"),
+                    "edge_min_usd": str(RN1_TF_EDGE_USD),
+                    "ladder_refused": q.get("tf_ladder_refused"),
+                    "label": "pre-reward trading edge vs independent "
+                             "fair; reward EV reported separately"}}
+                   if RN1_TRADING_FIRST else {}),
                 pause_depth=(None if not pause_reason else
                              {"reason": pause_reason,
                               "ticks": self.rn1_pause_depth(rng, tick)}),
@@ -8287,8 +8788,15 @@ class Engine:
                     tg["role"] != "complete" and \
                     not is_completion_stage(o.get("stage")) and \
                     D(0) < gap <= RN1_KEEP_DEEPER_TICKS * tick
-                if (near or deeper) and left <= tg["qty"]:
+                hold_c = RN1_COMPLETE_KEEP_TICKS > 0 and \
+                    tg["role"] == "complete" and \
+                    is_completion_stage(o.get("stage")) and \
+                    D(0) <= gap <= RN1_COMPLETE_KEEP_TICKS * tick
+                if (near or deeper or hold_c) and left <= tg["qty"]:
                     hit = i
+                    if hold_c and not near:
+                        self._kept_completion = int(getattr(
+                            self, "_kept_completion", 0)) + 1
                     if deeper and not near:
                         self._kept_deeper = int(getattr(
                             self, "_kept_deeper", 0)) + 1
@@ -8832,6 +9340,22 @@ class Engine:
         """Candidates for the one controller: games in progress, games not
         yet started, or both (PMUS_TWO_SIDED_SLATE). With both, a game in
         progress comes first and a market is listed once."""
+        out = self._slate_targets()
+        if RN1_LINE_MARKETS:
+            # priced line markets (sharp_line_shadow) join the slate; the
+            # trading-first gate still needs their fresh independent fair
+            seen = {t["slug"] for t in out}
+            now = time.time()
+            for slug, tg in list((getattr(self, "_line_targets", None)
+                                  or {}).items()):
+                st = ((self.b.d.get("sharp_shadow") or {}).get(slug) or {})
+                if slug in seen or not st.get("fair_yes") or \
+                        now - float(st.get("t") or 0) > SHARP_SHADOW_EVERY_S * 2:
+                    continue
+                out.append(tg)
+        return out
+
+    def _slate_targets(self) -> list:
         sl = slate()
         if sl == "pregame":
             return self.v.pregame_sports()
@@ -9430,8 +9954,8 @@ class Engine:
         completed, audited and counted in every limit as before."""
         out = []
         for s_, m_ in (self.b.d.get("markets") or {}).items():
-            if m_.get("done"):
-                continue
+            if m_.get("done") or CR.is_crypto_market(s_, m_):
+                continue           # a crypto-lane market holds no sports slot
             try:
                 bal = D(str(m_["pos"]["YES"])) == D(str(m_["pos"]["NO"]))
             except Exception:                             # noqa: BLE001
@@ -9903,6 +10427,10 @@ class Engine:
                     label="published programme, not a payment")
         if RN1.ON and RN1_RANK_NET and scored:
             scored = self.rank_net(scored)
+        if RN1.ON and RN1_TRADING_FIRST and RN1_TF_SELECT in ("first",
+                                                             "only") \
+                and scored:
+            scored = self.rn1_tf_select(scored)
         rewarded: Dict[str, Any] = {}
         if rewards_on() and scored:
             try:
@@ -9949,6 +10477,8 @@ class Engine:
             if RN1.ON and (RN1_LIVE_FIRST or RN1_SELECT_NO_CHURN) and \
                     not self.slot_gate(slug, acct):
                 continue
+            if RN1.ON and self.rn1_live_slots_full(slug):
+                continue                  # RN1_MAX_LIVE_MARKETS: live full
             self._try_select(slug, acct, rewarded.get(slug))
 
     def rewarded_active(self) -> int:
@@ -11305,6 +11835,18 @@ def start_combo_maker(venue: "Venue", eng: "Engine") -> Optional[Any]:
                 out[sy] = venue.bbo(sy)
             except Exception:                            # noqa: BLE001
                 out[sy] = None
+            if CM.INDEPENDENT in ("prefer", "require") and out[sy]:
+                # independent leg fair (PMUS_COMBO_INDEPENDENT): the fresh
+                # sportsbook / line shadow fair only, never the venue mid
+                try:
+                    st = ((eng.b.d.get("sharp_shadow") or {}).get(sy) or {})
+                    age = time.time() - float(st.get("t") or 0) + \
+                        float(st.get("odds_age_s") or 0.0)
+                    if st.get("fair_yes") is not None and \
+                            age <= RN1_DIR_SHARP_MAX_AGE_S:
+                        out[sy] = dict(out[sy], fair_yes=st["fair_yes"])
+                except Exception:                        # noqa: BLE001
+                    pass
         return out
 
     mk = CM.ComboMaker(

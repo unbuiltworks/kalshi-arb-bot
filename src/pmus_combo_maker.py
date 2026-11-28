@@ -77,6 +77,14 @@ except ValueError:
     QUOTE_TTL_S = 60.0                         # garbled -> the old short TTL
 QUOTE_MAX_TTL_S = float(os.getenv("PMUS_COMBO_QUOTE_MAX_TTL_S", "1800"))
 POLL_S = float(os.getenv("PMUS_COMBO_POLL_S", "3"))
+# INDEPENDENT LEG PRICING (28 Nov; default "off" = unchanged venue mids).
+#   "prefer"  a leg whose book record carries an independent fair_yes (the
+#             engine's sportsbook / international shadow state, never the
+#             venue's own price) is priced from it; others from the mid
+#   "require" every leg must carry one, else leg_unpriced
+# Legs are still multiplied only ACROSS games: same-game combos stay refused
+# because no validated joint (correlated) model exists.
+INDEPENDENT = os.getenv("PMUS_COMBO_INDEPENDENT", "off").strip().lower()
 
 
 # ---------------------------------------------------------------- pricing
@@ -99,6 +107,19 @@ def leg_prob(leg: Mapping[str, Any], book: Optional[Mapping[str, Any]]
     two-sided book (mid), or None if unusable."""
     if not book:
         return None
+    sell = "SELL" in str(leg.get("side") or "").upper()
+    if INDEPENDENT in ("prefer", "require"):
+        fy = book.get("fair_yes") if isinstance(book, Mapping) else None
+        if fy is not None:
+            try:
+                f = D(str(fy))
+                if ZERO < f < ONE:
+                    return ONE - f if sell else f
+            except Exception:                            # noqa: BLE001
+                pass
+            return None
+        if INDEPENDENT == "require":
+            return None
     try:
         b, a = D(str(book["bid"])), D(str(book["ask"]))
     except Exception:                                    # noqa: BLE001
@@ -106,7 +127,7 @@ def leg_prob(leg: Mapping[str, Any], book: Optional[Mapping[str, Any]]
     if not (ZERO < b < a < ONE) or a - b > MAX_LEG_SPREAD:
         return None
     m = (a + b) / 2
-    return ONE - m if "SELL" in str(leg.get("side") or "").upper() else m
+    return ONE - m if sell else m
 
 
 def combo_fair(legs: List[Mapping[str, Any]],

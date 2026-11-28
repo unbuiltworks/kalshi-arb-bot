@@ -942,6 +942,8 @@ def test_crypto_markets_do_not_fill_rn1_market_slots(lane, monkeypatch):
     for s in (ETH, SOL, XRP):
         e.step_market(s)
     assert not e.rn1_market_slots_full("aec-x", e.b.m("aec-x"))
+    assert e.slot_claimants() == ["aec-x"]         # no crypto claimant
+    assert e.guard_tracked() == ["aec-x"]
     assert e.rn1_campaign_exposure() == {"spend": D(0), "unmatched": D(0)}
 
 
