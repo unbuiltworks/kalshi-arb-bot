@@ -309,3 +309,4 @@ release candidate for a3e27b21d (trading-first: pre-reward edge vs independent f
 release candidate for f33b3da15 (trading-first v2: hybrid admission, economical hedge, fair-first selection, sharp nickname matching and on-demand refresh, coverage diagnostics; on 8f7cb2c36; all flags default off; not approved, not deployed)
 release candidate for 0cc2f30ea (expanded integrated: PR #253 pricing reviewed and fixed, line-market adapter and shadow pricing, line slate, independent combo legs, trading-first v2; on 8f7cb2c36; all flags default off; not approved, not deployed)
 release candidate for 046a63775 (expanded integrated + trading-first net bypass; all flags default off; not approved, not deployed)
+release candidate for 646d591d3 (soccer three-way: intl + sportsbook 3-way fair, club aliases, match-level risk, cross-outcome hedge, coverage verification; on 9e6c2039f; all flags default off; not approved, not deployed)
