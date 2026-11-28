@@ -1911,7 +1911,25 @@ def rn1_paid_fraction(now: Optional[float] = None) -> Optional[float]:
 
 
 def rn1_paid_rule() -> bool:
-    return RN1_REWARD_MIN_RULE == "paid_fraction"
+    """The paid fraction is applied as a calibration multiplier (both the
+    "paid_fraction" and the "threshold" rule)."""
+    return RN1_REWARD_MIN_RULE in ("paid_fraction", "threshold")
+
+
+# THRESHOLD RULE (28 Nov, issue #251; PMUS_RN1_REWARD_MIN_RULE=threshold).
+# The venue documents "Rewards under $1.00 are not paid out" per programme
+# and time period. Our sub-$1 PAID rows cannot be reconciled to programme ids
+# (earnings rows carry none; the venue no longer serves programme records
+# for settled markets; our logs from 15-18 Nov are no longer retained), so
+# the minimum is NOT treated as waived. Expected payable reward of a bid =
+# its own calibrated incremental reward x the venue paid fraction, credited
+# only when our projected total for that PROGRAMME AND PERIOD (accrual plus
+# every active market paying from it plus the candidate, over min(3 h, time
+# left)) reaches $1; otherwise $0. Score share stays per contract
+# (contract_period pool scope); only the threshold aggregates per programme.
+# Unknown paid fraction or programme: no reward credited (fail closed).
+def rn1_threshold_rule() -> bool:
+    return RN1_REWARD_MIN_RULE == "threshold"
 
 
 def rn1_comp_value(table: Mapping[str, float], slug: str) -> float:
@@ -3160,7 +3178,10 @@ class Venue:
                 hasattr(b, "safety") and is_completion_stage(stage):
             # a completion reduces risk: it waits its turn in the safety
             # class (ahead of openings) instead of being deferred
-            with b.safety():
+            # capped at the normal wait: a cool-down must not hold the
+            # trading loop (and the cancels it issues) any longer than it
+            # holds a normal order
+            with b.safety(max_wait_s=getattr(b, "normal_wait_s", 3.0)):
                 return self._place(slug, side, px, qty, stage, post_only)
         return self._place(slug, side, px, qty, stage, post_only)
 
@@ -6821,7 +6842,8 @@ class Engine:
 
     def rn1_reward_pool_projection(self, slug: Optional[str],
                                    extra_usd_h: float = 0.0,
-                                   now: Optional[float] = None
+                                   now: Optional[float] = None,
+                                   program_level: bool = False
                                    ) -> Dict[str, Any]:
         """RN1_REWARD_QUAL_SCOPE "program_period": the THEORETICAL,
         calibrated total of `slug`'s own reward pool (programId|period):
@@ -6838,7 +6860,10 @@ class Engine:
                "label": "THEORETICAL reward projection; not a payment"}
         try:
             per = self.rn1_reward(slug) if slug else None
-            contract = out["scope"] == "contract_period"
+            contract = out["scope"] == "contract_period" and \
+                not program_level
+            if program_level:
+                out["scope"] = "program_period"
             pk = rn1_pool_key(per, slug) if contract else rn1_pool_key(per)
             if not pk:
                 out["why"] = "no_paying_pool"
@@ -6917,6 +6942,16 @@ class Engine:
         """The one qualification every site uses (see RN1_REWARD_QUAL_SCOPE):
         "program_period" tests `slug`'s own pool; "account_day" the
         account's day total."""
+        if rn1_threshold_rule():
+            pj = self.rn1_reward_pool_projection(slug, extra_usd_h,
+                                                 program_level=True)
+            pf = rn1_paid_fraction()
+            pj["min_payout_usd"] = RN1_REWARD_MIN_DAY_USD
+            pj["rule"] = "threshold"
+            pj["paid_fraction"] = pf
+            pj["qualifies"] = bool(pf) and bool(pj.get("pool")) and \
+                pj["projected_usd"] + 1e-9 >= RN1_REWARD_MIN_DAY_USD
+            return pj
         if RN1_REWARD_QUAL_SCOPE in RN1_POOL_SCOPES:
             pj = self.rn1_reward_pool_projection(slug, extra_usd_h)
         else:
@@ -6949,6 +6984,24 @@ class Engine:
             mk = self.b.m(slug) if mk is None else mk
             if tick is not None:
                 self._rn1_reward_estimate(slug, mk, per, D(str(tick)))
+            if rn1_threshold_rule():
+                pf = rn1_paid_fraction()
+                pj = self.rn1_reward_qualifies(slug)
+                out.update(rule="threshold", paid_fraction=pf,
+                           projected_usd=pj.get("projected_usd"),
+                           min_payout_usd=RN1_REWARD_MIN_DAY_USD,
+                           pool=pj.get("pool"), horizon_h=pj.get("horizon_h"),
+                           label="THEORETICAL reward x venue paid fraction, "
+                                 "credited only above the programme-period "
+                                 "minimum; not a payment")
+                if not pf:
+                    out["why"] = "paid_fraction_unavailable"
+                    return out
+                if not pj.get("qualifies"):
+                    out["why"] = "below_minimum_payout"
+                    return out
+                out.update(ticks=RN1_REWARD_CREDIT_TICKS, why="qualifies")
+                return out
             if rn1_paid_rule():
                 pf = rn1_paid_fraction()
                 out.update(rule="paid_fraction", paid_fraction=pf,

@@ -57,7 +57,7 @@ def test_on_completion_waits_through_a_cooldown_instead_of_deferring(
         monkeypatch):
     monkeypatch.setattr(M, "RN1_COMPLETION_SAFETY_CLASS", True)
     now = [0.0]
-    b = RB.RequestBudget(rps=10, burst=2, cooldown_s=1.0, normal_wait_s=0.2,
+    b = RB.RequestBudget(rps=10, burst=2, cooldown_s=1.0, normal_wait_s=3.0,
                          safety_wait_s=5.0, clock=lambda: now[0],
                          sleep=lambda s: now.__setitem__(0, now[0] + s))
     b.note_429()                                   # cooling for 1 s
@@ -68,3 +68,28 @@ def test_on_completion_waits_through_a_cooldown_instead_of_deferring(
         v.place("s", "YES", D("0.4"), D("1"), "rn1_open")
     except RB.BudgetDeferred:
         pass                                       # an opening may still defer
+
+
+def test_on_the_wait_is_capped_at_the_normal_wait(monkeypatch):
+    """A cool-down longer than the normal wait defers the completion after
+    the normal wait instead of holding the loop for the full safety wait."""
+    monkeypatch.setattr(M, "RN1_COMPLETION_SAFETY_CLASS", True)
+    now = [0.0]
+    b = RB.RequestBudget(rps=10, burst=2, cooldown_s=60.0, normal_wait_s=3.0,
+                         safety_wait_s=20.0, clock=lambda: now[0],
+                         sleep=lambda s: now.__setitem__(0, now[0] + s))
+    b.note_429()
+    v, _ = _venue(monkeypatch, b)
+    import pytest
+    with pytest.raises(RB.BudgetDeferred):
+        v.place("s", "NO", D("0.5"), D("1"), "two_sided_complete")
+    assert now[0] <= 3.5
+    # audits keep the full safety wait (no cap outside the completion path)
+    assert getattr(b._tl, "max_wait", None) is None
+
+
+def test_critical_cancel_is_never_held_by_a_waiting_completion():
+    b = RB.RequestBudget(rps=1, burst=1)
+    b._tokens = -1                                   # budget exhausted
+    b.acquire("critical")                            # cancels always go
+    assert b.stats["sent"]["critical"] == 1
