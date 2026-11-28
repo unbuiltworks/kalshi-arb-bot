@@ -2909,3 +2909,22 @@ utilization and settled net profitability."
   at close-out. Rewards: none confirmed yet (rows post 1–7 days).
 - **Report files:** `campaign_20261128/campaign_report_window.json`,
   `inventory_at_window_end.txt`.
+
+## 86. Disarmed deploy of ac1c1bbaf with the coverage log authorized — 28 Nov 2026, 04:34 UTC
+
+Owner, verbatim: "I explicitly authorize deployment of release
+ac1c1bbafb007107b592a4a5732b94c4403be899 to the existing sports service,
+strictly disarmed, after the current campaign's grace period and close-out.
+Keep PMUS_TWO_SIDED_SUBMISSION_LOCK=1 and enable PMUS_SHARP_COVERAGE_LOG=1.
+[...] No live trading, arming, taker execution, capital increases or weakened
+safety limits are authorized."
+
+- **Scope:** one deploy of `ac1c1bbaf` to sports service `d84d9a68`, after the
+  6e6cc2d5d grace ends (05:15Z) and the close-out (lock=1, `why: locked`,
+  reconciliation) is done. Variable changes: `PMUS_TWO_SIDED_SUBMISSION_LOCK=1`
+  and `PMUS_SHARP_COVERAGE_LOG=1` only.
+- **Purpose:** read-only measurement of provider coverage, live vs pregame
+  odds, Pinnacle availability and quota, event matching, and independent fair
+  coverage across eligible markets.
+- **Not authorized:** live trading, arming, taker, capital increases, weaker
+  limits, crypto changes, automatic repeat.
