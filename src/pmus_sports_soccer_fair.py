@@ -244,9 +244,9 @@ def soccer_market_fair(market: Mapping[str, Any], event_markets_or_teams: Any,
                        ) -> Tuple[Optional[Dict[str, Any]], str]:
     """({fair_yes, outcome, team, source, age_s, event_id}, "ok") or (None,
     reason). P(YES) = P(team wins in regulation) or P(draw), from the ONE
-    feed event whose two teams pair one-to-one with the venue's (teams_match,
-    PMUS_SHARP_NAME_MATCH) and whose commence time is within MATCH_TOL_S of
-    the market's gameStartTime."""
+    feed event whose two teams pair one-to-one with the venue's (exact club
+    keys via the explicit alias table, `club_pair`) and whose commence time
+    is within MATCH_TOL_S of the market's gameStartTime."""
     spec, why = soccer_market_spec(market)
     if spec is None:
         return None, why
@@ -264,7 +264,7 @@ def soccer_market_fair(market: Mapping[str, Any], event_markets_or_teams: Any,
         if not isinstance(ev, Mapping):
             continue
         ct = SH._ts(ev.get("commence_time"))
-        pair = SH.teams_match(teams, ev.get("home_team"), ev.get("away_team"))
+        pair = club_pair(teams, ev.get("home_team"), ev.get("away_team"))
         if pair and ct is not None and abs(ct - start) <= SH.MATCH_TOL_S:
             hits.append((ev, pair))
     if len(hits) != 1:
@@ -307,3 +307,196 @@ def soccer_shadow_rows(event_markets: Sequence[Mapping[str, Any]],
                      "source": None if f is None else f["source"],
                      "label": "SHADOW: soccer 3-way fair; nothing placed"})
     return rows
+
+
+# ------------------------------------------------ deterministic club keys
+#: Explicit alias table: normalised name (after the strip rules below) ->
+#: canonical club key. Venue full names are from the public catalogue
+#: (28 Nov slate + settled 22 Nov Serie A); feed-side short names are the
+#: usual sportsbook spellings and are UNVERIFIED against The Odds API until
+#: a coverage read confirms them. Only an entry here, or an exact strip
+#: rule, can make two different spellings equal; nothing is fuzzy.
+CLUB_ALIASES: Dict[str, str] = {
+    # La Liga
+    "real betis balompie": "real betis",
+    "betis": "real betis",
+    # Serie A
+    "internazionale milano": "inter", "internazionale": "inter",
+    "inter milan": "inter", "inter": "inter",
+    "bologna fc 1909": "bologna",
+    "parma calcio 1913": "parma",
+    # Eredivisie
+    "psv eindhoven": "psv",
+    "sbv excelsior": "excelsior",
+    "telstar 1963": "telstar",
+    "cambuur leeuwarden": "cambuur", "cambuur": "cambuur",
+    # Bundesliga
+    "1 fc koln": "koln", "koln": "koln", "cologne": "koln",
+    "paderborn 07": "paderborn",
+    "schalke 04": "schalke",
+    "07 elversberg": "elversberg",
+}
+#: Whole words removed from the START or END of a name (never the middle,
+#: never the last remaining word): legal-form / club-type tokens only.
+STRIP_WORDS = ("fc", "cf", "ac", "sc", "afc", "cfc", "ss", "us", "sv",
+               "calcio")
+#: Exact trailing phrases removed (explicit rule list).
+STRIP_SUFFIXES = ("de madrid",)
+
+
+def club_key(name: Any) -> str:
+    """Canonical club key: normalise, apply the explicit alias table, else
+    the strip rules then the table again. Applied identically to venue and
+    feed names. "" for an empty name."""
+    n = SH.norm(name)
+    if not n:
+        return ""
+    if n in CLUB_ALIASES:
+        return CLUB_ALIASES[n]
+    w = n.split()
+    changed = True
+    while changed and len(w) > 1:
+        changed = False
+        if w[0] in STRIP_WORDS:
+            w, changed = w[1:], True
+        elif w[-1] in STRIP_WORDS:
+            w, changed = w[:-1], True
+        else:
+            for suf in STRIP_SUFFIXES:
+                sw = suf.split()
+                if len(w) > len(sw) and w[-len(sw):] == sw:
+                    w, changed = w[:-len(sw)], True
+                    break
+    k = " ".join(w)
+    return CLUB_ALIASES.get(k, k)
+
+
+def club_pair(teams: Sequence[str], home: Any, away: Any
+              ) -> Optional[Dict[str, str]]:
+    """{venue team -> feed team} when the two venue teams and the two feed
+    teams have the same two DISTINCT club keys, one-to-one; else None."""
+    if len(teams) != 2:
+        return None
+    vk = [club_key(t) for t in teams]
+    fk = [club_key(home), club_key(away)]
+    if not all(vk) or not all(fk) or vk[0] == vk[1] or fk[0] == fk[1] or \
+            DRAW in vk or DRAW in fk:
+        return None
+    if vk == fk:
+        return {teams[0]: str(home), teams[1]: str(away)}
+    if vk == fk[::-1]:
+        return {teams[0]: str(away), teams[1]: str(home)}
+    return None
+
+
+# ------------------------------------------------- one match, one risk
+_MATCH = re.compile(
+    r"^atc-([a-z0-9]+)-([a-z0-9]+)-([a-z0-9]+)-(\d{4}-\d{2}-\d{2})-([a-z0-9]+)$")
+
+
+def match_of(slug: Any) -> Optional[Dict[str, Any]]:
+    """{"match", "league", "outcome", "outcomes", "siblings"} for a soccer
+    full-time-winner outcome slug atc-<lg>-<home>-<away>-<date>-<outcome>
+    (outcome = home code, away code or "draw"), else None. Pure slug
+    arithmetic; the market TYPE is the caller's to check."""
+    m = _MATCH.match(str(slug or ""))
+    if not m:
+        return None
+    lg, h, a, date, o = m.groups()
+    if h == a or DRAW in (h, a) or o not in (h, a, DRAW):
+        return None
+    base = "atc-%s-%s-%s-%s-" % (lg, h, a, date)
+    outs = (h, DRAW, a)
+    return {"match": "%s-%s-%s-%s" % (lg, h, a, date), "league": lg,
+            "outcome": o, "outcomes": outs,
+            "siblings": tuple(base + x for x in outs)}
+
+
+def _payoff(outcome: str, side: str, result: str) -> D:
+    yes = outcome == result
+    return D(1) if (yes if side == "YES" else not yes) else D(0)
+
+
+def outcome_pnl(holdings: Mapping[str, Mapping[str, Any]],
+                outcomes: Sequence[str],
+                resting: Iterable[Tuple[str, str, Any, Any]] = ()
+                ) -> Dict[str, D]:
+    """Worst P&L of ONE match for each result (H, D, A), exactly.
+
+    holdings  {outcome: {"pos": {YES, NO}, "cost": {YES, NO}}}: the filled
+              inventory of each outcome's binary market (missing = flat).
+    resting   (outcome, side, px, qty) bids that may fill.
+    For a fixed result the P&L is linear in each bid's fill, so its worst
+    case is each bid filling fully exactly when that loses money for that
+    result (and not at all otherwise): base(r) + sum min(0, q*(pay - px)).
+    No outcome is assumed to offset another except through this arithmetic.
+    Raises ValueError on an unknown outcome or unreadable figure."""
+    outs = tuple(outcomes)
+    if len(outs) != 3 or len(set(outs)) != 3:
+        raise ValueError("outcomes")
+    rest = list(resting)
+    for o in list(holdings) + [r[0] for r in rest]:
+        if o not in outs:
+            raise ValueError("unknown_outcome:%s" % o)
+    res: Dict[str, D] = {}
+    for r in outs:
+        v = D(0)
+        for o, h in holdings.items():
+            pos, cost = h.get("pos") or {}, h.get("cost") or {}
+            for sd in ("YES", "NO"):
+                q, c = D(str(pos.get(sd) or 0)), D(str(cost.get(sd) or 0))
+                if not (q.is_finite() and c.is_finite()) or q < 0 or c < 0:
+                    raise ValueError("figure")
+                v += q * _payoff(o, sd, r) - c
+        for o, sd, px, qty in rest:
+            p, q = D(str(px)), D(str(qty))
+            if not (p.is_finite() and q.is_finite()) or q < 0:
+                raise ValueError("figure")
+            side = "YES" if str(sd).upper() == "YES" else "NO"
+            v += min(D(0), q * (_payoff(o, side, r) - p))
+        res[r] = v
+    return res
+
+
+def match_worst(holdings, outcomes, resting=()) -> D:
+    """The match's worst P&L over results and adverse fills."""
+    return min(outcome_pnl(holdings, outcomes, resting).values())
+
+
+def match_loss(holdings, outcomes, resting=()) -> D:
+    """max(0, -worst): the most this match can lose."""
+    return max(D(0), -match_worst(holdings, outcomes, resting))
+
+
+def dutch_lock(holdings: Mapping[str, Mapping[str, Any]],
+               outcomes: Sequence[str]) -> Dict[str, D]:
+    """YES held on ALL three outcomes is a locked set: exactly one pays $1.
+    {"sets": min YES qty, "set_cost": sum of the three YES average costs,
+    "locked_pnl": sets * (1 - set_cost)}; sets 0 when any is missing."""
+    qs, avgs = [], []
+    for o in outcomes:
+        h = holdings.get(o) or {}
+        q = D(str((h.get("pos") or {}).get("YES") or 0))
+        c = D(str((h.get("cost") or {}).get("YES") or 0))
+        qs.append(q)
+        avgs.append(c / q if q > 0 else D(0))
+    n = min(qs) if qs else D(0)
+    if n <= 0:
+        return {"sets": D(0), "set_cost": D(0), "locked_pnl": D(0)}
+    sc = sum(avgs)
+    return {"sets": n, "set_cost": sc, "locked_pnl": n * (D(1) - sc)}
+
+
+def three_way_consistent(mids: Sequence[Any], tol: Any = "0.04"
+                         ) -> Tuple[bool, Optional[D]]:
+    """(ok, sum): the three outcome mids of one match must all be present,
+    each in (0, 1), and sum to 1 within `tol`."""
+    try:
+        ms = [D(str(m)) for m in mids]
+        if len(ms) != 3 or not all(m.is_finite() and D(0) < m < D(1)
+                                   for m in ms):
+            return False, None
+        s = sum(ms)
+        return abs(s - D(1)) <= D(str(tol)), s
+    except Exception:                                    # noqa: BLE001
+        return False, None

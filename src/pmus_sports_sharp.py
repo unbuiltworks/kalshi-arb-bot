@@ -441,12 +441,23 @@ class OddsClient:
         self.refresh = os.getenv("PMUS_SHARP_REFRESH", "poll").strip()
         self.daily_calls = int(os.getenv("PMUS_SHARP_DAILY_CALLS", "8"))
         self._day: Tuple[str, int] = ("", 0)
+        import threading
+        self._fetch_lock = threading.RLock()
 
     @property
     def configured(self) -> bool:
         return bool((self._key or "").strip())
 
     def fetch(self, sport_key: str) -> List[Mapping[str, Any]]:
+        # one caller at a time: the soccer refresher (PMUS_SHARP_SOCCER)
+        # shares this cache and quota from a background thread
+        lk = getattr(self, "_fetch_lock", None)
+        if lk is None:
+            return self._fetch(sport_key)
+        with lk:
+            return self._fetch(sport_key)
+
+    def _fetch(self, sport_key: str) -> List[Mapping[str, Any]]:
         now = self.clock()
         hit = self.cache.get(sport_key)
         # polling is unchanged until provider coverage and quota are
@@ -535,6 +546,20 @@ class OddsClient:
                           if word in k.lower() or word in str(
                               b.get("group") or "").lower())
         used_after = int(used) if used not in (None, "") else None
+        # soccer three-way keys (pmus_sports_soccer_fair.SOCCER_KEYS, 28 Nov)
+        # are from provider docs: this read is what verifies them
+        try:
+            from src.pmus_sports_soccer_fair import SOCCER_KEYS as _SK
+            sk = dict(_SK)
+        except Exception:                                # noqa: BLE001
+            sk = {}
+        out.update(soccer_configured_offered=sorted(
+            "%s=%s" % (c, k) for c, k in sk.items() if k in keys),
+            soccer_configured_missing=sorted(
+                "%s=%s" % (c, k) for c, k in sk.items() if k not in keys),
+            soccer_offered_unmapped=sorted(
+                k for k in keys if k.startswith("soccer_")
+                and k not in sk.values())[:60])
         out.update(ok=True, sports=len(keys),
                    tennis=pick("tennis"),
                    table_tennis=pick("table") + [k for k in pick("tt_")

@@ -1864,6 +1864,36 @@ SHARP_LINES = os.getenv("PMUS_SHARP_LINES", "0").strip() == "1"
 SHARP_LINE_REFRESH_S = float(os.getenv("PMUS_SHARP_LINE_REFRESH_S", "600"))
 SHARP_LINE_GAP_S = float(os.getenv("PMUS_SHARP_LINE_GAP_S", "0.5"))
 RN1_LINE_MARKETS = os.getenv("PMUS_RN1_LINE_MARKETS", "0").strip() == "1"
+# SOCCER THREE-WAY (28 Nov; every flag default off = unchanged):
+#   PMUS_SHARP_SOCCER=1  a background thread prices pre-game soccer
+#                        full-time-winner outcomes (atc-...-<home|draw|away>)
+#                        from The Odds API 3-way h2h (pmus_sports_soccer_fair,
+#                        SOCCER_KEYS, the same OddsClient cache and quota)
+#                        into the sharp shadow state as kind "soccer3". The
+#                        trading loop only copies the thread's results; it
+#                        makes no request for this.
+#   PMUS_RN1_SOCCER=1 with PMUS_RN1_SOCCER_LEAGUES (strict allowlist, empty
+#                        = none): for those leagues only, the three outcome
+#                        markets of one match are ONE risk -- the independent
+#                        fair is the settled international band whose three
+#                        outcome mids sum to 1 within PMUS_RN1_SOCCER_SUM_TOL
+#                        (else all three refused), or pre-game the sportsbook
+#                        3-way fair; the existing per-market spend / unpaired
+#                        caps also bind the MATCH (exact worst case over home,
+#                        draw, away incl. resting bids); the loss stop and the
+#                        resting worst case use that joint arithmetic; the
+#                        match's other outcome markets may be held together;
+#                        and a trading-first hedge may buy another outcome
+#                        at <= fair + RN1_TF_HEDGE_GIVE_USD when it lowers the
+#                        match worst case. Without the flag, or outside the
+#                        allowlist, soccer behaves exactly as before.
+SHARP_SOCCER = os.getenv("PMUS_SHARP_SOCCER", "0").strip() == "1"
+SHARP_SOCCER_REFRESH_S = float(os.getenv("PMUS_SHARP_SOCCER_REFRESH_S",
+                                         "600"))
+RN1_SOCCER = os.getenv("PMUS_RN1_SOCCER", "0").strip() == "1"
+RN1_SOCCER_LEAGUES = tuple(x.strip().lower() for x in os.getenv(
+    "PMUS_RN1_SOCCER_LEAGUES", "").split(",") if x.strip())
+RN1_SOCCER_SUM_TOL = D(os.getenv("PMUS_RN1_SOCCER_SUM_TOL", "0.04"))
 RN1_TRADING_FIRST = os.getenv("PMUS_RN1_TRADING_FIRST", "0").strip() == "1"
 RN1_TF_EDGE_USD = D(os.getenv("PMUS_RN1_TF_EDGE_USD", "0.02"))
 RN1_TF_FAV_ONLY = os.getenv("PMUS_RN1_TF_FAV_ONLY", "0").strip() == "1"
@@ -5077,6 +5107,8 @@ class Engine:
                             lo.strftime("%Y-%m-%dT%H:%M:%SZ"),
                             hi.strftime("%Y-%m-%dT%H:%M:%SZ")))
         evs = d.get("events") if isinstance(d, Mapping) else d
+        # the same listing feeds the soccer refresher (no second request)
+        self._sharp_events = evs if isinstance(evs, list) else []
         out = []
         for ev in evs or []:
             for m in (ev.get("markets") or []) if isinstance(ev, Mapping) \
@@ -5178,6 +5210,8 @@ class Engine:
                                      else str(q["NO"])}}
         if SHARP_LINES:
             rows += self.sharp_line_shadow(cands, by_sport, state, now)
+        if SHARP_SOCCER:
+            rows += self.sharp_soccer_shadow(state, now)
         for slug in [k for k, v in state.items()
                      if now - float(v.get("t") or 0) > 6 * 3600]:
             state.pop(slug, None)
@@ -5268,6 +5302,270 @@ class Engine:
             label="exact full-game spread/total fairs (shadow state); "
                   "nothing placed")
         return rows
+
+    # ------------------------------------------ soccer three-way (shadow)
+    def sharp_soccer_events(self, now: float) -> Dict[str, Any]:
+        """{event slug: {"markets": [...], "sport_key"}} for pre-game soccer
+        events in the sharp window, from the listing sharp_candidates just
+        read (no request). Only leagues in SOCCER_KEYS."""
+        from src import pmus_sports_sharp as SH
+        from src import pmus_sports_soccer_fair as SF
+        out: Dict[str, Any] = {}
+        for ev in getattr(self, "_sharp_events", None) or []:
+            if not isinstance(ev, Mapping):
+                continue
+            ms = [m for m in ev.get("markets") or [] if isinstance(m, Mapping)
+                  and str(m.get("sportsMarketType") or "") == SF.SOCCER_TYPE]
+            if not ms:
+                continue
+            mo = SF.match_of(ms[0].get("slug"))
+            if mo is None or mo["league"] not in SF.SOCCER_KEYS or \
+                    not SH.in_window(ms[0].get("gameStartTime"), now):
+                continue
+            out[mo["match"]] = {"markets": [dict(m) for m in ms],
+                                "sport_key": SF.SOCCER_KEYS[mo["league"]]}
+        return out
+
+    def _soccer_refresh_loop(self) -> None:
+        """Background: fetch each wanted soccer league's odds (shared
+        OddsClient: same cache, quota and lock) and price every outcome
+        market. Results are handed to the loop through _soccer_fairs."""
+        from src import pmus_sports_soccer_fair as SF
+        while not getattr(self, "stop", False):
+            want = dict(getattr(self, "_soccer_want", None) or {})
+            keys = sorted({v["sport_key"] for v in want.values()})
+            odds = {}
+            for k in keys:
+                try:
+                    odds[k] = self._odds.fetch(k)
+                except Exception as exc:                  # noqa: BLE001
+                    log("sharp_soccer_fetch_error", key=k,
+                        err=type(exc).__name__)
+                    odds[k] = []
+            now = time.time()
+            res: Dict[str, Any] = {}
+            for ev, v in want.items():
+                for m in v["markets"]:
+                    try:
+                        f, why = SF.soccer_market_fair(
+                            m, v["markets"], odds.get(v["sport_key"]) or [],
+                            now=now)
+                    except Exception as exc:              # noqa: BLE001
+                        f, why = None, "error:%s" % type(exc).__name__
+                    res[str(m.get("slug"))] = {
+                        "t": now, "why": why, "fair": f,
+                        "game_start": m.get("gameStartTime")}
+            self._soccer_fairs = res
+            time.sleep(max(5.0, SHARP_SOCCER_REFRESH_S / 10))
+
+    def sharp_soccer_shadow(self, state: Dict[str, Any], now: float) -> int:
+        """Copy the soccer refresher's 3-way fairs into the sharp shadow
+        state (kind "soccer3"; read for trading only under PMUS_RN1_SOCCER
+        and its league allowlist). Starts the refresher once. No request."""
+        self._soccer_want = self.sharp_soccer_events(now)
+        if getattr(self, "_soccer_thread", None) is None:
+            th = threading.Thread(target=self._soccer_refresh_loop,
+                                  name="sharp-soccer", daemon=True)
+            self._soccer_thread = th
+            th.start()
+        rows, why_n = 0, {}
+        for slug, r in list((getattr(self, "_soccer_fairs", None) or {}
+                             ).items()):
+            why_n[r["why"]] = why_n.get(r["why"], 0) + 1
+            f = r.get("fair")
+            if f is None:
+                if (state.get(slug) or {}).get("kind") == "soccer3":
+                    state.pop(slug, None)
+                continue
+            rows += 1
+            state[slug] = {"t": float(r["t"]), "fair_yes": str(f["fair_yes"]),
+                           "odds_age_s": f.get("age_s") or 0.0,
+                           "source": f["source"], "kind": "soccer3",
+                           "outcome": f.get("outcome"),
+                           "game_start": r.get("game_start"),
+                           "q": {"YES": None, "NO": None}}
+        log("SHARP_SOCCER", priced=rows, reasons=why_n,
+            events=len(self._soccer_want),
+            label="soccer 3-way sportsbook fairs (shadow state); nothing "
+                  "placed")
+        return rows
+
+    # ------------------------------------------ soccer: one match, one risk
+    def rn1_soccer_ok(self, slug: str) -> bool:
+        """PMUS_RN1_SOCCER on and this is a soccer full-time-winner outcome
+        of an allowlisted league (slug shape; the type is the venue's)."""
+        if not RN1_SOCCER or not RN1_SOCCER_LEAGUES:
+            return False
+        from src import pmus_sports_soccer_fair as SF
+        mo = SF.match_of(slug)
+        return bool(mo and mo["league"] in RN1_SOCCER_LEAGUES)
+
+    def rn1_soccer_prob(self, slug: str) -> Optional[Dict[str, Any]]:
+        """Independent fair for an allowlisted soccer outcome: the settled
+        international band when all three outcome mids are fresh and sum to
+        1 within RN1_SOCCER_SUM_TOL (an inconsistent set refuses every
+        outcome of the match, sportsbook included); otherwise, PRE-GAME
+        only, the sportsbook 3-way fair (kind soccer3) within
+        RN1_DIR_SHARP_MAX_AGE_S. None = no fair (fail closed)."""
+        from src import pmus_directional_alloc as DA
+        from src import pmus_sports_soccer_fair as SF
+        mo = SF.match_of(slug)
+        if mo is None:
+            return None
+        mids = [self.intl_fair(s_) for s_ in mo["siblings"]]
+        if all(m is not None for m in mids):
+            ok, tot = SF.three_way_consistent(mids, RN1_SOCCER_SUM_TOL)
+            if not ok:
+                key = (mo["match"], None if tot is None else str(tot))
+                if getattr(self, "_soccer_sum_logged", None) != key:
+                    self._soccer_sum_logged = key
+                    log("RN1_SOCCER_SUM_REFUSED", match=mo["match"],
+                        mids=[str(m) for m in mids],
+                        sum=None if tot is None else str(tot),
+                        tol=str(RN1_SOCCER_SUM_TOL),
+                        label="three outcome mids inconsistent: no fair for "
+                              "any outcome of this match")
+                return None
+            band = self.intl_fair_band(slug)
+            if band.get("settled") and band.get("mid") is not None:
+                return DA.probability(band["mid"], band.get("lo"),
+                                      band.get("hi"), source="intl3")
+        st = ((self.b.d.get("sharp_shadow") or {}).get(slug) or {})
+        if st.get("kind") != "soccer3" or st.get("fair_yes") is None or \
+                not st.get("t"):
+            return None
+        start = parse_start(st.get("game_start"))
+        if start is None or time.time() >= start:
+            return None                    # sportsbook fair is pre-game only
+        age = max(0.0, time.time() - float(st["t"])) + \
+            float(st.get("odds_age_s") or 0.0)
+        return DA.probability(st["fair_yes"], source="sportsbook3:%s" % (
+            st.get("source") or "odds"), age_s=round(age, 1),
+            max_age_s=RN1_DIR_SHARP_MAX_AGE_S,
+            drift_per_s=RN1_DIR_SHARP_DRIFT)
+
+    def rn1_soccer_group(self, slug: str,
+                         extra: Optional[tuple] = None,
+                         filled_extra: bool = False
+                         ) -> Optional[Dict[str, Any]]:
+        """The match of an allowlisted soccer outcome as ONE book:
+        {"outcomes", "holdings", "resting", "slugs", "per_market"}; resting
+        = every open and reserved bid of its outcome markets (+ `extra`
+        = (slug, side, px, qty) as a bid, or as filled when filled_extra).
+        None when not soccer-ok, or a sibling is settled / unreadable."""
+        from src import pmus_sports_soccer_fair as SF
+        if not self.rn1_soccer_ok(slug):
+            return None
+        mo = SF.match_of(slug)
+        markets = self.b.d.get("markets") or {}
+        res = {}
+        for r in self.reserved_orders():
+            res.setdefault(str(r.get("slug")), []).append(r)
+        hold, rest, per = {}, [], {}
+        for s_, o in zip(mo["siblings"], mo["outcomes"]):
+            mk_ = markets.get(s_)
+            r_m = []
+            if mk_ is not None:
+                if mk_.get("settle_px") is not None or mk_.get("closed"):
+                    return None
+                hold[o] = {"pos": dict(mk_["pos"]), "cost": dict(mk_["cost"])}
+                r_m += [(od["side"], D(str(od["px"])),
+                         D(str(od["qty"])) - D(str(od.get("filled") or "0")))
+                        for od in (mk_.get("orders") or {}).values()
+                        if od.get("open")]
+            r_m += [(r["side"], D(str(r["px"])), D(str(r["qty"])))
+                    for r in res.get(s_, [])]
+            if extra is not None and extra[0] == s_:
+                if filled_extra:
+                    h = hold.setdefault(o, {"pos": {"YES": "0", "NO": "0"},
+                                            "cost": {"YES": "0", "NO": "0"}})
+                    sd = "YES" if str(extra[1]).upper() == "YES" else "NO"
+                    h = {"pos": dict(h["pos"]), "cost": dict(h["cost"])}
+                    h["pos"][sd] = str(D(str(h["pos"].get(sd) or 0)) +
+                                       D(str(extra[3])))
+                    h["cost"][sd] = str(D(str(h["cost"].get(sd) or 0)) +
+                                        D(str(extra[2])) * D(str(extra[3])))
+                    hold[o] = h
+                else:
+                    r_m.append((extra[1], D(str(extra[2])),
+                                D(str(extra[3]))))
+            per[s_] = r_m
+            rest += [(o, sd, px, q) for sd, px, q in r_m]
+        return {"outcomes": mo["outcomes"], "holdings": hold, "resting": rest,
+                "slugs": mo["siblings"], "per_market": per,
+                "match": mo["match"]}
+
+    def rn1_soccer_group_why(self, slug: str, side: str, px: Any,
+                             qty: Any) -> Optional[str]:
+        """The existing per-market caps applied to the WHOLE match (no new
+        or larger limit): committed spend of its outcome markets <=
+        RN1.PER_MARKET_USD and the exact match worst-case loss (home, draw,
+        away; every resting bid filling adversely) <= RN1.RESIDUAL_CAP_USD.
+        Unreadable = refuse."""
+        from src import pmus_sports_soccer_fair as SF
+        try:
+            g = self.rn1_soccer_group(slug, extra=(slug, side, px, qty))
+            if g is None:
+                return "soccer_group_unreadable"
+            markets = self.b.d.get("markets") or {}
+            spend = D(0)
+            for s_ in g["slugs"]:
+                mk_ = markets.get(s_) or {"pos": {"YES": "0", "NO": "0"},
+                                          "cost": {"YES": "0", "NO": "0"}}
+                spend += RN1.committed(mk_["pos"], mk_["cost"], [
+                    (a, b, c, False) for a, b, c in g["per_market"][s_]
+                ])["spend"]
+            loss = SF.match_loss(g["holdings"], g["outcomes"], g["resting"])
+            tol = D("0.000001")
+            if spend > D(str(RN1.PER_MARKET_USD)) + tol:
+                return "match_spend:%s>%s" % (spend, RN1.PER_MARKET_USD)
+            if loss > D(str(RN1.RESIDUAL_CAP_USD)) + tol:
+                return "match_worst_loss:%s>%s" % (loss,
+                                                   RN1.RESIDUAL_CAP_USD)
+            return None
+        except Exception as exc:                          # noqa: BLE001
+            return "soccer_group_error:%s" % type(exc).__name__
+
+    def rn1_soccer_groups(self, slugs: Iterable[str]) -> Dict[str, list]:
+        """{match: [its allowlisted outcome slugs among `slugs`]}."""
+        from src import pmus_sports_soccer_fair as SF
+        out: Dict[str, list] = {}
+        for s_ in slugs:
+            if self.rn1_soccer_ok(s_):
+                out.setdefault(SF.match_of(s_)["match"], []).append(s_)
+        return out
+
+    def rn1_soccer_book_adjust(self) -> D:
+        """Loss-stop correction for allowlisted matches: the bot's book
+        worst case values each market alone (its unpaired side worthless);
+        for one match the exact worst over home / draw / away replaces the
+        sum of its markets' terms. Either sign (exact, never assumed).
+        Groups with a settled, unpiloted or unreadable market: 0."""
+        if not RN1_SOCCER:
+            return D(0)
+        from src import pmus_pilot_pnl as PP
+        from src import pmus_sports_soccer_fair as SF
+        markets = self.b.d.get("markets") or {}
+        pilot = set(PP.pilot_slugs(markets, self.since))
+        adj = D(0)
+        for _m, ss in self.rn1_soccer_groups(list(markets)).items():
+            try:
+                g = self.rn1_soccer_group(ss[0])
+                if g is None:
+                    continue
+                held = [s_ for s_ in g["slugs"] if s_ in markets]
+                if any(s_ not in pilot for s_ in held):
+                    continue
+                per = D(0)
+                for s_ in held:
+                    mk_ = markets[s_]
+                    per += min(D(str(mk_["pos"]["YES"])),
+                               D(str(mk_["pos"]["NO"]))) - \
+                        D(str(mk_["cost"]["YES"])) - D(str(mk_["cost"]["NO"]))
+                adj += SF.match_worst(g["holdings"], g["outcomes"]) - per
+            except Exception:                             # noqa: BLE001
+                continue
+        return adj
 
     # ------------------------------------------- account-wide risk (shared)
     def own_exposure_usd(self) -> D:
@@ -5571,6 +5869,7 @@ class Engine:
             tot = D(0)
             markets = self.b.d.get("markets") or {}
             seen = False
+            contrib: Dict[str, D] = {}
             held: Dict[str, list] = {}
             for r in self.reserved_orders():
                 held.setdefault(r["slug"], []).append(
@@ -5591,13 +5890,42 @@ class Engine:
                     continue
                 worst = RN1.committed(mk_["pos"], mk_["cost"],
                                       resting)["unmatched"]
-                tot += max(D(0), worst - RN1.unmatched_usd(
+                inc = max(D(0), worst - RN1.unmatched_usd(
                     mk_["pos"], mk_["cost"]))
+                tot += inc
+                contrib[s_] = inc
             if extra is not None and not seen:
                 tot += D(str(extra[2])) * D(str(extra[3]))
+            if RN1_SOCCER and contrib:
+                tot += self._soccer_resting_adjust(contrib, extra, seen)
             return tot if tot.is_finite() else D("Infinity")
         except Exception:                                # noqa: BLE001
             return D("Infinity")
+
+    def _soccer_resting_adjust(self, contrib: Mapping[str, D],
+                               extra: Optional[tuple],
+                               seen: bool = True) -> D:
+        """PMUS_RN1_SOCCER: for each allowlisted match, replace the sum of
+        its markets' resting-bid increments with the EXACT joint increment
+        (match worst P&L held minus worst with every resting bid filling
+        adversely). An `extra` bid on a sibling with no book entry was
+        counted at face value by the caller; when the joint figure includes
+        it, that face value is taken back out (no double count). Either
+        sign; an unreadable group raises (caller -> Infinity, refuse)."""
+        from src import pmus_sports_soccer_fair as SF
+        adj = D(0)
+        for _m, ss in self.rn1_soccer_groups(list(contrib)).items():
+            ex = extra if extra is not None and extra[0] in \
+                SF.match_of(ss[0])["siblings"] else None
+            g = self.rn1_soccer_group(ss[0], extra=ex)
+            if g is None:
+                raise ValueError("soccer_group_unreadable")
+            joint = SF.match_worst(g["holdings"], g["outcomes"]) - \
+                SF.match_worst(g["holdings"], g["outcomes"], g["resting"])
+            adj += max(D(0), joint) - sum(contrib[s_] for s_ in ss)
+            if ex is not None and not seen:
+                adj -= D(str(ex[2])) * D(str(ex[3]))
+        return adj
 
     def account_risk_blocks(self, px: Optional[D] = None,
                             qty: Optional[D] = None,
@@ -5876,6 +6204,8 @@ class Engine:
                 worst = PP.book_worst_case(self.b.d.get("markets") or {},
                                            self.since) - \
                     self.own_resting_worst(extra=(slug, sd, p, q))
+                if RN1_SOCCER:
+                    worst += self.rn1_soccer_book_adjust()
                 if worst <= -D(str(PILOT_LOSS_USD)):
                     return "campaign_loss_stop_with_resting:%s<=-%s" % (
                         worst.quantize(D("0.01")), PILOT_LOSS_USD)
@@ -5890,6 +6220,10 @@ class Engine:
             if c["unmatched"] > D(str(RN1.RESIDUAL_CAP_USD)) + tol:
                 return "per_market_unpaired:%s>%s" % (
                     c["unmatched"], RN1.RESIDUAL_CAP_USD)
+            if self.rn1_soccer_ok(slug):
+                gw = self.rn1_soccer_group_why(slug, sd, p, q)
+                if gw:
+                    return gw
             other = self.rn1_campaign_exposure(exclude=slug)
             if other["spend"] + c["spend"] > \
                     D(str(RN1.TOTAL_SPEND_USD)) + tol:
@@ -6059,12 +6393,16 @@ class Engine:
         Never the traded market's own price."""
         from src import pmus_directional_alloc as DA
         try:
+            if self.rn1_soccer_ok(slug):
+                return self.rn1_soccer_prob(slug)
             band = self.intl_fair_band(slug)
             if band.get("settled") and band.get("mid") is not None:
                 return DA.probability(band["mid"], band.get("lo"),
                                       band.get("hi"), source="intl")
             if RN1_DIR_SHARP:
                 st = ((self.b.d.get("sharp_shadow") or {}).get(slug) or {})
+                if st.get("kind") == "soccer3":
+                    return None        # soccer 3-way: only via RN1_SOCCER
                 if st.get("fair_yes") is not None and st.get("t"):
                     age = max(0.0, time.time() - float(st["t"])) + \
                         float(st.get("odds_age_s") or 0.0)
@@ -6106,8 +6444,18 @@ class Engine:
         shadow holds a fair within RN1_DIR_SHARP_MAX_AGE_S."""
         if self.guard is not None and self.guard.token(slug):
             return True
+        if self.rn1_soccer_ok(slug):
+            st = ((self.b.d.get("sharp_shadow") or {}).get(slug) or {})
+            if st.get("kind") == "soccer3" and st.get("t") and \
+                    st.get("fair_yes") is not None:
+                age = time.time() - float(st["t"]) + \
+                    float(st.get("odds_age_s") or 0.0)
+                return age <= RN1_DIR_SHARP_MAX_AGE_S
+            return False
         if RN1_DIR_SHARP:
             st = ((self.b.d.get("sharp_shadow") or {}).get(slug) or {})
+            if st.get("kind") == "soccer3":
+                return False
             if st.get("fair_yes") is not None and st.get("t"):
                 age = time.time() - float(st["t"]) + \
                     float(st.get("odds_age_s") or 0.0)
@@ -6212,7 +6560,11 @@ class Engine:
                          "favourite": fair_m >= D("0.5"),
                          "source": prob.get("source")}
             if edge < need:
-                return "tf_negative_ev"
+                hw = self.rn1_soccer_hedge_ok(slug, side, px, qty, fair_m)
+                rec[side]["cross_hedge"] = hw
+                if hw != "ok":
+                    return "tf_negative_ev"
+                return None
             fh = mk.get("_tf_fair") or []
             if RN1_TF_WEAKEN_USD > 0 and len(fh) > 1:
                 d = fh[-1][1] - fh[0][1]
@@ -6234,6 +6586,36 @@ class Engine:
             return None
         except Exception as exc:                          # noqa: BLE001
             return "tf_error:%s" % type(exc).__name__   # fail closed
+
+    def rn1_soccer_hedge_ok(self, slug: str, side: str, px: Any, qty: Any,
+                            fair: Any) -> str:
+        """ECONOMICAL CROSS-OUTCOME HEDGE (PMUS_RN1_SOCCER, allowlisted
+        league, RN1_TF_HEDGE_GIVE_USD set): a bid that fails the edge test
+        is still admitted when it is priced <= its independent fair +
+        RN1_TF_HEDGE_GIVE_USD AND, filled, it LOWERS the match's exact worst
+        case (filled inventory of the three outcome markets). "ok" or the
+        reason it is not a hedge. Never forces a pairing."""
+        try:
+            if not self.rn1_soccer_ok(slug):
+                return "not_soccer"
+            if RN1_TF_HEDGE_GIVE_USD is None:
+                return "no_hedge_give"
+            q = D(str(qty or 0))
+            if q <= 0:
+                return "no_qty"
+            if D(str(px)) > D(str(fair)) + RN1_TF_HEDGE_GIVE_USD:
+                return "above_fair_plus_give"
+            from src import pmus_sports_soccer_fair as SF
+            g0 = self.rn1_soccer_group(slug)
+            g1 = self.rn1_soccer_group(slug, extra=(slug, side, px, q),
+                                       filled_extra=True)
+            if g0 is None or g1 is None:
+                return "group_unreadable"
+            w0 = SF.match_worst(g0["holdings"], g0["outcomes"])
+            w1 = SF.match_worst(g1["holdings"], g1["outcomes"])
+            return "ok" if w1 > w0 else "does_not_reduce_worst"
+        except Exception as exc:                          # noqa: BLE001
+            return "error:%s" % type(exc).__name__
 
     def rn1_directional_inputs(self, slug: str, want: Mapping[str, Any],
                                bbo: Mapping[str, Any]) -> tuple:
@@ -9153,7 +9535,13 @@ class Engine:
         if self.foreign_exposure(slug, acct):
             return False
         ek = event_key(slug)
-        if any(s_ != slug and event_key(s_) == ek for s_ in self.active()):
+        # PMUS_RN1_SOCCER (allowlisted leagues): the match's OTHER outcome
+        # markets may be held together -- the match is one risk under the
+        # joint caps (rn1_soccer_group_why). Anything else of the same game
+        # still blocks, as before.
+        if any(s_ != slug and event_key(s_) == ek and not (
+                self.rn1_soccer_ok(slug) and self.rn1_soccer_ok(s_))
+               for s_ in self.active()):
             return False
         spec = self.v.spec(slug)
         bbo = self.v.bbo(slug) if spec else None
@@ -9408,8 +9796,16 @@ class Engine:
         """Markets the international feed should follow: the active ones,
         plus the few candidates the ranking is trying to price."""
         act = list(self.active())
-        return act + [s for s in getattr(self, "_rank_watch", ())
-                      if s not in act]
+        out = act + [s for s in getattr(self, "_rank_watch", ())
+                     if s not in act]
+        if RN1_SOCCER:
+            # the three-way sum check needs every outcome's intl mid
+            from src import pmus_sports_soccer_fair as SF
+            for s_ in list(out):
+                if self.rn1_soccer_ok(s_):
+                    out += [x for x in SF.match_of(s_)["siblings"]
+                            if x not in out]
+        return out
 
     def _opportunity(self, slug: str, R: Any) -> Dict[str, Any]:
         spec = self.v.spec(slug)
@@ -9681,7 +10077,13 @@ class Engine:
         # SAME game at once: their results are tied together and would put
         # both slots, and both per-market caps, on one match.
         ek = event_key(slug)
-        if any(s_ != slug and event_key(s_) == ek for s_ in self.active()):
+        # PMUS_RN1_SOCCER (allowlisted leagues): the match's OTHER outcome
+        # markets may be held together -- the match is one risk under the
+        # joint caps (rn1_soccer_group_why). Anything else of the same game
+        # still blocks, as before.
+        if any(s_ != slug and event_key(s_) == ek and not (
+                self.rn1_soccer_ok(slug) and self.rn1_soccer_ok(s_))
+               for s_ in self.active()):
             return False
         spec = self.v.spec(slug)
         bbo = self.v.bbo(slug) if spec else None
@@ -9897,7 +10299,8 @@ class Engine:
         # every step, from the book: the hourly audit is too slow to be the
         # only at-risk check inside a 60-90 minute window
         from src import pmus_pilot_pnl as PP
-        if PP.book_worst_case(self.b.d.get("markets") or {}, self.since) \
+        if PP.book_worst_case(self.b.d.get("markets") or {}, self.since) + (
+                self.rn1_soccer_book_adjust() if RN1_SOCCER else D(0)) \
                 <= -PILOT_LOSS_USD:
             return "pilot_loss_at_risk_book"
         r = getattr(self, "_pilot", None)

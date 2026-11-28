@@ -71,12 +71,6 @@ def _event(*books, home="Real Betis", away="Rayo Vallecano", ct=START):
 PIN = _book("pinnacle", [2.0, 4.0, 4.0])      # 0.5/0.25/0.25 -> sum 1.0
 
 
-@pytest.fixture(autouse=True)
-def _words(monkeypatch):
-    # feed names are short forms of the venue's full names
-    monkeypatch.setattr(SH, "NAME_MATCH", "words")
-
-
 # ------------------------------------------------------------ h2h3 / devig
 def test_h2h3_devig_sums_to_one_and_keys():
     got = SF.h2h3(_book("x", [2.1, 3.4, 3.6]), now=NOW)
@@ -270,10 +264,20 @@ def test_fair_refuses_wrong_team():
         (None, "no_event_match")
 
 
-def test_fair_exact_names_required_by_default(monkeypatch):
-    monkeypatch.setattr(SH, "NAME_MATCH", "exact")
-    assert SF.soccer_market_fair(MK_BET, EVENT_MKS, [_event(PIN)],
-                                 now=NOW) == (None, "no_event_match")
+def test_fair_matching_is_alias_based_not_words_mode(monkeypatch):
+    # PMUS_SHARP_NAME_MATCH is irrelevant: the club key table decides
+    for mode in ("exact", "words"):
+        monkeypatch.setattr(SH, "NAME_MATCH", mode)
+        f, why = SF.soccer_market_fair(MK_BET, EVENT_MKS, [_event(PIN)],
+                                       now=NOW)
+        assert why == "ok"
+    # a feed spelling with no alias and no strip rule is refused
+    ev = _event(_book("pinnacle", [2, 4, 4], names=("Betis Sevilla",
+                                                    "Rayo Vallecano",
+                                                    "Draw")),
+                home="Betis Sevilla")
+    assert SF.soccer_market_fair(MK_BET, EVENT_MKS, [ev], now=NOW) == \
+        (None, "no_event_match")
 
 
 def test_fair_refuses_start_time_mismatch_and_ambiguous():
@@ -349,10 +353,95 @@ def test_shadow_rows_on(monkeypatch):
     assert sorted(r["fair_yes"] for r in rows) == ["0.25", "0.25", "0.5"]
 
 
-def test_not_imported_by_trading_loop():
-    import pathlib
-    src = pathlib.Path(__file__).resolve().parents[1] / "src"
-    hits = [p.name for p in src.glob("*.py")
-            if p.name != "pmus_sports_soccer_fair.py"
-            and "pmus_sports_soccer_fair" in p.read_text(errors="ignore")]
-    assert hits == []
+def test_engine_soccer_flags_default_off():
+    import importlib
+    from src import pmus_sports_two_sided as M
+    import os
+    for k in ("PMUS_SHARP_SOCCER", "PMUS_RN1_SOCCER",
+              "PMUS_RN1_SOCCER_LEAGUES"):
+        assert not os.environ.get(k)
+    assert M.SHARP_SOCCER is False and M.RN1_SOCCER is False
+    assert M.RN1_SOCCER_LEAGUES == ()
+
+
+# ------------------------------------------------ club aliases (real names)
+# venue names: public catalogue 28 Nov (slate) and 22 Nov (settled Serie A);
+# feed names: usual sportsbook spellings, UNVERIFIED against the provider.
+@pytest.mark.parametrize("venue,feed", [
+    ("Real Betis Balompié", "Real Betis"),
+    ("Rayo Vallecano de Madrid", "Rayo Vallecano"),
+    ("FC Internazionale Milano", "Inter Milan"),
+    ("Genoa CFC", "Genoa"), ("Torino FC", "Torino"), ("SS Lazio", "Lazio"),
+    ("Parma Calcio 1913", "Parma"), ("Frosinone Calcio", "Frosinone"),
+    ("Bologna FC 1909", "Bologna"), ("Udinese Calcio", "Udinese"),
+    ("US Sassuolo Calcio", "Sassuolo"), ("PSV", "PSV Eindhoven"),
+    ("SBV Excelsior", "Excelsior"), ("Telstar 1963", "Telstar"),
+    ("SC Cambuur-Leeuwarden", "SC Cambuur"),
+    ("1. FC Köln", "FC Koln"), ("SC Paderborn 07", "SC Paderborn"),
+    ("FC Schalke 04", "Schalke 04"), ("SV 07 Elversberg", "SV Elversberg"),
+    ("Ipswich Town FC", "Ipswich Town"), ("Aston Villa FC", "Aston Villa"),
+    ("Leeds United FC", "Leeds United"),
+    ("Coventry City FC", "Coventry City"),
+])
+def test_club_key_venue_and_feed_agree(venue, feed):
+    assert SF.club_key(venue) == SF.club_key(feed) != ""
+
+
+def test_club_key_strip_rules_are_edge_only_and_explicit():
+    assert SF.club_key("AC Milan") == "milan"
+    assert SF.club_key("FC") == "fc"            # never strips to nothing
+    assert SF.club_key("Real Madrid") == "real madrid"   # "madrid" kept
+    assert SF.club_key("Atletico de Madrid") == "atletico"
+    assert SF.club_key("Inter") != SF.club_key("AC Milan")
+    assert SF.club_key("Sparta Rotterdam") == "sparta rotterdam"
+
+
+def test_club_pair_one_to_one_and_ambiguity_refused():
+    t = ("Real Betis Balompié", "Rayo Vallecano de Madrid")
+    assert SF.club_pair(t, "Real Betis", "Rayo Vallecano") == {
+        t[0]: "Real Betis", t[1]: "Rayo Vallecano"}
+    assert SF.club_pair(t, "Rayo Vallecano", "Real Betis") == {
+        t[0]: "Real Betis", t[1]: "Rayo Vallecano"}
+    assert SF.club_pair(t, "Real Betis", "Real Betis Balompie") is None
+    assert SF.club_pair(t, "Real Betis", "Sevilla") is None
+    assert SF.club_pair(("Inter", "FC Internazionale Milano"),
+                        "Inter", "Genoa") is None     # venue keys collide
+    assert SF.club_pair(t, "Real Betis", "Draw") is None
+
+
+def test_fair_ambiguous_when_two_feed_events_alias_to_same_match():
+    a = _event(PIN)
+    b = dict(_event(PIN, home="Real Betis Balompie",
+                    away="Rayo Vallecano de Madrid"), id="ev2")
+    assert SF.soccer_market_fair(MK_BET, EVENT_MKS, [a, b], now=NOW) == \
+        (None, "ambiguous_event")
+
+
+# ------------------------------------------- settled venue outcomes (real)
+# Public venue records (closed, 22 Nov), outcomePrices [Yes, No]:
+SETTLED = {
+    "atc-sea-bol-udi-2026-11-22-bol": ["0", "1"],
+    "atc-sea-bol-udi-2026-11-22-draw": ["1", "0"],     # ended in a draw
+    "atc-sea-bol-udi-2026-11-22-udi": ["0", "1"],
+    "atc-sea-sas-gen-2026-11-22-sas": ["0", "1"],
+    "atc-sea-sas-gen-2026-11-22-draw": ["0", "1"],
+    "atc-sea-sas-gen-2026-11-22-gen": ["1", "0"],      # Genoa won
+}
+
+
+def test_settled_draw_pays_draw_yes_and_both_team_markets_no():
+    """'If the match is tied ... settle to Tie' = team market NO."""
+    for match, result in (("atc-sea-bol-udi-2026-11-22", "draw"),
+                          ("atc-sea-sas-gen-2026-11-22", "gen")):
+        mo = SF.match_of(match + "-draw")
+        for slug, o in zip(mo["siblings"], mo["outcomes"]):
+            yes = SETTLED[slug][0] == "1"
+            assert yes == (o == result)
+        # exactly one outcome market of a match settles YES
+        assert sum(SETTLED[s][0] == "1" for s in mo["siblings"]) == 1
+        # and that is what outcome_pnl's payoff assumes
+        hold = {o: {"pos": {"YES": "1", "NO": "0"},
+                    "cost": {"YES": "0", "NO": "0"}}
+                for o in mo["outcomes"]}
+        pnl = SF.outcome_pnl(hold, mo["outcomes"])
+        assert pnl[result] == 1 and all(v == 1 for v in pnl.values())
