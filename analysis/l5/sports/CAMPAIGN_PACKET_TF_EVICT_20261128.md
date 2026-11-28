@@ -83,3 +83,19 @@ Reply with:
 **Left off until the counters are read:** the events-page TTL and the fill-list seeding. Exact-order reads, cancel timing and priority, the account cadence and the fail-closed read are unchanged.
 
 To choose this option, authorize Release B in place of `97a22688d`, plus those two variables.
+
+## 9. Addendum (18:36Z): selection-ranking release option
+
+**Release C: `4bf99cc6d6b5b601d88ee9d9ed4a912f1a2e5cb5`**, branch `release/pmus-sports-tf-select-4bf99cc6d`. It is Release B plus the integrated `dev/l5-tf-selection-correction` commits.
+
+- **Kept as committed:** `44123c91c` (reward discovery no longer re-sorts trading-first candidates).
+- **Corrected:** `3f941d850` (rank by listing edge). As committed it had two defects:
+  - it called the fair-stability routine for every candidate, which extends or clears the price history the admission gate depends on;
+  - it got no probability for candidates (they are not subscribed on the guard), so `TF_SELECT=only` would have dropped every new candidate.
+- **Now:** eligibility is unchanged (an independent fair source). Ranking uses a read-only peek at the fresh international mid or the fresh sportsbook fair, and never touches the stability history. Order: known edge ≥ 0, then unknown, then known negative. `PMUS_RN1_TF_SELECT_MIN_EDGE` can drop known negatives (unset = off).
+- **Superseded:** `9293da8ee` and `3dca8a583` (gateway counters). Release B's per-route counters already count every public gateway read, with errors and 429s.
+- **7 new tests:** tier order; candidates without a live quote are kept; the stability history is untouched after ranking; a stale sportsbook fair is treated as unknown; the minimum-edge drop; the underdog extra edge; errors keep the candidate.
+- **Regression:** 6,381 passed, 27 failed. 26 are the baseline; the 27th is the port collision from concurrent suites and passes alone.
+- **Behaviour change:** the ranking acts whenever `TF_SELECT` is on, with no separate flag.
+
+**Choice for 22:15Z:** A (`97a22688d`, fully tested, smallest change), B (A plus request counters and the two combo-shadow settings), or C (B plus ranking). The recommendation is **B**. C's ranking is tested but new, and in practice most candidates are in the "unknown" tier because the guard only subscribes active markets, so its benefit tonight is small.
