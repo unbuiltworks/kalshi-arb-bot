@@ -154,7 +154,42 @@ def fair_from_event(event: Mapping[str, Any], *, now: float,
 
 # --------------------------------------------------------------- matching
 def norm(name: Any) -> str:
-    return re.sub(r"[^a-z0-9]+", " ", str(name or "").lower()).strip()
+    import unicodedata
+    t = unicodedata.normalize("NFKD", str(name or ""))
+    t = "".join(c for c in t if not unicodedata.combining(c))
+    return re.sub(r"[^a-z0-9]+", " ", t.lower()).strip()
+
+
+#: "exact" (default, unchanged) or "words": a market team name also matches a
+#: feed name that contains it as whole words at its start or end ("Lightning"
+#: ~ "Tampa Bay Lightning", "Air Force" ~ "Air Force Falcons"). Both teams
+#: must pair one-to-one and the start time must agree, so a nickname shared by
+#: two feed teams of the same game is still refused.
+NAME_MATCH = os.getenv("PMUS_SHARP_NAME_MATCH", "exact").strip().lower()
+
+
+def name_match(market_name: Any, feed_name: Any, mode: Optional[str] = None
+               ) -> bool:
+    a, b = norm(market_name), norm(feed_name)
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    if (mode or NAME_MATCH) != "words":
+        return False
+    return b.startswith(a + " ") or b.endswith(" " + a) or \
+        a.startswith(b + " ") or a.endswith(" " + b)
+
+
+def teams_match(teams: Tuple[str, str], home: Any, away: Any,
+                mode: Optional[str] = None) -> Optional[Dict[str, str]]:
+    """{market team -> feed team} when both pair one-to-one, else None."""
+    y, n = teams
+    for fy, fn in ((home, away), (away, home)):
+        if name_match(y, fy, mode) and name_match(n, fn, mode) and \
+                not (name_match(y, fn, mode) or name_match(n, fy, mode)):
+            return {y: str(fy), n: str(fn)}
+    return None
 
 
 def sport_code(slug: str) -> str:
@@ -189,14 +224,13 @@ def match_event(market: Mapping[str, Any], events: Iterable[Mapping[str, Any]]
     start = _ts(market.get("gameStartTime"))
     if teams is None or start is None:
         return None
-    want = {norm(teams[0]), norm(teams[1])}
     hits = []
     for ev in events:
         if not isinstance(ev, Mapping):
             continue
-        got = {norm(ev.get("home_team")), norm(ev.get("away_team"))}
         t = _ts(ev.get("commence_time"))
-        if got == want and t is not None and abs(t - start) <= MATCH_TOL_S:
+        if teams_match(teams, ev.get("home_team"), ev.get("away_team")) \
+                and t is not None and abs(t - start) <= MATCH_TOL_S:
             hits.append(ev)
     return hits[0] if len(hits) == 1 else None
 
@@ -210,7 +244,9 @@ def fair_yes(market: Mapping[str, Any], events: Iterable[Mapping[str, Any]],
     if f is None:
         return None
     yes, _no = market_teams(market)
-    p = f["probs"].get(norm(yes))
+    pair = teams_match(market_teams(market), ev.get("home_team"),
+                       ev.get("away_team")) or {}
+    p = f["probs"].get(norm(pair.get(yes, yes)))
     if p is None:
         return None
     return {"fair_yes": p, "source": f["source"], "age_s": f["age_s"],
@@ -236,8 +272,8 @@ def diagnose(market: Mapping[str, Any], events: Iterable[Mapping[str, Any]],
             return out
         out["teams"] = [teams[0], teams[1]]
         want = {norm(teams[0]), norm(teams[1])}
-        exact = [e for e in evs if {norm(e.get("home_team")),
-                                    norm(e.get("away_team"))} == want]
+        exact = [e for e in evs if teams_match(teams, e.get("home_team"),
+                                               e.get("away_team"))]
         if not exact:
             words = set(" ".join(want).split())
             near = sorted(evs, key=lambda e: -len(words & set(
@@ -371,6 +407,13 @@ class OddsClient:
         self.used: Optional[int] = None
         self.last_error: Optional[str] = None
         self.calls = 0
+        # PMUS_SHARP_REFRESH=on_demand (default "poll" = unchanged): a cached
+        # sport is refetched once its odds are older than MAX_ODDS_AGE_S,
+        # at most PMUS_SHARP_DAILY_CALLS times per UTC day, so the quota is
+        # spent only where a candidate needs fresh odds.
+        self.refresh = os.getenv("PMUS_SHARP_REFRESH", "poll").strip()
+        self.daily_calls = int(os.getenv("PMUS_SHARP_DAILY_CALLS", "8"))
+        self._day: Tuple[str, int] = ("", 0)
 
     @property
     def configured(self) -> bool:
@@ -381,7 +424,17 @@ class OddsClient:
         hit = self.cache.get(sport_key)
         # polling is unchanged until provider coverage and quota are
         # reported (issue #251); stale odds are still refused downstream
-        if hit and now - hit[0] < self.poll_s:
+        if self.refresh == "on_demand":
+            day = time.strftime("%Y-%m-%d", time.gmtime(now))
+            if self._day[0] != day:
+                self._day = (day, 0)
+            if hit and now - hit[0] < MAX_ODDS_AGE_S:
+                return hit[1]
+            if self._day[1] >= self.daily_calls:
+                self.last_error = "DAILY_CALL_CAP"
+                return hit[1] if hit else []
+            self._day = (day, self._day[1] + 1)
+        elif hit and now - hit[0] < self.poll_s:
             return hit[1]
         if not self.configured:
             self.last_error = "NO_KEY"
@@ -472,6 +525,8 @@ class OddsClient:
 
     def status(self) -> Dict[str, Any]:
         return {"configured": self.configured, "calls": self.calls,
+                "refresh": self.refresh, "calls_today": self._day[1],
+                "daily_calls": self.daily_calls,
                 "remaining": self.remaining, "used": self.used,
                 "last_error": self.last_error, "poll_s": self.poll_s,
                 "reserve": self.reserve}

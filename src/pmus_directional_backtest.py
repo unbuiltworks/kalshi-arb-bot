@@ -313,6 +313,9 @@ class Market:
                                       "NO": qc["depth_ticks"]}
             if self.policy.get("pause_min_size"):
                 qc["qty"] = str(self.sim["min_qty"])
+        hpc = self.policy.get("hedge_pair_cap")
+        if hpc is not None and D(str(hpc)) < D(str(qc["pair_cap"])):
+            qc["pair_cap"] = str(hpc)        # only ever tighter
         q = RN1.quotes(yes_bid=f["yes_bid"], yes_ask=f["yes_ask"], tick=tick,
                        pos=self.pos, cost=self.cost,
                        last_fill_t=self.last_fill_t, now=t,
@@ -336,6 +339,30 @@ class Market:
             if tg["px"] > fair_s - margin:
                 want[s] = None
                 self.decisions["guard"] += 1
+        # hedge economics (offline knobs; completions only):
+        #   hedge_give  complete only while px <= fair_side + give (the
+        #               hedge's EV cost vs the independent fair is bounded;
+        #               otherwise the favourable residual is held)
+        #   hedge_frac  complete this fraction of the imbalance per order
+        hg = self.policy.get("hedge_give")
+        hf = self.policy.get("hedge_frac")
+        for s in ("YES", "NO"):
+            tg = want[s]
+            if tg is None or tg["role"] != "complete":
+                continue
+            if hg is not None and mid is not None:
+                fair_s = mid if s == "YES" else ONE - mid
+                if tg["px"] > fair_s + D(str(hg)):
+                    want[s] = None
+                    self.decisions["hedge_held"] += 1
+                    continue
+            if hf is not None:
+                o = "NO" if s == "YES" else "YES"
+                need = self.pos[o] - self.pos[s]
+                qq = max(D(str(self.sim["min_qty"])),
+                         (need * D(str(hf))).to_integral_value(
+                             rounding="ROUND_CEILING"))
+                want[s] = dict(tg, qty=min(D(str(tg["qty"])), qq))
         # trading-first admission (pre-reward marginal EV; offline knobs):
         #   require_fair  no independent fair -> no opening/addition
         #   edge_min      fair_side - px - ev_fill_loss >= edge_min
