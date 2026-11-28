@@ -241,11 +241,28 @@ def match_event(market: Mapping[str, Any], events: Iterable[Mapping[str, Any]]
     return hits[0] if len(hits) == 1 else None
 
 
+def is_moneyline(market: Mapping[str, Any]) -> bool:
+    """True only for a two-way full-game / match winner. The venue labels
+    these `<sport>_team_full_game_winner` / `<sport>_match_winner` with
+    sportsMarketTypeV2 SPORTS_MARKET_TYPE_MONEYLINE (catalogue 28 Nov). A
+    period, half, quarter, set or regulation winner, a drawable (soccer
+    full-time) outcome, a spread, a total or a prop is NOT. A market with no
+    type at all keeps the previous behaviour (moneyline by construction of
+    the caller); any other label is refused."""
+    t = str(market.get("sportsMarketType") or "").strip().lower()
+    v2 = str(market.get("sportsMarketTypeV2") or "").strip().upper()
+    if not t and not v2:
+        return True
+    if v2 and v2 != "SPORTS_MARKET_TYPE_MONEYLINE":
+        return False
+    return t in ("moneyline", "h2h") or t.endswith("_team_full_game_winner") \
+        or t.endswith("_match_winner") or (not t and bool(v2))
+
+
 def fair_yes(market: Mapping[str, Any], events: Iterable[Mapping[str, Any]],
              *, now: float) -> Optional[Dict[str, Any]]:
     # Explicit non-moneyline contracts must never inherit h2h fair value.
-    kind = str(market.get("sportsMarketType") or "").strip().lower()
-    if kind and kind not in ("moneyline", "h2h"):
+    if not is_moneyline(market):
         return None
     ev = match_event(market, events)
     if ev is None:
@@ -453,7 +470,12 @@ class OddsClient:
             self.last_error = "BUDGET_RESERVE"
             return hit[1] if hit else []
         q = urllib.parse.urlencode({
-            "apiKey": self._key.strip(), "regions": "eu", "markets": "h2h",
+            "apiKey": self._key.strip(), "regions": "eu",
+            # PMUS_SHARP_MARKETS (default "h2h" = unchanged): e.g.
+            # "h2h,spreads,totals" -- the provider charges one request per
+            # market key per region, so three keys cost 3 per call.
+            "markets": os.getenv("PMUS_SHARP_MARKETS", "h2h").strip()
+            or "h2h",
             "oddsFormat": "decimal", "dateFormat": "iso"})
         url = "%s/sports/%s/odds?%s" % (ODDS_BASE, sport_key, q)
         try:

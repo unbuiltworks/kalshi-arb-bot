@@ -1844,6 +1844,15 @@ RN1_DIR_SHARP_DRIFT = os.getenv("PMUS_RN1_DIR_SHARP_DRIFT", "0.00002")
 # Tape evidence (THEORETICAL, 21 Nov two-venue recording, pre-reward):
 # analysis/l5/sports/directional/TRADING_FIRST_*_20261128.txt.
 _TF_UNSET = object()
+# EXPANDED MARKETS (28 Nov, PR #253 integration; all default off):
+#   PMUS_SHARP_LINES=1   price exact full-game spreads / game totals of each
+#                        sharp candidate's event (needs PMUS_SHARP_MARKETS to
+#                        include spreads,totals) into the shadow state
+#   PMUS_RN1_LINE_MARKETS=1  priced line markets join the selection slate
+SHARP_LINES = os.getenv("PMUS_SHARP_LINES", "0").strip() == "1"
+SHARP_LINE_REFRESH_S = float(os.getenv("PMUS_SHARP_LINE_REFRESH_S", "600"))
+SHARP_LINE_GAP_S = float(os.getenv("PMUS_SHARP_LINE_GAP_S", "0.5"))
+RN1_LINE_MARKETS = os.getenv("PMUS_RN1_LINE_MARKETS", "0").strip() == "1"
 RN1_TRADING_FIRST = os.getenv("PMUS_RN1_TRADING_FIRST", "0").strip() == "1"
 RN1_TF_EDGE_USD = D(os.getenv("PMUS_RN1_TF_EDGE_USD", "0.02"))
 RN1_TF_FAV_ONLY = os.getenv("PMUS_RN1_TF_FAV_ONLY", "0").strip() == "1"
@@ -5156,6 +5165,8 @@ class Engine:
                                      else str(q["YES"]),
                                      "NO": None if q["NO"] is None
                                      else str(q["NO"])}}
+        if SHARP_LINES:
+            rows += self.sharp_line_shadow(cands, by_sport, state, now)
         for slug in [k for k, v in state.items()
                      if now - float(v.get("t") or 0) > 6 * 3600]:
             state.pop(slug, None)
@@ -5163,6 +5174,89 @@ class Engine:
                   modelled_fills=fills)
         log("SHARP_STATUS", **st)
         return st
+
+    # ------------------------------------------------ line markets (shadow)
+    def sharp_line_events(self, siblings: List[Mapping[str, Any]]) -> None:
+        """Hand the moneyline candidates to the background line refresher
+        (started once). The loop never fetches event listings itself."""
+        self._line_want = {str(m.get("slug")): dict(m) for m in siblings
+                           if str(m.get("slug") or "").startswith("aec-")}
+        if getattr(self, "_line_thread", None) is None:
+            self._line_cache = getattr(self, "_line_cache", {})
+            th = threading.Thread(target=self._line_refresh_loop,
+                                  name="sharp-lines", daemon=True)
+            self._line_thread = th
+            th.start()
+
+    def _line_refresh_loop(self) -> None:
+        from src import pmus_sports_line_fair as LF
+        while not getattr(self, "stop", False):
+            for sib, m in list((getattr(self, "_line_want", None) or {}
+                                ).items()):
+                ev = sib[4:]
+                hit = self._line_cache.get(ev)
+                if hit and time.time() - hit["t"] < SHARP_LINE_REFRESH_S:
+                    continue
+                try:
+                    d = self.v.gget("/v1/events?slug=%s" % ev)
+                    evs = d.get("events") if isinstance(d, Mapping) else None
+                    ms = [x for e in (evs or []) if isinstance(e, Mapping)
+                          for x in e.get("markets") or []
+                          if isinstance(x, Mapping) and str(
+                              x.get("sportsMarketType") or "") in
+                          LF.LINE_TYPES]
+                    self._line_cache[ev] = {"t": time.time(), "markets": ms,
+                                            "sibling": m}
+                except Exception as exc:                  # noqa: BLE001
+                    log("sharp_line_refresh_error", event=ev,
+                        err=type(exc).__name__)
+                time.sleep(SHARP_LINE_GAP_S)
+            time.sleep(max(5.0, SHARP_LINE_REFRESH_S / 10))
+
+    def sharp_line_shadow(self, cands: List[Mapping[str, Any]],
+                          by_sport: Mapping[str, List[Mapping[str, Any]]],
+                          state: Dict[str, Any], now: float) -> int:
+        """Exact full-game spread / game total fairs (pmus_sports_line_fair)
+        from the odds ALREADY fetched this tick for the sibling moneyline's
+        sport; stored in the same sharp_shadow state the trading-first gate
+        reads (RN1_DIR_SHARP). Logs every refusal reason. Places nothing."""
+        from src import pmus_sports_line_fair as LF
+        from src import pmus_sports_sharp as SH
+        self.sharp_line_events(cands)
+        rows = 0
+        why_n: Dict[str, int] = {}
+        for code, ms in by_sport.items():
+            events = self._odds.cache.get(SH.SPORT_KEYS[code],
+                                          (0, []))[1]
+            for sib in ms:
+                hit = (getattr(self, "_line_cache", None) or {}).get(
+                    str(sib.get("slug"))[4:])
+                for lm in (hit or {}).get("markets") or []:
+                    f, why = LF.line_market_fair(lm, sib, events, now=now)
+                    why_n[why] = why_n.get(why, 0) + 1
+                    slug = str(lm.get("slug"))
+                    if f is None:
+                        state.pop(slug, None)
+                        continue
+                    rows += 1
+                    state[slug] = {"t": now, "fair_yes": str(f["fair_yes"]),
+                                   "odds_age_s": f.get("age_s") or 0.0,
+                                   "source": f["source"], "kind": f["kind"],
+                                   "point": f["point"],
+                                   "sibling": str(sib.get("slug")),
+                                   "q": {"YES": None, "NO": None}}
+                    self._line_targets = getattr(self, "_line_targets", {})
+                    self._line_targets[slug] = {
+                        "slug": slug, "game_start": parse_start(
+                            sib.get("gameStartTime")),
+                        "market_meta": {k: lm.get(k) for k in
+                                        ("bestBidQuote", "bestAskQuote")
+                                        if lm.get(k) is not None}}
+        log("SHARP_LINES", priced=rows, reasons=why_n,
+            events_cached=len(getattr(self, "_line_cache", {}) or {}),
+            label="exact full-game spread/total fairs (shadow state); "
+                  "nothing placed")
+        return rows
 
     # ------------------------------------------- account-wide risk (shared)
     def own_exposure_usd(self) -> D:
@@ -8399,6 +8493,22 @@ class Engine:
         """Candidates for the one controller: games in progress, games not
         yet started, or both (PMUS_TWO_SIDED_SLATE). With both, a game in
         progress comes first and a market is listed once."""
+        out = self._slate_targets()
+        if RN1_LINE_MARKETS:
+            # priced line markets (sharp_line_shadow) join the slate; the
+            # trading-first gate still needs their fresh independent fair
+            seen = {t["slug"] for t in out}
+            now = time.time()
+            for slug, tg in list((getattr(self, "_line_targets", None)
+                                  or {}).items()):
+                st = ((self.b.d.get("sharp_shadow") or {}).get(slug) or {})
+                if slug in seen or not st.get("fair_yes") or \
+                        now - float(st.get("t") or 0) > SHARP_SHADOW_EVERY_S * 2:
+                    continue
+                out.append(tg)
+        return out
+
+    def _slate_targets(self) -> list:
         sl = slate()
         if sl == "pregame":
             return self.v.pregame_sports()
@@ -10869,6 +10979,18 @@ def start_combo_maker(venue: "Venue", eng: "Engine") -> Optional[Any]:
                 out[sy] = venue.bbo(sy)
             except Exception:                            # noqa: BLE001
                 out[sy] = None
+            if CM.INDEPENDENT in ("prefer", "require") and out[sy]:
+                # independent leg fair (PMUS_COMBO_INDEPENDENT): the fresh
+                # sportsbook / line shadow fair only, never the venue mid
+                try:
+                    st = ((eng.b.d.get("sharp_shadow") or {}).get(sy) or {})
+                    age = time.time() - float(st.get("t") or 0) + \
+                        float(st.get("odds_age_s") or 0.0)
+                    if st.get("fair_yes") is not None and \
+                            age <= RN1_DIR_SHARP_MAX_AGE_S:
+                        out[sy] = dict(out[sy], fair_yes=st["fair_yes"])
+                except Exception:                        # noqa: BLE001
+                    pass
         return out
 
     mk = CM.ComboMaker(
