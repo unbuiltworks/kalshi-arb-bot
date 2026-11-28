@@ -123,6 +123,7 @@ COPY src/l5_completion_policy.py src/l5_completion_policy.py
 COPY src/l5_account_risk.py src/l5_account_risk.py
 COPY src/pmus_sports_sharp.py src/pmus_sports_sharp.py
 COPY src/pmus_sports_line_fair.py src/pmus_sports_line_fair.py
+COPY src/pmus_sports_soccer_fair.py src/pmus_sports_soccer_fair.py
 COPY src/pmus_combo_maker.py src/pmus_combo_maker.py
 COPY src/pmus_rn1_replica.py src/pmus_rn1_replica.py
 # Imported lazily by pmus_sports_two_sided.py when PMUS_RN1_DURATION_RANK /
