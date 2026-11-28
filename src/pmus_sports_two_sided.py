@@ -9671,7 +9671,13 @@ class Engine:
         if any(o.get("open") for o in (mk.get("orders") or {}).values()):
             return False
         now = time.time() if now is None else now
-        return now - float(at) >= RN1_RESELECT_COOLDOWN_S
+        cooldown = RN1_RESELECT_COOLDOWN_S
+        if RN1_TRADING_FIRST:
+            # Repeated flat releases consume scarce request capacity. Bound
+            # the backoff to five minutes; legacy mode is unchanged.
+            repeats = max(0, int(mk.get("reselected") or 0))
+            cooldown = max(cooldown, min(300.0, 60.0 * (2 ** min(repeats, 3))))
+        return now - float(at) >= cooldown
 
     def _try_select(self, slug: str, acct: Mapping[str, Any],
                     rp: Optional[Mapping[str, Any]],
