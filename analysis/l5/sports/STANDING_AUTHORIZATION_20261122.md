@@ -3058,3 +3058,8 @@ authorization."
   - This variable is **not in §5**, so it needs owner confirmation for the
     armed window. Otherwise the arm sequence restores it to 1.
 - **Lock held throughout:** `why: locked`. 0 orders, 0 positions.
+
+### 88a. NET_RANK=0 confirmed for the armed window — 28 Nov 2026
+
+Owner, verbatim: "I confirm PMUS_RN1_NET_RANK=0 for the armed window." The
+arm sequence keeps `PMUS_RN1_NET_RANK=0`; every other §5 variable is unchanged.
