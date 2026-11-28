@@ -3035,3 +3035,26 @@ weakened safety controls."
     coverage is below 80% by 16:35Z, the service is relocked.
 - **Arming:** scheduled at 15:45Z (re-verify, then set the window).
   Close-out scheduled at 21:17Z.
+
+### 88. Readiness under the disarmed apply authorization — 28 Nov 2026, 15:25 UTC
+
+Owner: "I explicitly authorize applying the existing expanded sports campaign
+configuration on SHA 9e6c2039f now, while strictly disarmed. [...] Resolve any
+remaining operational blockers. [...] Do not arm or trade under this
+authorization."
+
+- **Blocker 1: slot deadlock.** Two flat, out-of-scope markets held both slots
+  under the account-wide lock, so selection never ran.
+  - Temporary `PMUS_RN1_LIVE_FIRST=1` (deploy `7bd10fc4`) let selection run;
+    the guard resolved 28 candidates.
+  - **Reverted to 0** at 15:23Z.
+- **Blocker 2: reward-net selection filter.** `RN1_NET_RANK=1` kept only
+  candidates with a positive reward-net estimate (`RN1_REWARD_RANK
+  candidates: 0`). Under trading-first, rewards must not decide selection.
+  - Set `PMUS_RN1_NET_RANK=0` (deploy `9dd80731`, 15:05Z). After that, the two
+    stale markets were released and `RN1_TF_SELECT mode=only candidates=30
+    with_independent_fair=30` (100%).
+  - The guard WebSocket is connected; resolved 30, matched 1.
+  - This variable is **not in §5**, so it needs owner confirmation for the
+    armed window. Otherwise the arm sequence restores it to 1.
+- **Lock held throughout:** `why: locked`. 0 orders, 0 positions.
