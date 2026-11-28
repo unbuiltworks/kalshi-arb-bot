@@ -206,6 +206,10 @@ def match_event(market: Mapping[str, Any], events: Iterable[Mapping[str, Any]]
 
 def fair_yes(market: Mapping[str, Any], events: Iterable[Mapping[str, Any]],
              *, now: float) -> Optional[Dict[str, Any]]:
+    # Explicit non-moneyline contracts must never inherit h2h fair value.
+    kind = str(market.get("sportsMarketType") or "").strip().lower()
+    if kind and kind not in ("moneyline", "h2h"):
+        return None
     ev = match_event(market, events)
     if ev is None:
         return None
