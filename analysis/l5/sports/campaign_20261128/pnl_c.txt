@@ -1,0 +1,12 @@
+SETTLED fill-level P&L by role (settled markets only: aregonreyvar, plivol-kovnaz):
+  opening    fills 7 contracts 9.10  settled fills 2  settled P&L -0.2000
+  completion fills 9 contracts 6.02  settled fills 3  settled P&L -0.0664
+  addition   fills 8 contracts 6.60  settled fills 0  settled P&L +0.0000
+BY MARKET:
+  atpdb-aregonreyvar-ambrogg   SETTLED  pairs 1.00 pair edge +0.0300  total settled P&L +0.0300
+  setkameua-bokrom-priser-20   OPEN     pairs 2.19 pair edge +0.0601  unpaired 1.11 YES cost 0.52 (awaiting settlement)
+  setkameua-masyev-cherom-20   OPEN     pairs 0.64 pair edge +0.0192  unpaired 2.36 YES cost 1.25 (awaiting settlement)
+  setkameua-plivol-kovnaz-20   SETTLED  pairs 1.19 pair edge +0.0357  total settled P&L -0.2964
+  setkameua-beldmy-kvaiho-20   OPEN     pairs 0.00 pair edge +0.0000  unpaired 1.85 YES cost 0.70 (awaiting settlement)
+  setkameua-makyar-karole-20   OPEN     pairs 0.00 pair edge +0.0000  unpaired 3.55 NO cost 1.74 (awaiting settlement)
+  setkameua-kanden-kotand-20   OPEN     pairs 1.00 pair edge +0.0300  unpaired 0.00 NO cost 0.00 (awaiting settlement)
