@@ -1,6 +1,52 @@
-# Bounded live-validation packet: expanded trading-first, 29 Nov 2026
+# Bounded live-validation packet: expanded trading-first — REVISION 1 (28 Nov, 13:35Z)
 
 **This is a request for explicit authorization. Nothing in it has been done.** Production is locked and unchanged on `8f7cb2c36`.
+
+## 0. Revision 1: earliest feasible window
+
+### Slate at 13:30Z
+
+- **74 live events** (54 sports, 20 crypto). **None is independently priced under the release's rules:**
+  - 3-way soccer is not supported;
+  - UTR, ITF, Setka, WTT, KHL and darts have no international listing and no provider key;
+  - esports is off by policy;
+  - crypto up/down has no reward programme here and is disarmed in this lane (#250).
+- **First independently priced markets: 11 CFB and 3 CBB moneylines kicking off at 17:00Z (noon ET).** All 14 have tight two-sided international books now.
+  - About 7 are inside the 0.20–0.80 band, for example `cfb-cmich-ballst` 0.62/0.63, `cfb-mich-ohiost` 0.22/0.23, `cfb-ncst-ncar` 0.33/0.35, `cfb-loutch-gas` 0.47/0.48, `cfb-uconn-wyom` 0.60/0.61, `cfb-lou-uk` 0.56/0.57 and `cbb-prnce-stmn` 0.45/0.47.
+  - More CFB kicks off through the afternoon, NHL from 21:00Z and NBA from 22:00Z.
+
+### Revised window
+
+**Today, Saturday 28 Nov, 16:15–19:15Z (11:15–14:15 ET),** then completions-only grace to 21:15Z. No automatic repeat. It covers 45 min of pre-game and about 2 h 15 min in-play for the noon games, plus the afternoon kick-offs that start inside it.
+
+### Evidence, stated plainly
+
+- **No closed-game two-venue data exists yet beyond 21 Nov.** The production tapes are Setka and UTR, which have no fair. The recorder has captured the 14 noon games since 13:28Z, but they close after the window would end.
+- **The window would arm on the 21 Nov evidence only** (−$7.74 → +$0.82 strict, threshold chosen on the same tape). The campaign itself is the bounded live probe; its loss is capped at $6.50.
+- **The out-of-sample replay is no longer a gate before arming.** It runs as each game closes (first around 20:30Z) and is reported with the campaign. **Choosing this window means accepting that.** The alternative is the original 29 Nov 00:15Z window, which keeps the gate.
+
+### Revised sequence
+
+1. **On authorization (earliest 13:45Z), deploy `9e6c2039f` locked**, with the §5 variables except the window.
+2. **Verify by 16:00Z:**
+   - `boot`, `why: locked`, 5 min with no errors;
+   - watchdog OK, reconcile 0/0, lifetime room ≥ $6.50;
+   - `RN1_TF_SELECT with_independent_fair` > 0;
+   - `intl_guard.matched` > 0 and `ws.connected`;
+   - `fair_coverage.any` on at least 80% of candidate quotes.
+   - Any failure means no arming.
+3. **16:15Z, arm:** `PMUS_TWO_SIDED_SUBMISSION_LOCK=window:2026-11-28T16:15:00Z/2026-11-28T19:15:00Z`.
+4. **19:15Z:** completions only. **21:15Z:** lock = 1. Then reconcile, report, and record. No automatic repeat.
+
+**To authorize Revision 1, reply with:**
+- release `9e6c2039fd1b31f281b5cbd1545b036b8604651b`;
+- the §5 activation variables, including `PMUS_RN1_PILOT_LOSS_USD=6.50`;
+- the window **28 Nov 16:15–19:15Z plus 2 h grace**;
+- acceptance that the out-of-sample replay is reported after arming, not before.
+
+Everything below is the original packet. Its §5 variables and limits apply unchanged, except the window and its gate.
+
+---
 
 ## 1. Release
 
