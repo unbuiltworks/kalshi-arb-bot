@@ -5112,9 +5112,16 @@ class Engine:
                             label="MODELLED touch-fill of a shadow quote; "
                                   "nothing was placed; not P&L")
                 if fy is None or not bbo:
+                    diag = {}
+                    if fy is None and os.getenv(
+                            "PMUS_SHARP_COVERAGE_LOG", "0").strip() == "1":
+                        diag = dict(SH.diagnose(m, events, now=now),
+                                    feed_cache_age_s=self._odds.cache_age_s(
+                                        SH.SPORT_KEYS[code]))
                     log("SHARP_SHADOW", slug=slug, sport=code,
                         start=m.get("gameStartTime"),
-                        skipped="no_fair" if fy is None else "no_book")
+                        skipped="no_fair" if fy is None else "no_book",
+                        **({"diag": diag} if diag else {}))
                     state.pop(slug, None)
                     continue
                 tick = (self.v.spec(slug) or {}).get("tick") or D("0.01")

@@ -217,6 +217,70 @@ def fair_yes(market: Mapping[str, Any], events: Iterable[Mapping[str, Any]],
             "event_id": ev.get("id")}
 
 
+def diagnose(market: Mapping[str, Any], events: Iterable[Mapping[str, Any]],
+             *, now: float) -> Dict[str, Any]:
+    """READ-ONLY reason a market has no sportsbook fair (28 Nov, #251):
+    which step fails -- teams unreadable, no event in the feed, team names
+    that do not match exactly (with the nearest feed names, for the alias
+    table), start-time mismatch, no two-way h2h, Pinnacle absent, or odds
+    older than MAX_ODDS_AGE_S -- plus Pinnacle's and the freshest book's
+    odds age. Never raises."""
+    out: Dict[str, Any] = {}
+    try:
+        evs = [e for e in events if isinstance(e, Mapping)]
+        out["feed_events"] = len(evs)
+        teams = market_teams(market)
+        start = _ts(market.get("gameStartTime"))
+        if teams is None:
+            out["why"] = "market_teams_unreadable"
+            return out
+        out["teams"] = [teams[0], teams[1]]
+        want = {norm(teams[0]), norm(teams[1])}
+        exact = [e for e in evs if {norm(e.get("home_team")),
+                                    norm(e.get("away_team"))} == want]
+        if not exact:
+            words = set(" ".join(want).split())
+            near = sorted(evs, key=lambda e: -len(words & set(
+                ("%s %s" % (norm(e.get("home_team")),
+                            norm(e.get("away_team")))).split())))[:1]
+            out["why"] = "no_exact_team_match" if evs else "feed_empty"
+            if near:
+                out["nearest"] = [near[0].get("home_team"),
+                                  near[0].get("away_team")]
+            return out
+        timed = [e for e in exact if start is not None and
+                 _ts(e.get("commence_time")) is not None and
+                 abs(_ts(e.get("commence_time")) - start) <= MATCH_TOL_S]
+        if len(timed) != 1:
+            out["why"] = "start_time_mismatch" if not timed else \
+                "ambiguous_event"
+            return out
+        ev = timed[0]
+        ct = _ts(ev.get("commence_time"))
+        out["live"] = bool(ct is not None and ct <= now)
+        books = [b for b in ev.get("bookmakers") or []
+                 if isinstance(b, Mapping)]
+        out["books"] = len(books)
+        ages = {}
+        for b in books:
+            got = _h2h(b)
+            if got:
+                ages[str(b.get("key"))] = round(now - got[1], 1)
+        out["pinnacle"] = "pinnacle" in ages
+        out["pinnacle_age_s"] = ages.get("pinnacle")
+        out["freshest_age_s"] = min(ages.values()) if ages else None
+        if not ages:
+            out["why"] = "no_two_way_h2h"
+        elif out["freshest_age_s"] > MAX_ODDS_AGE_S:
+            out["why"] = "odds_stale"
+        else:
+            out["why"] = "ok"
+        return out
+    except Exception as exc:                             # noqa: BLE001
+        out["why"] = "diag_error:%s" % type(exc).__name__
+        return out
+
+
 # ----------------------------------------------------------------- window
 def in_window(game_start: Any, now: float) -> bool:
     t = _ts(game_start)
@@ -401,6 +465,10 @@ class OddsClient:
                        used_after is not None and used_before is not None)
                    else None)
         return out
+
+    def cache_age_s(self, sport_key: str) -> Optional[float]:
+        hit = self.cache.get(sport_key)
+        return None if not hit else round(self.clock() - hit[0], 1)
 
     def status(self) -> Dict[str, Any]:
         return {"configured": self.configured, "calls": self.calls,
