@@ -1946,6 +1946,37 @@ RN1_TF_SELECT = os.getenv("PMUS_RN1_TF_SELECT", "off").strip().lower()
 # completion is unchanged (the pair cap alone governs it).
 _hg = os.getenv("PMUS_RN1_TF_HEDGE_GIVE_USD", "").strip()
 RN1_TF_HEDGE_GIVE_USD: Optional[D] = D(_hg) if _hg else None
+# ADAPTIVE HEDGE under RN1_TRADING_FIRST (PMUS_RN1_TF_ADAPTIVE_HEDGE=1;
+# default 0 = unchanged). A completion is priced and sized from the
+# independent fair and the inventory by src/pmus_adaptive_hedge.plan instead
+# of "the whole imbalance at the pair cap":
+#   price  min(today's completion price, floor(fair_side + give)); give
+#          rises with the held leg's fair WEAKENING since entry (AH_WEAKEN_K
+#          past AH_WEAKEN_DEAD_USD) and with unpaired cost / the per-market
+#          unpaired cap (AH_EXPO_USD at the cap), falls by AH_EDGE_K per $ of
+#          held edge vs cost, is <= 0 while the held leg has edge and has not
+#          weakened, and stays inside [AH_GIVE_MIN_USD, AH_GIVE_MAX_USD];
+#   size   the part of the imbalance that maximises mean - risk penalty over
+#          the two outcomes (exact arithmetic, fair as probability,
+#          AH_RISK_AVERSION, default = PMUS_RN1_DIR_RISK_AVERSION), at most
+#          today's clip; 0 = hold the residual (no forced pairing).
+# Never above the pair cap, never above today's completion price, never a
+# lower worst case. It takes the place of RN1_TF_HEDGE_GIVE_USD where it
+# applies; with no independent fair, on an allowlisted soccer match (joint
+# three-outcome risk) or on any error the completion is exactly what it is
+# without this flag. Completions stay exempt from the edge gate.
+RN1_TF_ADAPTIVE_HEDGE = os.getenv("PMUS_RN1_TF_ADAPTIVE_HEDGE",
+                                  "0").strip() == "1"
+RN1_TF_AH_CFG = {
+    "give_max": os.getenv("PMUS_RN1_TF_AH_GIVE_MAX_USD", "0.01"),
+    "give_min": os.getenv("PMUS_RN1_TF_AH_GIVE_MIN_USD", "-0.02"),
+    "weaken_k": os.getenv("PMUS_RN1_TF_AH_WEAKEN_K", "0.5"),
+    "weaken_dead": os.getenv("PMUS_RN1_TF_AH_WEAKEN_DEAD_USD", "0.01"),
+    "expo_usd": os.getenv("PMUS_RN1_TF_AH_EXPO_USD", "0.01"),
+    "edge_k": os.getenv("PMUS_RN1_TF_AH_EDGE_K", "1"),
+    "risk_aversion": os.getenv("PMUS_RN1_TF_AH_RISK_AVERSION", "").strip()
+    or RN1_DIR_CFG["risk_aversion"],
+}
 # Candidates whose KNOWN listing edge is below this are not selected
 # (unset = never dropped, only ranked last).
 _tsm = os.getenv("PMUS_RN1_TF_SELECT_MIN_EDGE", "").strip()
@@ -6676,6 +6707,51 @@ class Engine:
         except Exception:                                 # noqa: BLE001
             return tg
 
+    def rn1_tf_adaptive_hedge(self, slug: str, mk: Dict[str, Any],
+                              side: str, tg: Dict[str, Any], tick: Any,
+                              prob: Optional[Mapping[str, Any]],
+                              qcfg: Mapping[str, Any], min_qty: Any) -> tuple:
+        """See RN1_TF_ADAPTIVE_HEDGE. (target, applied): applied False = the
+        rule does not apply here (no fair, soccer joint risk, unusable
+        input, error) and `target` is the completion untouched; applied True
+        = the adaptive completion, or None to hold the residual."""
+        try:
+            if prob is None or self.rn1_soccer_ok(slug):
+                return tg, False
+            from src import pmus_adaptive_hedge as AH
+            from src import pmus_directional_alloc as DA
+            other = "NO" if side == "YES" else "YES"
+            pos, cost = mk.get("pos") or {}, mk.get("cost") or {}
+            unp = D(str(pos.get(other) or 0)) - D(str(pos.get(side) or 0))
+            f_s = DA.fair_for(prob, side, conservative=False)
+            ref = AH.note_entry(mk.get("_ah_ref"), other, unp, ONE - f_s)
+            mk["_ah_ref"] = ref
+            pl = AH.plan(
+                side=side, px=tg["px"], qty=tg["qty"], pos=pos, cost=cost,
+                fair_side=f_s, tick=tick, clip=qcfg.get("qty", RN1.QTY),
+                min_qty=min_qty,
+                pair_cap=qcfg.get("pair_cap", RN1.PAIR_CAP),
+                unpaired_cap_usd=qcfg.get("residual_cap_usd",
+                                          RN1.RESIDUAL_CAP_USD),
+                entry_fair_held=(ref or {}).get("fair"), cfg=RN1_TF_AH_CFG)
+            if pl is None:
+                return tg, False
+            px0, q0 = D(str(tg["px"])), D(str(tg["qty"]))
+            if not pl["hold"] and (D(str(pl["px"])) > px0 or
+                                   D(str(pl["qty"])) > max(
+                                       q0, D(str(min_qty))) or
+                                   D(str(pl["qty"])) <= 0):
+                return tg, False          # belt and braces: never widened
+            mk.setdefault("_tf_last", {})["hedge_" + side] = {
+                k: (str(v) if v is not None else None)
+                for k, v in pl.items()}
+            if pl["hold"]:
+                return None, True
+            return dict(tg, px=pl["px"], qty=pl["qty"],
+                        hedge_adaptive=True), True
+        except Exception:                                 # noqa: BLE001
+            return tg, False
+
     def rn1_tf_note_mid(self, slug: str, mk: Dict[str, Any],
                         bbo: Mapping[str, Any], now: float) -> None:
         """Venue YES-mid history for RN1_TF_FALLING_S (diagnostic input to
@@ -8229,6 +8305,13 @@ class Engine:
         tf_prob: Any = _TF_UNSET
         if RN1_TRADING_FIRST:
             self.rn1_tf_note_mid(slug, mk, bbo, now)
+            if RN1_TF_ADAPTIVE_HEDGE and "_ah_ref" in mk:
+                try:
+                    if D(str(mk["pos"].get("YES") or 0)) == \
+                            D(str(mk["pos"].get("NO") or 0)):
+                        mk.pop("_ah_ref", None)   # flat/paired: new entry
+                except Exception:                         # noqa: BLE001
+                    mk.pop("_ah_ref", None)
         ks = mk.setdefault("keep_since", {})
         for side in ("YES", "NO"):
             tg = q.get(side)
@@ -8263,11 +8346,20 @@ class Engine:
                     q["why_" + side] = "intl_guard:" + str(gv.get("why"))
                     tg = None
             if tg and tg["role"] == "complete" and RN1_TRADING_FIRST and \
-                    RN1_TF_HEDGE_GIVE_USD is not None:
+                    (RN1_TF_HEDGE_GIVE_USD is not None or
+                     RN1_TF_ADAPTIVE_HEDGE):
                 if tf_prob is _TF_UNSET:
                     tf_prob = self.rn1_directional_prob(slug)
                     self.rn1_tf_note_fair(mk, tf_prob, now)
-                tg = self.rn1_tf_hedge_price(mk, side, tg, tick, tf_prob)
+                ah_done = False
+                if RN1_TF_ADAPTIVE_HEDGE:
+                    tg, ah_done = self.rn1_tf_adaptive_hedge(
+                        slug, mk, side, tg, tick, tf_prob, qcfg,
+                        spec["min_qty"])
+                    if ah_done and tg is None:
+                        q["why_" + side] = "ah_hold"
+                if not ah_done and RN1_TF_HEDGE_GIVE_USD is not None:
+                    tg = self.rn1_tf_hedge_price(mk, side, tg, tick, tf_prob)
             if tg and tg["role"] != "complete" and RN1_TRADING_FIRST:
                 if tf_prob is _TF_UNSET:
                     tf_prob = self.rn1_directional_prob(slug)

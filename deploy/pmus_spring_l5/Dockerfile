@@ -135,6 +135,7 @@ COPY src/pmus_reward_calibration.py src/pmus_reward_calibration.py
 COPY src/pmus_campaign_economics.py src/pmus_campaign_economics.py
 # Imported lazily when PMUS_RN1_DIRECTIONAL=1 (directional allocation).
 COPY src/pmus_directional_alloc.py src/pmus_directional_alloc.py
+COPY src/pmus_adaptive_hedge.py src/pmus_adaptive_hedge.py
 COPY src/pmus_request_budget.py src/pmus_request_budget.py
 COPY src/pmus_pilot_pnl.py src/pmus_pilot_pnl.py
 COPY src/pmus_fill_markout.py src/pmus_fill_markout.py

@@ -36,6 +36,7 @@ from collections import defaultdict, deque
 from decimal import Decimal as D
 from typing import Any, Dict, Iterable, Iterator, List, Mapping, Optional
 
+from src import pmus_adaptive_hedge as AH
 from src import pmus_directional_alloc as DA
 from src import pmus_rn1_replica as RN1
 
@@ -136,6 +137,7 @@ class Market:
         self.fair_now: Optional[D] = None    # international YES fair
         self.vmid: deque = deque()           # (t, venue YES mid)
         self.tf_fh: deque = deque()          # (t, intl YES fair)
+        self.ah_ref: Optional[dict] = None   # adaptive-hedge entry fair
 
     # fair band exactly as Engine.intl_fair_band (on recorded samples)
     def band(self, t: float, mid: Optional[D]) -> Optional[dict]:
@@ -344,12 +346,43 @@ class Market:
         #               hedge's EV cost vs the independent fair is bounded;
         #               otherwise the favourable residual is held)
         #   hedge_frac  complete this fraction of the imbalance per order
+        #   adaptive_hedge  dict (the engine's RN1_TF_AH_CFG keys; {} =
+        #               defaults): pmus_adaptive_hedge.plan prices and sizes
+        #               the completion, exactly as the engine does with
+        #               PMUS_RN1_TF_ADAPTIVE_HEDGE; where it does not apply
+        #               (no fair) the knobs above/below act as before
         hg = self.policy.get("hedge_give")
         hf = self.policy.get("hedge_frac")
+        ah = self.policy.get("adaptive_hedge")
+        if ah is not None and self.pos["YES"] == self.pos["NO"]:
+            self.ah_ref = None
         for s in ("YES", "NO"):
             tg = want[s]
             if tg is None or tg["role"] != "complete":
                 continue
+            if ah is not None and mid is not None:
+                o = "NO" if s == "YES" else "YES"
+                fair_s = mid if s == "YES" else ONE - mid
+                self.ah_ref = AH.note_entry(
+                    self.ah_ref, o, self.pos[o] - self.pos[s], ONE - fair_s)
+                pl = AH.plan(
+                    side=s, px=tg["px"], qty=tg["qty"], pos=self.pos,
+                    cost=self.cost, fair_side=fair_s, tick=tick,
+                    clip=qc["qty"], min_qty=self.sim["min_qty"],
+                    pair_cap=qc["pair_cap"],
+                    unpaired_cap_usd=qc["residual_cap_usd"],
+                    entry_fair_held=(self.ah_ref or {}).get("fair"), cfg=ah)
+                if pl is not None:
+                    if pl["hold"]:
+                        want[s] = None
+                        self.decisions["ah_hold"] += 1
+                    else:
+                        if pl["px"] < tg["px"]:
+                            self.decisions["ah_repriced"] += 1
+                        if pl["qty"] < D(str(tg["qty"])):
+                            self.decisions["ah_resized"] += 1
+                        want[s] = dict(tg, px=pl["px"], qty=pl["qty"])
+                    continue
             if hg is not None and mid is not None:
                 fair_s = mid if s == "YES" else ONE - mid
                 capx = fair_s + D(str(hg))
