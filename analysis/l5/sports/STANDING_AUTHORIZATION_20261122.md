@@ -3107,3 +3107,33 @@ maker-only execution and independent watchdog protections."
 - **Any failed gate:** remain disarmed.
 - **Reporting:** venue-confirmed fills, settled trading P&L, verified rewards, fees
   and total realized net, each separately.
+
+### 87b. Campaign close-out (16:15–19:15Z, release 9e6c2039f) — 28 Nov 2026, 21:19 UTC
+
+- **Lock:** `window_ended` since 21:15Z; set to `1` at 21:19Z. Watchdog: 0 open
+  orders, nothing foreign, registries OK.
+- **Venue-confirmed fills:** 8 (8 contracts, $3.765 spent), all CFB, all
+  post-only.
+- **Pairs:** 4 at an average of 0.941.
+  - `cfb-cmich-ballst`: 3 at 0.932.
+  - `cfb-ncst-ncar`: 1 at 0.970.
+- **Residual:** 0 contracts. No unsettled inventory at risk.
+- **Trading P&L, realized: +$0.235.** This is pair cash, confirmed by the account
+  cash change (+$0.2350, unexplained 0). Settled residual: $0.
+- **Fees:** $0. **Rebates:** $0.
+- **Verified rewards (PAID) on campaign markets:** $0. Account-wide: PAID $24.09,
+  PENDING $1.90, SKIPPED $4.00.
+- **Total realized net: +$0.235.**
+- **INVENTORY_RECONCILE 20:52Z:** reconciled, 0 venue positions, 0 mismatches.
+- **Ledger:** lifetime −$67.9157, so **room $7.0843**. Account drawdown room
+  $12.59.
+- **Execution:** about 240 orders. 125+ reward-only evictions. Median rest time
+  335 s. 65 venue 429s.
+
+### 89a. Stop computed and release 010af7729 deployed locked — 21:20 UTC
+
+- **Stop:** min(6.50, floor(7.0843 / 0.25) × 0.25 = 7.00) = **$6.50**. The
+  unsettled worst case is $0, so effective room is $7.08 ≥ $6.50.
+- **Variables (skipDeploys):** lock = 1, `PMUS_COMBO_SHADOW_POLL_S=60`,
+  `PMUS_COMBO_QUOTE_BOOK_TTL_S=10`, `PMUS_RN1_PILOT_LOSS_USD=6.50`.
+- **Source:** pinned to `010af772943dd96d34bc67f5de5c30a070f7aba1`.
