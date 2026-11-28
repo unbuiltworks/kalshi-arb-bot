@@ -2879,3 +2879,33 @@ utilization and settled net profitability."
   7,200 s; campaign marker 00:15Z. Active: two pregame Setka UA markets.
 - **Scheduled:** first-orders check 00:27; mid-checks 01:20 and 02:20;
   window report 03:17; close-out and relock 05:17.
+
+### 85b. Window report (00:16:33–03:15Z) — 28 Nov 2026, 03:25 UTC
+
+- **Lock:** 03:15:01 `window_completions_only`. Watchdog 03:18: 5 open
+  orders, all ours, none overdue, all registries OK.
+
+| Measure | 27 Nov baseline (a51) | This window (6e6cc2d5d) |
+|---|---|---|
+| Minutes with resting orders | 11.7% | **91.6%** |
+| Minutes accruing reward-qualifying time | 5.5% | **91.6%** (RN1_QUOTE `qualifies` 100% of time) |
+| Pregame resting / qualifying contract-seconds | 0 / 0 | **33,475 / 31,878** (live 194 / 97) |
+| Capital deployed (time-weighted mean, share of $60) | $1.13, 1.9% | **$3.91, 6.5%** (max $11.43; 19.6% of the $20 at-risk budget) |
+| Orders / fills / filled contracts | 11 / 3 / 4 | 138 / 24 / 21.7 |
+| Same-side additions | 0 | **8 fills, 6.6 contracts** (avg 0.467) |
+| Openings / completions | 1 / 2 | 7 fills 9.1 contracts (avg 0.448) / 9 fills 6.0 contracts (avg 0.536) |
+| Completed pairs (book) | 2 at 0.97, +$0.06 | **6.02 at about 0.97, +$0.175 locked** |
+
+- **Unpaired at the window end:** 9.68 contracts, $4.54 cost (masyev YES 2.36,
+  makyar NO 3.55, beldmy YES 1.85, bokrom YES 1.11, plivol YES 0.81).
+  Completion bids continue in grace; the worst case if all lose is −$4.54,
+  inside the $8 stop.
+- **Blocks:** jump pause 151, `net_not_positive` 118, volatility 52,
+  `account_risk` 49, `max_markets` 33.
+- **Request budget:** 33 orders deferred (30 of them completions), each sent
+  on a later pass.
+- **P&L:** PILOT_PNL (02:20) realized +$0.0447, venue-reconciled. The book
+  pair edge at the window end is +$0.175; the venue-reconciled figure comes
+  at close-out. Rewards: none confirmed yet (rows post 1–7 days).
+- **Report files:** `campaign_20261128/campaign_report_window.json`,
+  `inventory_at_window_end.txt`.
