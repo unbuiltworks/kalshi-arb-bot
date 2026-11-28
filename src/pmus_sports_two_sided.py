@@ -6463,21 +6463,40 @@ class Engine:
         return False
 
     def rn1_tf_select(self, scored: list) -> list:
-        try:
-            has = {r[2]: self.rn1_has_independent_fair(r[2]) for r in scored}
-        except Exception as exc:                          # noqa: BLE001
-            log("RN1_TF_SELECT", error=type(exc).__name__, mode=RN1_TF_SELECT)
-            return [] if RN1_TF_SELECT == "only" else scored
-        out = [r for r in scored if has[r[2]]] + \
-            ([] if RN1_TF_SELECT == "only" else
-             [r for r in scored if not has[r[2]]])
-        key = (RN1_TF_SELECT, len(scored), sum(has.values()))
+        # Listing prices are ranking hints only; execution revalidates BBO,
+        # fair, inventory and every existing safety gate.
+        from src import pmus_directional_alloc as DA
+        ranked, unknown = [], []
+        for r in scored:
+            try:
+                prob = self.rn1_directional_prob(r[2])
+                if prob is None:
+                    unknown.append(r)
+                    continue
+                # scored stores absolute distance from 0.5, not the signed
+                # bid. Keep the original tuple shape and use listing quotes
+                # supplied by select() rather than reconstructing the bid.
+                bid, ask = self._tf_listing_quotes[r[2]]
+                edges = []
+                for side, px in (("YES", bid), ("NO", D(1) - ask)):
+                    mid = DA.fair_for(prob, side, conservative=False)
+                    need = RN1_TF_EDGE_USD + (
+                        RN1_TF_DOG_EXTRA_USD if mid < D("0.5") else D(0))
+                    edges.append(DA.fair_for(prob, side, conservative=True)
+                                 - px - need)
+                ranked.append((max(edges), r))
+            except Exception:
+                unknown.append(r)
+        ranked.sort(key=lambda x: -x[0])
+        out = [r for _, r in ranked] + (
+            [] if RN1_TF_SELECT == "only" else unknown)
+        key = (RN1_TF_SELECT, len(scored), len(ranked))
         if key != getattr(self, "_tf_sel_logged", None):
             self._tf_sel_logged = key
             log("RN1_TF_SELECT", mode=RN1_TF_SELECT, candidates=len(scored),
-                with_independent_fair=sum(has.values()),
+                with_independent_fair=len(ranked),
                 first=[r[2] for r in out[:4]],
-                label="trading-first selection: independent fair first")
+                label="trading-first selection: conservative listing edge")
         return out
 
     def rn1_tf_hedge_price(self, mk: Dict[str, Any], side: str,
@@ -9877,6 +9896,7 @@ class Engine:
         _pinned = rn1_pin() if RN1.ON else None
         _seen = set()
         _dur_out: list = []
+        self._tf_listing_quotes = {}
         for tg in targets:
             slug = tg["slug"]
             _seen.add(slug)
@@ -9917,6 +9937,7 @@ class Engine:
                         int(_di["remaining_s"]), int(RN1_MIN_REMAINING_S))
                     _dur_out.append((slug, int(_di["remaining_s"])))
                     continue     # about to end: no slot
+            self._tf_listing_quotes[slug] = (b, a)
             scored.append((a - b, abs(b - D("0.5")), slug))
         if RN1_DURATION_RANK:
             _dk = json.dumps(sorted(s_ for s_, _r in _dur_out))
