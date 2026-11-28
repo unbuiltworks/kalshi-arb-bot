@@ -88,7 +88,10 @@ def devig(decimal_odds: Iterable[Any]) -> Optional[List[D]]:
     """Multiplicative de-vig: implied 1/o, normalised to sum 1. None on any
     unusable price (<= 1.0, missing, unparsable)."""
     try:
-        inv = [ONE / D(str(o)) for o in decimal_odds]
+        prices = [D(str(o)) for o in decimal_odds]
+        if any(not p.is_finite() or p <= ONE for p in prices):
+            return None
+        inv = [ONE / p for p in prices]
     except Exception:                                    # noqa: BLE001
         return None
     if len(inv) < 2 or any(x <= 0 or x >= 1 for x in inv):
