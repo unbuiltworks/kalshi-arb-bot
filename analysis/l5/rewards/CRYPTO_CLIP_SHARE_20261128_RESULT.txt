@@ -1,0 +1,115 @@
+Daily-crypto reward lane - achievable share at the account's clip, 28 Nov 2026
+===============================================================================
+Read-only. MODELLED from public books. No order placed. Venue-confirmed crypto
+fills: 0. Venue-credited crypto rewards: $0. Nothing here is earned.
+
+Clip: 2 contracts per order (rn1_max_clip() on sports 9e6c2039f; final gate and
+safety latch apply it to every order, crypto included).
+
+Inputs
+  * Programme, re-read 28 Nov 21:10Z: crypto_alt_updown_1d_20261110, pool 150,
+    period daily_event, target 2000 a side, max spread 0.05, DF 0.3, active.
+    The same programmeId is on the ETH, SOL and XRP daily markets.
+  * Books: the two 22 Nov samples already on this branch (1.94 h tape rebuilt
+    from summary rows; 0.33 h of full books). A live read at 21:10Z today was
+    not usable: the day's markets were 50 minutes from their end, priced
+    0.01-0.05, and no second was paying (target size not met on the bid side).
+  * Share = our fraction of ONE market's paying seconds (0.5 x bid-side share
+    + 0.5 x ask-side share), averaged over ALL snapshots. No pool split is
+    assumed in the share column.
+
+Sample 1: 00:04-02:01Z 22 Nov (tape)
+  asset  policy         qty  quotable  share_mean  share_when     pays_any  worst_leg
+  eth    1 tick back      2       85%    0.06782%    0.07955%         100%       1.02
+  eth    1 tick back    100       85%    3.21234%    3.76811%         100%      51.00
+  eth    at touch         2      100%    0.25227%    0.25227%         100%       1.04
+  eth    at touch       100      100%   10.71978%   10.71978%         100%      52.00
+  sol    1 tick back      2       56%    0.31088%    0.55761%          99%       1.00
+  sol    1 tick back    100       56%    8.47916%   15.20866%          99%      50.00
+  sol    at touch         2       99%    1.09252%    1.10227%          99%       1.02
+  sol    at touch       100       99%   20.06873%   20.24791%          99%      51.00
+  xrp    1 tick back      2       27%    0.03323%    0.12378%          99%       1.06
+  xrp    1 tick back    100       27%    1.54259%    5.74656%          99%      53.00
+  xrp    at touch         2       99%    0.26549%    0.26786%          99%       1.10
+  xrp    at touch       100       99%   10.89041%   10.98765%          99%      55.00
+Sample 2: 03:30-03:50Z 22 Nov (full books)
+  asset  policy         qty  quotable  share_mean  share_when     pays_any  worst_leg
+  eth    1 tick back      2       83%    0.10417%    0.12479%         100%       1.44
+  eth    1 tick back    100       83%    4.75287%    5.69355%         100%      72.00
+  eth    at touch         2      100%    0.38857%    0.38857%         100%       1.50
+  eth    at touch       100      100%   15.06898%   15.06898%         100%      75.00
+  sol    1 tick back      2       75%    0.23600%    0.31558%         100%       1.42
+  sol    1 tick back    100       75%    8.13649%   10.88018%         100%      71.00
+  sol    at touch         2      100%    1.16697%    1.16697%         100%       1.44
+  sol    at touch       100      100%   25.33346%   25.33346%         100%      72.00
+  xrp    1 tick back      2       68%    0.63780%    0.94034%          83%       1.38
+  xrp    1 tick back    100       68%   15.94808%   23.51320%          83%      69.00
+  xrp    at touch         2       83%    2.08286%    2.52136%          83%       1.42
+  xrp    at touch       100       83%   31.00459%   37.53187%          83%      71.00
+
+  quotable    snapshots in which both sides would rest and score
+  share_mean  share averaged over all snapshots (what a day would earn of the
+              market's allocation if the sample held)
+  share_when  share while quoting
+  worst_leg   dearest 2-contract (or 100-contract) leg, filled alone, lost
+
+What it means in dollars (2 contracts a side, one tick back)
+  The dollar figure is share x the market's allocation of the $150 pool, and
+  that allocation is NOT published. Two bounds, no claim about which holds:
+    sum of the three markets' shares      0.41% (sample 1)   0.98% (sample 2)
+    if each market had the whole $150     $0.62/day          $1.47/day
+    if the pool is split evenly in three  $0.21/day          $0.49/day
+  At the best price instead of one tick back:
+    sum of shares                         1.61%              3.64%
+    whole pool each / even split          $2.42 / $0.81      $5.46 / $1.82
+  The venue pays nothing under $1.00. Sports evidence (not crypto) points to
+  that minimum applying per programme and period, which would let the three
+  markets' accruals add up; it is unverified for crypto.
+
+Worst-case risk at the clip
+  One lone leg per market, lost in full: $1.00-1.50; three markets $3.1-4.4.
+  That is inside the $30 crypto loss budget and inside the sports per-market
+  unpaired cap as shipped ($3).
+
+Is a payout probe economically defensible?
+  As income: no. One tick back the modelled programme-period total is
+  $0.21-1.47/day against up to $4.4 at risk, and under most denominators it
+  does not reach the $1.00 floor, so the likeliest outcome is no credit and
+  nothing learned.
+  As a purchase of information (does the venue credit crypto at all; how the
+  pool is divided): only at the best price, where the modelled total is
+  $0.81-5.46/day and clears the floor under either bound in sample 2 and one
+  bound in sample 1. Joining the best price is the configuration the lane
+  ships OFF (PMUS_CRYPTO_ALLOW_TOUCH) because that is where a quote is picked
+  off first. Neither sample contains a real move, so that cost is unmeasured.
+  Smallest probe that could answer the question: one programme-day, the three
+  daily markets, 2 contracts a side, at the best price, hard loss budget on,
+  observation tape on; worst case about $4.5. It is NOT prepared beyond this
+  description: no variable is set and no approval document exists. It needs
+  its own authorization and, first, the outstanding release gates.
+
+Review of the four reused commits (dev/l5-crypto-reward-economics)
+  src/pmus_crypto_period_identity.py
+   - Slug format checked against the live list (28 Nov): daily
+     cpc<a>-<a>-updown-1d-<date>-2200z and hourly ...-1h-<date>-<hh>00z both
+     exist and are accepted; 5m/15m and BTC are refused.
+   - The slug time is the window's START (1d-2026-11-27-2200z closes 28 Nov
+     22:00Z). The field is named slug_boundary; read it as the start.
+   - HOURLY MARKETS CARRY NO LIQUIDITY PROGRAMME: /v1/incentives returned no
+     row for the three 1h markets. identify() accepts them, but there is no
+     pool to evaluate; the 3600 s case is hypothetical today.
+   - The daily hour is fixed at 22. If the listing moves with US daylight
+     time the validator refuses every daily market (fails closed).
+  src/pmus_crypto_reward_economics.py
+   - Refuses without a verified pool scope, never assumes an equal split,
+     does not re-count accrued reward, and applies the payout floor. Fed the
+     lane's best single-market figure (SOL, 0.31%, $150, whole day, cost
+     $1.02): reward below the floor -> not eligible, with any allocation.
+   - Reward denominator: share_lower must be the POOL-level share,
+     0.5 x (bid-side + ask-side), because the venue normalises each side to
+     1.0 per second. Passing a one-side share doubles the reward.
+   - period_seconds / remaining_seconds must describe the REWARD period. For
+     daily_event the venue documents midnight-to-midnight Eastern, not the
+     market's 22:00Z-22:00Z window; the two overlap by ~17 h.
+   - allocation_lower has no source yet: no crypto reward row exists.
+  Neither module is imported by the engine; both are pure and place nothing.
