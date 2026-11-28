@@ -1,0 +1,989 @@
+From 7c044c6da337fcefca35814b682915ee6ef4cd7b Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 21 Nov 2026 12:51:52 +0000
+Subject: [PATCH 1/2] Account ledger: restate another strategy's two-sided
+ market from the venue's fills when that strategy's order ledger agrees order
+ by order
+
+cpc-btc-updown-5m-2026-11-21-0620z: seventeen maker fills (UP 0.49 for
+0.2948, DOWN 0.61 for 0.2957), DOWN won, cash moved +0.0195. This ledger
+adopted one net snapshot (DOWN 0.10 at the $1 bound) and retired the market
+at 0.00; the exact GROSS and VENUE_NET forms refuse and the row stays wrong.
+
+New form VENUE_FILLS_EQUAL_SIBLING_LEDGER, OFF unless
+L5_SIBLING_LEDGER_ATTESTATION=VENUE_FILLS_AND_SIBLING_LEDGER. Only for a
+market in another registered strategy's series, only after settlement, and
+only when the venue's activity feed and that strategy's published order
+ledger state the same orders with the same side, quantity and cost; fees
+must be readable and zero; a side this ledger knew is never repriced; the
+row must have settled after the last re-anchor. Any miss keeps the bound.
+An already exhausted market is re-read at most three times. 24 tests.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01HTk927uH8zwpj6gLES92PF
+---
+ src/l5_live_execution.py                    | 164 ++++++++++-
+ src/l5_venue_cost_attestation.py            | 148 +++++++++-
+ tests/test_l5_sibling_ledger_attestation.py | 300 ++++++++++++++++++++
+ 3 files changed, 603 insertions(+), 9 deletions(-)
+ create mode 100644 tests/test_l5_sibling_ledger_attestation.py
+
+diff --git a/src/l5_live_execution.py b/src/l5_live_execution.py
+index f9746d821..817ef9a76 100644
+--- a/src/l5_live_execution.py
++++ b/src/l5_live_execution.py
+@@ -3746,7 +3746,8 @@ class InventoryStore:
+     VENUE_ATTEST_STATE_KEY = "venue_cost_attestation"
+ 
+     def note_venue_cost_attempt(self, market: str, *, reason: str,
+-                                final: bool, count_attempt: bool = True
++                                final: bool, count_attempt: bool = True,
++                                sibling_attempts: Optional[int] = None
+                                 ) -> Dict[str, Any]:
+         """Record ONE refused attestation attempt. Writes no money field.
+ 
+@@ -3760,6 +3761,8 @@ class InventoryStore:
+         rec = dict(rows.get(market) or {})
+         if count_attempt:
+             rec["attempts"] = int(rec.get("attempts") or 0) + 1
++        if sibling_attempts is not None:
++            rec["sibling_attempts"] = int(sibling_attempts)
+         rec["status"] = "UPPER_BOUND_KEPT" if final else "PENDING"
+         rec["last_reason"] = str(reason)[:200]
+         rec["t"] = dt.datetime.now(dt.timezone.utc).isoformat()
+@@ -3772,11 +3775,18 @@ class InventoryStore:
+                                    walk: Mapping[str, Any],
+                                    correction_id: str,
+                                    expect_superset: Optional[
++                                       Mapping[str, Any]] = None,
++                                   sibling: Optional[
+                                        Mapping[str, Any]] = None
+                                    ) -> Dict[str, Any]:
+         """Replace a RETIRED market's $1/share upper bound with the cost the
+         VENUE's own fills state -- only when they reconcile exactly.
+ 
++        `sibling` (default None: behaviour exactly as before) admits ONE
++        more form, for a market in ANOTHER registered strategy's series
++        whose own order ledger states, order by order, exactly the fills
++        the venue's feed states. See `_sibling_refusal`.
++
+         `expect_superset` (default None: behaviour exactly as before) admits
+         ONE more form, for a market the owner has listed by its exact
+         figures: the venue's fills CONTAIN the ledger's quantity and exceed
+@@ -3933,14 +3943,22 @@ class InventoryStore:
+                 expect_superset, row=row, held=held, venue=venue,
+                 derived=derived, v=v, old_pnl=old_pnl, walk=walk,
+                 unknown_keys=unknown_keys, market=market)
++            sib_why = None
+             if why is not None:
+-                return no("VENUE_QTY_NE_LEDGER_QTY",
+-                          venue_up=str(venue[UP]),
+-                          venue_down=str(venue[DOWN]),
+-                          ledger_up=str(held[UP]),
+-                          ledger_down=str(held[DOWN]),
+-                          superset=why)
+-            form = self.VENUE_SUPERSET_FORM
++                sib_why = self._sibling_refusal(
++                    sibling, row=row, held=held, venue=venue,
++                    derived=derived, unknown_keys=unknown_keys,
++                    market=market)
++                if sib_why is not None:
++                    return no("VENUE_QTY_NE_LEDGER_QTY",
++                              venue_up=str(venue[UP]),
++                              venue_down=str(venue[DOWN]),
++                              ledger_up=str(held[UP]),
++                              ledger_down=str(held[DOWN]),
++                              superset=why, sibling=sib_why)
++                form = self.SIBLING_LEDGER_FORM
++            else:
++                form = self.VENUE_SUPERSET_FORM
+         for side in (UP, DOWN):
+             key = "%s|%s" % (market, side)
+             if held[side] > 0 and key not in unknown_keys:
+@@ -4035,6 +4053,11 @@ class InventoryStore:
+                               ("pages", "ended", "sufficient", "by",
+                                "started_at", "floor")},
+             "ownership_unchanged": True,
++            "sibling_ledger": (None if form != self.SIBLING_LEDGER_FORM
++                               else {"strategy": sibling.get("strategy"),
++                                     "source": sibling.get("source"),
++                                     "as_of_utc": sibling.get("as_of_utc"),
++                                     "orders_matched": len(order_ids)}),
+             "labels": ("account-wide realized with a venue-attested cost "
+                        "basis. NOT verified L5: no owner field was written. "
+                        "Fees are recorded per leg and are NOT in the pnl."),
+@@ -4055,6 +4078,131 @@ class InventoryStore:
+                 "realized_before": before,
+                 "realized_after": self.realized_lines()}
+ 
++    SIBLING_LEDGER_FORM = "VENUE_FILLS_EQUAL_SIBLING_LEDGER"
++
++    def _sibling_refusal(self, sibling: Any, *, row: Mapping[str, Any],
++                         held: Mapping[str, D], venue: Mapping[str, D],
++                         derived: Mapping[str, Mapping[str, Any]],
++                         unknown_keys: List[str], market: str
++                         ) -> Optional[str]:
++        """None when another strategy's own ledger states exactly the fills
++        the venue's feed states for this market, else why not.
++
++        THE CASE (2026-11-21, cpc-btc-updown-5m-2026-11-21-0620z). The
++        5-minute lane bought UP 0.49 and DOWN 0.61 in seventeen maker fills.
++        This ledger never sees those fills: it adopted the venue's NET
++        position once (DOWN 0.10, at the $1 bound, when the true net was
++        already moving) and retired the market at $0.00 while the account's
++        cash moved +$0.0195. The exact forms refuse, correctly -- neither
++        the gross nor the net quantity equals what this ledger held -- and
++        the row stays wrong for good.
++
++        TWO INDEPENDENT RECORDS MUST AGREE, ORDER BY ORDER:
++          the venue's activity feed, read by this service with its own
++          credentials (`derived`: every fill with its trade id, order id,
++          quantity, price and fee); and
++          the other strategy's durable order ledger (`sibling`), built
++          from its own `/v1/order` reads.
++        A fill missing from either, an extra one, a different quantity or
++        a different cost refuses. Because the two must be equal, a feed
++        walk that stopped at a time floor is enough here: a fill it missed
++        makes the venue's side short of the sibling's and refuses.
++
++        Also required, each a refusal:
++          * the market is in ANOTHER registered strategy's series, and
++            the sibling record says it is that strategy's;
++          * the ledger's quantity is contained in the venue's and differs
++            from it (equal is the GROSS form, which needs no sibling);
++          * every side this ledger holds is one it never had a cost for;
++          * every venue fill names its order, and every venue leg's fee is
++            readable and ZERO (fees are not in the booked result);
++          * the row settled after the last accounting re-anchor.
++        READS ONLY.
++        """
++        if sibling is None:
++            return "NO_SIBLING_EVIDENCE"
++        if not isinstance(sibling, Mapping):
++            return "SIBLING_UNREADABLE"
++        owner = ORIGIN.strategy_of_market(market)
++        if owner is None or owner == OWN_STRATEGY:
++            return "NOT_ANOTHER_STRATEGYS_MARKET"
++        if str(sibling.get("strategy") or "") != str(owner):
++            return "SIBLING_IS_NOT_THE_MARKETS_STRATEGY"
++        orders = sibling.get("orders")
++        if not isinstance(orders, Mapping) or not orders:
++            return "SIBLING_ORDERS_UNREADABLE"
++        if not (held[UP] <= venue[UP] and held[DOWN] <= venue[DOWN]):
++            return "LEDGER_NOT_CONTAINED_IN_VENUE"
++        if held[UP] == venue[UP] and held[DOWN] == venue[DOWN]:
++            return "NOT_A_SUPERSET"
++        for side in (UP, DOWN):
++            if held[side] > 0 and "%s|%s" % (market, side) \
++                    not in unknown_keys:
++                return "KNOWN_SIDE:%s" % side
++        by_order: Dict[str, Dict[str, Any]] = {}
++        for side in (UP, DOWN):
++            leg = derived.get(side)
++            if leg is None:
++                continue
++            fee = finite_decimal(leg.get("fees"))
++            if fee is None:
++                return "FEE_UNREADABLE:%s" % side
++            if fee != 0:
++                return "FEE_NOT_ZERO:%s" % side
++            for f in leg.get("fills") or ():
++                vid = str(f.get("venue_order_id") or "").strip()
++                if not vid:
++                    return "VENUE_FILL_NAMES_NO_ORDER:%s" % side
++                rec = by_order.setdefault(
++                    vid, {"side": side, "qty": D(0), "cost": D(0)})
++                if rec["side"] != side:
++                    return "VENUE_ORDER_ON_BOTH_SIDES:%s" % vid
++                q = finite_decimal(f.get("qty"))
++                own = finite_decimal(f.get("own_price"))
++                if q is None or own is None:
++                    return "VENUE_FILL_UNREADABLE:%s" % vid
++                rec["qty"] += q
++                rec["cost"] += q * own
++        theirs: Dict[str, Dict[str, Any]] = {}
++        for vid, o in orders.items():
++            if not isinstance(o, Mapping):
++                return "SIBLING_ORDER_UNREADABLE"
++            q = finite_decimal(o.get("filled_qty"))
++            c = finite_decimal(o.get("filled_cost"))
++            if q is None or c is None or q < 0 or c < 0:
++                return "SIBLING_ORDER_UNREADABLE:%s" % vid
++            if q == 0:
++                continue
++            try:
++                side = canonical_side(o.get("side"),
++                                      doing="reading a sibling fill")
++            except UnknownSide:
++                return "SIBLING_SIDE_UNREADABLE:%s" % vid
++            theirs[str(vid)] = {"side": side, "qty": q, "cost": c}
++        if set(theirs) != set(by_order):
++            return "ORDER_SETS_DIFFER:venue_only=%d,sibling_only=%d" % (
++                len(set(by_order) - set(theirs)),
++                len(set(theirs) - set(by_order)))
++        for vid in sorted(theirs):
++            a, b = by_order[vid], theirs[vid]
++            if a["side"] != b["side"]:
++                return "ORDER_SIDE_DIFFERS:%s" % vid
++            if a["qty"] != b["qty"]:
++                return "ORDER_QTY_DIFFERS:%s:%s!=%s" % (vid, a["qty"],
++                                                         b["qty"])
++            if a["cost"] != b["cost"]:
++                return "ORDER_COST_DIFFERS:%s:%s!=%s" % (vid, a["cost"],
++                                                          b["cost"])
++        rebases = [str(r.get("t")) for r in
++                   (self.state.get("accounting_rebase_log") or [])
++                   if isinstance(r, Mapping) and r.get("t")]
++        settled = str(row.get("t") or "")
++        if not settled:
++            return "SETTLEMENT_TIME_UNREADABLE"
++        if rebases and settled < max(rebases):
++            return "SETTLED_BEFORE_THE_LAST_REBASE"
++        return None
++
+     VENUE_SUPERSET_FORM = "VENUE_SUPERSET_OWNER_LISTED"
+     SUPERSET_FIELDS = frozenset((
+         "venue_up", "venue_down", "cost_up", "cost_down", "ledger_up",
+diff --git a/src/l5_venue_cost_attestation.py b/src/l5_venue_cost_attestation.py
+index dc5e243c4..7ea80e40e 100644
+--- a/src/l5_venue_cost_attestation.py
++++ b/src/l5_venue_cost_attestation.py
+@@ -79,6 +79,100 @@ MAX_ATTEMPTS = 3
+ SETTLE_AGE_S = 120.0
+ RETRY_S = 600.0
+ 
++#: THE SIBLING-LEDGER FORM. OFF unless this is exactly the token below.
++#:
++#: A market in another registered strategy's series (the 5-minute lane)
++#: is traded two-sided and fast; this ledger adopts one net snapshot of it
++#: and retires it at the $1 bound, so the exact forms can never match. With
++#: the switch on, a refusal `VENUE_QTY_NE_LEDGER_QTY` on such a market is
++#: retried ONCE per pass with that strategy's own order ledger as second
++#: evidence -- see `InventoryStore._sibling_refusal` for everything that
++#: must then agree. Off, nothing here changes.
++SIBLING_ENV = "L5_SIBLING_LEDGER_ATTESTATION"
++SIBLING_TOKEN = "VENUE_FILLS_AND_SIBLING_LEDGER"
++#: where each other strategy publishes its order ledger (read-only GET)
++SIBLING_FEED_ENVS = {"BTC5M": "L5_BTC5M_FILLS_URL"}
++SIBLING_TIMEOUT_S = 3.0
++#: a market already exhausted under the exact forms gets this many tries
++#: under the sibling form, recorded durably, then is left alone again
++MAX_SIBLING_ATTEMPTS = 3
++QTY_REASON = "VENUE_QTY_NE_LEDGER_QTY"
++
++
++def sibling_enabled() -> bool:
++    return (os.environ.get(SIBLING_ENV) or "").strip() == SIBLING_TOKEN
++
++
++def _strategy_of(market: str) -> Optional[str]:
++    try:
++        from src import l5_live_execution as LX
++        owner = LX.ORIGIN.strategy_of_market(market)
++        return None if owner in (None, LX.OWN_STRATEGY) else str(owner)
++    except BaseException as exc:                               # noqa: BLE001
++        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
++            raise
++        return None
++
++
++def sibling_evidence(market: str, *, fetch: Any = None) -> Dict[str, Any]:
++    """The other strategy's own orders for `market`, or why not. GET only.
++
++    {"ok": True, "evidence": {...}} | {"ok": False, "reason": ...}. Never
++    raises. An order with no venue id, or the same venue id twice, refuses:
++    the store matches by venue order id and must not be handed a guess.
++    """
++    if not sibling_enabled():
++        return {"ok": False, "reason": "SIBLING_FORM_OFF"}
++    owner = _strategy_of(market)
++    if owner is None:
++        return {"ok": False, "reason": "NOT_ANOTHER_STRATEGYS_MARKET"}
++    env = SIBLING_FEED_ENVS.get(owner)
++    url = (os.environ.get(env) or "").strip() if env else ""
++    if not url:
++        return {"ok": False, "reason": "SIBLING_FEED_NOT_CONFIGURED"}
++    try:
++        if fetch is None:
++            import json as _json
++            import urllib.request as _ur
++            with _ur.urlopen(url, timeout=SIBLING_TIMEOUT_S) as r:  # noqa: S310
++                doc = _json.loads(r.read().decode("utf-8"))
++        else:
++            doc = fetch(url)
++    except BaseException as exc:                               # noqa: BLE001
++        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
++            raise
++        return {"ok": False,
++                "reason": "SIBLING_FEED_UNREACHABLE:%s" % type(exc).__name__}
++    if not isinstance(doc, Mapping) or doc.get("readable") is not True:
++        return {"ok": False, "reason": "SIBLING_FEED_NOT_READABLE"}
++    if str(doc.get("strategy") or "") != owner:
++        return {"ok": False, "reason": "SIBLING_FEED_IS_ANOTHER_STRATEGYS"}
++    orders: Dict[str, Dict[str, Any]] = {}
++    for o in doc.get("orders") or ():
++        if not isinstance(o, Mapping):
++            return {"ok": False, "reason": "SIBLING_ORDER_UNREADABLE"}
++        if str(o.get("market") or "") != market:
++            continue
++        q = CBA._d(o.get("filled_qty"))
++        if q is None:
++            return {"ok": False, "reason": "SIBLING_ORDER_UNREADABLE"}
++        if q == 0:
++            continue
++        vid = str(o.get("venue_order_id") or "").strip()
++        if not vid or vid in orders:
++            return {"ok": False,
++                    "reason": "SIBLING_ORDER_ID_MISSING_OR_REPEATED"}
++        orders[vid] = {"side": o.get("side"),
++                       "filled_qty": o.get("filled_qty"),
++                       "filled_cost": o.get("filled_cost")}
++    if not orders:
++        return {"ok": False, "reason": "SIBLING_HAS_NO_FILLS_IN_MARKET"}
++    return {"ok": True, "evidence": {
++        "strategy": owner, "orders": orders,
++        "as_of_utc": doc.get("as_of_utc"),
++        "source": "%s_ORDER_LEDGER_FEED" % owner}}
++
++
+ _SLUG_TIME = re.compile(r"(\d{4})-(\d{2})-(\d{2})-(\d{2})(\d{2})z$")
+ _ROW_TIME_KEYS = ("time", "createTime", "transactTime", "tradeTime",
+                   "executionTime", "createdAt", "created_at", "timestamp",
+@@ -165,7 +259,10 @@ def candidates(store: Any, *, now: Optional[dt.datetime] = None
+         if not t or t[:10] < floor:
+             continue
+         rec = book.get(m) or {}
+-        if rec.get("status") in ("CORRECTED", "UPPER_BOUND_KEPT"):
++        if rec.get("status") == "CORRECTED":
++            continue
++        if rec.get("status") == "UPPER_BOUND_KEPT" and not sibling_retry(
++                m, rec):
+             continue
+         rt = parse_time(t)
+         if rt is not None and (now - rt).total_seconds() < SETTLE_AGE_S:
+@@ -178,6 +275,21 @@ def candidates(store: Any, *, now: Optional[dt.datetime] = None
+     return out
+ 
+ 
++def sibling_retry(market: str, rec: Mapping[str, Any]) -> bool:
++    """May an EXHAUSTED market be read again under the sibling form?
++
++    Only with the switch on, only for another strategy's market, only when
++    what exhausted it was the quantity rule (the one thing the sibling form
++    addresses), and only `MAX_SIBLING_ATTEMPTS` times, counted durably.
++    """
++    if not sibling_enabled() or _strategy_of(market) is None:
++        return False
++    if not str(rec.get("last_reason") or "").startswith(QTY_REASON) \
++            and not int(rec.get("sibling_attempts") or 0):
++        return False
++    return int(rec.get("sibling_attempts") or 0) < MAX_SIBLING_ATTEMPTS
++
++
+ class Walk:
+     """One paced walk of the activity feed for a fixed set of markets."""
+ 
+@@ -407,6 +519,9 @@ class Attestor:
+                         "old_pnl": out.get("old_pnl"),
+                         "new_pnl": out.get("new_pnl"),
+                         "delta": out.get("delta")}
++            if str(out.get("reason")) == QTY_REASON and sibling_enabled() \
++                    and _strategy_of(market) is not None:
++                return self._evaluate_sibling(store, w, market, got)
+             return self._refuse(store, market, str(out.get("reason")))
+         except BaseException as exc:                           # noqa: BLE001
+             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+@@ -418,6 +533,37 @@ class Attestor:
+                 return {"market": market, "attested": False,
+                         "reason": "EXCEPTION:%s" % type(exc).__name__}
+ 
++    def _evaluate_sibling(self, store: Any, w: Walk, market: str,
++                          got: Mapping[str, Any]) -> Dict[str, Any]:
++        """The same venue fills, with the other strategy's ledger beside
++        them. Every outcome but a correction spends one SIBLING attempt and
++        leaves the bound exactly where it was."""
++        ev = sibling_evidence(market)
++        if ev.get("ok"):
++            out = store.attest_retired_market_cost(
++                market, legs=got["legs"], walk=w.proof(),
++                correction_id="venue-attest|%s" % market,
++                sibling=ev["evidence"])
++            if out.get("attested"):
++                return {"market": market, "attested": True,
++                        "form": "VENUE_FILLS_EQUAL_SIBLING_LEDGER",
++                        "old_pnl": out.get("old_pnl"),
++                        "new_pnl": out.get("new_pnl"),
++                        "delta": out.get("delta")}
++            reason = "%s:SIBLING:%s" % (QTY_REASON, out.get("sibling")
++                                        or out.get("reason"))
++        else:
++            reason = "%s:SIBLING:%s" % (QTY_REASON, ev.get("reason"))
++        rec = (((getattr(store, "state", {}) or {}).get(STATE_KEY) or {})
++               .get("markets") or {}).get(market) or {}
++        n = int(rec.get("sibling_attempts") or 0) + 1
++        final = n >= MAX_SIBLING_ATTEMPTS
++        store.note_venue_cost_attempt(market, reason=reason, final=final,
++                                      count_attempt=False,
++                                      sibling_attempts=n)
++        return {"market": market, "attested": False, "reason": reason,
++                "sibling_attempts": n, "final": final}
++
+     def heartbeat(self, store: Any) -> Dict[str, Any]:
+         st = getattr(store, "state", {}) or {}
+         floor = retro_floor_day()
+diff --git a/tests/test_l5_sibling_ledger_attestation.py b/tests/test_l5_sibling_ledger_attestation.py
+new file mode 100644
+index 000000000..a98ed530c
+--- /dev/null
++++ b/tests/test_l5_sibling_ledger_attestation.py
+@@ -0,0 +1,300 @@
++"""Another strategy's two-sided market, restated only when the venue's
++fills and that strategy's own order ledger agree order by order.
++
++THE CASE: cpc-btc-updown-5m-2026-11-21-0620z. Seventeen maker fills, UP
++0.49 for $0.2948 and DOWN 0.61 for $0.2957, DOWN won: +$0.0195, which is
++what the account's cash moved. This ledger adopted DOWN 0.10 at the $1
++bound and retired the market at $0.00.
++"""
++from __future__ import annotations
++
++import copy
++from decimal import Decimal as D
++
++import pytest
++
++from src import l5_live_execution as LX
++from src import l5_venue_cost_attestation as VCA
++
++from tests.test_l5_venue_cost_attestation import (
++    Feed, _no_retry_spacing, fill, retire, run_until_idle,  # noqa: F401
++)
++
++M = "cpc-btc-updown-5m-2026-11-21-0620z"
++OTHER = "aec-nba-det-sa-2026-11-21"
++URL = "http://lane.invalid/btc5m_fills"
++
++#: the seventeen fills of the window, as the lane logged them
++WINDOW = [
++    ("DOWN", "0.08", "0.40"), ("UP", "0.07", "0.66"), ("DOWN", "0.07", "0.33"),
++    ("DOWN", "0.06", "0.20"), ("UP", "0.06", "0.79"), ("UP", "0.06", "0.81"),
++    ("UP", "0.06", "0.79"), ("DOWN", "0.06", "0.20"), ("UP", "0.06", "0.82"),
++    ("DOWN", "0.08", "0.39"), ("UP", "0.08", "0.60"), ("DOWN", "0.08", "0.61"),
++    ("DOWN", "0.06", "0.72"), ("DOWN", "0.07", "0.67"), ("UP", "0.05", "0.10"),
++    ("DOWN", "0.05", "0.93"), ("UP", "0.05", "0.06"),
++]
++
++
++def venue_fills(rows=WINDOW, market=M, fee="0"):
++    return [fill(market, side, q, px, "T%02d" % i, "V%02d" % i,
++                 t="2026-11-21T06:2%d:00Z" % (i % 4), fee=fee)
++            for i, (side, q, px) in enumerate(rows)]
++
++
++def lane_doc(rows=WINDOW, market=M, strategy="BTC5M", readable=True):
++    orders = [{"client_order_id": "b5m-%02d" % i, "venue_order_id": "V%02d" % i,
++               "market": market, "side": side, "price": px,
++               "filled_qty": q, "filled_cost": str(D(q) * D(px)),
++               "state": "FILLED"}
++              for i, (side, q, px) in enumerate(rows)]
++    #: orders that never filled are in the feed too
++    orders.append({"client_order_id": "b5m-zz", "venue_order_id": "V99",
++                   "market": market, "side": "UP", "price": "0.58",
++                   "filled_qty": "0", "filled_cost": "0",
++                   "state": "CANCELLED"})
++    orders.append({"client_order_id": "b5m-old", "venue_order_id": "VOLD",
++                   "market": "cpc-btc-updown-5m-2026-11-20-0100z",
++                   "side": "UP", "price": "0.5", "filled_qty": "1",
++                   "filled_cost": "0.5", "state": "FILLED"})
++    return {"readable": readable, "strategy": strategy,
++            "as_of_utc": "2026-11-21T06:30:00+00:00", "orders": orders}
++
++
++@pytest.fixture
++def store(tmp_path):
++    s = LX.InventoryStore(str(tmp_path / "inv.json"))
++    s.state["realized_unattributed"] = "0"
++    s.state["realized_attributed"] = "0"
++    s.state["realized_today"] = "0"
++    retire(s, M, dn="0.10", yes="0", t="2026-11-21T06:26:56+00:00")
++    assert s.realized_today() == D("0")
++    return s
++
++
++@pytest.fixture
++def lane(monkeypatch):
++    box = {"doc": lane_doc(), "calls": 0, "raise": None}
++
++    def fake(market, *, fetch=None):
++        def f(url):
++            box["calls"] += 1
++            assert url == URL
++            if box["raise"] is not None:
++                raise box["raise"]
++            return copy.deepcopy(box["doc"])
++        return REAL(market, fetch=f)
++    REAL = VCA.sibling_evidence
++    monkeypatch.setattr(VCA, "sibling_evidence", fake)
++    monkeypatch.setenv("L5_BTC5M_FILLS_URL", URL)
++    return box
++
++
++@pytest.fixture
++def on(monkeypatch):
++    monkeypatch.setenv(VCA.SIBLING_ENV, VCA.SIBLING_TOKEN)
++
++
++def book(store, m=M):
++    return store.state[VCA.STATE_KEY]["markets"][m]
++
++
++# ------------------------------------------------------------- off
++
++@pytest.mark.parametrize("raw", ["", "1", "YES", "ON",
++                                 "venue_fills_and_sibling_ledger"])
++def test_off_unless_the_exact_token(store, lane, monkeypatch, raw):
++    monkeypatch.setenv(VCA.SIBLING_ENV, raw)
++    run_until_idle(store, Feed([venue_fills()]))
++    assert lane["calls"] == 0
++    assert book(store)["status"] == "UPPER_BOUND_KEPT"
++    assert book(store)["last_reason"] == "VENUE_QTY_NE_LEDGER_QTY"
++    assert store.realized_today() == D("0")
++    assert not store.state.get("cost_basis_corrections")
++
++
++# ------------------------------------------------------------- the case
++
++def test_the_window_is_restated_to_what_the_cash_did(store, lane, on):
++    _att, results = run_until_idle(store, Feed([venue_fills()]))
++    done = [r for o in results for r in (o.get("evaluated") or [])
++            if r.get("attested")]
++    assert len(done) == 1 and done[0]["form"] == store.SIBLING_LEDGER_FORM
++    assert D(done[0]["delta"]) == D("0.0195")
++    assert store.realized_today() == D("0.0195")
++    row = store.state["retired_markets"][M]
++    assert D(row["settlement_pnl"]) == D("0.0195")
++    assert D(row["up_cost"]) == D("0.2948")
++    assert D(row["dn_cost"]) == D("0.2957")
++    assert D(row["venue_up_qty"]) == D("0.49")
++    assert D(row["venue_dn_qty"]) == D("0.61")
++    assert row["venue_qty_form"] == store.SIBLING_LEDGER_FORM
++    #: the original retirement is kept beside the restated one
++    assert D(row["cost_superseded"]["settlement_pnl"]) == D("0")
++    rec, = store.state["cost_basis_corrections"]
++    assert rec["qty_form"] == store.SIBLING_LEDGER_FORM
++    assert rec["sibling_ledger"]["strategy"] == "BTC5M"
++    assert rec["sibling_ledger"]["orders_matched"] == 17
++    assert len(rec["trade_ids"]) == 17
++    assert book(store)["status"] == "CORRECTED"
++    assert "%s|DOWN" % M not in store.state.get("leg_cost_basis_unknown", [])
++
++
++def test_it_is_applied_once(store, lane, on):
++    run_until_idle(store, Feed([venue_fills()]))
++    calls = lane["calls"]
++    run_until_idle(store, Feed([venue_fills()]))
++    assert lane["calls"] == calls
++    assert store.realized_today() == D("0.0195")
++    assert len(store.state["cost_basis_corrections"]) == 1
++
++
++def test_a_losing_window_is_restated_downward_too(tmp_path, lane, on):
++    s = LX.InventoryStore(str(tmp_path / "inv.json"))
++    for k in ("realized_unattributed", "realized_attributed",
++              "realized_today"):
++        s.state[k] = "0"
++    retire(s, M, dn="0.10", yes="1", t="2026-11-21T06:26:56+00:00")
++    assert s.realized_today() == D("-0.10")
++    run_until_idle(s, Feed([venue_fills()]))
++    #: UP won: 0.49 redeemed against 0.5905 spent
++    assert s.realized_today() == D("0.49") - D("0.5905")
++
++
++def test_an_already_exhausted_market_is_reopened_when_switched_on(
++        store, lane, monkeypatch):
++    run_until_idle(store, Feed([venue_fills()]))           # switch off
++    assert book(store)["status"] == "UPPER_BOUND_KEPT"
++    assert book(store)["attempts"] == VCA.MAX_ATTEMPTS
++    monkeypatch.setenv(VCA.SIBLING_ENV, VCA.SIBLING_TOKEN)
++    run_until_idle(store, Feed([venue_fills()]))
++    assert book(store)["status"] == "CORRECTED"
++    assert store.realized_today() == D("0.0195")
++
++
++# ------------------------------------------------------------- refusals
++
++def refused(store, lane, feed_rows=None, n=VCA.MAX_SIBLING_ATTEMPTS):
++    before = copy.deepcopy(store.state["retired_markets"][M])
++    run_until_idle(store, Feed([feed_rows if feed_rows is not None
++                                else venue_fills()]))
++    assert store.state["retired_markets"][M] == before
++    assert store.realized_today() == D("0")
++    assert not store.state.get("cost_basis_corrections")
++    assert book(store)["status"] == "UPPER_BOUND_KEPT"
++    assert book(store)["sibling_attempts"] == n
++    return book(store)["last_reason"]
++
++
++def test_lane_unreachable_keeps_the_bound_and_is_bounded(store, lane, on):
++    lane["raise"] = OSError("down")
++    why = refused(store, lane)
++    assert why.endswith("SIBLING:SIBLING_FEED_UNREACHABLE:OSError")
++    assert lane["calls"] == VCA.MAX_SIBLING_ATTEMPTS
++
++
++def test_lane_feed_not_readable(store, lane, on):
++    lane["doc"] = lane_doc(readable=False)
++    assert refused(store, lane).endswith("SIBLING_FEED_NOT_READABLE")
++
++
++def test_feed_of_another_strategy(store, lane, on):
++    lane["doc"] = lane_doc(strategy="BTC15M")
++    assert refused(store, lane).endswith("SIBLING_FEED_IS_ANOTHER_STRATEGYS")
++
++
++def test_feed_url_not_configured(store, lane, on, monkeypatch):
++    monkeypatch.delenv("L5_BTC5M_FILLS_URL")
++    assert refused(store, lane).endswith("SIBLING_FEED_NOT_CONFIGURED")
++
++
++def test_the_lane_is_missing_a_fill_the_venue_has(store, lane, on):
++    lane["doc"] = lane_doc(WINDOW[:-1])
++    assert "ORDER_SETS_DIFFER:venue_only=1,sibling_only=0" in refused(
++        store, lane)
++
++
++def test_the_venue_is_missing_a_fill_the_lane_has(store, lane, on):
++    assert "ORDER_SETS_DIFFER:venue_only=0,sibling_only=1" in refused(
++        store, lane, venue_fills(WINDOW[:-1]))
++
++
++def test_a_quantity_differs(store, lane, on):
++    rows = list(WINDOW)
++    rows[3] = ("DOWN", "0.05", "0.20")
++    lane["doc"] = lane_doc(rows)
++    assert "ORDER_QTY_DIFFERS:V03" in refused(store, lane)
++
++
++def test_a_price_differs(store, lane, on):
++    rows = list(WINDOW)
++    rows[3] = ("DOWN", "0.06", "0.21")
++    lane["doc"] = lane_doc(rows)
++    assert "ORDER_COST_DIFFERS:V03" in refused(store, lane)
++
++
++def test_a_side_differs(store, lane, on):
++    rows = list(WINDOW)
++    rows[3] = ("UP", "0.06", "0.20")
++    lane["doc"] = lane_doc(rows)
++    assert "ORDER_SIDE_DIFFERS:V03" in refused(store, lane)
++
++
++def test_a_fee_was_charged(store, lane, on):
++    assert "FEE_NOT_ZERO" in refused(store, lane, venue_fills(fee="0.01"))
++
++
++def test_a_repeated_order_id_in_the_lane_feed(store, lane, on):
++    d = lane_doc()
++    d["orders"][1]["venue_order_id"] = d["orders"][0]["venue_order_id"]
++    lane["doc"] = d
++    assert refused(store, lane).endswith(
++        "SIBLING_ORDER_ID_MISSING_OR_REPEATED")
++
++
++def test_settled_before_the_last_rebase(store, lane, on):
++    store.state["accounting_rebase_log"] = [
++        {"t": "2026-11-21T07:00:00+00:00", "id": "r"}]
++    assert "SETTLED_BEFORE_THE_LAST_REBASE" in refused(store, lane)
++
++
++# ------------------------------------------- scope: nothing wider
++
++def test_this_services_own_markets_never_use_the_form(tmp_path, lane, on):
++    s = LX.InventoryStore(str(tmp_path / "inv.json"))
++    for k in ("realized_unattributed", "realized_attributed",
++              "realized_today"):
++        s.state[k] = "0"
++    retire(s, OTHER, up="5", yes="0", t="2026-11-21T06:26:56+00:00")
++    run_until_idle(s, Feed([[fill(OTHER, "UP", "10", "0.46", "TA", "VA"),
++                             fill(OTHER, "DOWN", "10", "0.48", "TB", "VB")]]))
++    assert lane["calls"] == 0
++    b = s.state[VCA.STATE_KEY]["markets"][OTHER]
++    assert b["status"] == "UPPER_BOUND_KEPT"
++    assert b["last_reason"] == "VENUE_QTY_NE_LEDGER_QTY"
++    assert "sibling_attempts" not in b
++    assert s.realized_today() == D("-5")
++
++
++def test_a_side_the_ledger_already_knew_is_never_repriced(tmp_path, lane, on):
++    s = LX.InventoryStore(str(tmp_path / "inv.json"))
++    for k in ("realized_unattributed", "realized_attributed",
++              "realized_today"):
++        s.state[k] = "0"
++    retire(s, M, up="0.05", dn="0.10", yes="0",
++           unknown=["%s|DOWN" % M], cost={"UP": "0.03", "DOWN": "0.10"},
++           t="2026-11-21T06:26:56+00:00")
++    run_until_idle(s, Feed([venue_fills()]))
++    assert "KNOWN_SIDE:UP" in s.state[VCA.STATE_KEY]["markets"][M][
++        "last_reason"]
++    assert not s.state.get("cost_basis_corrections")
++
++
++def test_the_store_verb_alone_needs_the_evidence(store):
++    """Called without `sibling`, the store behaves exactly as before."""
++    legs = VCA.legs_from_rows(venue_fills(), M)["legs"]
++    out = store.attest_retired_market_cost(
++        M, legs=legs, walk={"sufficient": True, "by": "END_OF_FEED"},
++        correction_id="x")
++    assert out["attested"] is False
++    assert out["reason"] == "VENUE_QTY_NE_LEDGER_QTY"
++    assert out["sibling"] == "NO_SIBLING_EVIDENCE"
+-- 
+2.43.0
+
+
+From 62b54e14a4a2db0f85d8133020a5ce5c47bb8194 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 21 Nov 2026 13:20:02 +0000
+Subject: [PATCH 2/2] Pin what L5_BTC5M_FILLS_URL switches on before
+ settlement: a two-sided window is refused and nothing is written
+
+Tests only; no source change. The pre-settlement check has never run in
+production. For the 0620z shape it refuses on every net or single-side
+snapshot, on an unreachable lane, a failed venue read, an unreadable feed
+and an order with no venue id; ledger state and file are byte-identical
+afterwards. End to end: refuse, retire at the bound, corrected to +0.0195
+by the post-settlement form. 13 tests.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01HTk927uH8zwpj6gLES92PF
+---
+ tests/test_l5_fills_url_interaction.py | 217 +++++++++++++++++++++++++
+ 1 file changed, 217 insertions(+)
+ create mode 100644 tests/test_l5_fills_url_interaction.py
+
+diff --git a/tests/test_l5_fills_url_interaction.py b/tests/test_l5_fills_url_interaction.py
+new file mode 100644
+index 000000000..c5b5186d3
+--- /dev/null
++++ b/tests/test_l5_fills_url_interaction.py
+@@ -0,0 +1,217 @@
++"""Setting L5_BTC5M_FILLS_URL also switches on the OLDER pre-settlement
++check (`Runner.attest_other_strategy_cost`), which has never run in
++production. These tests pin what it does to a two-sided 5-minute window
++shaped like cpc-btc-updown-5m-2026-11-21-0620z: it must refuse, write
++nothing, and leave the market for the post-settlement sibling form.
++"""
++from __future__ import annotations
++
++import copy
++import json
++from decimal import Decimal as D
++
++import pytest
++
++from src import l5_live_execution as LX
++from src import l5_pmus_live_runner as R
++from src import l5_venue_cost_attestation as VCA
++
++from tests.test_l5_venue_cost_attestation import (
++    Feed, _no_retry_spacing, run_until_idle,  # noqa: F401
++)
++from tests.test_l5_sibling_ledger_attestation import (
++    M, URL, WINDOW, lane_doc, venue_fills,
++)
++
++
++def adopted(tmp_path, dn="0.10", up="0"):
++    s = LX.InventoryStore(str(tmp_path / "inv.json"))
++    for k in ("realized_unattributed", "realized_attributed",
++              "realized_today"):
++        s.state[k] = "0"
++    rows = {}
++    if D(up):
++        rows["%s|UP" % M] = up
++    if D(dn):
++        rows["%s|DOWN" % M] = dn
++    s.adopt_venue_position(M, rows, why="test")
++    s.save()
++    return s
++
++
++class Venue:
++    """The account service's own /v1/order reads of the lane's ids."""
++
++    def __init__(self, rows=WINDOW, fail=None):
++        self.rows = {"V%02d" % i: {
++            "marketSlug": M, "cumQuantity": q,
++            "avgPx": {"value": str(D(px) if side == "UP" else 1 - D(px))}}
++            for i, (side, q, px) in enumerate(rows)}
++        self.fail = fail
++        self.asked = []
++
++    def order(self, vid):
++        self.asked.append(vid)
++        if self.fail is not None:
++            raise self.fail
++        return self.rows[vid]
++
++    def __getattr__(self, name):
++        raise AssertionError("pre-settlement check touched transport.%s"
++                             % name)
++
++
++@pytest.fixture
++def wire(monkeypatch):
++    box = {"doc": lane_doc(), "raise": None, "emitted": []}
++    monkeypatch.setattr(R, "emit", lambda k, d: box["emitted"].append((k, d)))
++    monkeypatch.setenv(R.BTC5M_FILLS_URL_ENV, URL)
++
++    class Resp:
++        def __init__(self, b):
++            self.b = b
++
++        def read(self):
++            return self.b
++
++        def __enter__(self):
++            return self
++
++        def __exit__(self, *a):
++            return False
++
++    def urlopen(url, timeout=0):
++        assert url == URL
++        if box["raise"] is not None:
++            raise box["raise"]
++        return Resp(json.dumps(box["doc"]).encode())
++    import urllib.request as UR
++    monkeypatch.setattr(UR, "urlopen", urlopen)
++    return box
++
++
++def pre(store, venue):
++    class Shell:
++        pass
++    sh = Shell()
++    sh.store = store
++    return R.Runner.attest_other_strategy_cost(sh, M, venue)
++
++
++def unchanged(store, tmp_path, before):
++    assert store.state == before[0]
++    assert (tmp_path / "inv.json").read_bytes() == before[1]
++
++
++def snap(store, tmp_path):
++    return copy.deepcopy(store.state), (tmp_path / "inv.json").read_bytes()
++
++
++def test_the_two_sided_window_is_refused_and_nothing_is_written(
++        tmp_path, wire):
++    s = adopted(tmp_path)
++    before = snap(s, tmp_path)
++    got = pre(s, Venue())
++    assert got["attested"] is False
++    assert got["reason"] == "FILLS_DO_NOT_ACCOUNT_FOR_THE_POSITION"
++    unchanged(s, tmp_path, before)
++    assert wire["emitted"][-1][0] == "L5_OTHER_STRATEGY_COST"
++
++
++@pytest.mark.parametrize("dn,up", [("0.12", "0"), ("0.61", "0"),
++                                   ("0", "0.49"), ("0.17", "0")])
++def test_no_net_or_single_side_snapshot_of_it_is_accepted(tmp_path, wire,
++                                                          dn, up):
++    s = adopted(tmp_path, dn=dn, up=up)
++    before = snap(s, tmp_path)
++    got = pre(s, Venue())
++    assert got["attested"] is False
++    assert got["reason"] == "FILLS_DO_NOT_ACCOUNT_FOR_THE_POSITION"
++    unchanged(s, tmp_path, before)
++
++
++def test_lane_unreachable_writes_nothing(tmp_path, wire):
++    wire["raise"] = OSError("down")
++    s = adopted(tmp_path)
++    before = snap(s, tmp_path)
++    got = pre(s, Venue())
++    assert got == {"attested": False, "market": M,
++                   "reason": "ATTEST_FAILED:OSError"}
++    unchanged(s, tmp_path, before)
++
++
++def test_a_venue_order_read_failing_writes_nothing(tmp_path, wire):
++    s = adopted(tmp_path)
++    before = snap(s, tmp_path)
++    got = pre(s, Venue(fail=RuntimeError("429")))
++    assert got["attested"] is False
++    assert got["reason"] == "ATTEST_FAILED:RuntimeError"
++    unchanged(s, tmp_path, before)
++
++
++def test_a_feed_that_is_not_readable_writes_nothing(tmp_path, wire):
++    wire["doc"] = lane_doc(readable=False)
++    s = adopted(tmp_path)
++    before = snap(s, tmp_path)
++    assert pre(s, Venue())["reason"] == "ATTEST_FAILED:ValueError"
++    unchanged(s, tmp_path, before)
++
++
++def test_an_order_that_never_reached_the_venue_refuses(tmp_path, wire):
++    d = lane_doc()
++    d["orders"].append({"client_order_id": "b5m-none", "venue_order_id": None,
++                        "market": M, "side": "UP", "price": "0.5",
++                        "filled_qty": "0", "filled_cost": "0",
++                        "state": "UNCERTAIN"})
++    wire["doc"] = d
++    s = adopted(tmp_path)
++    before = snap(s, tmp_path)
++    assert pre(s, Venue())["reason"] == "FILL_ID_MISSING_OR_REPEATED"
++    unchanged(s, tmp_path, before)
++
++
++def test_it_only_reads_the_venue_and_only_filled_orders(tmp_path, wire):
++    v = Venue()
++    pre(adopted(tmp_path), v)
++    assert sorted(v.asked) == ["V%02d" % i for i in range(17)]
++
++
++def test_a_market_not_held_at_the_bound_is_not_even_fetched(tmp_path, wire):
++    s = LX.InventoryStore(str(tmp_path / "inv.json"))
++    wire["raise"] = AssertionError("must not fetch")
++    assert pre(s, Venue()) is None
++    assert wire["emitted"] == []
++
++
++def test_end_to_end_refuse_before_retire_at_the_bound_correct_after(
++        tmp_path, wire, monkeypatch):
++    """The whole path with both settings on, in production order."""
++    monkeypatch.setenv(VCA.SIBLING_ENV, VCA.SIBLING_TOKEN)
++    monkeypatch.setattr(
++        VCA, "sibling_evidence",
++        lambda market, _real=VCA.sibling_evidence: _real(
++            market, fetch=lambda url: copy.deepcopy(wire["doc"])))
++    s = adopted(tmp_path)
++    assert pre(s, Venue())["attested"] is False
++    out = s.retire_settled_market(
++        M, yes_value=D("0"),
++        resolution={"source": "VENUE_SETTLEMENT_PX", "market": M,
++                    "yes_value": "0"})
++    assert out["retired"] and D(out["settlement_pnl"]) == D("0")
++    s.state["retired_markets"][M]["t"] = "2026-11-21T06:26:56+00:00"
++    assert s.realized_today() == D("0")
++    run_until_idle(s, Feed([venue_fills()]))
++    assert s.realized_today() == D("0.0195")
++    assert D(s.state["retired_markets"][M]["settlement_pnl"]) == D("0.0195")
++    assert len(s.state["cost_basis_corrections"]) == 1
++
++
++def test_when_it_does_accept_the_cost_is_the_real_one(tmp_path, wire):
++    """The one shape it can accept: the ledger holds exactly what the
++    lane's fills state, per side. Then the cost it writes is the fills'."""
++    rows = [("DOWN", "0.06", "0.20"), ("DOWN", "0.04", "0.30")]
++    wire["doc"] = lane_doc(rows)
++    s = adopted(tmp_path, dn="0.10")
++    got = pre(s, Venue(rows))
++    assert got["attested"] is True
++    assert s.leg_cost(M)["DOWN"] == D("0.06") * D("0.20") + D("0.04") * D("0.30")
+-- 
+2.43.0
+

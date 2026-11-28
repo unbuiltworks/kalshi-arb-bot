@@ -1,0 +1,16 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/l5_btc5m_live/Dockerfile",
+    "watchPatterns": [
+      "deploy/l5_btc5m_live/**"
+    ]
+  },
+  "deploy": {
+    "startCommand": "python3 -u -m src.l5_btc5m_runner",
+    "restartPolicyType": "NEVER",
+    "numReplicas": 1
+  },
+  "_status": "BTC 5-minute live session: ONE owner-approved window per configuration, then idles. Money-capable only with owner-supplied PMUS credentials, the owner's arm token, an approval document naming the exact 5-minute window, both shared halts released, and a fresh readable account-wide loss state from l5-pmus-live. Never relaunches itself into another window: a durable marker on its volume refuses a market it has already run. Restart policy NEVER."
+}

@@ -1,0 +1,173 @@
+{
+  "label": "GEMINI_CANARY_PREFLIGHT_V1",
+  "ok": true,
+  "generated_utc": "2026-09-19T05:48:44.227196+00:00",
+  "instrument": "GEMI-BTC05M2609190550-UP",
+  "side": "BUY",
+  "limit_price": "0.10",
+  "quantity": "0.01",
+  "maximum_cash_exposure_usd": "0.001000",
+  "current_bbo": {
+    "bid": "0.1",
+    "bid_qty": "1500.0",
+    "ask": "0.48",
+    "ask_qty": "288.0",
+    "levels": "3 bid / 5 ask",
+    "source_ts": 1789796924.0
+  },
+  "restability": {
+    "restable": true,
+    "why": "a BUY below the ask rests; at or above it would cross and take",
+    "tick_offset_from_touch": 0,
+    "queue_priority_note": "joins the touch exactly as the shadow did. NOTHING here is intended to improve queue priority, because a placement change would make this first live result incomparable with the observations that justified running it."
+  },
+  "post_only": {
+    "venue_status": "limit_only",
+    "enforced_by": "the VENUE: status limit_only means it rejects anything but a limit order on this instrument"
+  },
+  "tte_s": 76.1,
+  "expiry_utc": "2026-09-19T05:50:00+00:00",
+  "venue_terms": {
+    "readable": true,
+    "tick_size": 0.01,
+    "quote_increment": 0.01,
+    "min_order_size": "0.01",
+    "status": "limit_only"
+  },
+  "envelope": {
+    "windows": 1,
+    "orders": 1,
+    "quantity": "0.01",
+    "max_residual": "0.01",
+    "automatic_second_order": false,
+    "automatic_complement": false,
+    "automatic_repeat": false
+  },
+  "rejected_windows": [
+    {
+      "symbol": "GEMI-BTC05M2609190555-UP",
+      "tte_s": 376.1,
+      "why": "TTE outside [60.0, 300.0]"
+    },
+    {
+      "symbol": "GEMI-BTC05M2609190600-UP",
+      "tte_s": 676.1,
+      "why": "TTE outside [60.0, 300.0]"
+    },
+    {
+      "symbol": "GEMI-BTC05M2609190605-UP",
+      "tte_s": 976.1,
+      "why": "TTE outside [60.0, 300.0]"
+    }
+  ],
+  "eligible_windows": [
+    {
+      "symbol": "GEMI-BTC05M2609190550-UP",
+      "tte_s": 76.1,
+      "spread": "0.38",
+      "both_sides_deep": true
+    }
+  ],
+  "selection_basis": "genuinely two-sided first, then tightest spread. Instrument quality, never queue position.",
+  "fill_prospect": {
+    "volume_ahead_at_our_price": "1500.0",
+    "our_quantity": "0.01",
+    "must_clear_before_we_fill": "1500.0",
+    "spread": "0.38",
+    "model": "VOLUME_AHEAD_CLEARED: assumes we joined behind everything resting, so it is a LOWER bound. Real priority is unpublished and may be better.",
+    "caveat": "an UNKNOWN queue can never be shown to clear, and zero is never substituted for it"
+  },
+  "what_this_proves": {
+    "if_it_FILLS": [
+      "the durable-intent path wrote before the venue mutation",
+      "/v1/mytrades returns OUR fill with the venue's own fee field",
+      "/v1/prediction-markets/positions POPULATES -- the one thing no read can establish today, because it needs a position to exist through an expiry",
+      "settlement cashflow lands and reconciles against our legs"
+    ],
+    "if_it_does_NOT_fill": [
+      "SUBMITTED -> UNFILLED -> EXPIRED is exercised, and the authoritative order-state read path with it",
+      "the settlement and position chain is NOT exercised: with no position there is nothing for the venue to settle"
+    ],
+    "stated_plainly": "THE ACCOUNTING HALF OF THIS CANARY NEEDS A FILL. The lane is queue-bound, so an unfilled first order is the likely outcome and would leave the settlement question exactly where it is. That is a cost of the envelope, not a defect in it, and it is the owner's call to accept: the envelope forbids anything intended to improve queue priority, and improving it is the only thing that would raise the fill probability."
+  },
+  "fee_treatment": {
+    "venue_fee_bps": {
+      "api_maker_fee_bps": 60,
+      "api_taker_fee_bps": 120
+    },
+    "rule": "fees are their own line and are NEVER netted into a price; rebates and rewards stay in separate ledgers and enter nothing until credited and source-accounted"
+  },
+  "balance_sufficiency": {
+    "balance_sufficient_for_required": true,
+    "balance_required_usd": "0.001000",
+    "balance_amount_reported": "WITHHELD_BY_DESIGN"
+  },
+  "read_paths_live": {
+    "/v1/balances": {
+      "status": 200,
+      "reachable": true
+    },
+    "/v1/notionalvolume": {
+      "status": 200,
+      "reachable": true
+    },
+    "/v1/prediction-markets/positions": {
+      "status": 200,
+      "reachable": true
+    },
+    "/v1/mytrades": {
+      "status": 200,
+      "reachable": true
+    }
+  },
+  "paths": {
+    "durable_intent": {
+      "path": "written BEFORE the venue mutation, never after",
+      "module": "src.l5_surface_exec.adapter (record/persist_intent)",
+      "why": "an order that exists at the venue and not in our ledger is the one state we cannot reconcile"
+    },
+    "authoritative_order_fill": {
+      "path": "/v1/mytrades",
+      "status_today": "200, 0 rows",
+      "why": "the venue's own record with its own fee fields. VOLUME_AHEAD_CLEARED is OUR model of an unpublished queue and is never admissible here"
+    },
+    "settlement_position": {
+      "path": "/v1/prediction-markets/positions",
+      "status_today": "200, {positions[], total}, 0 rows",
+      "why": "the only authoritative outcome source; the PUBLIC surface publishes no terminal value at all"
+    },
+    "cash_reconciliation": {
+      "path": "/v1/balances + /v1/transfers",
+      "status_today": "200; transfers carries 9 rows with purpose/status",
+      "why": "REALIZED is the venue's cash movement. Our arithmetic over the legs is reported beside it as a cross-check, and when they disagree the venue is right"
+    }
+  },
+  "kill_deadman": {
+    "armed": false,
+    "submission_reachable": false,
+    "why": "this module has no order transport and imports none; a test asserts it over the AST",
+    "kill_conditions": [
+      "any order that is not a limit_only maker",
+      "residual exceeding 0.01 contracts",
+      "more than 1 outstanding order or more than 1 market",
+      "total notional exceeding the stated maximum cash exposure",
+      "venue_vs_ledger disagreement on a resumed session",
+      "any settlement endpoint that stops answering mid-run",
+      "an unreadable order state that cannot be resolved to terminal"
+    ],
+    "deadman": "existing risk/deadman protections remain in force and are not modified by this probe",
+    "fail_closed": "the session does NOT relaunch after a crash or a completion"
+  },
+  "status_ladder": [
+    "SUBMITTED",
+    "FILLED_OR_UNFILLED",
+    "EXPIRED_OR_SETTLED",
+    "RECONCILED",
+    "REALIZED"
+  ],
+  "authorization": "NOT GRANTED. This is a preflight, not a submission. No order is placed by this module and none may be placed without explicit owner authorization.",
+  "labels": [
+    "an execution and ACCOUNTING canary, not a profitability test: the lane is queue-bound and expected P&L at this size is ~zero.",
+    "never realized before venue-confirmed cash reconciliation."
+  ]
+}

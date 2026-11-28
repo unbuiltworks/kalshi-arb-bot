@@ -1,0 +1,28 @@
+[Unit]
+Description=L5 PMUS authenticated read-only recorder and gate
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ssm-user
+Group=ssm-user
+WorkingDirectory=/home/ssm-user/l5-pmus-engine
+EnvironmentFile=/home/ssm-user/l5-pmus-q1-credentials.env
+Environment=PYTHONPATH=/home/ssm-user/l5-pmus-engine
+Environment=PMUS_SERVICE_ROLE=ws-recorder
+Environment=PMUS_WS_ROOT=/home/ssm-user/l5-pmus-ws-state
+Environment=PMUS_WS_LEAGUES=all
+Environment=PMUS_WS_MAX_MARKETS=40
+Environment=PMUS_WS_DISCOVERY_SECONDS=300
+Environment=PMUS_WS_STATUS_EVERY_SECONDS=30
+ExecStart=/home/ssm-user/l5-pmus-engine-venv/bin/python -m src.pmus_ws_evidence_recorder
+Restart=always
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+StandardOutput=append:/home/ssm-user/l5-pmus-ws-state/recorder.log
+StandardError=append:/home/ssm-user/l5-pmus-ws-state/recorder.err.log
+
+[Install]
+WantedBy=multi-user.target

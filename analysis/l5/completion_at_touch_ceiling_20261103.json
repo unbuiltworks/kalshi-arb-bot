@@ -1,0 +1,312 @@
+{
+ "artifact": "analysis/l5/completion_at_touch_ceiling_20261103.json",
+ "generated_utc": "2026-11-03T14:21:03.035645+00:00",
+ "owner_direction": "configurable $0.99 fee-inclusive completion ceiling for already-filled unmatched inventory behind a disabled-by-default flag; preserve the $0.96 opening ceiling; prioritise at-touch maker completion; lot-aware completion pricing; report hedging separately from profitable completion.",
+ "headline": "THE PREMISE NEEDED CORRECTING FIRST: 0.96 was never the completion bound. `completion_pair_rescue` already permitted completions up to eff <= 1.00, and the venue record shows this engine submitting a complement at a pair of exactly 1.0000. What actually blocked completion was PLACEMENT -- the two-sided path priced the complement at the OPENING depth, resting it two ticks BELOW the touch and behind the entire visible queue. On authenticated evidence the at-touch change plus the lot-aware basis take admissible completions from 1 window of 4 to 2 of 4, and best-case locked margin from $0.084 to $0.124 against $2.96 of basis at risk. Every change defaults to today's behaviour; parity is unchanged.",
+ "item1_state_and_parity": {
+  "head": "56346421",
+  "branch": "claude/compassionate-allen-wic64u",
+  "remote": "in sync",
+  "tree": "clean at inspection",
+  "parity_6db042fc": {
+   "ids": 80,
+   "digest": "eb672d14b4baf439",
+   "identical": true
+  },
+  "parity_head_56346421": {
+   "ids": 80,
+   "digest": "eb672d14b4baf439",
+   "identical": true,
+   "summary": "54 failed, 15705 passed, 27 skipped, 1 xfailed, 26 errors in 449.27s"
+  },
+  "deployed": {
+   "service": "l5-pmus-live",
+   "project": "arb-ev-wallet-shadow",
+   "deployment": "b8faa380 SUCCESS on 51542dad",
+   "armed": false,
+   "halt": "active",
+   "note": "HEAD is 5 commits ahead of the deployed SHA; all five are analysis, tests and read-only observability. Nothing in this turn is deployed."
+  }
+ },
+ "what_the_code_already_did": {
+  "finding": "0.96 is the OPENING cap, enforced at the submission boundary. A COMPLETION that fails it falls through to `completion_pair_rescue`, whose own limit was `eff <= 1.00`.",
+  "verified_against_the_live_2245z_state": {
+   "held": "DOWN 2 at own 0.4500 (venue-confirmed single lot)",
+   "completion_ceiling_returns": "0.95 own price",
+   "COMPLETION_CEILINGS_IN_FORCE": [
+    "improves",
+    "within_budget"
+   ],
+   "pair_cap_excluded_from_that_tuple": true,
+   "at_own_0_53": {
+    "eff": "0.9800",
+    "clears_0_96": false,
+    "clears_rescue_limit_1_00": true,
+    "rescue_conditions": "all hold"
+   }
+  },
+  "and_the_venue_agrees": "at 22:45:40.718 the engine submitted the complement at own 0.5500 for a pair of exactly 1.0000",
+  "one_precondition_I_checked_rather_than_assumed": "the rescue reads `max_worst_case_deficit_usd` and refuses RESIDUAL_BUDGET_UNKNOWN when it is unset -- 'unset or blank = gate disabled'. L5_MAX_WORST_CASE_DEFICIT_USD IS present on the deployed service and is graded by the preflight, so the rescue is live in production. My first test fixture had no budget and every completion above 0.96 was refused; that is now pinned as its own fail-closed test rather than papered over."
+ },
+ "the_actual_blocker": {
+  "defect": "`l5_live_execution.py` priced the COMPLEMENT leg with `depth_ticks=_dticks`, where `_dticks = int(os.getenv('L5_TS_DEPTH_TICKS', '2'))` -- the OPENING depth.",
+  "venue_proof": {
+   "utc": "2026-11-02T22:45:36.749Z",
+   "side": "UP (the complement)",
+   "own_px": "0.5100",
+   "pair": "0.9600",
+   "up_bid_at_submission": "0.5300",
+   "coid": "l5f-57948e7484cad428775f6081",
+   "reading": "two ticks BELOW the touch, behind the entire visible queue, fillable only if the market moved two more ticks AGAINST the leg being hedged. It cleared every economic gate and never filled."
+  },
+  "already_known_in_the_codebase": "`l5_book_completion` has its own `completion_depth_ticks()` defaulting to 0, and its comment records the same failure at 1445z: 'posted its complement at own 0.6000 into a 0.6200 bid -- two ticks behind the entire visible queue, unfillable by construction -- because the opening depth was reused here.' That fix was never applied to the two-sided path, and the two-sided path is the one that submits.",
+  "reproduced_exactly": {
+   "depth_2": "own 0.5100, pair 0.9600 (the order that went out)",
+   "depth_1": "own 0.5200, pair 0.9700",
+   "depth_0": "own 0.5300, pair 0.9800 (at the touch)"
+  }
+ },
+ "changes_shipped": [
+  {
+   "file": "src/l5_two_sided_probe.py",
+   "what": "`completion_pair_ceiling()` plus COMPLETION_PAIR_CEILING (1.00), its env name and a 1.00 maximum. Default equals the bound the rescue already enforced, so an unset environment is byte-identical. Clamped to [max_pair_cost(), 1.00]: it can tighten toward the opening cap and can never exceed redemption. Unreadable falls back to the default, matching `max_pair_cost`.",
+   "default_changes_behaviour": false
+  },
+  {
+   "file": "src/l5_live_execution.py (completion_pair_rescue)",
+   "what": "the hard `eff > D(1)` test now reads `TS.completion_pair_ceiling()` and reports it on the record. Setting L5_COMPLETION_PAIR_CEILING=0.99 makes the bound 0.99.",
+   "default_changes_behaviour": false
+  },
+  {
+   "file": "src/l5_live_execution.py (two-sided complement)",
+   "what": "a `_cdticks` local, defaulting to `_dticks`, switched to `BC.completion_depth_ticks()` only when L5_TS_COMPLETION_AT_TOUCH is truthy. The COMPLEMENT call site uses `_cdticks`; the OPENING leg keeps `_dticks`. An unresolvable depth falls back to the opening depth, which is what is deployed.",
+   "default_changes_behaviour": false
+  },
+  {
+   "file": "src/l5_live_execution.py (InventoryStore)",
+   "what": "`lots()`, `attested_qty()`, `unattested_qty()` -- readers over the `fill_provenance` entries `apply_fill` already persists, so NO new state. Lots are returned dearest first, because a gate choosing an attribution should choose the conservative one.",
+   "default_changes_behaviour": false
+  },
+  {
+   "file": "src/l5_runtime_config_verify.py",
+   "what": "two observed-not-graded rows: `completion_pair_ceiling` and `ts_completion_at_touch`. An operator reading only `maker_pair_ceiling` would have concluded the wrong number was in force for completions.",
+   "default_changes_behaviour": false
+  },
+  {
+   "file": "src/l5_live_execution.py (InventoryStore + pair_cost_refusal)",
+   "what": "`basis_attestation()` plus a fail-closed BASIS_UNATTESTED refusal in pair_cost_refusal, placed AFTER the create-no-matched-quantity early return so it binds completions and hedges only. `leg_cost_basis_unknown` was read in five reporting paths and consulted by NO gate, so the completion path would price a pair against the $1/share UNKNOWN_PRICE_WORST_CASE placeholder that `adopt_venue_position` writes. Refuses on a placeholder basis and on position no fill explains.",
+   "default_changes_behaviour": "only on a book that is already incoherent -- a tightening, in the conservative direction",
+   "openings_untouched": true,
+   "risk_reducing_paths_untouched": true
+  }
+ ],
+ "lot_aware_pricing": {
+  "why_it_matters_concretely": "the live 2300z book held 3.3600 UP at an average own cost of 0.605 -- exactly 2 x 1.68 and exactly (0.21 + 1.00)/2: the venue-confirmed lot of 1.68 at own 0.2100 blended with a second lot carrying the 1.00 unattested-basis placeholder. 0.605 is a price neither lot ever traded at.",
+  "opposite_conclusions_from_the_same_inventory": {
+   "on_the_blend": "0.605 + 0.7400 = 1.3450 -> above redemption, refused",
+   "on_the_real_lot": "0.2100 + 0.7400 = 0.9500 -> inside even the 0.96 cap"
+  },
+  "attestation_is_the_discriminator": "only a real fill writes a fill_provenance entry, so quantity from `reconcile_from_venue`'s net has no lot. `position - attested_qty` names it.",
+  "honest_limit": "attribution does not change total settled P&L -- contracts are fungible at settlement, so which lot a pair is matched against is an accounting choice. What lot-awareness fixes is the GATE reading a blended placeholder price and refusing (or admitting) on a number nothing traded at. This is shipped as readers and reporting; no gate consults them yet."
+ },
+ "item6_ceiling_comparison_0_96_vs_0_99": {
+  "basis": "authenticated websocket residual samples with venue-confirmed single-lot bases, at-touch quote, fee-inclusive. Maker fee 0.0000 is venue-verified on all four fills; rebate_usd is null on all four so NO rebate is credited. Within COMPLETE_CUTOFF_S 720 only.",
+  "samples_within_cutoff": 312,
+  "per_window": [
+   {
+    "window": "2215z",
+    "held": "DOWN 1.92 @ 0.3900",
+    "at_risk_usd": "0.7488",
+    "samples": 89,
+    "best_0_96": null,
+    "best_0_99": null
+   },
+   {
+    "window": "2230z",
+    "held": "UP 2.04 @ 0.4700",
+    "at_risk_usd": "0.9588",
+    "samples": 4,
+    "best_0_96": null,
+    "best_0_99": null,
+    "note": "4-sample slice; the full forensics showed 1.05-1.10 throughout"
+   },
+   {
+    "window": "2245z",
+    "held": "DOWN 2 @ 0.4500",
+    "at_risk_usd": "0.9000",
+    "samples": 108,
+    "best_0_96": null,
+    "best_0_99": {
+     "pair": "0.9800",
+     "utc": "22:45:36.395",
+     "locked_usd": "0.0400",
+     "queue_ahead_shares": "400.01"
+    }
+   },
+   {
+    "window": "2300z",
+    "held": "UP 1.68 @ 0.2100",
+    "at_risk_usd": "0.3528",
+    "samples": 111,
+    "best_0_96": {
+     "pair": "0.9500",
+     "utc": "23:03:19.102",
+     "locked_usd": "0.0840",
+     "queue_ahead_shares": "60.00"
+    },
+    "best_0_99": {
+     "pair": "0.9500",
+     "utc": "23:03:19.102",
+     "locked_usd": "0.0840",
+     "queue_ahead_shares": "60.00"
+    },
+    "only_visible_with_the_lot_fix": true
+   }
+  ],
+  "totals": {
+   "basis_at_risk_usd": "2.9604",
+   "windows_with_any_admissible_completion": {
+    "0.96": "1 of 4",
+    "0.99": "2 of 4"
+   },
+   "best_case_locked_margin_if_each_fills": {
+    "0.96": "0.0840",
+    "0.99": "0.1240"
+   },
+   "delta_from_the_ceiling_usd": "0.0400",
+   "delta_from_the_lot_fix_usd": "0.0840"
+  },
+  "reading": "the ceiling adds ONE window and $0.0400. The lot-aware basis unlocks $0.0840 -- more than the ceiling does -- and the at-touch depth is what makes either fillable at all. At clip 2 over ~2 hours this is cents; against $480/day it is not a path, it is a correctness fix that stops the engine refusing on wrong numbers.",
+  "fill_rates": {
+   "supported_by_order_level_evidence": "NONE",
+   "complement_fills_in_the_entire_campaign": 0,
+   "first_leg_fills": 4,
+   "why": "every venue-confirmed fill in the campaign is a FIRST leg. No completion has ever filled at any depth, so no fill rate for 0.96 or 0.99 is supported. Every figure above is ADMISSIBILITY and locked margin CONDITIONAL on a fill the displayed book does not guarantee."
+  }
+ },
+ "item7_residual_risk_hedge_versus_profitable_completion": {
+  "reported_separately_on_purpose": true,
+  "profitable_completion": "the matched book locks a gain against the basis actually paid: pair < 1.00 means the completed pair redeems more than it cost. At 2245z that is $0.0400 and at 2300z $0.0840 -- confirmed, settled, realized money if the quote fills.",
+  "so_a_hedge_is_not_rejected_for_being_unprofitable": "the two questions have different answers and both are true. 'Did this pair make money against what we paid?' -- yes, 2 to 5 cents a contract. 'Was completing better than holding?' -- neither better nor worse in expectation. For a CONFIRMED REALIZED profit target, converting an EV-neutral uncertain outcome into a locked small gain is exactly what the objective asks for, and it cuts the stranded-leg loss tail. What it does not do is create expected value, and nothing here reports it as if it did.",
+  "the_tail_it_cuts": "$2.9604 of basis sat at risk across the four windows. A stranded first leg settles at 0 or at its full quantity; completing removes that dispersion at a cost of the fee and of the upside tail.",
+  "SUPERSEDED_hedge": "forward variance reduction. Completing locks margin = 1 - basis - mk; holding the unmatched leg, marked at the same book, is worth (1 - mk) - basis. Those are the same expression, so completing at the prevailing complement price is EXACTLY EV-neutral against holding before fees, and negative after. This is algebra, not a sample statistic.",
+  "hedge": "forward risk transfer. The arithmetic identity 1 - basis - mk == (1 - mk) - basis holds, but it only means EV-neutral if (1 - mk) is the TRUE settlement probability and execution is free. Neither holds, so whether completing beats holding is UNMEASURED, not zero.",
+  "correction": "OWNER CORRECTION 2026-11-03, accepted: 'completing a position is not automatically expected-value neutral versus holding it. That depends on the true probability of settlement, execution costs, and the price paid for the hedge.' That is right and my framing was wrong. The ALGEBRA is sound -- 1 - basis - mk and (1 - mk) - basis are the same expression -- but calling it EV-neutral silently assumed that (1 - mk) IS the true settlement probability of the held leg. It is not. `mk` is one side of a spread, an OFFERED price rather than a mid or a probability; a maker completion also carries queue risk and may never fill; and a taker completion pays a fee that makes the comparison strictly negative. So the honest statement is CONDITIONAL: completing is EV-neutral against holding ONLY IF the complement's own price equals the true settlement probability and execution is free. Where the true probability is BELOW (1 - mk), completing is strictly better than holding; where it is above, strictly worse. Nothing in this programme has measured that probability, so the sign is UNKNOWN rather than zero -- and 'unknown' is not 'neutral', which is the same error I warned about with UNKNOWN not being NO."
+ },
+ "go_no_go": {
+  "decision": "GO on the code, NO-GO on enabling it without the measurement",
+  "go_because": "the complement-depth defect is real, venue-proven, already diagnosed elsewhere in this codebase, and fixed in three lines behind a default-off flag; the ceiling is now named, bounded and telemetered instead of implicit at 1.00; and the lot readers expose a blended placeholder that was hiding a window's only admissible completion.",
+  "no_go_because": "no completion has ever filled, so the at-touch fill rate is unmeasured. Enabling at-touch completion is a bet that resting at the touch fills materially more often than resting two ticks back, and that number does not exist in any historical record because the venue publishes no per-order queue position.",
+  "not_authorized_here": "no live orders, no arming, no enablement. The flags stay off until the owner approves a campaign scope."
+ },
+ "bounded_live_validation_config": {
+  "purpose": "measure venue-confirmed complement fill rate AND net realized P&L for two-tick versus at-touch completion. Both are outcomes: the earlier framing of this as fill-rate-only rested on the withdrawn EV-neutrality claim.",
+  "env_to_set": {
+   "L5_TS_COMPLETION_AT_TOUCH": "1 (treatment windows only)",
+   "L5_COMPLETION_PAIR_CEILING": "0.99 (tightens from today's implicit 1.00)"
+  },
+  "env_to_leave_alone": {
+   "L5_TS_MAX_PAIR_COST": "unset -> 0.96 opening cap",
+   "L5_TS_DEPTH_TICKS": "2 -> the opening leg is untouched",
+   "L5_TS_CANCEL_MARGIN_S": "300",
+   "L5_LIVE_HALT": "active until arming",
+   "L5_MAX_WORST_CASE_DEFICIT_USD": "unchanged -- the rescue answers to it"
+  },
+  "design": "alternate by window: depth 2 control, at-touch treatment. 20 windows, ~1.75 admissible moments a window on campaign evidence, so roughly 35 split ~17 per arm -- enough for a large difference, not a small one. A modest result is NOT RESOLVED, not a promotion.",
+  "preserved_unchanged": [
+   "$0.96 opening ceiling",
+   "300s cancellation margin",
+   "exact-order cancellation",
+   "partial-fill reconciliation",
+   "orders_uncertain fail-closed",
+   "watchdog",
+   "residual cap",
+   "daily and cumulative loss limits",
+   "settlement-only realized labelling"
+  ],
+  "prerequisites": [
+   "reconcile the 2300z-class placeholder basis, or a live engine prices the pair from a blend",
+   "deploy and verify the SHA, then confirm the two new telemetry rows read as expected while still disarmed",
+   "preflight: zero open orders, armed false, 0.96 opening cap, 300s margin"
+  ],
+  "success_criteria": [
+   ">=20 admissible completion moments with queue-ahead recorded at placement",
+   ">=10 resting completion attempts per arm",
+   "at-touch fill rate exceeding depth-2 by >=20 percentage points, reported as counts",
+   "every fill venue-confirmed; zero pairs priced from an unattested lot",
+   "zero exposure, residual, loss, watchdog or cancellation breaches"
+  ],
+  "failure_criteria": [
+   "any breach or cancel-verification left unresolved -> stop",
+   "<10 admissible moments in the first 10 windows -> stop, opportunity rate too low",
+   "any pair priced from a placeholder basis -> stop, the 2300z defect recurring",
+   "difference <20 points -> NOT RESOLVED, promote neither depth"
+  ],
+  "SUPERSEDED_limits": {
+   "max_exposure_per_window_usd": 2.0,
+   "max_cumulative_completion_notional_usd": 20.0,
+   "cumulative_realized_loss_limit_usd": 5.0,
+   "max_concurrent_markets": 1,
+   "max_live_orders": 1,
+   "stop_on_loss_limit": "HALT, fail closed, no automatic relaunch"
+  },
+  "budget_arithmetic_correction": {
+   "owner_asked": "verify that the $20 cumulative-notional budget and $2-per-window limit are compatible with the intended order sizes",
+   "they_were_not": true,
+   "the_deployed_contract_limits": {
+    "ABS_RESIDUAL_CAP_CONTRACTS": "5 (src/l5_live_execution.py)",
+    "residual_cap_formula": "min(k * use_clip, ABS_RESIDUAL_CAP_CONTRACTS)",
+    "OPENING_LEG_MAX_CONTRACTS": "3 (src/l5_two_sided_probe.py, env-overridable)"
+   },
+   "what_that_implies": "a completion is qty <= the unmatched leg at a complement own price <= the ceiling. At the deployed residual cap that is 5 x 0.99 = $4.95 a window, and even one opening leg at the deployed max is 3 x 0.99 = $2.97. My $2.00 per-window cap would have REFUSED exactly the orders the experiment exists to measure, and the observed campaign clip of 2.04 alone needs 2.04 x 0.99 = $2.0196.",
+   "cumulative_was_also_wrong": "20 windows at one completion each, up to $1.98 on a 2-contract clip, is up to $39.60. A $20 cumulative cap stops the run around window 10.",
+   "stated_as_formulas_not_constants": true
+  },
+  "limits": {
+   "per_window_completion_notional_usd": "max_unmatched_contracts * completion_pair_ceiling -- NOT a constant",
+   "option_A_pinned_small_clip": {
+    "set": {
+     "L5_TS_OPENING_LEG_MAX_CONTRACTS": "2",
+     "residual cap for the experiment": "2 contracts"
+    },
+    "per_window_cap_usd": 1.98,
+    "cumulative_cap_usd": 40.0,
+    "why": "makes $2.00 a window correct BY CONSTRUCTION rather than by assertion, and keeps the whole run inside $40"
+   },
+   "option_B_leave_deployed_caps_alone": {
+    "per_window_cap_usd": 5.0,
+    "cumulative_cap_usd": 100.0,
+    "why": "the deployed residual cap of 5 contracts can legitimately need 4.95 in one completion; a cap below that silently becomes the binding gate and the experiment measures the cap instead of the fill rate"
+   },
+   "recommended": "option_A_pinned_small_clip",
+   "notional_is_not_loss": "a completed pair redeems $1.00 a contract, so a $1.98 completion against 2 held contracts returns $2.00 at settlement. The binding RISK control is the realized-loss limit, not the notional cap; the notional cap exists so the experiment cannot quietly grow.",
+   "cumulative_realized_loss_limit_usd": 5.0,
+   "max_concurrent_markets": 1,
+   "max_live_orders": 1,
+   "stop_on_loss_limit": "HALT, fail closed, no automatic relaunch",
+   "first_leg_exposure_accounted_separately": true
+  },
+  "outcomes": [
+   "venue-confirmed complement fill rate, per arm, as counts",
+   "net realized settled P&L per arm, labelled settlement-only",
+   "completed pairs per arm",
+   "stranded first legs per arm and their settled loss",
+   "every pair's basis attested, with zero placeholder-priced pairs"
+  ]
+ },
+ "safety": {
+  "live_policy_changed": false,
+  "live_trading_authorized": false,
+  "opening_pair_cap": "0.96 unchanged",
+  "cancel_margin_s": 300.0,
+  "completion_ceiling_default": "1.00 == the bound already enforced",
+  "at_touch_flag_default": "off",
+  "risk_limits": "unchanged",
+  "halt": "active",
+  "armed": false,
+  "new_services": 0,
+  "new_branches": 0,
+  "orders_placed": 0,
+  "deployed": false
+ }
+}

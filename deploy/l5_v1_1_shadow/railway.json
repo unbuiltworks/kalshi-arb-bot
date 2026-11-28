@@ -1,0 +1,43 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "_status": "L5_CONTINUOUS_INVENTORY_V1_1 -- SHADOW ONLY, running BESIDE the unchanged V1 control. Cannot trade by construction, not by flag: the image ships no executor, no transport, no fill ledger and no order verb, and the service carries NO API CREDENTIALS. It moves no money and consumes no live mandate. Stage 1 ACT/WAIT gates Stage 2; H=10s is PREREGISTERED from the chronological OOS and is not to be re-chosen from prospective data.",
+  "_control": "deploy/l5_v1_shadow/railway.json is the control and stays untouched. Every V1.1 row also carries `v1_would_have`, computed on the SAME observation, so the comparison is per-row and needs no clock alignment between the two services.",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/l5_v1_1_shadow/Dockerfile",
+    "watchPatterns": [
+      "src/l5_v1_1_shadow.py",
+      "src/l5_v1_1_shadow_runner.py",
+      "src/l5_v1_shadow.py",
+      "src/l5_v1_shadow_runner.py",
+      "analysis/l5/act_wait/l5_act_wait_v1.json",
+      "analysis/l5/live_v1/risk_scale.py",
+      "deploy/l5_v1_1_shadow/**"
+    ]
+  },
+  "deploy": {
+    "startCommand": "sh -c 'test \"$PMUS_SERVICE_ROLE\" = l5-v1-1-shadow || { echo SERVICE_ROLE_MISMATCH; exit 64; }; exec python3 -m src.l5_v1_1_shadow_runner'",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
+  },
+  "_startcommand_note": "This is IDENTICAL to the image CMD. It is a role guard, not configuration: it smuggles no variable, rewrites no source, and clears no latch. The legacy pmus-spring-l5-probe startCommand -- which runs `sed -i` at boot, so its running code is not its reviewed artifact -- is the anti-pattern this deliberately does not repeat.",
+  "_source_watch_reference": [
+    "src/l5_v1_1_shadow.py",
+    "src/l5_v1_1_shadow_runner.py",
+    "src/l5_v1_shadow.py",
+    "src/pmus_l5_fidelity_live.py",
+    "src/pmus_l5_persistence_v2.py",
+    "src/polymarket_l5/**",
+    "analysis/l5/l5_action_model_v2.json",
+    "analysis/l5/l5_fidelity_pass.json",
+    "analysis/l5/act_wait/l5_act_wait_v1.json",
+    "analysis/l5/live_v1/risk_scale.py"
+  ],
+  "_variables_expected": {
+    "PMUS_SERVICE_ROLE": "l5-v1-1-shadow (also baked into the image; the guard fails closed if they disagree)",
+    "L5_V1_1_STATUS_URL": "the recorder's private /status handoff -- READ ONLY, GET only",
+    "L5_V1_1_STATE_DIR": "/state/l5-v1-1-shadow",
+    "L5_V1_1_HORIZON_S": "10 -- PREREGISTERED. Do not change while the first prospective sample is being collected.",
+    "_no_credentials": "No PMUS_API_KEY_ID, no secret, no private key. Not omitted by accident -- the image has nothing that could use one."
+  }
+}

@@ -1,0 +1,38 @@
+windows: 187
+
+== PART B: the existing controller, USD per window, mean [95% over windows] ==
+-- live configuration
+   FIRST HALF  fills 1541  matched -0.0075 [-0.014,-0.000]  residual -0.0122 [-0.028,+0.005]
+               net -0.0197 [-0.040,+0.002]   avg matched pair cost 1.0171
+   SECOND HALF fills 1543  matched -0.0094 [-0.015,-0.003]  residual -0.0200 [-0.034,-0.004]
+               net -0.0294 [-0.047,-0.010]   avg matched pair cost 1.0227
+-- completed pair <= 1.00
+   FIRST HALF  fills 1063  matched +0.0209 [+0.015,+0.028]  residual -0.0441 [-0.057,-0.030]
+               net -0.0231 [-0.041,-0.003]   avg matched pair cost 0.9298
+   SECOND HALF fills 1060  matched +0.0201 [+0.014,+0.027]  residual -0.0492 [-0.060,-0.037]
+               net -0.0291 [-0.045,-0.012]   avg matched pair cost 0.9283
+-- completed pair <= 0.99
+   FIRST HALF  fills 1045  matched +0.0212 [+0.015,+0.028]  residual -0.0464 [-0.059,-0.032]
+               net -0.0252 [-0.043,-0.005]   avg matched pair cost 0.9272
+   SECOND HALF fills 1042  matched +0.0206 [+0.015,+0.027]  residual -0.0493 [-0.060,-0.037]
+               net -0.0287 [-0.045,-0.012]   avg matched pair cost 0.9244
+-- completed pair <= 0.97
+   FIRST HALF  fills 1002  matched +0.0238 [+0.018,+0.030]  residual -0.0463 [-0.058,-0.034]
+               net -0.0225 [-0.039,-0.005]   avg matched pair cost 0.9150
+   SECOND HALF fills 1010  matched +0.0226 [+0.016,+0.030]  residual -0.0506 [-0.062,-0.038]
+               net -0.0280 [-0.044,-0.011]   avg matched pair cost 0.9126
+-- completed pair <= 1.00 + one-sided rule
+   FIRST HALF  fills 1020  matched +0.0211 [+0.015,+0.028]  residual -0.0447 [-0.056,-0.033]
+               net -0.0237 [-0.040,-0.006]   avg matched pair cost 0.9285
+   SECOND HALF fills 1032  matched +0.0199 [+0.014,+0.027]  residual -0.0507 [-0.059,-0.041]
+               net -0.0308 [-0.044,-0.016]   avg matched pair cost 0.9280
+-- completed pair <= 0.99 + one-sided rule
+   FIRST HALF  fills 1008  matched +0.0215 [+0.016,+0.028]  residual -0.0458 [-0.058,-0.034]
+               net -0.0243 [-0.041,-0.007]   avg matched pair cost 0.9258
+   SECOND HALF fills 1015  matched +0.0202 [+0.014,+0.027]  residual -0.0528 [-0.061,-0.044]
+               net -0.0326 [-0.046,-0.019]   avg matched pair cost 0.9251
+-- completed pair <= 1.00 + one-sided + unmatched cap $0.03
+   FIRST HALF  fills  457  matched +0.0064 [+0.004,+0.010]  residual -0.0180 [-0.020,-0.015]
+               net -0.0116 [-0.016,-0.006]   avg matched pair cost 0.9289
+   SECOND HALF fills  485  matched +0.0075 [+0.004,+0.011]  residual -0.0169 [-0.020,-0.014]
+               net -0.0094 [-0.014,-0.004]   avg matched pair cost 0.9282

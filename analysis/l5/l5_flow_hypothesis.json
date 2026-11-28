@@ -1,0 +1,154 @@
+{
+ "forward_contemporaneous": {
+  "coverage": {
+   "measurable": 18,
+   "measured_but_silent": 5,
+   "polled": 60,
+   "share_with_any_flow": 0.2167,
+   "under_observed": 42
+  },
+  "cycles": 41,
+  "monotonicity": {
+   "bottom": 0.0,
+   "buckets": 5,
+   "non_decreasing": true,
+   "series": [
+    0.0,
+    0.0,
+    0.0,
+    0.6667,
+    1.0
+   ],
+   "top": 1.0
+  },
+  "quintiles": [
+   {
+    "decile": 1,
+    "markets": 3,
+    "max": 0.0,
+    "min": 0.0,
+    "slugs": [
+     "aec-county-dur-mid-2026-09-08",
+     "asc-cs2-falf-ep-2026-09-09-m1rh-neg-2pt5",
+     "asc-cs2-b8-33-2026-09-09-hcap-neg-1pt5"
+    ],
+    "two_sided_share": 0.0
+   },
+   {
+    "decile": 2,
+    "markets": 3,
+    "max": 0.1061,
+    "min": 0.0,
+    "slugs": [
+     "astatc-cs2-b8-33-2026-09-09-map2",
+     "astatc-cs2-inox-tlr-2026-09-09-map1",
+     "aec-county-lei-som-2026-09-08"
+    ],
+    "two_sided_share": 0.0
+   },
+   {
+    "decile": 3,
+    "markets": 3,
+    "max": 3.7654,
+    "min": 0.7492,
+    "slugs": [
+     "aec-county-yor-essex-2026-09-08",
+     "aec-cs2-falf-ep-2026-09-09",
+     "aec-cs2-depo-oxi-2026-09-09"
+    ],
+    "two_sided_share": 0.0
+   },
+   {
+    "decile": 4,
+    "markets": 3,
+    "max": 36.3421,
+    "min": 5.4605,
+    "slugs": [
+     "aec-county-gla-war-2026-09-08",
+     "aec-cs2-inox-tlr-2026-09-09",
+     "aec-atp-marsha-tardan-2026-09-07"
+    ],
+    "two_sided_share": 0.6667
+   },
+   {
+    "decile": 5,
+    "markets": 3,
+    "max": 190.1945,
+    "min": 39.0071,
+    "slugs": [
+     "aec-atp-marmoe-matsot-2026-09-09",
+     "aec-cs2-b8-33-2026-09-09",
+     "aec-cs2-nem-sin-2026-09-09"
+    ],
+    "two_sided_share": 1.0
+   }
+  ],
+  "verdict": "Contemporaneous flow IS structured. Across 41 polls of the live slate, two-sidedness rises monotonically with first-differenced shares/minute -- 0%, 0%, 0%, 67%, 100% by quintile -- and only 18 of 60 live markets had any measurable flow at all. This measures the VENUE. Whether it predicts OUR completion is the pre-registered forward test, not a conclusion available from this data."
+ },
+ "forward_gate": {
+  "baseline": {
+   "complete_fill_rate_full_cohort": 0.231,
+   "complete_fill_rate_partial_cohort": 0.057,
+   "fully_paired": 21,
+   "markets_with_a_first_side_fill": 31,
+   "partial": 3,
+   "stranded": 7,
+   "stranded_share": 0.2258
+  },
+  "baseline_from": "analysis/l5/L5_COMPLETION_FORENSICS.md",
+  "cohort_rule": "admit only markets in the top two flow quintiles AND two_sided true, measured over at least 10 intervals before admission",
+  "confound_named_in_advance": "the entry-band fix (a9b0b243) landed between the baseline and any forward cohort, so a forward run measures flow selection AND that fix together. Attributing the delta to flow alone requires either a same-period control arm without the flow filter, or accepting the combined claim and saying so.",
+  "fail": "stranded share at or above 7/31, or fill rate below 23.1%",
+  "inconclusive": "fewer than 15 markets with a first-side fill",
+  "not_a_licence": "passing this gate is evidence for a selection rule, not authority to increase size, concurrency or capital.",
+  "pass": "stranded share strictly below 7/31 AND complete fill rate at or above the FULL cohort's 23.1%, over at least 15 markets with a first-side fill",
+  "question": "does entering only high-flow, two-sided markets raise our completion rate over the R5F baseline?",
+  "registered_before_data": true
+ },
+ "labels": {
+  "descriptive": "cohorts are not randomly assigned; no causal claim",
+  "forward": "first-differenced shares/minute over the live slate; contemporaneous, and about the VENUE, not about our fills",
+  "retro": "lifetime cumulative volume; the weak measure, reported because it is the only one the venue can serve for a settled market"
+ },
+ "retro_lifetime": {
+  "per_cohort": {
+   "FULL": {
+    "max": 9094164.47,
+    "max_slug": "aec-atp-fratia-alemic-2026-09-07",
+    "median": 159271.89,
+    "min": 25033.85,
+    "min_slug": "aec-cs2-mouzn-bmb-2026-09-08",
+    "n": 21
+   },
+   "PARTIAL": {
+    "max": 233200.88,
+    "max_slug": "aec-atp-pedmar-frafor-2026-09-08",
+    "median": 98471.44,
+    "min": 62544.95,
+    "min_slug": "aec-setkamecz-tomvoj-ticjir-2026-09-07",
+    "n": 3
+   },
+   "ZERO": {
+    "max": 511234.5,
+    "max_slug": "aec-wta-martre-jenrug-2026-09-08",
+    "median": 144559.4,
+    "min": 10671.71,
+    "min_slug": "aec-atp-grilom-filpel-2026-09-07",
+    "n": 7
+   }
+  },
+  "separable": {
+   "loudest_stranded": {
+    "shares": 511234.5,
+    "slug": "aec-wta-martre-jenrug-2026-09-08"
+   },
+   "quietest_completed": {
+    "shares": 25033.85,
+    "slug": "aec-cs2-mouzn-bmb-2026-09-08"
+   },
+   "separable": false,
+   "why": "no threshold separates them: the quietest market that completed is quieter than the loudest market that stranded"
+  },
+  "verdict": "Lifetime volume does NOT separate the cohorts. Medians are indistinguishable (completed 159,272, stranded 144,559, difficulty 98,471) and the extremes run the wrong way: the quietest market we traded completed in full at 25,034 shares while the loudest stranded one held 511,234. A rule built on headline volume would have kept every market that stranded."
+ }
+}

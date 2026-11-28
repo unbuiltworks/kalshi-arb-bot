@@ -1,0 +1,87 @@
+{
+ "generated_utc": "2026-08-31T21:25:08.890703+00:00",
+ "sample": "RETROSPECTIVE_IN_SAMPLE_DIAGNOSTIC_ONLY",
+ "note": "Full-tape replay incl. pre-cutoff windows. Mechanics diagnostics only; never a pass/fail verdict.",
+ "arms": {
+  "L0": {
+   "engaged": 25,
+   "scored_with_labels": 24,
+   "n_fills": 108,
+   "turnover_usdc": 41.84,
+   "matched_pct_qty": 0.5741,
+   "both_sides_windows_pct": 44.0,
+   "median_pair_cost": 0.89,
+   "pair_locked": 7.9139,
+   "rung_fill_counts": {
+    "0": 108
+   },
+   "labeled_subset_diag": {
+    "realized_settlement_pnl": 7.5,
+    "residual_pnl": -0.4139,
+    "turnover": 41.5,
+    "max_single_window_loss": -1.54
+   }
+  },
+  "L1": {
+   "engaged": 59,
+   "scored_with_labels": 57,
+   "n_fills": 170,
+   "turnover_usdc": 63.15,
+   "matched_pct_qty": 0.4235,
+   "both_sides_windows_pct": 27.1,
+   "median_pair_cost": 0.96,
+   "pair_locked": 7.7706,
+   "rung_fill_counts": {
+    "0": 170
+   },
+   "labeled_subset_diag": {
+    "realized_settlement_pnl": 9.49,
+    "residual_pnl": 1.7194,
+    "turnover": 62.51,
+    "max_single_window_loss": -1.54
+   }
+  },
+  "L2": {
+   "engaged": 25,
+   "scored_with_labels": 24,
+   "n_fills": 110,
+   "turnover_usdc": 42.88,
+   "matched_pct_qty": 0.5636,
+   "both_sides_windows_pct": 44.0,
+   "median_pair_cost": 0.89,
+   "pair_locked": 7.9233,
+   "rung_fill_counts": {
+    "0": 108,
+    "1": 2,
+    "2": 0
+   },
+   "labeled_subset_diag": {
+    "realized_settlement_pnl": 6.46,
+    "residual_pnl": -1.4633,
+    "turnover": 42.54,
+    "max_single_window_loss": -2.18
+   }
+  },
+  "L3": {
+   "engaged": 59,
+   "scored_with_labels": 57,
+   "n_fills": 176,
+   "turnover_usdc": 65.7,
+   "matched_pct_qty": 0.4091,
+   "both_sides_windows_pct": 27.1,
+   "median_pair_cost": 0.95,
+   "pair_locked": 7.7767,
+   "rung_fill_counts": {
+    "0": 170,
+    "1": 6,
+    "2": 0
+   },
+   "labeled_subset_diag": {
+    "realized_settlement_pnl": 6.94,
+    "residual_pnl": -0.8367,
+    "turnover": 65.06,
+    "max_single_window_loss": -2.18
+   }
+  }
+ }
+}

@@ -1,0 +1,169 @@
+{
+ "label": "GEMINI_LIVE_READINESS_GATE_V1",
+ "utc": "2026-09-21T12:43:24.825272+00:00",
+ "verdict": "PASS",
+ "expected": {
+  "branch": "claude/gemini-btc-economic-viability-h3u7zl",
+  "commit_sha": "f75e154062ab76ff8d058e6f5888afe548c6e5cf",
+  "executable_sha": "17a10e561c1e4e66aa7ed8b1a47fda4d1622e43d7edf906c4a1b3af10ede0f34",
+  "envelope_sha": "0ba19c6dc47c84e650a368402f4fcf76adf7b5ec425be7c0479b533774c98ca3",
+  "bundle_sha": "02f7a55800b952bfc2c76117dcfcc472825df19ff5952ba561c9f8fcc73b6bbb",
+  "auth_id": "<NONE INSTALLED>",
+  "family": "btc15m",
+  "symbol_family": "GEMI-BTC15M",
+  "envelope_id": "GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_V1",
+  "action_size": "1",
+  "cohort_prefix": "GEMI-BTC15M",
+  "remaining_budget": 36,
+  "max_working_orders": 2,
+  "max_committed_usd": "2.50",
+  "max_residual_usd": "2.00",
+  "max_concurrent_markets": 1,
+  "minimum_rest_time_s": "30.0",
+  "argv": [
+   "--family",
+   "btc15m",
+   "--envelope",
+   "live_q1_btc15m",
+   "--entry-tte-band",
+   "240:280"
+  ]
+ },
+ "resolved": {
+  "branch": "claude/gemini-btc-economic-viability-h3u7zl",
+  "commit_sha": "f75e154062ab76ff8d058e6f5888afe548c6e5cf",
+  "executable_sha": "17a10e561c1e4e66aa7ed8b1a47fda4d1622e43d7edf906c4a1b3af10ede0f34",
+  "envelope_sha": "0ba19c6dc47c84e650a368402f4fcf76adf7b5ec425be7c0479b533774c98ca3",
+  "bundle_sha": "02f7a55800b952bfc2c76117dcfcc472825df19ff5952ba561c9f8fcc73b6bbb",
+  "auth_id": "<NONE INSTALLED>",
+  "family": "btc15m",
+  "symbol_family": "GEMI-BTC15M",
+  "envelope_id": "GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_V1",
+  "action_size": "1",
+  "cohort_prefix": "GEMI-BTC15M",
+  "remaining_budget": 36,
+  "max_working_orders": 2,
+  "max_committed_usd": "2.50",
+  "max_residual_usd": "2.00",
+  "max_concurrent_markets": 1,
+  "minimum_rest_time_s": "30.0",
+  "frame_quantity": "1",
+  "policy_max_rungs": 2,
+  "rest_floor_invoked": true,
+  "retained_counts_as_risk": true,
+  "mutations_sent": 0,
+  "observed_dry_run": {
+   "symbol": "GEMI-BTC15M2609211245-UP",
+   "tte_s": 277.23,
+   "state": "DO_NOT_TRADE",
+   "why": "preflight discrepancy: terms_accepted expected True got False",
+   "place_acks": [],
+   "latch_consumed": false
+  },
+  "first_order_frame_would_be": {
+   "method": "order.place",
+   "params": {
+    "symbol": "GEMI-BTC15M2609211245-UP",
+    "outcome": "YES",
+    "side": "buy",
+    "type": "limit",
+    "timeInForce": "maker-or-cancel",
+    "quantity": "1",
+    "price": "<bid at entry>",
+    "clientOrderId": "l5cp-<uuid>",
+    "signature": "<REMOVED>",
+    "apikey": "<REMOVED>"
+   }
+  }
+ },
+ "checks": {
+  "fields": {
+   "ok": true,
+   "diffs": []
+  },
+  "cross_field": {
+   "ok": true,
+   "violations": []
+  },
+  "call_graph": {
+   "ok": true,
+   "claims": [
+    {
+     "module": "src.gemini_execution.ws_continuous",
+     "name": "reconcile_surface",
+     "reached": true
+    },
+    {
+     "module": "src.gemini_execution.ws_continuous",
+     "name": "_leg_slots",
+     "reached": true
+    },
+    {
+     "module": "src.gemini_execution.live_envelope",
+     "name": "would_breach",
+     "reached": true
+    },
+    {
+     "module": "src.gemini_execution.continuous_probe",
+     "name": "resolve_action_size",
+     "reached": true
+    },
+    {
+     "module": "src.gemini_execution.run_canary",
+     "name": "can_make_durable",
+     "reached": true
+    }
+   ],
+   "unreached": [],
+   "why": "a safety function that tests assert but production never calls is the stale_orders class of defect"
+  },
+  "dead_safety": {
+   "ok": true,
+   "rows": [
+    {
+     "name": "stale_orders",
+     "defined": 1,
+     "production_calls": 1,
+     "dead": false
+    },
+    {
+     "name": "risk_gates",
+     "defined": 1,
+     "production_calls": 2,
+     "dead": false
+    },
+    {
+     "name": "would_breach",
+     "defined": 2,
+     "production_calls": 2,
+     "dead": false
+    },
+    {
+     "name": "can_make_durable",
+     "defined": 1,
+     "production_calls": 1,
+     "dead": false
+    },
+    {
+     "name": "reconcile_surface",
+     "defined": 1,
+     "production_calls": 3,
+     "dead": false
+    }
+   ],
+   "dead": []
+  },
+  "stale_refs": {
+   "ok": true,
+   "hits": [],
+   "checked": {
+    "branch": "claude/gemini-btc-economic-viability-h3u7zl",
+    "cohort_prefix": "GEMI-BTC15M",
+    "envelope_id": "GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_V1",
+    "workflow": ".github/workflows/gemini-settlement-gate.yml"
+   }
+  }
+ },
+ "labels": "EXPECTED == RESOLVED, proved immediately before the mutation boundary. The frame below is what WOULD have been sent; nothing was.",
+ "manifest_sha": "da664b52eee3daf04014b9801f09c3ea0e9d41d52dad05d6116b45db69d98806"
+}

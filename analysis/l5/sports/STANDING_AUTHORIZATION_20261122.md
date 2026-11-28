@@ -1,0 +1,2930 @@
+# Owner authorizations for live sports windows — given 22 Nov 2026
+
+Recorded so a later session works from the owner's own terms. These were
+chosen by the owner in this session's approval dialogs (about 19:58Z and
+20:08Z on 22 Nov 2026). Nothing here raises a limit.
+
+## 1. Tonight, first window (armed 19:59Z)
+
+"Arm, NFL + NBA": 21:35–23:05 UTC, sports bot `pmus-spring-l5-probe` on
+`158685d3ab0b446ac31387bf3ba32bb7bc5659fd`, allow list `nfl,nba`.
+
+At 20:12Z the owner wrote "I approved starting asap". The window's start
+was moved to 20:16 UTC (end unchanged, 23:05 UTC); nothing else changed.
+
+At 20:32Z the start was put back to 21:35 UTC. Reason: the bot's campaign
+marker had stayed at 21:35, so the campaign spend cap, unmatched cap and
+loss stop would not have counted anything traded before then. In the 16
+minutes it was open the bot sent one order (Baltimore–Carolina YES 0.37,
+2 contracts, post-only), which the venue rejected; there were no fills.
+The defect is fixed on the dev branch (`47099e532`), not deployed.
+
+## 2. Tonight, second window — conditional
+
+"Add Sunday night, if clean": if the 21:35–23:05 window ends with no stop
+condition, arm a second window 01:30–04:30 UTC (23 Nov) for
+Minnesota–San Francisco and the late NBA games, same limits, without
+asking again. If anything is off: stay locked and tell the owner.
+
+## 3. Standing authorization through Sunday 29 Nov 2026
+
+"Standing, while clean": arm a window for every NFL slate through Sunday
+29 Nov (Monday night if listed, Thursday 26 Nov, Sunday 29 Nov), only if
+the previous window ended with no stop condition, and report after each.
+
+Terms stated to the owner when it was given:
+- NFL + NBA only (allow list `nfl,nba`).
+- Each window at most 6 hours, relocking itself.
+- Limits exactly as tonight: $16 campaign spend, $6 campaign unmatched,
+  $8 and $3 per market, $4 campaign loss stop, $5 daily halt, 2-contract
+  maker-only orders, at most 2 markets, pair cap 0.97.
+- Any change to limits or size still needs the owner's explicit approval.
+
+It does not cover: other sports, crypto, taker orders, larger size, more
+markets, a different build, or anything after 29 Nov.
+
+## 4. What "clean" means (all must hold at the end of a window)
+
+- The bot relocked itself and the venue shows zero resting orders.
+- No safety latch; reconciliation clean; no watchdog halt.
+- Every order was post-only and at most 2 contracts; no taker fill.
+- Only `nfl` and `nba` markets were traded.
+- Campaign and per-market caps were respected.
+- The campaign loss stop and the daily halt did not trip.
+- The account ledger's figures agree with venue cash for settled markets.
+- Campaign accounting is verified (owner, 22 Nov about 20:45Z: the next
+  window is conditional on "a clean close-out and verified campaign
+  accounting, rather than automatically proceeding if any safety
+  discrepancy remains"): the campaign marker equals the window's start for
+  the whole window; every order of the window is at or after it; the
+  bot's campaign spend, unmatched and market count agree with its own
+  ORDER and FILL lines; the cash change equals what the meter expects.
+
+If any one fails: do not arm the next window; stay locked; report; wait
+for the owner.
+
+## 5. Owner instructions of 22 Nov, about 20:45Z
+
+- Keep the 21:35 UTC start; do not move the window again tonight.
+- Verify the marker and campaign counters before opening.
+- No new build tonight. The marker correction is to be deployed while
+  locked, after tonight's campaigns, on the owner's approval of the exact
+  release SHA.
+
+## 6. Continuation of tonight's campaign — authorized about 20:50Z
+
+Owner, in their own message: "I explicitly authorize extending tonight's
+existing L5 NFL/NBA live campaign with a continuation window from
+2026-11-22 23:05 UTC through 2026-11-23 01:30 UTC, subject to the safety
+conditions below."
+
+Terms:
+- Same build `158685d3a`; NFL and NBA only; maker-only; 2-contract orders;
+  $8 and $3 per market; $16 campaign spend; $6 campaign unmatched; $4
+  campaign loss stop; $5 daily halt; watchdog and all other protections.
+- "The continuation does not authorize additional capital or reset any
+  cumulative limits. The $16 campaign ceiling and other campaign-level
+  protections must apply across both periods together."
+- "If the fix requires a new money-capable production deployment, stop and
+  request my separate explicit deployment approval." "Do not change the
+  currently running build mid-campaign without that approval."
+- At the 23:05 boundary, before configuring: campaign reconciled; all
+  orders and positions accounted for; watchdog healthy; no safety latch or
+  halt; campaign accounting carries forward without resetting; original
+  exposure and loss limits still enforced; no unsafe gap or bypass. "If any
+  condition fails, remain locked and report the exact blocker."
+- Sunday night window 01:30-04:30: "Prepare a clean transition into that
+  window, subject to its existing authorization and a successful safety
+  handoff. Do not silently reset account-wide or daily loss protection at
+  the boundary."
+- Report after each window: SHA and mode; campaign boundaries; orders
+  submitted, accepted, rejected, cancelled, filled; YES/NO inventory;
+  capital committed and unmatched; campaign spend and loss counters;
+  venue-confirmed settled P&L; confirmed rewards and rebates; total
+  realized net; watchdog and reconciliation; any blocker.
+
+How it is done (proof: `proof_window_extension_158685d3a.py`, run on the
+running build's code):
+- The continuation is ONE window with the SAME start:
+  `window:2026-11-22T21:35:00Z/2026-11-23T01:30:00Z`. The campaign marker
+  stays 21:35, so first-period orders stay in the campaign: committed
+  spend, unmatched, the every-step worst-case loss check and a latched
+  loss stop all carry over. No new build is needed.
+- It must NOT be configured as a window starting 23:05: the marker would
+  move and the first period would drop out of the counters.
+- The Sunday night window is a new window and therefore a NEW campaign
+  with its own $16 / $6 / $4 counters (its original authorization). A
+  latched campaign loss stop still blocks it. The $5 daily halt is per UTC
+  day and starts a new day at 00:00Z by design.
+
+## 7. Account drawdown limit — owner decision about 20:55Z
+
+Finding (from code): the account ledger's $3.00 portfolio drawdown limit
+($2.21 used) is enforced on the ledger's own BTC orders and published to
+the BTC 5-minute lane. The sports bot never reads it; its account check
+covers only the daily and lifetime loss figures and runs in observe mode.
+The limit values unpaired contracts at zero, so about $0.80 of unpaired
+sports inventory exceeds it.
+
+Owner chose "Trade under campaign limits": tonight the sports bot is
+bounded by its own campaign limits, and the $3.00 account drawdown figure
+does not gate it and will read as exceeded while it holds unpaired
+inventory. This covers the 21:35 window and the continuation to 01:30 if
+every other check passes at 23:05.
+
+Open item for a later build, on the owner's approval: enforce an
+account-level limit on the sports bot, with an allowance the owner sets.
+
+## 8. Owner's second message on the drawdown limit, about 20:57Z, and the decision at 21:00Z
+
+Owner: "I do not want the account-level drawdown protection silently
+bypassed. Before enabling any further live trading, establish whether the
+existing sports campaign loss stops and portfolio exposure limits provide
+equivalent protection, and identify the maximum additional account loss
+possible. Do not increase or disable the $3 account-level drawdown limit
+without my explicit approval." Also: "At 23:05, verify venue orders, fills,
+residual inventory, campaign counters, and watchdog status before
+extending. At 01:30, carry existing portfolio exposure into the next
+campaign's risk assessment." And: prepare tomorrow's release to enforce
+account-level drawdown protection across sports and crypto, with
+independent watchdog coverage and regression tests.
+
+What was established (`maxloss_sim_158685d3a.py`, the running build's code
+against an adversarial market: every position-increasing bid fills, no
+opposite-side bid does):
+
+| Limits | Largest unpaired cost reached | Hard ceiling |
+|---|---|---|
+| Tonight's (2 contracts, $3 per market, $6 campaign, $4 loss check) | $5.20 | $6.00 |
+| Tightened to fit ($0.75 caps, 1 contract) | $0.75 | $0.75 |
+
+- The account limit has $0.79 of room. Tonight's sports limits allow about
+  $5.20 (ceiling $6.00) of additional account loss in one campaign. Not
+  equivalent.
+- The bot was put on a plain lock at 20:59Z while the owner decided.
+
+Owner's decision (21:00Z), "Accept up to $6 tonight": keep the original
+sports limits; the owner explicitly accepts that the account can go up to
+$6.00 beyond today's level tonight, exceeding the $3 drawdown limit, which
+stays unchanged and unenforced on sports tonight. The Sunday night window
+carries over what is still held and lost, so the whole night stays within
+one $6 unpaired / $4 loss budget.
+
+Done at 21:00Z: window `21:35-23:05` set again (same start; the stored
+campaign marker is 21:35). The $3 limit was not touched.
+
+Rule for 01:30 (in the scheduled handoff): with U = unpaired cost still
+held, L = realized loss so far, S = spend: arm the Sunday night campaign
+only with total unmatched = 6 - U, loss stop = 4 - (L + U), spend = 16 - S
+(tightening only), and only if each leaves at least $1.50 ($3 for spend).
+The loss stop is never set to 0 (that would switch it off).
+
+## 9. Direct confirmation of tonight's authorization, about 21:04Z
+
+A message from the owner at about 21:02Z relayed the view that the "accept
+up to $6" statement should not be treated as permission to override the
+account-level limit unless verified directly, and that the bot should stay
+locked if that authorization was absent or ambiguous.
+
+The bot was put on a plain lock (21:03Z) and the owner was asked directly,
+in the session's approval dialog, with the bot locked:
+
+> Do you, the account owner, authorize tonight's sports campaign (NFL +
+> NBA, 21:35-23:05 UTC, conditional extension to 01:30, build 158685d3a,
+> maker-only, 2-contract orders, $16 spend / $6 unmatched / $4 loss stop /
+> $5 daily halt) knowing that the $3.00 account drawdown limit is NOT
+> enforced on the sports bot, has only $0.79 of room left, and that this
+> campaign can lose up to $6.00 (more is possible if a fill races a
+> cancel) - i.e. the account can end up past that $3.00 limit tonight? The
+> $3.00 limit itself is not changed.
+
+Owner's answer: "Yes, I authorize it".
+
+The window 21:35-23:05 was then set again (same start, marker 21:35). The
+$3.00 limit was not changed. Both the 21:00Z choice and this confirmation
+were the owner's own selections in the approval dialog; they are not text
+relayed from anyone else.
+
+Also from that message: a loss stop prevents new orders, it does not
+remove losses on positions already held; the $5.20 test result is
+evidence, not a guarantee. The next milestone is a completed, reconciled
+live campaign with venue-confirmed fills and settled results.
+
+## 10. Stop at 22:10Z; relock effective 22:41Z; nothing further armed
+
+- 22:10:20Z: the bot's first reconciliation of the window did not match
+  the venue (venue net -2 against the book's 0 in Detroit-Atlanta). Cause:
+  a fill (NO 0.23, 2 contracts) that the bot learned of 89 seconds late.
+  Its own meter then blocked all new exposure (`pilot_fills_unconfirmed`)
+  for the rest of the window.
+- A reconciliation mismatch is a stop condition. The relock
+  (`PMUS_TWO_SIDED_SUBMISSION_LOCK=1`) was issued at about 22:19Z and
+  reached Railway at 22:41:19Z: a session stall of about 22 minutes, the
+  same failure as the 14:35Z relock this morning. In that gap the bot
+  placed no order; one resting completion bid (YES 0.61) filled at
+  22:26:39Z.
+- State after the relock (22:43Z): locked, zero resting orders, position
+  YES 8 / NO 8 in Detroit-Atlanta (eight pairs, cost $7.46), venue cash
+  $319.8038 against $319.2638 before the campaign.
+- The window was not clean under section 4. The continuation to 01:30Z and
+  the Sunday night window were NOT armed and their scheduled steps were
+  cancelled. The standing authorization for later slates is treated as
+  suspended until the owner decides: its condition ("only if the previous
+  window ended with no stop condition") is not met.
+
+## 11. Unchanged standing rules
+
+Explicit approval is still required for capital increases, taker
+authorization, weakened limits, other deployments, and anything outside
+the terms above.
+
+## 11. Decisions of 23 Nov 2026
+
+From the owner's messages of 23 Nov:
+
+| Item | Decision |
+|---|---|
+| Non-blocking account-risk reader | Keep |
+| $3 drawdown limit | Unchanged; "I would not silently redefine the existing $3 limit" |
+| In-game hysteresis | Keep off |
+| Champions League | "Approve for development and market evaluation only" |
+| $97 live campaign | Not approved |
+| Capital increase, live arming | Not approved |
+| Production death drill | "Prepare, but separate authorization required for a live resting order" |
+
+Two deployments, asked separately and answered directly by the owner at
+about 12:10 UTC on 23 Nov:
+
+- **Watchdog.** Asked: deploy `l5-halt-watchdog` from
+  `release/l5-halt-watchdog-ce26e2a9e` at
+  `ce26e2a9eeb6c95e534e34f907686b1948b640e2`, verify sweeps are unchanged,
+  then add `L5_WATCHDOG_REMEMBER_CLAIMS_S=900` and
+  `L5_WATCHDOG_DEAD_AFTER_S=30`. Answer: **"Deploy and enable"**.
+- **Sports bot.** Asked: deploy `pmus-spring-l5-probe` from
+  `release/pmus-sports-rn1-02e5141b1` at
+  `02e5141b13a41eca7224671a22bd4fec9ff26c6f` with the submission lock left
+  on and no variable changed. Answer: **"Deploy locked"**.
+
+Neither answer authorises an order, arming, a new competition, a limit
+change or the death drill.
+
+## 12. Death drill and pin build, 23 Nov 2026
+
+Asked and answered directly by the owner at about 13:28 UTC:
+
+- **Pin build.** Asked: deploy `pmus-spring-l5-probe` from
+  `release/pmus-sports-rn1-8eb920772` at
+  `8eb920772e9cfadbc58eaeb5899ebb973a7776d0`, lock on, no variable changed.
+  Answer: **"Deploy locked"**. Deployed 13:32 UTC, verified locked.
+- **Death drill.** Asked: one maker bid of 2 contracts, YES only, at 25c or
+  below on `atc-sea-mon-fio-2026-11-23-mon`, in a 3-minute window at the
+  first of 14:30, 16:30 or 18:30 UTC at least 40 minutes after approval; the
+  bot exits with no cleanup 60 s in and stays down 3 minutes; the watchdog
+  must cancel the bid; maximum settlement loss $0.50; Serie A permitted for
+  that window only; settings restored after. Answer: **"Authorize the
+  drill"**.
+
+Correction asked at about 13:34 UTC, before anything was set: the watchdog
+latches the shared halt when it cancels an unmanaged order, which the terms
+had left out, so after a successful drill every lane stays halted until a
+separate owner-approved reset. Answer: **"Proceed, accept the latch"**.
+
+This authorises one drill on those terms. It does not authorise a halt
+reset, any other order, or arming.
+
+## 13. Death drill retry, 23 Nov 2026
+
+The first attempt (14:30 to 14:33 UTC) was void: no order was placed.
+
+The owner authorised read-only inspection of exactly two settings
+(`PMUS_TWO_SIDED_BAND_LO`, `PMUS_TWO_SIDED_BAND_HI`). They were not read:
+the only tool available returns every variable in plain text.
+
+Asked and answered directly by the owner at about 15:19 UTC:
+
+- **Step 1.** Asked: deploy the logging-only build from
+  `release/pmus-sports-rn1-62dca41cd` at
+  `62dca41cd7167fab117753a2f010fddffd95d55c`, then a locked pre-flight (pin
+  `atc-sea-mon-fio-2026-11-23-fio:YES`, slate both, Serie A added to the
+  permitted list, submission lock still `1`). Answer: **"Deploy and
+  pre-flight"**.
+- **Step 2.** Asked: only if the pre-flight shows the market selected and
+  the bid passing, one maker bid of 1 contract, YES only, at 49c or below on
+  `atc-sea-mon-fio-2026-11-23-fio`; 3-minute window at 16:30 UTC, or 18:30
+  UTC if 16:30 cannot be met; exit with no cleanup 60 s in, down 3 minutes;
+  maximum settlement loss $0.49; the shared halt will latch if the watchdog
+  acts and stays latched until a separately approved reset; settings
+  restored after. Answer: **"Authorize the retry"**.
+
+This authorises one drill on those terms. It does not authorise a halt
+reset, any other order, or arming.
+
+## 14. Watchdog fix and third death drill, 23 Nov 2026
+
+The second drill (16:30 to 16:33 UTC) failed: the watchdog did not cancel
+the resting bid. No fill, no loss, no halt.
+
+Asked and answered directly by the owner at about 16:44 UTC:
+
+- **Watchdog fix.** Asked: deploy `l5-halt-watchdog` from
+  `release/l5-halt-watchdog-8c9bee06f` at
+  `8c9bee06fe0faf7d0ed22aec2453acc1a2cad6be`. Answer: **"Deploy the fix"**.
+- **Third drill.** Asked: same terms as the second (one maker bid of 1
+  contract, YES only, at 49c or below on `atc-sea-mon-fio-2026-11-23-fio`;
+  3-minute window at 17:30 UTC, or 18:30 UTC if 17:30 cannot be met; exit
+  with no cleanup 60 s in, down 3 minutes; maximum settlement loss $0.49;
+  the shared halt latches if the watchdog acts and stays latched until a
+  separately approved reset; settings restored after), only after the fix
+  is verified. Answer: **"Authorize the third drill"**.
+
+Earlier owner messages of 16:00 to 16:10 UTC ("we need to be aggressive",
+"attack current live sports as well as pre game", "can we loosen the
+filters? ... full tilt") are direction. They authorise no order, no
+permission change and no limit change.
+
+## 15. Live campaign of 23 Nov 2026, 17:15 to 23:15 UTC
+
+Owner, about 16:43 UTC: "can we work on getting the strategy working first
+before worrying about this" (the death drill).
+
+Asked and answered directly by the owner at about 16:44 UTC:
+
+- **Campaign.** Asked: tonight's live sports campaign on build `62dca41cd`;
+  six-hour window from the first quarter-hour at least 20 minutes after
+  approval, automatic relock at the end; pre-game and in-play, maker-only, 2
+  contracts a side, taker off, pair cap 0.97, band 30c to 70c,
+  international price required; caps unchanged ($8/$3 per market, $16
+  campaign spend, $6 campaign unpaired, $4 loss stop, $5 daily halt);
+  maximum settlement loss $6, stated as the owner's explicit $6 for this one
+  window above the $1.33 left under the $3 limit. Answer: **"Wide slate, 6
+  markets"**: NBA, NFL, NHL, ATP, Serie A, Premier League, La Liga; up to 6
+  markets at once by the bot's ranking.
+- **Third death drill.** Answer: **"Defer the drill"**. The authorization
+  given at 16:44 lapses; it is not run today.
+
+Asked at about 16:50 UTC whether to add live markets with no international
+price. Answer: **"Priced markets only (Recommended)"**.
+
+Window by those terms: 17:15:00 to 23:15:00 UTC. Not authorised: any size
+or cap increase, taker orders, unpriced markets, cricket, table tennis,
+Dota 2, a second window, a halt reset.
+
+## 16. Mid-campaign stop rule — 23 Nov, about 18:30 UTC
+
+State at 18:27 UTC: 7 fills, 5 pairs (+$0.20 locked, $0.10 of it settled),
+one unpaired leg (Debru–Kopp, 2 YES, cost $1.27), ledger drawdown $2.69 of
+$3.00, ledger venue reconciliation clean. The bot's own hourly account
+audit had not completed once in the window: its only attempt (17:47) was
+deferred by the request budget and the code does not retry.
+
+Owner's decision, in their words:
+
+- "Audit passes: Continue the approved campaign if reconciliation is clean
+  and drawdown remains below $3."
+- "Audit fails or is deferred: Lock immediately, cancel resting orders, and
+  reconcile venue-confirmed cancellations."
+- "Drawdown reaches $3: Enforce the existing halt regardless of audit
+  status."
+- "I would not authorize completion-only mode yet. The missing
+  verification—that completion quantity can never exceed the existing
+  unpaired inventory—is too important."
+- "No additional authorization from me or you is needed to enforce the
+  existing safety lock. Any future live campaign or activation of
+  completion-only mode still requires your explicit approval."
+
+Decision point: the audit attempt due about 18:47 UTC, checked at 18:50.
+The stop is the plain lock (`PMUS_TWO_SIDED_SUBMISSION_LOCK=1`).
+
+Owner's order of work after the campaign: reserved request capacity for
+account audits and reconciliation with retry of a deferred audit,
+regression-tested before another extended live campaign; then the $16
+spend ceiling's accounting; then adverse selection; and an independent
+verification of completion-only mode. No limit is raised to compensate.
+
+### Outcome of the 18:50 decision point
+
+- 18:47:57 UTC: the audit attempt was deferred by the request budget again
+  (the reward read at 18:47:55 too). Rule applied: plain lock.
+- About 18:52 UTC: `PMUS_TWO_SIDED_SUBMISSION_LOCK=1` set on the sports
+  bot. **The lock did not take effect for about 15 minutes**: the platform
+  created the replacement deployment (`6263f134`, same commit `62dca41cd`)
+  only at 19:06:43 and it started at 19:07:31.
+- In between, the old process placed six more pre-game orders (last one
+  18:56:56), none filled, then stopped quoting by itself at 18:59:19
+  (`pilot_meter_unavailable`). Venue open orders: 0 from 18:59:36 on every
+  watchdog sweep and on the ledger reconciles of 19:01 and 19:06.
+- New deployment: locked for new exposure and completions, no order and
+  no fill since it started, no safety latch.
+- Last fill of the campaign: 18:31:48 (before the lock). Inventory at the
+  lock: no unpaired contracts. Seven pairs in three ATP markets, locked
+  +$0.33; venue cash $319.8038 before the window, $320.1338 after.
+- The campaign is over. No further window is authorised.
+
+## 17. Audit-protection release — 23 Nov, about 20:27 UTC
+
+Owner's decisions (their table): audit release `4e60d5384` "Approve in
+principle, locked deployment only"; 75-minute stale-audit protection
+"Enable, retain fail-closed behavior"; two-minute settlement
+reconciliation "Include in locked release"; $16 spend accounting "Keep
+conservative"; immediate halt "Configure existing mechanism, no new
+service"; live halt drill "Separate authorization required"; new live
+campaign "Not authorized". "The deployment still needs your explicit
+approval; my recommendation isn't a substitute for it."
+
+Asked with the exact commit and settings. Answer: **"Deploy locked"**.
+
+Done at about 20:28 UTC: `PMUS_TWO_SIDED_SUBMISSION_LOCK=1`,
+`PMUS_TWO_SIDED_AUDIT_MAX_AGE_S=4500`, `PMUS_TWO_SIDED_SETTLE_CHECK_S=120`
+set; source connected to `release/pmus-sports-rn1-4e60d5384`, commit
+`4e60d5384a5eeab383f1bcee2f25473b92cf81a3`. Not authorised: arming, any
+order, a halt reset, any limit change, the halt drill, a campaign.
+
+Owner on the halt marker: "a dedicated, uncached HTTPS endpoint under our
+existing infrastructure"; the secret "generated and stored in Railway's
+protected environment configuration, not committed to GitHub or included
+in logs"; verify first "with the joint sports-bot/watchdog regression
+test"; the watchdog's own triggers must keep working without the endpoint.
+
+## 18. Account-limit and strict-scope release — 23 Nov, about 21:49 UTC
+
+Owner: "Deploy 19ee9fdd1 locked, after explicit deployment approval."
+"Keep the $3 account limit for the first validation." "I would not raise
+the limit to $5 merely to get four markets running." Next campaign as the
+owner described it: shorter, supervised, "one market at two contracts or
+up to three at one contract, depending on available risk capacity",
+in-play ATP tennis first, strict competition authorization. "no new
+deployment or live authorization has been given" by that message.
+
+Asked with the exact commit and settings. Answer: **"Deploy locked"**.
+
+Done at about 21:49 UTC: `PMUS_TWO_SIDED_SUBMISSION_LOCK=1`,
+`PMUS_TWO_SIDED_STRICT_SPORTS=1`, `PMUS_TWO_SIDED_ACCOUNT_RISK=1` set;
+source connected to `release/pmus-sports-rn1-19ee9fdd1`, commit
+`19ee9fdd13df1b6ad066b9b9619647977146144e`. The account limit itself is
+unchanged at $3.00. Not authorised: arming, any order, a halt reset, any
+limit change, the halt drill, a campaign window.
+
+Verified read-only at 21:58 UTC: deployment `ff70b969` on commit
+`19ee9fdd13df…`, container started 21:51:02; locked for new exposure and
+completions; no order since 18:56:56; watchdog open orders 0; ledger
+reconcile clean. Boot line: strict scope on, allowed NBA and NFL, account
+risk on and not on observe. First audit complete at 21:54:36 (87 safety
+requests, none refused; position reconciliation clean; campaign of 23 Nov
++$0.33, nothing unconfirmed). Ledger figure $1.3444 of $3.00.
+
+Not verifiable while locked: the account-limit verdict itself. The bot
+evaluates it only for a market that has passed the lock, so no
+`ACCOUNT_RISK` line exists yet. First seen when a window opens.
+
+## 19. Preflight build and the 24 Nov ATP window — asked 22:30 UTC, 23 Nov
+
+Owner's proposed terms (their table): Polymarket US; RN1 + Bonereaper
+hybrid; ATP only; up to 3 markets; 1 contract per order; $3.00 account
+limit enforced; $4.00 loss stop unchanged; maker-only, no taker; 60
+minutes, supervised; start after a fresh audit and preflight; "Existing
+watchdog and campaign shutdown; no reliance on an unverified immediate
+halt". "Before arming, I want the account-risk verdict verified through a
+non-trading preflight if possible. If it can only be observed after
+unlocking, the first-minute check must fail closed". "No live arming is
+authorized by this recommendation."
+
+Two questions asked with exact terms.
+
+**1. Preflight build.** Deploy `e6e8b4e60`
+(`e6e8b4e60a2c5c9c4732d001035aaa718949f226`) locked and set
+`L5_ACCOUNT_DRAWDOWN_REQUIRED=1`. Answer: **"Deploy locked"**. Done at
+22:54 UTC (first attempt at about 22:35 did not run; production stayed on
+`19ee9fdd1` in between). Rollback: `19ee9fdd1`.
+
+**2. Window.** "If, and only if, the locked preflight passes (verdict
+readable, enforce mode, $3.00 limit, capacity about $1.66, zero orders,
+clean audit): arm one supervised window on build e6e8b4e60": Polymarket
+US; ATP only, strict scope; in-play markets only; up to 3 markets; 1
+contract per order; maker-only, taker off; $3.00 account limit enforced;
+$4 loss stop, $5 daily halt, $16/$6 campaign and $8/$3 per-market caps,
+0.97 pair cap, 10-contract depth, international price required; automatic
+relock at the end; settings restored to NBA/NFL, 2 markets, lock=1
+afterwards. Answer: **"03:10-04:10 UTC, 24 Nov"**.
+
+Arming plan: at about 02:55 UTC, after re-checking the preflight, set
+`PMUS_TWO_SIDED_SUBMISSION_LOCK=window:2026-11-24T03:10:00Z/2026-11-24T04:10:00Z`,
+`PMUS_TWO_SIDED_OPEN_GATE_ALLOW_SPORTS=atp`, `PMUS_TWO_SIDED_MAX_MARKETS=3`,
+`PMUS_TWO_SIDED_SLATE=live`, `PMUS_RN1_QTY=1`. Nothing else changes. If
+the preflight does not pass, or the service is not up and audited by
+03:08, the window is not opened. Not authorised: any other window, size,
+limit or competition; a halt reset; taker orders; the halt drill.
+
+### Preflight of `e6e8b4e60` — 23:05 UTC, 23 Nov: PASS (no trading)
+
+Deployment `46c889ed` on commit `e6e8b4e60a2c…`, container started
+22:54:55; locked for new exposure and completions; strict scope on;
+account risk on, not on observe. The account-limit verdict is in every
+heartbeat while locked: mode enforce, ok, would block nothing, ledger
+figure $1.3444, limit $3.00, capacity $1.6556, resting orders counted
+separately, own resting $0, snapshot 0.5 to 5 s old. First audit complete
+at 22:58:32 (position reconciliation clean, 87 safety requests, none
+refused). No order or fill; watchdog 0 open orders, not halted; ledger
+reconcile clean. Campaign of 23 Nov still +$0.33 at the venue; the ledger
+has $0.29 (Karpol–Benwei +$0.04 not booked). No reward row dated 23 Nov.
+The bot still tracks two NHL markets from 23 Nov; both blocked by the lock.
+
+## 20. Watchdog `b79ad4a8b` — asked 00:10 UTC, 24 Nov
+
+Owner: watchdog `b79ad4a8b` "Prepare for immediate deployment approval";
+both drills "Proceed after exact authorization"; 12-hour scope "ATP, Serie
+A, Premier League, La Liga, NBA, NFL and NHL", up to four markets "subject
+to available risk capacity", one contract, "$3 for initial validation".
+"No additional production deployment, live drill, capital increase or
+campaign is authorized by this recommendation."
+
+Asked with the exact commit
+(`b79ad4a8ba54fe96853de34d112f235424e99e42`,
+`release/l5-halt-watchdog-b79ad4a8b`) and three timings. Answer:
+**"After tonight's window (Recommended)"**: deploy at about 04:20 UTC,
+once the 03:10–04:10 ATP window has relocked. Rollback:
+`release/l5-halt-watchdog-8c9bee06f`. Not authorised: either drill, a halt
+reset, setting the marker's secret or token (the operator sets those), any
+order.
+
+## 21. ATP window moved earlier — 24 Nov, 00:45 UTC
+
+Owner: "We can't move that up sooner?" Checked the slate: one ATP match in
+play, three starting 01:00 UTC with prices in band (0.41, 0.53, 0.66).
+Asked whether to replace the 03:10–04:10 window "on exactly the same terms
+(build e6e8b4e60, ATP only strict scope, in-play only, up to 3 markets, 1
+contract, maker-only, $3.00 account limit enforced, all other limits
+unchanged, automatic relock, armed only if the preflight passes)".
+Answer: **"01:20-02:20 UTC"**. The 03:10–04:10 window is cancelled; its
+scheduled tasks were deleted before arming.
+
+Preflight at 00:45 UTC: running commit exact, locked, account limit in
+enforce mode ($3.00 limit, ledger $1.3444, capacity $1.6556, snapshot
+0.9 s old), last audit complete, no order in the last hour, watchdog
+sweeping with 0 open orders and no halt, ledger reconcile clean, no safety
+latch, no tracebacks. The only error-named lines were the two known
+info-level ones seen in every check since 23 Nov (a websocket
+"invalid_message" frame and the shadow combo reader deferred by the
+request budget).
+
+Armed at 00:46:28 UTC in one call:
+`PMUS_TWO_SIDED_SUBMISSION_LOCK=window:2026-11-24T01:20:00Z/2026-11-24T02:20:00Z`,
+`PMUS_TWO_SIDED_OPEN_GATE_ALLOW_SPORTS=atp`, `PMUS_TWO_SIDED_MAX_MARKETS=3`,
+`PMUS_TWO_SIDED_SLATE=live`, `PMUS_RN1_QTY=1`. Nothing else changed.
+
+Scheduled as separate tasks: verification before opening 01:12; first
+minutes 01:24; mid 01:48; close-out 02:25; watchdog deployment 02:45
+(section 20, moved up with the window). Each locks the bot if its check
+cannot be completed.
+
+## 22. Pre-open verification and watchdog timing — 24 Nov, 01:05 UTC
+
+**Pre-open verification of the 01:20–02:20 window: PASS** (01:03 UTC,
+read-only). Deployment `65bca0fe` on commit `e6e8b4e60a2c…`, started
+00:47; locked until 01:20 ("window_not_started"); strict scope on, allowed
+ATP only, 3 markets, 1 contract, pair cap 0.97, taker off, account risk on
+and not on observe. First audit complete at 00:50:55 (positions reconciled,
+no mismatch; 87 safety requests, none refused). Account limit: enforce,
+$3.00 limit, ledger $1.3444, capacity $1.6556. No order; watchdog 0 open
+orders, not halted; ledger reconcile clean; no safety latch.
+Noted: the bot still tracks two NHL markets from 23 Nov; strict scope
+refuses any order on them (checked again at 01:24).
+
+**Watchdog timing.** The owner pointed out that moving the watchdog
+deployment with the window needed its own approval; it was put back to
+04:30. Asked with the exact commit. Answer: **"Deploy at 02:45 UTC"**,
+only after a clean 02:25 close-out leaves the bot locked with zero orders.
+
+## 23. Close-out of the 01:20–02:20 window — 24 Nov, 02:30 UTC
+
+The bot relocked itself at 02:20:03 ("window_ended"). Zero open orders on
+three venue reads (watchdog 02:26:17, ledger reconcile 02:25:17, bot audit
+01:50:53, the last of which predates the 02:14 fills). Result: 29 orders,
+2 fills, 1 pair at $0.97, venue cash +$0.03, nothing unpaired, no safety
+event. Report: `CAMPAIGN_20261124_REPORT.md`.
+
+At about 02:30 UTC the pre-window settings were restored in one call:
+`PMUS_TWO_SIDED_SUBMISSION_LOCK=1`,
+`PMUS_TWO_SIDED_OPEN_GATE_ALLOW_SPORTS=nfl,nba`,
+`PMUS_TWO_SIDED_MAX_MARKETS=2`, `PMUS_RN1_QTY=2`. The window's
+authorization is spent; no window is authorised.
+
+## 24. Watchdog `b79ad4a8b` deployed — 24 Nov, 03:13 UTC
+
+Pre-check at 02:46 UTC: sports bot restarted 02:31 on the plain lock
+(NFL and NBA, two markets); zero open orders on the watchdog (02:45:22)
+and ledger (02:45:24) venue reads; no order or fill since 02:14:54; the
+bot's 02:34 audit attributes the +$0.03 to the one pair with nothing
+unexplained.
+
+Source switched at about 02:50 UTC to
+`release/l5-halt-watchdog-b79ad4a8b`,
+`b79ad4a8ba54fe96853de34d112f235424e99e42`. No variable was set. The
+platform created the deployment at 03:11:49 (about 20 minutes later) and
+it started at 03:13:01.
+
+Verified read-only at 03:16: deployment `139e7cf8` SUCCESS on that
+commit; gap between the old deployment's last sweep and the new one's
+first 10.4 s (no sweep missed); ten sweeps 20 s apart, all 0 open orders,
+not halted, no read error, all three registries OK; cancel enabled, order
+age limit 300 s; halt marker reported "configured false, read credential
+not set" (the operator has not set its values); no error. Sports bot
+unchanged and locked, no halt-state change logged; ledger reconcile clean
+and reading the new watchdog's latch (clear).
+
+Not visible in the logs: the claim-refresh, claim-memory and dead-after
+settings are not echoed at boot. They are service variables that were not
+touched, but their effect is only proven by drill 1.
+
+Rollback if needed: `release/l5-halt-watchdog-8c9bee06f`.
+
+## 25. Final release candidates deployed locked — 24 Nov, about 03:35 UTC
+
+Owner: configure the non-secret watchdog values "Yes"; watchdog
+`09e94cc9d` "Prepare for deployment with channel-loss detection enabled";
+sports `12d5d3daf` "Adopt as the final combined release"; operator setup
+"Reduce to the two secrets". Two further requirements, both met before
+asking: on a channel timeout the bot must also cancel resting
+exposure-increasing orders (it already did; now proven by a test), and a
+404 on the marker must not be taken as "no marker" when it may be an
+access failure (watchdog `f6a5900eb`, which supersedes `09e94cc9d`: a 404
+counts as absent only when a known file beside the marker is readable).
+
+Asked with exact commits and settings. Answers:
+
+- **Watchdog: "Deploy and set the five values".** Done: source
+  `release/l5-halt-watchdog-f6a5900eb`,
+  `f6a5900eb831ab752209d9ae7c39dabf42fc3e30`; set
+  `L5_EMERGENCY_HALT_URL`, `L5_EMERGENCY_HALT_PROBE_URL`,
+  `L5_EMERGENCY_HALT_ACCEPT=application/vnd.github.raw`,
+  `L5_EMERGENCY_HALT_SERVICE=pmus-spring-l5-probe`,
+  `L5_EMERGENCY_HALT_CHANNEL_MAX_DOWN_S=120`. No secret was set by this
+  session; the mechanism stays off until the operator sets
+  `L5_EMERGENCY_HALT_SECRET` and `L5_EMERGENCY_HALT_BEARER`.
+  Rollback: `release/l5-halt-watchdog-b79ad4a8b`.
+- **Sports: "Deploy locked, 12-hour ceiling".** Done: source
+  `release/pmus-sports-rn1-12d5d3daf`,
+  `12d5d3daf78efcc919f0060c63a922561cb0dc80`; set
+  `PMUS_TWO_SIDED_SUBMISSION_LOCK=1`, `PMUS_RN1_PAUSED_RELEASE_S=600`,
+  `PMUS_RN1_RESELECT=1`, `PMUS_RN1_GAP_HOLD_S=20`,
+  `PMUS_RN1_KEEP_DEEPER_TICKS=1`,
+  `PMUS_TWO_SIDED_SHARED_HALT_MAX_AGE_S=120`,
+  `PMUS_TWO_SIDED_WINDOW_MAX_S=43200`. Rollback:
+  `release/pmus-sports-rn1-e6e8b4e60`.
+
+Not authorised: any order, arming, either drill, a halt reset, any limit
+change, a campaign. A connection drop interrupted three of the four calls
+on the first attempt; each was repeated once and confirmed.
+
+## 26. Drill 1 (bot process death) authorized — 24 Nov, about 04:03 UTC
+
+Owner, typed: "Authorized: drill 1, 05:00–05:10 UTC 24 Nov (fallback
+05:30–05:40), on these terms."
+
+Terms as put to the owner:
+
+| Term | Value |
+|---|---|
+| Window | 05:00:00–05:10:00 UTC; fallback 05:30:00–05:40:00 only if the redeploy is not live by 04:55 |
+| Sports build | `12d5d3daf78efcc919f0060c63a922561cb0dc80` |
+| Watchdog build | `f6a5900eb831ab752209d9ae7c39dabf42fc3e30` |
+| Market | `aec-atp-andmar-radpap-2026-11-23`, YES only (pre-game, scheduled start 08:00 UTC) |
+| Order | one maker bid, 1 contract, three ticks behind the best bid (0.44 at 0.47 / 0.48), never outside 0.30–0.70 |
+| Bot exit | 60 s into the window, no cleanup; down until 60 s after it |
+| Pass | venue shows that exact order cancelled by the watchdog within 90 s of the exit; no fill; no other order |
+| Worst case | the bid fills first: at most $0.70 |
+| Stop | production pre-flight must show the market open, pre-game, selected, start not within 30 min of the window end, shared-halt reading fresh; otherwise nothing is armed, no retry |
+| After | bot relocked, settings restored; shared halt stays latched until a separate owner-approved reset |
+
+Temporary settings (restored afterwards): pin, 1 contract (back to 2),
+three-tick depth (back to 1), slate both (back to live), ATP added to the
+permitted list (back to NFL and NBA), both unpaired caps 0.60 (back to 3
+and 6). Market count left at 2: the carried-over paired tennis market holds
+one slot and the pin allows it no new exposure.
+
+Drill 2: owner chose the watchdog halt variable as an interim validation,
+"not a substitute for the fast emergency stop"; it needs its own exact
+authorization after drill 1's halt reset. The signed-marker stop must be
+validated "before unattended 12-hour operation".
+
+## 27. Drill 1 result — 24 Nov, 05:00–05:10 UTC (written 11:25 UTC)
+
+Sports `12d5d3daf`, watchdog `f6a5900eb`. Source: production logs of the
+sports bot, the watchdog and the ledger.
+
+| Time (UTC) | Event |
+|---|---|
+| 04:06 | locked production pre-flight: market selected, pre-game, YES edge passes, only the lock blocking |
+| 04:15 | account audit complete, ok |
+| 04:52 | venue: market open, not closed, start 08:00, 0.50 / 0.51 |
+| 05:00:01 | bot reads shared halt PERMITTED (first read on this build) |
+| 05:00:02 | one order, YES 1 @ 0.47 (three ticks behind 0.50), id ending `55P1` |
+| 05:01:00 | bot exits, no cleanup |
+| 05:01:12 | watchdog: bot unreachable, using its last ownership read (12 s old), 1 open order |
+| 05:01:32 | watchdog selects the order (executor unreachable), sends the cancel with no error, latches the halt `UNMANAGED_RESTING_ORDER`; its immediate re-read still showed the order NEW with 0 filled |
+| 05:01:52 | watchdog: 0 open orders at the venue |
+
+Result: **pass, with one gap in the evidence.** The order left the venue's
+open orders between 33 and 53 s after the exit, inside the 90 s limit. No
+fill: filled quantity 0 at the re-read, buying power $320.1638 before,
+during and six hours after, venue positions 0 at the 11:17 reconcile. No
+other order. The gap: the watchdog's re-read came before the venue showed
+the cancel, so no log line carries the order's terminal state; "cancelled"
+rests on the open-order list, the zero fill and the unchanged cash.
+
+Afterwards: the bot restarted at 05:11 into the expired window (locked).
+The session's worker was down from about 05:03 to 11:12, so the drill
+settings were restored only at 11:12 (deployment `8a6b6afe`, plain lock,
+pin off, 2 contracts, depth 1, live slate, NFL and NBA, caps 3 and 6,
+death drill off). No order was possible in between. Halt latched since
+05:01:32; latch digest at 11:17 `4004b056…3021693`; reset needs the
+owner's separate approval.
+
+## 28. Halt reset after drill 1 — 24 Nov, 11:28 UTC
+
+Owner, typed: "Approved: reset the halt latched at 05:01:32 UTC 24 Nov.
+Keep the sports controller locked throughout. Defer the interim
+Railway-variable drill. Prioritize fast emergency-stop validation and
+preparation of the 12-hour live campaign. No additional development unless
+a critical defect is discovered."
+
+Done by the existing procedure (watchdog startup hook), deployment
+`03361a74`. Digest re-read at 11:23:58, unchanged. `L5_HALT_BOOT_RESET`
+cleared at 11:28:21.01 UTC: prior latch digest `4004b056…3021693`, reason
+`UNMANAGED_RESTING_ORDER`, reset id `halt-reset-20261124-d1-7c3e9a41b2f6`
+(spent). Machine-verified at the clear: three registries readable, 0 live
+orders, submission disabled on each; venue 0 working orders, no positions.
+Sweeps at 11:33 attest halt false, 0 open orders. Reset settings disarmed
+afterwards without a further restart. Sports bot locked throughout.
+
+Drill 2 by the watchdog variable: deferred by the owner. Still required
+before unattended 12-hour operation: the signed-marker stop, which needs
+the operator's two secrets (marker mechanism still reads "configured
+false" at the 11:28 boot).
+
+## 29. Fast-stop credentials set; wrong-signature check passed — 24 Nov, 14:50 UTC
+
+Operator set the two watchdog values (deployment `572232d3`, 14:46 UTC,
+same build `f6a5900eb`). Boot line: marker "configured true", read
+credential set, service `pmus-spring-l5-probe`, timeout 3 s. I saw neither
+value.
+
+Wrong-signature check (no order, sports bot locked): test marker committed
+to `ops/halt-marker` at 14:49:00 (`af39fe36d`), signed with a throwaway
+key. Watchdog at 14:49:17, 17 s later: `MARKER_SIGNATURE_INVALID`,
+`acted false`, repeated each 20 s poll. Marker removed 14:50:32
+(`c2208c581`). Sweeps at 14:50:52 and 14:51:12: halt false, 0 open orders,
+no channel alarm. This proves the watchdog reads the private file with the
+token and rejects a bad signature. Not yet proven: a valid marker halting
+and cancelling (the signed-marker drill, needs its own authorization).
+
+## 30. Signed-marker drill authorized — 24 Nov, about 14:55 UTC
+
+Owner, typed: "Authorized: signed-marker drill, 16:30–16:40 UTC 24 Nov, on
+these terms. Prepare the exact 12-hour campaign authorization in parallel.
+Once the drill passes and the halt is reset, prioritize starting the
+campaign without further delay. No additional engineering or strategy
+experiments unless a critical defect appears."
+
+Terms: sports `12d5d3daf`, watchdog `f6a5900eb`; market
+`aec-atp-chdp-leosto-2026-11-24`, YES only (pre-game, start 19:25 UTC);
+one maker bid, 1 contract, three ticks behind the best bid, inside
+0.30–0.70; window 16:30:00–16:40:00 UTC; the operator publishes a validly
+signed marker 2 to 7 minutes in; pass = order gone at the venue within
+90 s of the commit, no fill, no order after the halt, latch still present
+after the bot restarts; worst case $0.70; no arming and no retry if the
+locked pre-flight fails; afterwards relocked, settings restored, halt
+latched until a separate reset approval. The campaign itself is not
+authorized by this.
+
+## 31. Signed-marker drill: market changed — 24 Nov, 15:52 UTC
+
+The locked pre-flight at 15:29 refused `aec-atp-chdp-leosto-2026-11-24`
+(`no_international_price_yet`; none exists for it) and nothing was armed.
+My error: the market was chosen from the venue price list without the full
+selection check. Five alternatives were then run through the full check.
+
+Owner, typed: "Authorized: same signed-marker drill, market
+aec-atp-benwil-matalv-2026-11-23, 16:30–16:40 UTC on 24 Nov. All
+previously approved limits remain unchanged. Prepare the exact 12-hour
+campaign authorization now. Once the drill passes and the halt is reset,
+proceed directly to requesting campaign approval. No additional tests or
+development unless a critical defect appears."
+
+Market at 15:32: open, pre-game, start 19:30 UTC, international price
+present, 0.55 / 0.56. Pin and the 16:30–16:40 window set at 15:53 in one
+change (the bot stays locked until 16:30; the pre-flight is read in that
+locked period).
+
+## 32. Signed-marker drill stood down before the window — 24 Nov, 16:03 UTC
+
+Owner at about 16:00: no terminal available to sign the marker; "If the
+current drill cannot proceed, let the window expire safely and keep the
+controller locked." The window was removed before it opened: plain lock
+and normal settings restored at 16:03 (deployment `08e6dfae`). No order
+was placed. The drill authorization of sections 30–31 is spent; a new
+window needs a new authorization. Open: a browser-only way for the
+operator to sign (GitHub Codespaces proposed; nothing built).
+
+## 33. 12-hour supervised campaign authorized — 24 Nov, about 16:25 UTC
+
+Owner, typed: "Authorized: 12-hour supervised campaign, 17:00 UTC 24 Nov
+to 05:00 UTC 25 Nov, on these terms, with the signed emergency stop
+unverified. Preserve all existing risk limits and automatic shutdown
+protections. Prioritize profitable inventory accumulation, sustained
+liquidity provision and reward capture. Report confirmed realized net
+profit, paid rewards, inventory and capital utilization. No additional
+development or strategy experiments during the campaign. Stop if any
+existing safety control fails." The signed-marker drill was deferred by
+the owner beforehand ("Defer the signed-marker drill").
+
+Terms: sports `12d5d3daf`, watchdog `f6a5900eb`, no build change. Window
+17:00:00 UTC 24 Nov to 05:00:00 UTC 25 Nov, relocks itself. ATP, Serie A,
+Premier League, La Liga, NBA, NFL, NHL; pre-game and in-play; 1 contract;
+up to 4 markets; maker-only; pair cap 0.97; campaign spend 16 / unpaired
+6; per-market spend 8 / unpaired 3; campaign loss stop 4; daily halt 5;
+account limit 3.00 enforced; depth 10, international price, band
+0.30–0.70, stale-audit block; quoting as deployed (pause hold 600 s,
+reselect, gap hold 20 s, keep deeper 1 tick).
+
+Disclosed and accepted: signed emergency stop unverified and no signed
+marker held; manual stop is the plain lock (1 to 15+ minutes); watchdog
+proven once on process death; supervision by this session at +5 min and
+every 30 min, not guaranteed. Lock without waiting on: reconciliation or
+audit failure, safety latch, order above 1 contract, taker order, order
+outside the competitions, unexplained cash, watchdog error.
+
+Baseline before the window: buying power $320.1638; account figure
+$1.3144 of $3.00; zero open orders; zero positions (11:17 reconcile);
+halt clear. Settings set at 16:26.
+
+## 34. Campaign stopped: account-limit check defect — 24 Nov, 18:49 UTC
+
+Plain lock set 18:49:01, effective 18:50:16 (deployment `e7f1b743`).
+Watchdog 18:50:36: 0 open orders, no halt. Reason: owner's rule "Stop if
+any existing safety control fails."
+
+Defect (confirmed in logs and code): the bot's account-limit verdict is
+cached for 10 s (`PMUS_TWO_SIDED_ACCOUNT_RISK_TTL_S`), and its capacity
+figure includes only the bids resting when the verdict was computed. Each
+new opening bid is checked against that cached capacity alone, so several
+bids placed within one cache period each pass. From 18:27:47 the bot
+looped about every 25 s: reading ok with nothing resting → place two to
+four opening bids → next reading over the limit → pull them → repeat.
+Worst-case totals (account figure + resting opening bids) on the over
+readings: 3.06, 3.36, 3.17, 3.34, 3.33 (repeatedly), 3.23, against 3.00.
+The account figure itself never exceeded 3.00 (peak 2.2644). Had two such
+bids filled inside one period, it would have.
+
+Campaign 17:00–18:50 UTC, venue-confirmed: 6 fills, all 1 contract, maker,
+ATP. Two pairs (0.55+0.39, 0.57+0.39): +$0.10 in cash, both markets
+settled. Two unpaired NO legs open at the lock: Juagom–Bengeo 1 @ 0.44,
+Samher–Yanale 1 @ 0.61 ($1.05); they ride to settlement (the plain lock
+also stops completions). Cash $319.2138 at 18:36 against $320.1638 at the
+start. No oversize, taker or out-of-scope order; no latch; audits at
+17:44 clean.
+
+Not changed: any limit. Proposed $5 / $30 stage: not activated.
+
+## 35. Account-limit correction prepared — 24 Nov, 19:10 UTC
+
+Owner, about 18:55: "Proceed immediately with the account-limit
+correction" (reserve each submitted order immediately including in-flight
+and uncertain; no reuse of cached capacity; release only after confirmed
+cancellation, rejection or reconciliation; regression-test simultaneous
+submissions, concurrent fills, partial fills, stale readings; eliminate
+the place-and-cancel cycle; preserve everything else). "Prepare the
+corrected build for locked deployment and provide the exact SHA and
+regression results. Prepare the $5 account limit / $30 campaign spend
+configuration for separate authorization, but do not activate it.
+Reconcile the remaining inventory through settlement." Owner's correction
+to my figures: campaign trading result ranges from −$0.95 to +$1.05
+including the settled +$0.10.
+
+Done: release candidate `c2e4e0b3fe9cef43690f104cbaef636b03422e74`
+(`DEPLOY_REQUEST_SPORTS_c2e4e0b3f.md`). Not deployed; needs the owner's
+approval of that exact build. Inventory at 19:07 (public prices, not
+settled): Juagom–Bengeo YES 0.84/0.85, Samher–Yanale YES 0.98/0.99; our
+two NO legs are marked near $0.15 and $0.01 against $1.05 paid.
+
+## 36. Corrected build deployed locked; first reward credit — 24 Nov, 19:35 UTC
+
+Owner, typed: "Deploy c2e4e0b3fe9cef43690f104cbaef636b03422e74 locked."
+(verify locked boot, reservations, watchdog, zero open orders; prepare the
+$5 / $30 authorization; "Do not arm or increase limits until separately
+authorized.")
+
+Deployment `5b34f7aa`, created 19:26:34, booted 19:27:51 on
+`c2e4e0b3f`. Verified 19:28–19:33 (read-only): locked (new exposure and
+completions), no order or fill since boot, no traceback, no reservation
+lines, safety latch clear. First audit 19:31:30: reconciled, no
+mismatches, one venue position (Juagom–Bengeo NO 1, cost $0.44), no open
+orders. Watchdog 19:32:45: 0 open orders, no halt, no read error, all
+three registries OK. Cash $320.5138.
+
+Campaign of 17:00–18:50, venue records: two pairs +$0.10 (settled);
+Samher–Yanale settled, lone NO lost $0.61; Juagom–Bengeo NO 1 @ 0.44
+still open. Settled trading result so far −$0.51; −$0.95 if the open leg
+loses, +$0.05 if it wins.
+
+Reward rows at 19:29:59: PAID 122 / $24.09 (was 120 / $22.79). The two
+rows for 22 Nov, Serie A (Bologna–Udinese $0.52, Sassuolo–Genoa $0.78),
+moved from PENDING to PAID: **$1.30 credited**, matching the bot's
+otherwise unexplained cash of +$1.30. The two 21 Nov rows were SKIPPED
+($0.04). No rows yet for 23 or 24 Nov. The account drawdown figure fell
+to $0.9644 with the credit (limit $3.00, room $2.04).
+
+## 37. Reservation-release gap closed in a new candidate — 24 Nov, 19:45 UTC
+
+Owner, about 19:38: "Close the remaining uncertain-order reservation gap
+immediately. Require definitive venue order and position reconciliation
+before releasing reserved capital. Cover the fully filled unanswered-order
+case with regression tests. Keep the correction narrowly scoped and
+prepare the locked release immediately." Then: a one-hour live validation
+at $3, a separately authorized $5 / $30 campaign if it holds, reward
+reconciliation of the whole $24.09, scaling path to $10, $25, $50.
+"Obtain explicit authorization for deployment, resumption and capital
+increases."
+
+Prepared, not deployed: `766a965ba03330dcb1dbb05db517b59d8131e33a`
+(see `DEPLOY_REQUEST_SPORTS_c2e4e0b3f.md`, last section). Production
+stays on `c2e4e0b3f`, plain lock. Reward reconciliation updated in
+`analysis/l5/rewards/SPORTS_REWARD_RECONCILIATION_20261122.md` section 9.
+
+## 38. `766a965ba` approved for locked deployment — 24 Nov, about 19:50 UTC
+
+Owner, typed: "Deploy 766a965ba03330dcb1dbb05db517b59d8131e33a locked.
+Verify production health and prepare the earliest possible one-hour live
+validation authorization at $3. Following successful validation,
+immediately prepare the $5 account limit / $30 campaign spend
+authorization." Also: do not increase unpaired inventory caps; verify the
+49-of-49 losing residuals against venue settlements; investigate the
+daily bonus; "Obtain explicit authorization for live trading and capital
+increases." Scaling gates restated by the owner as evidence-based, without
+fixed waiting periods ($3 corrected enforcement shown live; $5 repeatable
+positive reward-adjusted economics; $10 sufficient paid-reward evidence
+and verified emergency stop; $25 consistent profitability across markets;
+$50 scaling without deteriorating returns).
+
+Source switched to `release/pmus-sports-rn1-766a965ba` with the plain lock
+on. This session's worker was down from about 19:50 to 20:53 UTC; the
+platform created the deployment (`4d714f1b`) at 20:53:45. Verification and
+an independent audit of the unpaired-residual settlements are running.
+The validation window is NOT authorized by this.
+
+## 39. `766a965ba` verified locked; campaign of 24 Nov closed — 21:00 UTC
+
+Deployment `4d714f1b` SUCCESS on `766a965ba`, booted 20:54:54, plain lock
+(new exposure and completions). No order, fill, traceback or reservation
+line. Audit 20:58:28: reconciled, no mismatches, venue positions 0, no
+open orders. Watchdog 20:59:38: 0 open orders, no halt, no read error.
+Safety latch clear. Cash $320.5138. Account figure $0.9644 of $3.00 (room
+$2.0356).
+
+Campaign 17:00–18:50 UTC, final, venue records: two pairs +$0.10;
+Samher–Yanale NO 1 @ 0.61 settled at 0 (−$0.61); Juagom–Bengeo NO 1 @
+0.44 settled at 0 (−$0.44). **Trading result −$0.95.** Rewards for 24 Nov
+not posted. Reward rows unchanged (PAID 122 / $24.09). The hourly
+post-campaign check is switched off.
+
+## 40. One-hour validation authorized — 24 Nov, 21:05 UTC
+
+Owner, typed: "Authorized: one-hour validation, 21:30–22:30 UTC 24 Nov, on
+these terms. Continue the opening-fill versus completed-position economic
+analysis in parallel. If capital enforcement passes, immediately present
+the $5 account limit / $30 campaign spend authorization for review."
+
+Terms: build `766a965ba`; window 21:30:00–22:30:00 UTC, relocks itself; $3
+account limit (room $2.04 at 21:00); 1 contract; up to 4 markets; spend
+16 / unpaired 6; per-market 8 / 3; loss stop 4; daily halt 5; maker-only;
+pair cap 0.97; ATP, Serie A, Premier League, La Liga, NBA, NFL, NHL;
+pre-game and in-play; no strategy change during the test. Pass: account
+figure plus resting and reserved bids never reads above 3.00; no
+place-and-pull cycle; reservations released only on venue reconciliation;
+audit and reconcile clean. Disclosed: signed emergency stop unverified;
+manual stop is the plain lock; session supervision not guaranteed. The
+$5 / $30 stage is not authorized by this. Baseline: cash $320.5138.
+Window set at 21:05:47.
+
+## 41. Validation hour result — 24 Nov, 21:30–22:30 UTC (written 22:40)
+
+Build `766a965ba`, $3 account limit. Source: production logs read at
+21:37, 21:54, 22:14, 22:18 and 22:35.
+
+| Criterion | Result |
+|---|---|
+| Account figure + resting opening bids | max 2.9644, never above 3.00 (8 limit readings, 60 heartbeats sampled) |
+| Bids placed beyond the limit | 0; 193 refused at placement for lack of room |
+| Place-and-pull cycle on opening bids | none (re-placements 52 s or more apart, on price moves) |
+| Reservations | 12 held (all sends deferred by the bot's own request budget), 12 released on venue order and position reconciliation, 17 to 35 s each; none outstanding |
+| Audit / reconcile | 22:18:00 reconciled, no mismatches, cash explained exactly |
+| Orders | 99, all 1 contract, maker, ATP or NBA |
+| Safety latch, errors, watchdog | clear; none; healthy, 0 open orders after the window |
+| Relock | by itself at 22:30:00 (window_ended); plain lock set 22:34, effective 22:35:10 |
+
+Not clean:
+- Two readings (21:46:58, 21:56:16) showed 3.41 and 3.39 because a fill was
+  counted both in the ledger figure and as "not yet in the ledger" for a
+  few seconds. True figures 2.96 and 2.88. Each made the bot pull and
+  re-place its opening bids once. Conservative, costs quoting time.
+- Two "account figure unreadable" blips (21:49:29, 21:59:44) did the same.
+- The completing bid on Axenef–Alarub was re-placed 45 times at the same
+  price: each two-tick jump marks fair value unsettled, the quote decision
+  drops the completion, and it returns about 13 s later. 50 of the 99
+  orders were completions.
+- The hourly audit took about ten minutes under traffic and no heartbeat
+  was logged while it ran (22:08–22:18); the loop and orders continued.
+
+Trading: 2 fills, 0 pairs. Axenef–Alarub NO 1 @ 0.45 (market now YES
+0.93/0.94); Jiecui–Benhas YES 1 @ 0.51 (market 0.52/0.53). Both unpaired
+and now without completing bids (locked). Cash $319.5538 = 320.5138 −
+0.96. Nothing settled. Owner's provisional view at 21:57: capital
+enforcement passes; the double count is conservative, not dangerous.
+
+## 42. Strategic direction changed by the owner — 24 Nov, 23:35 UTC
+
+Owner, typed: "Strategic direction has changed. We want to actively trade
+live sports events without requiring international reference prices. Use
+the existing inventory-aware controller. Do not build another trading
+system." Asked for a venue-native configuration ("Removes international
+pricing as a mandatory entry requirement, subject to explicit release
+approval"), reconsideration of table tennis, esports and tennis "based on
+actual net economics rather than international pricing availability", a
+bounded $5 / $30 configuration, targeted regression tests and the exact
+authorization request. "Do not arm or deploy money-capable changes without
+explicit authorization." This supersedes, for a profile the owner
+approves, the earlier rulings that table-tennis and Dota 2 rewards were
+not sufficient to enable those markets and the 22 Nov requirement of an
+international fair value for every bid. "No cricket!" is not superseded.
+
+Prepared, not active: `VENUE_NATIVE_CONFIG_20261124.md` (settings only on
+build `766a965ba`). Nothing changed in production.
+
+## 43. Venue-native validation authorized — 24 Nov, 23:55 UTC
+
+Owner, typed: "Authorized: venue-native validation, $5 account limit, $30
+campaign spend, table tennis (Setka Ukraine and Moldova), UTR tennis and
+Dota 2, 00:30–03:30 UTC 25 Nov, on these terms. Keep same-side
+accumulation and continuous replenishment enabled. Prioritize live
+reward-eligible events. Preserve all existing capital limits, loss stops,
+reconciliation and watchdog protections. Report actual trading activity,
+accumulated inventory, reward-qualifying resting time and settled
+economics. If the proposed start time has passed or insufficient
+preparation time remains, request authorization for a revised window."
+
+Terms (`VENUE_NATIVE_CONFIG_20261124.md`): build `766a965ba` unchanged;
+window 00:30:00–03:30:00 UTC 25 Nov, relocks itself; international price
+not required (guard still on where a price exists); fair-value test off;
+same-side additions without a fair value on; competitions setkameua,
+setkamemd, utr, dota2; account limit $5.00 (ledger); campaign spend $30;
+1 contract; up to 4 markets; in-play and pre-game; unpaired caps $6 / $3;
+per-market spend $8; loss stop $4; daily halt $5; maker-only; pair cap
+0.97; 10-contract depth gate; band 0.30–0.70; all other controls
+unchanged. Disclosed: no independent price check; ranking by pool size;
+signed emergency stop unverified; rewards post one to two days later.
+Settings set at 23:57 UTC (ledger limit and sports profile), 33 minutes
+before the window. To be restored and relocked afterwards; the account
+limit stays at $5 only until the owner decides otherwise at the close-out.
+
+## 44. Manual NHL order confirmed by the owner — 25 Nov, about 02:56 UTC
+
+Owner, verbatim: "FYI I spent $25 on the nhl game in order to get the free
+$5 reward" and "I confirm that the manual NHL order was mine."
+
+- The order on `aec-nhl-veg-edm-2026-11-24` seen from about 02:19 UTC is
+  the owner's own manual activity (venue promotion: trade $25 in a day for
+  a $5 bonus). Not bot trading. The watchdog had already marked it
+  manual-exempt.
+- Instruction: "Complete the current campaign reconciliation and
+  distinguish manual account activity from bot trading P&L. Preserve
+  total portfolio exposure protections."
+- Consequence observed, by design: the account figure the ledger publishes
+  moved with the manual cash change (to $21–27 against the $5 limit), so
+  the bot refused all new exposure from 02:19 UTC. No limit was changed to
+  work around it. The $5 bonus, if credited, is a promotion credit and is
+  not trading P&L or a liquidity reward.
+- Same message: add props, spreads, totals and combos to research and
+  market discovery (read-only scan started); prepare $10 / $25 / $50
+  configurations; "obtain explicit authorization before deployment or
+  capital increases." No deployment, arming or limit change is authorized
+  by this message.
+
+## 45. Venue-native validation result — 25 Nov, 00:30–03:30 UTC (written 04:00)
+
+Build `766a965ba`, $5 account limit, $30 spend, one contract, Setka and
+UTR (Dota 2 refused by the esports format rule throughout). Read from
+production logs by a read-only pass; figures marked (c) are computed.
+
+Bot trading only:
+
+| | |
+|---|---|
+| Fills | 15 (14.00 contracts, $6.61 (c)); 14 on campaign markets, 1 completing an ATP leg carried from the validation hour |
+| Pairs | 5 on UTR Traemm–Zylame at 0.96, 0.93, 0.91, 0.92, 0.90: +$0.38 locked; 1 ATP pair at 0.97: +$0.03 (belongs to the validation hour) |
+| Settled unpaired | Setka Korvol–Kozden YES 0.63 lost: −$0.63 |
+| Open at close | UTR Carjem–Caltes NO ×2 at 0.45, cost $0.90, unsettled (worst −$0.90, best +$1.10) |
+| Campaign result | −$0.25 settled and locked; −$1.15 to +$0.85 once Carjem–Caltes settles |
+| Same-side additions while unpaired | 2 (Traemm–Zylame 02:16, Carjem–Caltes 03:26); 3 fresh entries after a completed pair |
+| Orders placed | 153 (108 opening, 27 extension, 18 completing); 15 filled |
+| Fees / rebates logged | 0 / 0 |
+| Able to quote new exposure | about 127 of 180 minutes (c); refused 02:19–03:10 by the account limit after the manual purchase |
+| Two-sided resting, minutes (c) | 70, 59, 30, 9, 5, 5, 4 across seven UTR/Setka markets |
+
+Safety: largest order 1 contract; every order post-only; new opening
+orders only in UTR and Setka; no safety latch, halt, HTTP 429 or
+reconciliation mismatch; watchdog 602 sweeps with no action; loss stop not
+reached. Relocked itself at 03:30:00 (`window_ended`), all own orders
+cancelled by 03:30:04, zero open bot orders from then. Plain lock set at
+03:46 UTC (restart; boot shows new exposure and completions locked).
+Not proven either way: whether a fifth market briefly held an order at
+00:32–00:34 while the carried ATP completion rested beside four new
+markets.
+
+Manual activity, kept separate (owner's own, section 44):
+
+- 02:18:46 UTC: 35.46 contracts bought at 0.69 on
+  `aec-nhl-veg-edm-2026-11-24` (about $24.47).
+- 03:10:32 UTC: account value rose $31.56 = 35.46 × 0.89; consistent with
+  the position being sold at 0.89 (about +$7.09). Inferred from the value
+  change; no fill line was read.
+- 02:20 UTC: account value rose exactly $5.00; unexplained by the logs
+  (possibly the venue's promotion credit; not confirmed).
+
+Account figure the bots read (ledger): 1.92 at 00:30; 2.61 at 02:18; 27.61
+at 02:19; −9.93 at 03:10; −9.03 at 03:30. **It is now negative: the manual
+gain and the $5 step sit inside the same figure as the bot's results, so
+the $5 limit would currently allow about $14 of bot loss.** The bot is
+locked, so nothing is at risk now; this must be corrected before any
+window opens (ledger change in preparation: separate bot-only and
+total-account figures).
+
+Reward rows for this window: not posted yet.
+Left as they are pending the owner's decision: venue-native profile
+settings (locked), account limit $5.
+
+## 46. Venue-native validation — final settled result (read 11:50 UTC 25 Nov)
+
+UTR Carjem–Caltes settled against the 2 NO held at 0.45: −$0.90. Nothing
+is open. Venue-reconciled result for the 00:30–03:30 UTC window (the
+bot's own P&L line, fills reconciled against the venue): 14 fills, 13
+contracts, $6.15 spent; 5 pairs +$0.38; 3 unpaired contracts lost −$1.53;
+fees 0; **realized net −$1.15**. Rewards for the window: none credited yet
+(venue total credited still $24.09 at 05:48 UTC).
+
+Bounded campaigns since 21 Nov, bot trading only: −$2.10, −$0.42
+(validation hour), −$1.15 = −$3.67 realized; rewards credited +$1.30;
+net −$2.37.
+
+Owner direction 25 Nov (later messages, recorded for scope): C2 selected
+for preparation ($13 bot limit, $35 total-account limit, eight markets,
+$60 spend); feature development frozen; market-expansion branch kept
+separate from the production release; priority is the two locked
+deployments, manual-order accounting, emergency-stop verification and the
+$13 / eight-market campaign. None of these messages contained a
+deployment, settings or live-trading authorization line; nothing has been
+deployed or set.
+
+## 47. Coordinated locked deployment authorized — 25 Nov, about 12:10 UTC
+
+Owner, typed: "I authorize deployment of ledger
+c70e244a21bd0034c04b7ac610e6b19357cf2da1 with the split off, then sports
+bc3a5b6b95218d0b3b0c9c42a57c929fbdec97b9 locked. Verify both deployments,
+watchdog health, unchanged risk limits and zero open orders. Do not arm or
+increase capital yet. Freeze additional feature development."
+
+Scope: the two deployments only. No setting is changed: the ledger split
+stays off (no total limit set), the bot limit stays $5, the sports lock
+stays `1`, none of the new sports settings is switched on. Rollbacks:
+ledger `f5a5434d6`, sports `766a965ba`.
+
+Carried out (section 47), 25 Nov:
+
+- Ledger `l5-pmus-live`: deployment `24ba89e8`, commit `c70e244a2`,
+  SUCCESS 12:04 UTC. Heartbeats 12:05 and 12:06: value 330.5058, anchor
+  321.4782, limit 5, figure −9.0276, room 14.0276, no refusal, no `split`
+  block — identical to before the deploy.
+- Sports `pmus-spring-l5-probe`: deployment `10cf4c50`, commit
+  `bc3a5b6b9`, SUCCESS 12:14 UTC. Boot: lock `locked` (new exposure and
+  completions), refill cooldown 60, depth 1, 4 markets, 1 contract — the
+  earlier settings, none of the new ones on. New code confirmed running
+  (`CRICKET_LEARNED` for `sheffield` and `testcr` at start). No order
+  line.
+- Watchdog sweeps 12:14–12:15: all three registries OK, sports lane OK,
+  0 open orders, no halt, no read error.
+- Limits unchanged: bot limit $5, lane cap $20, at-risk $16, daily loss
+  $5, unpaired $6 / $3, campaign spend $30.
+- Not yet seen at the time of writing: the sports bot's first hourly
+  account audit on the new build.
+
+## 48. Owner's receipt for the manual NHL trade — 25 Nov, about 12:20 UTC
+
+Owner supplied the venue app's receipt: Golden Knights vs Oilers, bought
+$25 at 69%, sold at 89%, profit +$6.55, payout $31.55, dated 24 Nov (local
+date). It agrees with the production records (35.46 at 0.69, $24.9974
+with fee; sold at 0.89, $31.5594; +$6.56). The receipt shows no order id.
+Owner: "Use these details to locate the original order through
+authenticated venue execution or transaction history. Preserve the
+fail-closed accounting protections."
+
+Finding: the buy order id exists in the venue's account activity feed
+(each trade row carries our side's execution record with its order), which
+the sports bot reads every hour; no running build prints it. I have no
+signed access of my own, and forking the production environment to run a
+read would start second copies of the money-capable services, so that was
+not done.
+
+Prepared, not deployed: sports release
+`8ec438d52ed0e4e914aa8e3060d12bf4c5ccb616` (branch
+`release/pmus-sports-rn1-8ec438d52`, code `86c5bf455`) = the running
+`bc3a5b6b9` plus one read-only log line (`MANUAL_ORDER_IDS`) listing the
+order ids behind manual sports trades from that existing walk. No order
+path, no venue call of its own. Regression 5,643 passed, same 24
+unrelated failures. Needs deployment approval (locked).
+
+## 49. $13 / eight-market campaign authorized — 25 Nov, 13:28 UTC
+
+My request (12:50 UTC) ended with one line: "Authorized: set the anchor to
+333.0402 and the account limit to $13. Then run the eight-market campaign
+on the deployed build for six hours starting 30 minutes after this
+message: one contract, $60 campaign spend, Setka and UTR,
+join-the-best-bid, 10-second replenishment, share ranking,
+balanced-as-fresh-entry, batched fill detection, separated inventory
+slots, two-hour completions-only grace after the window. Emergency stop
+unverified; paid-reward gate waived for this campaign."
+
+Owner's reply, typed, in full: "Authorized". Received 13:28 UTC.
+
+Read as approval of exactly that line. Window: 13:58:00–19:58:00 UTC
+25 Nov (30 minutes after the reply, six hours), relocks itself;
+completions-only until 21:58 UTC. Terms as in
+`CONSOLIDATED_AUTHORIZATION_REQUEST_20261125.md`, "Final form". Gate
+before anything opens: the ledger must read about $2.53 after the anchor
+change; otherwise the bot stays locked and the owner is told.
+
+Carried out (section 49), 25 Nov:
+
+- 13:30 UTC ledger: anchor 333.0402, limit 13 (restart). Heartbeats 13:32
+  and 13:33: value 330.5058, figure **2.5344**, room 10.4656, no refusal —
+  exactly the reconciled expectation.
+- 13:35 UTC sports settings set (one restart, deployment `64a59ac8`):
+  8 markets / 16 tracked, spend 60, join-touch 1, share ranking 1,
+  balanced-is-open 1, batched fill detection 1, slots-count-inventory 0,
+  cooldown 10, completion grace 7200, competitions setkameua, setkamemd,
+  utr, lock `window:2026-11-25T13:58:00Z/2026-11-25T19:58:00Z`.
+- Boot 13:36:00: lock `window_not_started`, window and grace as set,
+  cooldown 10, spend 60, 8/16 markets, competitions as set, 1 contract.
+- Scheduled checks re-enabled at :05 and :35.
+
+## 50. Owner direction — inventory accumulation is the strategy (25 Nov, about 14:25 UTC)
+
+Owner, verbatim extracts: "Inventory accumulation and management is the
+strategy. Rewards and pair completion are secondary." "Our primary
+strategy is active inventory accumulation and intelligent inventory
+management." "Liquidity rewards are supplemental income. Pair completion
+is incidental." "Identify which existing settings and controller
+behaviors prevent this strategy from operating effectively. Prepare the
+necessary configuration changes for immediate authorization. Do not build
+another controller. Preserve hard risk limits." "...recognizing that
+accumulating more inventory at unfavorable prices will increase losses."
+"Profitability across the entire inventory portfolio is the objective."
+
+Strategic direction; not an authorization. The earlier rule "Do not
+increase unpaired inventory caps" (24 Nov) is in tension with it and is
+changed only if the owner approves specific new caps. Campaign of section
+49 continues unchanged until then.
+
+## 51. Mid-campaign configuration change authorized — 25 Nov, about 14:35 UTC
+
+Owner, typed: "Authorized for the remainder of this campaign: two
+contracts before the match and in play, four simultaneous markets, add ATP
+and WTA, depth filter 3. Keep mandatory external reference-price tests
+off. Preserve same-side accumulation across all approved competitions.
+Keep competitive quoting, intelligent cancellation, dynamic sizing,
+10-second replenishment and inventory management active. All existing
+capital limits, exposure caps, loss stops and watchdog protections remain
+unchanged. Measure inventory acquisition costs, same-side fills, exposure
+and settled net profitability. No further development."
+
+Differs from my request in one point: the margin test for same-side
+additions stays OFF (`PMUS_RN1_EXTEND_EV` unchanged at 0), so additions
+remain price-blind in every competition, bounded by average cost + 2c and
+the caps. Set: `PMUS_RN1_PREGAME_QTY=2`, `PMUS_RN1_LIVE_QTY=2`,
+`PMUS_TWO_SIDED_MAX_MARKETS=4`, `PMUS_TWO_SIDED_MAX_TRACKED=8`,
+`PMUS_TWO_SIDED_MIN_TOUCH_QTY=3`, competitions
+setkameua,setkamemd,utr,atp,wta. Window (to 19:58 UTC), $13 account
+limit, $3 / $6 unpaired caps, $8 a market, $60 spend, $4 loss stop, $5
+daily halt unchanged. Largest order is now 2 contracts.
+
+Carried out (section 51): settings set 14:32 UTC, one restart (deployment
+`1f816930`). Boot 14:33:40: window open (new exposure and completions
+unlocked), pre-game and in-play size 2, depth filter 3, 4 markets / 8
+tracked, competitions atp, setkamemd, setkameua, utr, wta, margin test
+off, cooldown 10, caps and limits as before. Carried inventory at the
+restart: UTR Dolhey–Monmic YES 2 / NO 1 (last fill YES 0.30 at 14:32:43).
+
+## 52. Mid-campaign review — 25 Nov, 15:20 UTC (no change made)
+
+- Settled P&L reconciled: bot realized −$0.86 (3 markets settled, all
+  losses from unpaired legs); ledger cash 330.5058 (13:58) → 329.6459
+  (15:17) = −$0.86; unexplained $0.00. Rewards: $0 modelled above payout.
+- ATP/WTA not selected because no selection ran after the 14:33 restart:
+  all four slots were held by pre-game UTR markets with resting bids. Only
+  one ATP market (pausan-thicig) would have been eligible.
+- 278 jump/volatility pauses: real moves (e.g. Dolhey 0.18→0.01, Viebru
+  0.43→0.14; 24 of 139 jumps were spread-only); opening time lost ≈ 0
+  because the slots were full anyway. Protections not weakened.
+- Champions League today (scan `rewards/scan_20261125/ucl_1515.json`):
+  pools $160 day-of / $1,280 live per match, target 10,000, but 5,000 to
+  100,000 contracts at each touch; our modelled reward is $0.00–0.01/hour
+  even at 20 contracts and even with the live pool. Not a reward
+  opportunity at our size; the earlier suggestion is withdrawn.
+
+## 53. Ladder release authorized — 25 Nov, about 16:30 UTC
+
+Owner, typed: "I explicitly authorize deployment of SHA
+5425d94d336d7ff13c7dafd55e55d64e7b369aa5 for the remainder of today's
+authorized campaign ending at 19:58 UTC. Enable three ladder levels, two
+ticks apart, with two contracts per level and in-play markets only. All
+other settings, capital limits, loss stops, maker-only restrictions and
+watchdog protections remain unchanged. ... Verify aggregate worst-case
+exposure across all ladder orders, including in-flight and uncertain
+orders. Do not extend the campaign or increase capital without separate
+authorization."
+
+To do: deploy `5425d94d3` (sports only; rollback `bc3a5b6b9`); set
+`PMUS_RN1_LADDER_LEVELS=3`, `PMUS_RN1_LADDER_STEP_TICKS=2`,
+`PMUS_TWO_SIDED_SLATE=live`. Size stays 2 (pre-game and in-play settings
+unchanged). Window unchanged (ends 19:58 UTC; completions-only grace to
+21:58 as already authorized in section 49).
+
+Carried out (section 53): ladder settings set 16:36 UTC without restart;
+release `5425d94d3` deployed (deployment `27ec5dec`, live 17:03:49 UTC;
+the build started at 17:02 after a session worker restart). Boot 17:03:53:
+slate live, window open to 19:58 UTC with 2 h completion grace, size 2,
+4 markets, depth 3, five competitions, caps unchanged. New code confirmed
+(`ladder` field in RN1_QUOTE). Carried in at the restart: ATP
+Joagui–Lucamb YES 2 at 0.42 (unpaired $0.84, completion NO bid 0.55);
+ATP Matalm–Carzar paired 1/1.
+
+## 54. New exposure stopped — term breach (25 Nov, 17:11 UTC)
+
+At 17:07:59–17:08:07 UTC the bot placed five opening orders (YES 0.56,
+0.54; NO 0.41, 0.39, 0.37; 2 contracts each) on
+`aec-wta-martre-vererj-2026-11-25`, logged `phase: pregame`. The owner's
+terms (section 53) were in-play markets only. Cause (inferred): the market
+was already being tracked from before the restart; `PMUS_TWO_SIDED_SLATE=
+live` governs which markets are newly selected, not whether an already
+tracked pre-game market keeps quoting. No fills; every cap held (worst
+case: market unpaired $2.34, campaign $3.18, account 4.20 + 5.09 resting
+= 9.29 of 13).
+
+Action, under the standing instruction to stop if a term is not held:
+`PMUS_TWO_SIDED_SUBMISSION_LOCK=window:2026-11-25T13:58:00Z/2026-11-25T17:11:00Z`
+— new exposure ends now; opening orders are cancelled by id; maker
+completion bids may continue for the already-authorized 2-hour grace
+(to 19:11 UTC, inside the authorized 21:58). Not resumed without the
+owner's decision.
+
+Confirmed 17:13 UTC: lock state `window_completions_only` (new exposure
+locked, completions allowed to 19:11 UTC); watchdog open_orders 1 — the
+ATP Joagui–Lucamb completing NO bid 0.55 × 2; all opening orders gone.
+
+Fix prepared, not deployed: release `0abb52a385d639e3c779f66a4de57f23af1869f9`
+(branch `release/pmus-sports-rn1-0abb52a38`, code `24aff0435`) =
+`5425d94d3` + under the live slate a pre-game market gets no opening or
+extension bid (completions continue). Regression 5,651 passed, same 24
+unrelated failures; test added for the exact case.
+
+## 55. Resume authorized on release a46a41b6a — 25 Nov, about 18:15 UTC
+
+Owner, typed: "Authorized: deploy a46a41b6a and resume the campaign until
+19:58 UTC on the same terms: in-play only, ladder 3 levels 2 ticks apart,
+2 contracts per level, maker-only, all existing limits unchanged. Keep the
+average-cost allowance at 0.02 for this campaign. ... Do not optimize for
+pair count. No further strategy changes during this campaign."
+
+Release `a46a41b6a244e8907592cb893f83de5cd499433b` (= `5b4584db4` + issue
+#252 opt-in, left OFF). Lock back to
+`window:2026-11-25T13:58:00Z/2026-11-25T19:58:00Z` (grace 2 h as before).
+`PMUS_RN1_EXTEND_MAX_UP` unchanged at 0.02. Rollback: `5425d94d3`.
+
+Carried out (section 55): lock set back to the 19:58 window (no restart),
+release `a46a41b6a` deployed (deployment `621db2a0`, live 18:17:21 UTC).
+Boot 18:17:27: new exposure and completions unlocked, window to 19:58 UTC,
+grace 7,200 s.
+
+## 56. Locked deployment of 6755062ad authorized — 25 Nov, about 19:55 UTC
+
+Owner, typed: "Authorized: deploy 6755062ad1e4ccdd9299982205f223e2a686ff37
+locked after the existing campaign and authorized completion period
+conclude. ... Do not arm, increase capital or change production risk
+limits without separate authorization."
+
+To do after 21:58 UTC: close out; set `PMUS_TWO_SIDED_SUBMISSION_LOCK=1`;
+deploy `6755062ad` (rollback `a46a41b6a`); verify locked, zero open
+orders, watchdog healthy, limits unchanged. Settings stay as they are;
+`PMUS_RN1_FIT_QTY` and `PMUS_RN1_PULL_THREATENED_ONLY` stay off;
+`PMUS_RN1_LOSS_STOP_COUNTS_RESTING` is on by default in the build.
+
+## 57. Close-out of the $13 campaign and locked deployment of 6755062ad — 25 Nov, 22:13 UTC
+
+Done as authorized in section 56. Nothing armed; no limit changed.
+
+- 21:58:40 the window lock moved to `window_ended`; the completing bid
+  (Garcar–Borvic NO 0.29 × 2) was withdrawn. Watchdog 22:05: 0 open orders.
+- 22:06 `PMUS_TWO_SIDED_SUBMISSION_LOCK=1` (no redeploy).
+- 22:10 deployed `6755062ad1e4ccdd9299982205f223e2a686ff37` (branch
+  `release/pmus-sports-rn1-6755062ad`); deployment `71075263`, SUCCESS
+  22:12. Boot: `SUBMISSION_LOCK_STATE` new exposure and completions locked;
+  limits unchanged (per-market unpaired 3, per-market 8, campaign unpaired 6,
+  spend 60, daily loss 5, at-risk 16, lane 20, account limit 13). Watchdog
+  22:12–22:13: 0 open orders, lane healthy. Rollback `a46a41b6a` not needed.
+
+Campaign 13:58–19:58 UTC (completions to 21:58), latest PILOT_PNL 21:21:
+
+| | |
+|---|---|
+| Fills | 15 (18.97 contracts): 10 open (14), 1 extend (1), 4 complete (3.97); one deeper-ladder fill (Garcar YES 2 @ 0.64, same second as 2 @ 0.66) |
+| Spent | $10.0199 |
+| Pairs | 3.97 at average 0.9675, locked edge +$0.1291 |
+| Settled residual (unpaired) | −$1.5790 |
+| Realized (bot) | **−$1.4499** |
+| Open | Garcar–Borvic YES 4 @ 0.65 ($2.60), venue-reconciled |
+| Fees / rebates | 0 / 0 |
+| Cash | 326.4559 vs baseline 330.5058: −4.0499, all explained by the campaign; unexplained 0.000000 |
+| Rewards | REWARD_CHECK 21:19: 187 rows, $24.09 credited (122 PAID), $4.00 skipped (65); unchanged since 15:35; no rows yet for 23–25 Nov |
+| Account figure | $6.58 of the $13 limit (22:12) |
+
+Defect found in review (fixed in `7a0535450`, not deployed): while a block
+was in force, ladder levels behind a completing bid (openings) were still
+placed — NO 0.27 / 0.25 rested behind the completion during the loss stop.
+`6755062ad` refuses them at the loss stop through the final gate.
+
+## 58. Revised Campaign B authorized — 25 Nov, 23:26 UTC
+
+Owner, typed: "Authorized: deploy 7a053545094473432cca296ec7bfb0d284228b36
+locked now, then revised campaign B for two hours, 23:45 to 01:45 UTC 25–26
+Nov (or, if the deploy checks are not complete by 23:45, from the next
+quarter hour for two hours), with exactly the settings and limits in "FINAL
+TERMS" of CAMPAIGN_B_NET_20261125.md (ledger account limit $20; loss stop
+and daily halt $10; sports lane $20 unchanged; esports off); crypto
+unchanged and disarmed."
+
+Done:
+- 23:27 deployed `7a0535450` locked (deployment `2e3cc3b9`, SUCCESS 23:28).
+- 23:28 ledger `L5_PORTFOLIO_MAX_DRAWDOWN_USD` 13 → 20 (deployment
+  `055ecc76`, SUCCESS 23:29). Bot reads limit 20, figure 6.5843,
+  capacity 13.4157.
+- Watchdog 23:30–23:31: 0 open orders.
+- 23:32 applied the FINAL TERMS settings, with
+  `PMUS_TWO_SIDED_SUBMISSION_LOCK=window:2026-11-25T23:45:00Z/2026-11-26T01:45:00Z`
+  and grace 7,200 s.
+
+Crypto and watchdog not touched; esports bypass off.
+
+## 59. New exposure stopped after 4 minutes — negative-net quoting (25 Nov, 23:49 UTC)
+
+The window opened at 23:45. Markets carried over from before the window
+(UTR `quioli-kimeli`, ATP `olibon-luimig`), both flat, quoted openings at
+a negative estimate (−$0.07 and −$0.10 an hour). The block applied only to
+markets holding inventory; a flat market quoted until its 120 s release.
+`quioli` filled YES 1 @ 0.46 and 1 @ 0.45 at 23:47. The owner's rule is
+"Do not force negative-EV trades", so new exposure was stopped: 23:49 the
+lock was set to `window:2026-11-25T23:45:00Z/2026-11-25T23:49:00Z`
+(completions only until 01:49).
+
+Before the stop, the rotation worked as designed. Negative markets were
+passed over, and the two positive markets were selected and quoted
+before their match: Setka `kimdmy-elfiva` (+$0.33/h, YES 0.49/0.47,
+NO 0.48/0.46) and ATP doubles `delanedelane-falcksuarez` (+$0.61/h,
+YES 0.34/0.32, NO 0.63/0.61). Those bids were cancelled at the restart
+(`cancelled_all_own`, still_open []).
+
+After the stop, completions: `quioli` NO 1 @ 0.49 and 1 @ 0.46 filled
+(23:50, 23:51), so it is paired 2 / 2 at 0.93 a pair. Garcar–Borvic
+completion NO 0.32 × 2 rests. Watchdog 23:52: 1 open order, ours.
+
+Fix: code `0511865ab`, release `afd8a611d650a18603ab4e833278cd806c6331f5`
+(branch `release/pmus-sports-rn1-afd8a611d`). With net ranking on, no
+opening or extension in any market whose fresh net is not positive, flat
+or not. Such a flat market is still released; completions continue. Test
+added. Regression: 5,706 passed, the same 24 unrelated failures. Not
+deployed; resuming needs the owner's authorization with new times.
+
+## 60. Resume authorized on afd8a611d — 26 Nov, about 00:00 UTC
+
+Owner, typed: "Authorized: deploy afd8a611d650a18603ab4e833278cd806c6331f5
+locked now, then resume revised campaign B for two hours, 00:10 to 02:10
+UTC 26 Nov (or, if deployment checks are not complete, from the next
+quarter hour for two hours), with exactly the settings and limits in FINAL
+TERMS of CAMPAIGN_B_NET_20261125.md. Ledger account limit $20; campaign
+loss stop and daily halt $10; sports lane $20 unchanged; esports off; crypto
+unchanged and disarmed. Verify the corrected opening-order gate before
+arming."
+
+- 23:59 deployed `afd8a611d` (deployment `3bc08412`, SUCCESS 00:00).
+  Completions only (old window); latch null; 1 open order, ours
+  (Garcar–Borvic completion); ledger figure 6.4443 of 20, capacity
+  13.5557.
+- Gate check before arming: the net-rank tests run against the exact
+  deployed commit pass (13), including "a flat market with no positive net
+  gets no openings". The lock check comes before the net block in the
+  quoting step, so the live check is made in the first passes of the
+  window: no opening in a market whose latest `RN1_NET_PLACEMENT` net is
+  not positive.
+- 00:02 lock set to `window:2026-11-26T00:10:00Z/2026-11-26T02:10:00Z`
+  (grace 7,200 s unchanged); all other FINAL TERMS values unchanged.
+
+## 61. Deploy b8693dcf4 into the running Campaign B window — 26 Nov, about 00:45 UTC
+
+Owner, typed: "I explicitly authorize deployment of
+b8693dcf4bc269f2d4c8576f99e123377e6fabbf into the existing Campaign B
+window, ending at 02:10 UTC on November 26, with the existing
+completions-only grace period unchanged. Preserve exactly the FINAL TERMS
+settings, capital limits, loss stops and independent watchdog protections.
+Maker-only. Esports off. Crypto unchanged and disarmed."
+
+Release = afd8a611d + dev/chatgpt-rn1-net-read-guard (16aecb0fb) + own-order
+book-lag guard (code 2618113e7). Variables unchanged.
+
+Done (section 61):
+- 00:48 deployed `b8693dcf4` (deployment `6420b7e2`, SUCCESS 00:49:58).
+- Boot 00:50:04 matches FINAL TERMS: qty 2, sizes 1/2, net rank on,
+  minimum touch 0, slate both, band 0.20–0.80, 2 markets / 4 tracked,
+  unpaired $5 per market / $10 campaign, $12 per market, spend $60, at-risk
+  $20, daily $10, lane $20, competitions as listed, esports fail-closed.
+- Lock: window 00:10–02:10, grace 7,200 s, open.
+- Account: ledger figure 8.0343 of 20, capacity 11.9657. Latch null; no
+  429s.
+- Watchdog 00:51: 2 open orders, both ours; nothing overdue or foreign.
+- Last venue reconcile 00:07 clean (the next is hourly).
+- Fills since 00:37 (on `6042cb94`, before the restart): Setka
+  `slomyk-fasiva` YES 1.68 @ 0.50 (open) and 1.5 @ 0.50 (extend), pre-match,
+  markouts +0.5 to +1.5c at 5–300 s; $1.59 unpaired.
+- Issue #251 integration comment posted.
+
+## 62. Campaign C (single event) authorized; owner's manual UConn trade — 26 Nov, about 02:15 UTC
+
+Owner, typed: "Authorized: after 02:10 UTC deploy
+1b496656c45c2b38664166a912ee518073fc781a, then single-event campaign C for
+two hours, 02:30 to 04:30 UTC 26 Nov, with FINAL TERMS plus exactly the
+changes in CAMPAIGN_C_SINGLE_EVENT_20261126.md (one market, tracking 6,
+hold 300 s, release 600 s, three ladder levels); all capital and loss
+limits unchanged; esports off; crypto unchanged and disarmed. Also I placed
+a manual $25 trade on UConn cbb. Don't let that interfere"
+
+Done:
+- 02:16 deployed `1b496656c` (deployment `86899366`, SUCCESS 02:17:45).
+  Boot: Campaign B settings; lock completions-only (B grace); latch null.
+- Watchdog 02:19: 3 open orders, all ours; nothing foreign or overdue.
+- 02:20 set `MAX_MARKETS` 1, `MAX_TRACKED` 6, `PMUS_RN1_NET_HOLD_S` 300,
+  `PMUS_RN1_RELEASE_UNQUALIFIED_S` 600, `PMUS_RN1_LADDER_LEVELS` 3, lock
+  `window:2026-11-26T02:30:00Z/2026-11-26T04:30:00Z`. All other FINAL
+  TERMS values and every capital and loss limit unchanged.
+
+Manual trade:
+- What the venue shows: `aec-cbb-duke-uconn-2026-11-25` NO (DOWN) 469
+  contracts. Ledger reconcile 02:12 shows "venue holds a market we never
+  booked", adopted, with new exposure refused on the crypto lane, which is
+  disarmed anyway.
+- Effect on the bot: the shared account figure rose to 34.45 (02:08) and
+  24.55 (02:19) against the $20 limit, so the bot refuses all new openings
+  (fail-closed).
+- Watchdog: never cancels a venue-MANUAL order; this one is filled, not
+  resting.
+- Bot: skips any market with a foreign position.
+- The plan, per the "Manual orders" option B design and the owner's
+  instruction that the trade must not interfere:
+  1. Take the exact cost from the venue activity feed (`MANUAL_FILL_STUDY`
+     / `MANUAL_ORDER_IDS` at the next hourly audit, about 02:55).
+  2. Raise `L5_PORTFOLIO_ANCHOR_USD` by exactly that cost; nothing else
+     changes.
+  3. When the market settles, lower the anchor by its proceeds.
+  4. Record every step here with the venue figures.
+- The account limit ($20), the loss stops and the daily halt are
+  unchanged. The manual position is excluded from bot P&L by order id.
+  Until the correction, the bot stays refused (no interference with
+  safety, but no campaign quoting).
+
+### Campaign B results, 00:10–02:10 UTC 26 Nov
+
+| | Old build (00:10–00:50) | New build `b8693dcf4` (00:50–02:10) |
+|---|---|---|
+| Median order lifetime | 17.7 s | 79.8 s |
+| Markets released while quoting | 3 | 0 |
+| Resting $ / room | 1.95 / 12.18 (16%) | 2.90 / 9.07 (32%) |
+| Qualifying / resting contract-s, pregame | 7,903 / 9,216 | 24,884 / 25,237 |
+| Qualifying / resting contract-s, live | 0 / 2,329 | 306 / 8,270 |
+| Fills | 2 (`slomyk` YES 3.18 @ 0.50) | 4 (`jaskub` YES 2 @ 0.43 and 2 @ 0.41, in play; `jaskub` NO 1 @ 0.55, completion; `delanedelane` NO 0.34 @ 0.54) |
+
+After 02:10, the `slomyk` NO 1 @ 0.47 completion filled (pair 0.97).
+
+PILOT_PNL 01:55: realized +0.03 (1 pair at 0.97); 6 fills; 8.52 contracts;
+spent $4.00; outstanding $3.03; unexplained 0. `jaskub` has since settled:
+4 YES lost, 1 NO won, about −$1.23 on the market; the settled figure comes
+from the next PILOT_PNL.
+
+REWARD_CHECK 01:52: unchanged ($24.09 credited, $4.00 skipped); no rows yet
+for 25–26 Nov.
+
+The read-out counted 5 openings or extensions placed while the latest net
+estimate was not positive. These were not checked one by one. The two
+flagged at the 01:30 check were ordering artifacts: the estimate was
+recomputed positive just before each order.
+
+### Flagged negative-net openings, checked one by one (owner request, 26 Nov)
+
+Method: both deployments (6042cb94, 6420b7e2), complete per-slug pulls,
+every event joined on its own JSON time "t". The in-force estimate is the
+latest RN1_NET_PLACEMENT for the slug before the order, which is logged on
+every sign change.
+
+Result: 131 openings and extensions 00:10–02:10 (91 open, 40 extend). In-force
+net > 0: **131**. ≤ 0: **0**. None without a prior estimate. The preceding
+quote had no block on all 131.
+
+The earlier flags (2 at the 01:30 check, 5 in the full-window read) were
+ordering artifacts: log emission time lagged the event time. The gate fired
+as designed at slomyk 00:48:30 (−0.0113 → `net_not_positive`, no order
+followed).
+
+Thin margins: several slomyk orders went out at +$0.0005 to +$0.0015 an
+hour. They pass on sign but are break-even within model error.
+
+## 63. Manual-trade accounting correction and replacement Campaign C window — 26 Nov, about 03:15 UTC
+
+Owner, typed: "I authorize the exact manual-trade accounting correction:
+change L5_PORTFOLIO_ANCHOR_USD from 333.0402 to 312.4102, excluding the
+venue-confirmed $20.63 manual UConn loss from bot-specific risk accounting.
+Preserve the manual loss in total account P&L. ... I also authorize
+replacing Campaign C with the 03:30–05:30 UTC November 26 window on release
+1b496656c, with unchanged capital limits, loss stops, maker-only execution
+and a two-hour completions-only grace period. Focus on one reward-eligible
+event ... Select an event expected to finish within the authorized window.
+Do not automatically extend the campaign. Esports off. Crypto unchanged and
+disarmed. No capital increases."
+
+Venue figures (account activity, audit 02:25):
+- `DYSS79F015P6`, 02:07:50: buy NO 469 @ 0.05 (YES 0.95), −$25.00
+  including fee.
+- `DYSW1R1G15P6`, 02:14:01: sell NO 469 @ 0.01 (YES 0.99), +$4.37 net.
+- `realized_usd` −20.63. The position is closed (venue reconcile 02:48 /
+  02:53 lists no `duke-uconn`).
+
+Done:
+- 03:16 ledger `L5_PORTFOLIO_ANCHOR_USD` 333.0402 → 312.4102 (deployment
+  `0cd0cd0d`, SUCCESS 03:17). The manual loss stays in total account P&L
+  (cash and the account audit are unchanged); it is excluded only from the
+  bot's drawdown figure.
+- 03:18 sports: lock
+  `window:2026-11-26T03:30:00Z/2026-11-26T05:30:00Z` (grace 7,200 s
+  unchanged) and `PMUS_RN1_PIN=aec-setkameua-slomyk-fasiva-2026-11-26`.
+  This is the single event. It is a Setka table-tennis match starting
+  03:45, typically 30–45 minutes, so it finishes inside the window. It has
+  a reward programme, and the bot already holds 2.18 YES there. Pinning
+  only restricts selection; nothing else changes.
+
+### 63a. Stopped before the window: ledger realized-loss figure corrupted by the manual trade (03:18–03:20 UTC)
+
+After the 03:17 ledger restart, the sports bot's account check reads
+`utc_day_realized_usd −471.0552`, `lifetime_realized_usd −515.8966`,
+reason `ACCOUNT_DAILY_LOSS_HALT` (daily 50, ceiling 75). At 02:13 the same
+fields read −3.98 and −48.82.
+
+This is a ledger accounting fault, not a trading loss:
+- The ledger's own reconcile already showed `realized_today −514.93` at
+  02:48, before the anchor change.
+- Its 02:12 reconcile had adopted the manual `duke-uconn` 469 NO "over our
+  book" with the basis unknown, priced at the $1 upper bound (`risk_floor_usd`
+  `aec-cbb-duke-uconn-2026-11-25: 469.0000`, still present at 02:53).
+- Booking the 02:14 sale against a $1 basis gives about
+  469 × (0.01 − 1.00) ≈ −464. Together with the real figures that matches
+  the new total.
+- The venue's own record of the trade is −$20.63.
+
+Action: 03:19 `PMUS_TWO_SIDED_SUBMISSION_LOCK=1` (owner rule: stop and relock
+when reconciliation fails); the replacement window was not opened. The 04:35
+and 06:35 campaign tasks are disabled.
+
+Verified 03:20–03:23:
+- Release `1b496656c` running; lock `locked`.
+- Watchdog: 0 open orders, nothing foreign.
+- Bot open inventory $3.69 (Garcar–Borvic 4 YES at $2.60, plus the
+  remainder of `slomyk`), venue-reconciled.
+- The ledger anchor is 312.4102 as authorized. The drawdown figure is not
+  published while the daily halt is in force.
+
+Nothing in the ledger was changed beyond the authorized anchor.
+
+## 64. Ledger release 086380d88 authorized — 26 Nov 2026
+
+Owner, typed: "Authorized: deploy ledger release
+086380d88687b52ce81dcdf03e17284aed7c8c6d to l5-pmus-live with trading
+locked. No limit changes. Crypto unchanged and disarmed." The owner then
+asked for a full reconciliation of account equity against the venue, with
+bot, manual and combined P&L, and an inventory of the risk gates that rely
+on reconstructed P&L. "Do not increase limits or reset genuine losses."
+
+12:49 UTC: source of `l5-pmus-live` set to `086380d88` (the session worker
+was restarted between authorization and deployment). Sports remains
+`PMUS_TWO_SIDED_SUBMISSION_LOCK=1`.
+
+## 65. Ledger e69e20ac7 and Campaign D authorized — 26 Nov 2026
+
+Owner, typed: "Authorized: deploy ledger release
+e69e20ac71fcd084183e25c14e8f28f836abc487 to l5-pmus-live. Once the UConn
+correction, account-risk record and loss halts are verified against the
+venue, run single-event Campaign D on sports release 1b496656c with the
+Campaign C settings for two hours from the next quarter hour after
+verification, with a two-hour completions-only grace. All existing limits
+unchanged. Maker-only. Esports off. Crypto unchanged and disarmed. ...
+Separately, prepare the existing bot-versus-total account risk split ...
+Keep the bot's $20 limit unchanged. Do not activate the split or increase
+account-wide limits without separate approval. Do not delay Campaign D for
+unrelated development."
+
+Ledger source set to `e69e20ac7`. Sports remains locked until the checks
+pass.
+
+### 65a. Verification failed — Campaign D not started (15:05 UTC)
+
+Ledger `e69e20ac7` deployed SUCCESS 14:50:30. At 15:01 the published
+record still lists four unresolved bound rows: UConn (−469), NHL veg-edm
+(0), UTR gaskan-hanbra (0) and test-cricket afg-zim (−1). Day −471.52;
+lifetime −516.36; `would_halt` true.
+
+Cause: release `086380d88`'s reader had already spent all three
+round-trip attempts on these markets (`TRADE_REALIZED_PNL_UNREADABLE`) and
+stored them as final. The corrected reader in `e69e20ac7` therefore never
+re-read them. Venue: cash 312.2135; drawdown 0.1967 against the anchor
+312.4102; no orders.
+
+Fix: code `b5f96107b` counts attempts per reader version. Release
+candidate `8cfb39d37666577c30bee01507cb0f6cf308b285`, branch
+`release/l5-pmus-live-reader-8cfb39d37`. **Not deployed; needs the
+owner's authorization.** Sports stays `PMUS_TWO_SIDED_SUBMISSION_LOCK=1`.
+
+## 66. Ledger 8cfb39d37 and bound-row acceptance authorized — 26 Nov 2026
+
+Owner, typed: "Authorized: deploy ledger release
+8cfb39d376777c30bee01507cb0f6cf308b285 to l5-pmus-live, then proceed with
+Campaign D as previously authorized once verified. Accept bound rows
+aec-utr-gaskan-hanbra-2026-11-17 and aec-testcr-afg-zim-2026-11-13 as
+booked ($0 and −$1 respectively), provided both are confirmed closed and
+no additional exposure remains. Preserve their audit records and existing
+loss accounting. Verify the corrected UConn loss against venue data,
+reconcile account equity, and confirm all safety protections before
+arming. ... All existing trading limits remain unchanged."
+
+The typed sha is 38 characters and differs after the ninth from the
+proposed release. Its first nine characters `8cfb39d37` resolve uniquely
+to `8cfb39d37666577c30bee01507cb0f6cf308b285`
+(`release/l5-pmus-live-reader-8cfb39d37`), the only release proposed;
+that is what is deployed.
+
+Acceptance applies through `L5_ACCEPT_BOUND_MARKETS` only after both
+markets are confirmed closed with no open position or order. It changes
+no figure.
+
+### 66a. Ledger 8cfb39d37 verified except one reconciliation defect — not armed (16:40 UTC)
+
+- 15:52 deployed `8cfb39d37`; 16:15 `L5_ACCEPT_BOUND_MARKETS` set after the
+  venue showed zero non-zero positions and no orders account-wide
+  (sports `INVENTORY_RECONCILE` 15:24; ledger live orders 0).
+- Round-trip corrections against the venue's own trade rows: UConn
+  −469.00 → −20.63; NHL veg-edm 0 → +6.56; test-cricket afg-zim −1.00 →
+  −0.21; CFB duke-mia −5.00 → +0.10. UTR gaskan-hanbra was held to
+  settlement (booked 0) and is accepted by name. Unresolved rows: 0.
+- Day −23.1524 (halt $50, not tripped). Venue cash 312.2135; drawdown
+  0.1967 against anchor 312.4102.
+- **Defect:** duke-mia settled 14 Nov, before the 16 Nov cash re-anchor,
+  which already contains its real result. Lifetime moved +5.10:
+  −55.5438 published, −60.6438 correct. `lifetime_basis.reconciled` is
+  false. The other forms refuse such rows; the round-trip form did not.
+- Fix: code `7b60b56b1`, release candidate
+  `cdfa68f4d260e21f4e0623fe5913c73296133a2b`
+  (`release/l5-pmus-live-anchor-cdfa68f4d`). The row stays restated, the
+  re-anchor residual absorbs the delta, and the existing record is repaired
+  once. Not deployed. Sports remains locked.
+
+## 67. Ledger cdfa68f4d authorized; Campaign D to proceed — 26 Nov 2026
+
+Owner, typed: "Authorized: deploy ledger release
+cdfa68f4d260e21f4e0623fe5913c73296133a2b to l5-pmus-live once full-suite
+regression parity is confirmed. Once venue reconciliation passes, proceed
+with Campaign D as previously authorized. All existing safety and trading
+limits remain unchanged. Prepare commit 9b28e6bfe from
+dev/pmus-rn1-marginal-ev for the next sports release, including the
+effective configuration needed to enable PMUS_RN1_MARGINAL_EV and
+PMUS_RN1_FIT_ALL_LEVELS. Do not deploy or activate those changes yet.
+Campaign D must establish actual two-sided inventory accumulation,
+replenishment and capital utilization throughout the event."
+
+### 67a. Ledger cdfa68f4d deployed; day figure made unknown — not armed (18:09–18:25 UTC)
+
+- 18:09 deployed `cdfa68f4d` (deployment `ddb519fe`) after full-suite
+  parity. Lifetime is now −60.6438 and `lifetime_basis.reconciled` is
+  true. Unresolved 0; venue cash 312.2135; drawdown 0.1967; no orders.
+- **Defect:** the repair put −5.10 into `realized_unattributed`. A
+  nonzero undated residual makes `utc_day_realized_usd` unknown, which
+  fails closed, so the account-risk record refuses and the sports bot
+  cannot open.
+- Fix: code `a4bb80f87`, release candidate
+  `c111abd67e3de543c6eacb4ddc1f8345006239a5`
+  (`release/l5-pmus-live-anchor2-c111abd67`).
+  - Like the other forms, the round trip refuses
+    `SETTLED_BEFORE_THE_LAST_REBASE`.
+  - The duke-mia restatement and the residual offset are reversed once:
+    the row is restored and the record kept for audit.
+  - Expected result: residual 0, day −23.15 readable, lifetime −60.64,
+    reconciled true.
+- Not deployed; needs the owner's authorization. Sports remains locked.
+
+## 68. Ledger c111abd67, sports 5cbca4d3c with marginal EV, Campaign D (ATP/WTA) — 26 Nov 2026
+
+Owner, typed: "Authorized: deploy ledger release
+c111abd67e3de543c6eacb4ddc1f8345006239a5 to l5-pmus-live. Once account
+reconciliation and the complete authorization path pass, deploy sports
+release 5cbca4d3cf609d4ecf2af9016d91b4481ec37104 to pmus-spring-l5-probe
+with: PMUS_RN1_MARGINAL_EV=1, PMUS_RN1_FIT_ALL_LEVELS=1,
+PMUS_RN1_EDGE_GATE=1. Run Campaign D for two hours from the next quarter
+hour after verification, with a two-hour completions-only grace, on an
+ATP/WTA event with fresh international fair value. All other settings and
+limits unchanged. Maker-only. Esports off. Crypto unchanged and disarmed.
+Confirm the effective configuration and explicitly test the enabled-feature
+regression cases before arming. ... If no suitable ATP/WTA event is
+available, report immediately rather than waiting indefinitely."
+
+### 68a. Ledger c111abd67 verified; sports 5cbca4d3c deployed locked (20:33–20:42 UTC)
+
+- **Ledger** `c111abd67` (deployment `607f7e14`, SUCCESS 20:34:43), HB
+  20:36:
+  - unresolved 0;
+  - day −23.1524, readable, halt $50 not tripped;
+  - lifetime −60.6438, `reconciled` true;
+  - unattributed 0;
+  - cash 312.2135; drawdown 0.1967 (room 19.80); live orders 0.
+- **Enabled-feature regression** on `5cbca4d3c`, targeted RN1/sports
+  suites:
+  - edge gate on alone: 1,168 passed;
+  - fit-all-levels on: 2 failures, both the "off" halves of tests;
+  - marginal EV on: 39 failures. All occur at setup: no bid passes the
+    stricter per-bid test, so the hold, pull and reprice safety steps are
+    never reached.
+  - Re-run with test-only fill-loss settings of 0 so that bids pass: 36 of
+    the 39 pass, including every gap-hold safety test. The other 3 are bids
+    with zero edge, or bids carried only by a non-qualifying reward, which
+    are not placed: stricter, not looser.
+  - No safety rule weakened.
+- **Liveness risk:** production fill-loss estimates are 5c (touch) and
+  3.5c (behind), so few bids may pass. Checked while still locked, before
+  the window.
+- **Sports:** variables set with `PMUS_RN1_MARGINAL_EV=1`,
+  `PMUS_RN1_FIT_ALL_LEVELS=1`, `PMUS_RN1_EDGE_GATE=1`, `PMUS_RN1_PIN`
+  cleared, lock `1`; then source `5cbca4d3c`.
+
+### 68b. No suitable ATP/WTA event with fair value — window not opened (21:05 UTC)
+
+Sports `5cbca4d3c` deployed (deployment `77448372`, SUCCESS 21:00:31).
+
+**Boot:** `edge_gate` true, pin null; every cap and limit unchanged; lock
+`locked`.
+
+**Account risk (21:00:42):** ok.
+- day −24.27, including −1.12 of own losses not yet in the ledger;
+- lifetime −61.77 against the $75 ceiling, leaving $13.23 of loss room;
+- drawdown 0.1967 against $20.
+
+**Event search (bot's own ranking):**
+- Only `aec-atpdb-alvvalflores-alvesperez-2026-11-26` has a positive net
+  estimate: ATP doubles, live, theoretical reward about 9.4/h, fill cost
+  0.96/h. It is SELECTED but gets `no_fair` on both sides. The
+  international fair value matches ATP/WTA singles names only, so with
+  the edge gate on a doubles match gets no bid.
+- ATP singles on the slate are negative:
+  - `chrlan-matdel` −0.30/h;
+  - `rionog-haymat` −0.30/h.
+- Market selection still requires a positive market-level estimate.
+
+**Result:** no ATP/WTA event with a fresh fair value qualifies. Reported
+to the owner; trading stays locked.
+
+## 69. Campaign D on ATP doubles authorized — 26 Nov 2026, about 21:05 UTC
+
+Owner's message (it included advisory text, then this line):
+"Authorized: set PMUS_RN1_EDGE_GATE=0 on pmus-spring-l5-probe and run
+Campaign D for two hours from the next quarter hour on
+aec-atpdb-alvvalflores-alvesperez-2026-11-26, provided the event remains
+active and economically eligible. Two-hour completions-only grace. All
+other settings and limits unchanged. Maker-only. Esports off. Crypto
+unchanged and disarmed. Keep PMUS_RN1_FIT_ALL_LEVELS enabled."
+
+The owner also asked for a way for marginal EV to support doubles, table
+tennis and other reward-eligible sports without an international singles
+feed, with no unvalidated fair-value substitute and no delay to live
+execution.
+
+Eligibility check: at 21:01 the market was live with YES 0.75–0.76, inside
+the 0.20–0.80 band. It was the only positive estimate (+8.47/h theoretical)
+and was SELECTED.
+
+21:06 set:
+- `PMUS_RN1_EDGE_GATE=0`;
+- `PMUS_RN1_PIN=aec-atpdb-alvvalflores-alvesperez-2026-11-26`;
+- lock `window:2026-11-26T21:15:00Z/2026-11-26T23:15:00Z` (grace 7,200 s
+  unchanged).
+
+`PMUS_RN1_MARGINAL_EV=1` and `PMUS_RN1_FIT_ALL_LEVELS=1` stay set; marginal
+EV has no fair value with the gate off, so it is inactive. Every other
+setting and limit is unchanged.
+
+### 69a. Campaign D live (21:15 UTC)
+
+- **Boot 21:06** (deployment `980eed60`):
+  - `edge_gate` false;
+  - pin `aec-atpdb-alvvalflores-alvesperez-2026-11-26`;
+  - window 21:15–23:15, grace 7,200 s;
+  - account risk ok, loss room 13.23; drawdown 0.1967.
+- **21:15:05** lock opened.
+- **21:16:03–21:16:11** full ladder posted, all post-only:
+  - YES 0.67 / 0.65 / 0.63 × 2;
+  - NO 0.30 / 0.28 / 0.26 × 2.
+- **21:17:45** all three NO levels filled in one 7-tick move:
+  - NO 6 at 0.30 / 0.28 / 0.26, cost 1.68;
+  - `reactive_pull` then cancelled the YES legs, as designed.
+  - Unpaired 1.68 against the $5 per-market cap.
+- Checks scheduled at 22:15, 23:16 and 01:16.
+
+### 69b. Campaign D event settled (21:49 UTC); mid-window check 22:15
+
+`aec-atpdb-alvvalflores-alvesperez-2026-11-26` closed at 21:49 and settled
+YES = 1 at 21:50.
+
+**Fills (venue-reconciled, 7 fills, 10 contracts, $4.35 spent):**
+
+| Time | Side | Contracts | Price | Role |
+|---|---|---|---|---|
+| 21:17:45 | NO | 2 | 0.30 | opening |
+| 21:17:45 | NO | 2 | 0.28 | opening |
+| 21:17:45 | NO | 2 | 0.26 | opening |
+| 21:23:43 | YES | 1 | 0.69 | completion |
+| 21:24:02 | YES | 1 | 0.66 | completion |
+| 21:25:22 | YES | 1 | 0.63 | completion |
+| 21:30–21:35 | YES | 1 (0.65 + 0.35) | 0.69 | completion |
+
+- **Final inventory:** YES 4.00 (cost 2.67, average 0.6675); NO 6 (cost
+  1.68, average 0.28).
+- **Settled (`PILOT_PNL`):**
+  - pairs +0.21 (4 at a combined 0.9475);
+  - residual 2 NO −0.56;
+  - **net −0.35**;
+  - fees 0, rebates 0.
+- **Cash:** 312.2135 → 311.8635, explained −0.35, unexplained 0.
+- **Rewards:** none credited yet for this market. REWARD_CHECK 22:08: paid
+  122 rows / $24.09 (unchanged); pending 10 rows / $0.86.
+- **Safety:**
+  - venue reconcile ok: no positions, no orders, no foreign orders;
+  - ACCOUNT_RISK ok: day −24.81, lifetime −62.31, loss room 12.69;
+  - drawdown 0.5467 of $20.
+  - One `position_mismatch_suspected` at 21:48:57, at the moment of
+    settlement (book 2 net, venue 0), cleared by `market_closed` at
+    21:49:02. No latch.
+- **Window:** the window to 23:15 stays open, but the pin allows only the
+  settled market, so nothing more can open. No extension or repin without
+  the owner's authorization.
+
+## 70. Pin cleared with lock 1, to rank events — 26 Nov 2026, about 22:30 UTC
+
+Owner, typed: "Authorized: clear PMUS_RN1_PIN on pmus-spring-l5-probe with the
+submission lock set to 1. Immediately identify and rank the next five
+reward-eligible events ... Prepare the best event for immediate live
+authorization. ... prepare a continuous campaign mechanism that
+automatically rotates from settled events into the next economically
+eligible market within explicitly authorized campaign limits. Reuse the
+existing market-ranking and inventory controller. ... Do not arm or deploy
+additional changes without authorization."
+
+Set `PMUS_RN1_PIN` to empty and `PMUS_TWO_SIDED_SUBMISSION_LOCK=1` (this
+ends the 21:15–23:15 window early; no trading). Everything else unchanged.
+
+### 70a. Stage 1 prepared for final authorization (22:30 UTC)
+
+Owner, typed: "Prepare Stage 1 for the next available UTC quarter-hour start.
+Use sports release 5cbca4d3c with PMUS_TWO_SIDED_MAX_MARKETS=2 and
+PMUS_RN1_PIN empty. Six-hour continuous campaign with automatic event
+rotation and a two-hour completions-only grace. ... Confirm the exact UTC
+start and end times, current account reconciliation, watchdog health and
+eligible market opportunities for final authorization. ... No capital
+increase or live authorization is granted by this message."
+
+**Checks:**
+- **Watchdog** (22:28): sweeping every 20 s, cancel enabled, no halt;
+  0 open, foreign or overdue orders; all three registries OK.
+- **Venue reconcile** (22:24): no positions, no orders, no mismatch.
+- **Cash** 311.8635, explained.
+- **Account risk:** ok. Day −24.81 (halt $50); lifetime −62.31 (ceiling
+  $75, room 12.69); drawdown 0.5467 of $20.
+- **Bot** (22:27): websocket up, loop not stalled, no latch, audit fresh,
+  rewards refresh on, lock `locked`.
+
+**Opportunities at 22:21:** one positive, `aec-atp-lucsil-diedur-2026-11-25`
+(ATP singles, live, +5.33/h theoretical). The other five estimated were
+negative. The second slot fills only when another market's estimate turns
+positive.
+
+**Proposed window:** 23:00–05:00 UTC 27 Nov, grace to 07:00. If the
+authorization arrives after 22:55, the next quarter hour after it.
+
+## 71. Sports 31ddf1b06 and Stage 1 authorized — 26 Nov 2026, about 23:12 UTC
+
+Owner, typed: "I explicitly authorize deployment of sports release
+31ddf1b06341d15712fe655693acd028a5077e9f to pmus-spring-l5-probe with the
+submission lock held at 1. After successful boot, fresh venue
+reconciliation and watchdog verification, authorize Stage 1 with
+PMUS_TWO_SIDED_MAX_MARKETS=2 and PMUS_RN1_PIN empty. Opening window:
+November 26 at 23:30 UTC through November 27 at 05:30 UTC. If verification
+finishes late, use the next UTC quarter-hour for a six-hour campaign.
+Confirm the exact effective window before arming. Two-hour
+completions-only grace. All existing capital, exposure and loss limits
+unchanged. Maker-only. Esports off. Crypto unchanged and disarmed. ...
+Report hourly ..."
+
+### 71a. Stage 1 armed: effective window 23:45–05:45 UTC (grace to 07:45)
+
+- **23:13** set lock `1`, `PMUS_TWO_SIDED_MAX_MARKETS=2`, pin empty; source
+  `31ddf1b06`. Deployment `94381184` SUCCESS 23:14:19.
+  - **Boot:** `max_markets` 2, pin null, `edge_gate` false, every cap and
+    loss limit unchanged, `locked`.
+  - **Account risk:** ok; loss room 12.69; drawdown capacity 19.45.
+- **Verification** completed 23:25:
+  - venue reconcile 23:18 ok: no positions, no orders, no foreign orders;
+  - watchdog 23:24–23:25 healthy: cancel on, 0 open / foreign / overdue,
+    3 registries OK.
+- **Window, set late.** A worker restart delayed my action until 23:36, so I
+  first set `window:23:30/05:30`, which was then already open. I corrected
+  it at 23:37 to the next quarter hour, `window:23:45/05:45`, per the
+  owner's rule.
+  - The 23:30 setting was live from 23:37:20 to 23:40:30 (deployment
+    `40adc916`). **No order was sent:** every quote was blocked by
+    `pilot_meter_unavailable` and a stale audit.
+  - Deployment `7bc972bf`, SUCCESS 23:40:28, has lock state
+    `window_not_started`, start 23:45:00Z, end 05:45:00Z, grace 7,200 s.
+- **Active at arming:**
+  - `aec-atp-lucsil-diedur-2026-11-25` (ATP singles, live);
+  - `aec-setkameua-hnorom-abaspa-2026-11-27` (Setka, pregame; $5 day-of
+    pool).
+
+### 71b. Stage 1 hourly report, 00:50 UTC
+
+**Fills (venue-reported):**
+
+| Market | Phase | Side | Contracts | Price |
+|---|---|---|---|---|
+| `setkameua-kobvit-khaser` | pregame | YES | 1 | 0.48 |
+| `setkameua-paryur-stoole` | pregame | NO | 2 | 0.47 |
+| | | NO | 1.72 | 0.45 |
+| | | NO | 1.73 | 0.47 |
+| | | NO | 1.75 | 0.45 |
+| `atp-timleg-karpol` | live (rotated in) | YES | 2 | 0.49 |
+| | | YES | 2 | 0.48 |
+| | | NO | 1 | 0.47 |
+
+**Inventory:**
+- `kobvit-khaser`: YES 1 (cost 0.48; completion NO 0.49 resting).
+- `paryur-stoole`: NO 7.20 (about 3.31, average about 0.46).
+- `timleg-karpol`: YES 4 (1.94, average 0.485), NO 1. One pair at 0.955; residual YES 3.
+
+**Capital (heartbeat 00:50:56):**
+- resting orders $5.25; unpaired $5.25 (campaign cap $10); paired awaiting
+  settlement $0.955;
+- own exposure $7.22 against lane $20;
+- account drawdown figure 5.75 against $20 (capacity 12.80).
+
+**Active markets:** `kobvit-khaser`, `kolval-volyur` (6-bid ladder 0.43–0.50
+posted 00:49), `timleg-karpol`, `paryur-stoole`, `kuzdmy-kurole`.
+
+**Activity:**
+- 72 orders, including extensions and completions;
+- 5 reactive pulls; 223 jump pauses (cumulative);
+- 19 flat releases / 15 reselections (churn as diagnosed).
+
+**Reward-qualifying time (cumulative, pregame):** 215,065 contract-seconds
+qualifying out of 310,277 resting.
+
+**Settled:** none yet; realized $0. **Rewards:** PAID unchanged at 122 rows /
+$24.09; PENDING 10 / $0.86.
+
+**Safety:**
+- venue reconcile 00:44 ok (1 position, matches the book);
+- watchdog 00:50: 10 open orders, all ours and managed, none overdue or
+  foreign;
+- no latch, loop not stalled, audit fresh;
+- 20 HTTP 429s with one cooldown, absorbed;
+- 2 `place_refused_account_risk` for `ACCOUNT_DRAWDOWN_UNREADABLE` (failed
+  closed, transient);
+- account risk ok: day 0 (new UTC day), lifetime −60.99, loss room 14.01.
+
+No action needed.
+
+### 71c. Stage 1 hourly report, 01:50 UTC
+
+**Fills 00:50–01:50 (venue-reported):**
+- `setkameua-savvol-hryevh`: NO 2 @ 0.49, 2 @ 0.47, 1.19 @ 0.45 (one
+  three-level sweep at 00:57).
+- `setkameua-kuzdmy-kurole`: YES 1 @ 0.47, 1 @ 0.46.
+- `atp-timleg-karpol` (live): NO 1 @ 0.48, 1 @ 0.45, 1 @ 0.48 → 4/4 paired
+  at 0.955.
+
+**Settled:** `timleg-karpol` closed 01:44 and settled YES = 1 at 01:48.
+- Pair edge **+$0.18 realized** (4 × (1 − 0.955)); no residual.
+- PILOT_PNL realized_net +0.18.
+- Cash 311.8635 → 304.8634, explained −7.0001 (purchases), unexplained 0.
+
+**Inventory (unpaired, all Setka pregame):**
+
+| Market | Side | Contracts | Cost | Average |
+|---|---|---|---|---|
+| `kobvit` | YES | 1 | 0.48 | 0.48 |
+| `kuzdmy` | YES | 2 | 0.93 | 0.465 |
+| `paryur` | NO | 7.20 | 3.31 | 0.460 |
+| `savvol` | NO | 5.19 | 2.46 | 0.473 |
+
+Total $7.18 against the $10 campaign cap. Completion bids rest on each.
+
+**Capital:** resting $2.97; at-risk about $10.15 against $20; account
+drawdown 7.55 against $20 (unpaired counted at 0).
+
+**Reward-qualifying (pregame, cumulative):** 244,792 contract-seconds
+qualifying out of 340,141 resting. **Rewards:** PAID unchanged at
+122 / $24.09.
+
+**Block since 01:47: `ACCOUNT_RISK_SAYS_UNREADABLE`.**
+- Cause: the ledger retired the bot's settled `timleg-karpol` (venue net 0
+  after YES 4 / NO 4) at the $1 bound and lists it under
+  `unresolved_cost_basis` (count 1). As designed, the account-risk record is
+  then `readable: false`, so new openings are refused while completions
+  continue.
+- It is a fail-closed block, not a reconciliation failure:
+  - venue reconcile 01:44 ok (4 positions, matching the book);
+  - watchdog clean; drawdown readable at 7.55 / 20.
+- Expected to clear when the ledger's round-trip attestation restates it
+  from the venue's trades (about 20–30 minutes). Re-checked at about 02:20.
+
+## 72. Unified sports candidate accepted; scope frozen — 27 Nov 2026
+
+Owner, typed: "Accept the unified release as the candidate. Freeze scope.
+Complete the remaining enabled-mode safety fixture verification and reward
+pool attribution check. Finish the ledger settlement correction first. Once
+the ledger is deployed under separate authorization and verified, bring
+forward the unified sports release for an exact three-hour live
+authorization. Keep all existing capital limits and hard protections. No
+additional strategy research, shadow campaigns or unrelated functionality."
+
+- Candidate: `a17a9c978a8c733f4cdf9d125f1ff8aac6567d48`
+  (`release/pmus-sports-next-ad7cd6237`). Not deployed.
+- Order: (1) ledger sports-settlement release, separately authorized,
+  deployed and verified; (2) the unified sports release for an exact
+  three-hour live window.
+
+### 71d. Stage 1 hourly report, 02:50 UTC
+
+- **Account-risk block** (unresolved `timleg-karpol`) cleared at 02:06:52.
+  The sibling form restated it to +0.18; ACCOUNT_RISK ok at 02:06:56. It
+  lasted 01:47–02:07.
+- **Fills 01:50–02:50:**
+  - `sydvik-dunvol`: YES 1 @ 0.47, 1 @ 0.45, 0.45 @ 0.43 (pregame sweep at
+    02:30);
+  - `paryur-stoole`: NO 1 @ 0.47, 0.75 @ 0.45 (same-side extension);
+  - `kobvit-khaser`: NO 1 @ 0.24 (live completion).
+  - Orders: rn1_open 14, rn1_extend 9, two_sided_complete 10.
+- **Realized (PILOT_PNL 02:45): +$0.46.**
+  - `timleg-karpol` 4 pairs at 0.955 → +0.18 (settled);
+  - `kobvit-khaser` 1 pair at 0.72 → +0.28 (pair locked; market not yet
+    settled).
+- **Cash:** 303.7024; explained −8.1611; unexplained 0.
+- **Unpaired inventory** ($8.62 against the $10 campaign cap):
+  - `paryur` NO 8.95 (4.12, average 0.461; near the $5 per-market cap);
+  - `savvol` NO 5.19 (2.46);
+  - `sydvik` YES 2.45 (1.11);
+  - `kuzdmy` YES 2 (0.93).
+  - Completion bids rest on each; 9 open orders (reconcile 02:45 ok).
+- **Short `ACCOUNT_DRAWDOWN_UNREADABLE` blips:** 02:30:54–02:31:21 and
+  02:36:21–02:36:36. This is the order-uncertain path described in the
+  ledger release note.
+- **Rewards:** PAID unchanged.
+- No action needed.
+
+## 73. Ledger 9b5f4995a with L5_SPORTS_SETTLE_FROM_FEED=1 authorized — 27 Nov 2026
+
+Owner, typed: "I explicitly authorize deployment of ledger release
+9b5f4995ad4f1a58574ffce3862bc4061997d678 to l5-pmus-live with
+L5_SPORTS_SETTLE_FROM_FEED=1. All other settings, capital limits, loss stops
+and safety protections remain unchanged. Preserve the existing Stage 1
+authorization without extending its duration or scope. Verify production
+reconciliation, account-risk readability, daily and lifetime P&L, drawdown
+and watchdog health immediately after deployment. Verify the next sports
+settlement is accounted for correctly without interrupting new openings.
+Roll back and relock sports if reconciliation fails. Once verified, present
+the exact three-hour live authorization packet for sports release
+1c1d546b6."
+
+### 73a. Ledger 9b5f4995a deployed and verified (03:19–03:24 UTC)
+
+- **03:16** set `L5_SPORTS_SETTLE_FROM_FEED=1` (deploy skipped), then source
+  `9b5f4995a`. Deployment `307dff04`, SUCCESS 03:20:20.
+- **Before (HB 03:14:30) and after (HB 03:23:16), all identical:**
+  - day +0.46; lifetime −60.5338; `reconciled` true;
+  - unresolved 0;
+  - drawdown 8.7078 against $20 (room 11.29);
+  - cash 303.7024;
+  - new heartbeat field `sibling_feed_settlements` {switch_on: true,
+    PENDING 0, CONFIRMED 0, CONTRADICTED 0}.
+- **Sports bot during the restart:**
+  - `ACCOUNT_RISK_SNAPSHOT_STALE` 03:20:39 (age 32.8 s), then
+    `ACCOUNT_DRAWDOWN_UNREADABLE` 03:20:52, then **ok at 03:21:03**: loss
+    room 14.02, drawdown capacity 11.29.
+  - Openings paused about 24 s; completions continued.
+- **Watchdog 03:24:** 10 open orders, all ours and managed, none overdue or
+  foreign; 3 registries OK.
+- **Venue reconcile:** last ok 02:45; next due about 03:45.
+- **Pending:** the first bot settlement under the new form.
+
+### 71e. Stage 1 hourly report, 03:50 UTC
+
+- **Fills 02:50–03:50:** none. Orders: rn1_open 7, rn1_extend 4,
+  two_sided_complete 2.
+- **Settlement:** `setkameua-kobvit-khaser` closed 02:55:50 and settled
+  YES = 0 at 02:57:23 (pair YES 1 @ 0.48 + NO 1 @ 0.24 = 0.72, pair edge
+  +0.28).
+  - This was on the **old** ledger: it caused another
+    `ACCOUNT_RISK_SAYS_UNREADABLE` block, 02:55:50 → 03:13:46 (about 18
+    minutes), cleared by the slower correction.
+  - The new ledger (03:20) has not yet seen a bot settlement.
+- **Realized (PILOT_PNL 03:45): +$0.46** (`timleg` +0.18, `kobvit` +0.28).
+  Cash 303.7024; unexplained 0.
+- **Unpaired:** $8.62, unchanged (`paryur` NO 8.95, `savvol` NO 5.19,
+  `sydvik` YES 2.45, `kuzdmy` YES 2), all pregame Setka with completion bids.
+- **Venue reconcile 03:45:** ok, 4 positions, no mismatch.
+- **Account risk:** ok since 03:21:03; loss room 14.02, drawdown capacity
+  11.29.
+- **Rewards:** PAID unchanged.
+
+### 71f. Stage 1 hourly report, 04:50 UTC
+
+- **Fills 03:50–04:50:**
+  - `sydvik-dunvol`: YES 1 @ 0.41 (extension);
+  - `savvol-hryevh`: NO 0.5 @ 0.40 (extension);
+  - `kolval-volyur`: YES 1 @ 0.47 (opening).
+  - Orders: rn1_open 12, rn1_extend 2, two_sided_complete 7.
+- **No settlement this hour.** The new ledger form is still untested live.
+- **Realized:** +$0.46, unchanged. Cash 302.6224; unexplained 0.
+- **Unpaired** ($9.70 against the $10 campaign cap, now nearly binding):
+
+  | Market | Side | Contracts | Cost | Average |
+  |---|---|---|---|---|
+  | `paryur` | NO | 8.95 | 4.12 | |
+  | `savvol` | NO | 5.69 | 2.66 | 0.467 |
+  | `sydvik` | YES | 3.45 | 1.52 | 0.442 |
+  | `kuzdmy` | YES | 2 | 0.93 | |
+  | `kolval` | YES | 1 | 0.47 | |
+
+  All pregame Setka, with completion bids.
+- **Safety:**
+  - venue reconcile 04:45 ok (5 positions, no mismatch);
+  - two drawdown-unreadable blips: 25 s at 03:56, 15 s at 04:06; one
+    opening refused;
+  - account risk otherwise ok.
+- **Rewards:** PAID unchanged.
+
+### 71g. Stage 1 hourly report, 05:50 UTC: window closed, completions-only
+
+- **05:45:02** lock state `window_completions_only`; grace to 07:45.
+- **Fills 04:50–05:50:**
+  - `kolval-volyur`: NO 1 @ 0.50 (live completion → pair 0.97);
+  - `sydvik-dunvol`: NO 1 @ 0.52, 0.1 @ 0.50, 2 @ 0.52 (completions → 3.1
+    pairs);
+  - `savvol-hryevh`: NO 1 @ 0.39 (extension).
+  - Orders: rn1_open 7, rn1_extend 7, two_sided_complete 6.
+- **Realized (PILOT_PNL 05:48): +$0.611**, from locked pair edge:
+  - `timleg` +0.18 (settled);
+  - `kobvit` +0.28 (settled);
+  - `kolval` +0.03;
+  - `sydvik` about +0.12.
+  - Cash 304.2224; unexplained 0.
+- **Unpaired ($8.25):**
+
+  | Market | Side | Contracts | Cost |
+  |---|---|---|---|
+  | `paryur` | NO | 8.95 | 4.12 |
+  | `savvol` | NO | 6.69 | 3.05 |
+  | `kuzdmy` | YES | 2 | 0.93 |
+  | `sydvik` | YES | 0.35 | 0.15 |
+
+  Completion bids only from now on.
+- **Venue reconcile 05:48:** ok, 4 positions. One 27 s drawdown blip at
+  05:42. No bot settlement this hour.
+
+### 71h. Stage 1 close-out — 27 Nov 2026, about 07:55 UTC
+
+- **Locks:** the window lock engaged at 07:45:02 (`window_ended`; new exposure
+  and completions both locked). `PMUS_TWO_SIDED_SUBMISSION_LOCK=1` was set
+  explicitly on the sports service. After a worker restart here it went live at 12:12 (deployment b874807c; lock state `locked`). Watchdog at 07:51 saw 0 open
+  orders. Venue reconcile at 07:48 was ok with 0 positions and 0 mismatches.
+- **Stage 1 result (23:45–07:45, venue-reconciled, cash-confirmed):** realized
+  net **−$5.8631**. Cash went from 311.8635 to 306.0004, with $0 unexplained.
+  Fees were $0 and rebates $0.
+
+  | Market | Result | Net |
+  |---|---|---|
+  | `timleg` | pair | +0.1800 |
+  | `kobvit` | pair | +0.2800 |
+  | `kolval` | pair | +0.0300 |
+  | `kuzdmy` | pair | +0.1900 |
+  | `sydvik` | pair | +0.1345 |
+  | `savvol` | 1 pair +0.0348; residual NO 5.69 lost −2.5903 | −2.5555 |
+  | `paryur` | residual NO 8.95 lost | −4.1221 |
+  | Total | pair edge +0.8493; residual −6.7124 | **−5.8631** |
+
+  - 3 markets had no fills.
+  - 34 fills, 39.54 contracts, $18.31 spent.
+  - Average pair cost 0.932.
+- **Rewards:** PAID was unchanged at $24.09. No Stage 1 reward has been
+  credited. The $0.86 PENDING is from earlier dates.
+- **Ledger 9b5f4995a:**
+  - Feed settlements CONFIRMED: 3 (`kolval`, `sydvik`, `kuzdmy`). CONTRADICTED: 0.
+  - `paryur` settled on the ordinary path.
+  - `savvol` fell back with `VENUE_NET_NE_FEED_NET`: the venue had already
+    netted the expired position before the feed form ran. Its settlement line
+    shows the $1 bound (−5.69).
+  - Account risk was unreadable at 07:13 and readable again by 07:33. This was
+    during completions-only, so no openings were lost.
+  - Ledger day is −5.8631 and lifetime −66.8569. Both match cash. Unattributed
+    $0, unresolved 0.
+  - Drawdown is 6.4098 of 20 (room 13.5902).
+  - Reconciliation did not fail, so no rollback was needed.
+- **Against the Stage 2 criteria:** not met. Net after confirmed rewards is
+  negative, because two residual legs lost after the window. Stage 2 is not
+  advanced.
+
+## 74. 1c1d546b6 authorization packet, revision 1 — 27 Nov 2026, about 12:25 UTC
+
+- **Not yet authorized; nothing deployed or armed.** The owner asked for
+  immediate preparation and the final authorization request.
+- **Pre-authorization checks** (SPORTS_1C1D546B6_LIVE_AUTHORIZATION_PACKET_20261127.md,
+  revision 1):
+  - paryur and savvol: all 12 opening/extension fills would have been
+    refused by the no-fair marginal-EV rule. The calibrated projection was
+    always below $1. Stage 1's build had no no-fair EV rule.
+  - The $8.14 lifetime room halts openings only on realized losses. The
+    packet therefore tightens the campaign stop (resting counted) from $10
+    to $8.
+  - Pool scope stays per market.
+  - The ledger fallback failed closed: bound booked, openings refused, venue
+    attestation restated it at 07:32, cash matched.
+  - Fresh reconcile, watchdog, lock and ledger checks were clean as of
+    12:12–12:21.
+- **Proposed window:** 12:45–15:45 UTC, grace to 17:45.
+
+## 75. 1c1d546b6 deployment and one three-hour campaign authorized — 27 Nov 2026, about 12:27 UTC
+
+**Owner (verbatim):** "I explicitly authorize deployment of sports release 1c1d546b6d80ccb3eb5c98bf295b7e84e8195e7a to pmus-spring-l5-probe with the submission lock held. Use the activation settings in Revision 1 of SPORTS_1C1D546B6_LIVE_AUTHORIZATION_PACKET_20261127.md, including PMUS_RN1_PILOT_LOSS_USD=8. After successful deployment, fresh venue reconciliation, account-risk verification and independent watchdog verification, authorize one three-hour live campaign beginning at the next quarter hour after verification, followed by two hours of completions-only grace. Record the exact UTC start, end and grace-period end before arming. Maintain: Two simultaneous accumulation markets. Maker-only execution. All existing capital limits and hard protections. The $75 lifetime loss ceiling. Esports and cricket disabled. Crypto unchanged and disarmed. No automatic repeat. Before arming, confirm that worst-case campaign exposure remains within the fresh remaining lifetime loss allowance, including resting and in-flight orders and uncertain submissions. If this cannot be established, remain locked."
+
+- **Scope:** one window only. No repeat. Window times are recorded in 75a
+  before arming.
+- **Worst-case basis (code, release `1c1d546b6`):**
+  - The final gate before submission (`campaign_loss_stop_with_resting`)
+    refuses any opening or extension when the book worst case since the
+    campaign start, minus `own_resting_worst(extra=this order)`, is at or
+    below −$8.
+  - `own_resting_worst` includes open orders and every reservation,
+    `in_flight` and `uncertain`. An unknown figure counts as infinite, so
+    the order is refused.
+  - So the campaign worst case is above −$8, against fresh lifetime room of
+    $8.1431. The fresh figure is re-read before arming (75a).
+
+### 75a. Deployment failed verification; rolled back; not armed — 27 Nov 2026, 12:53 UTC
+
+- **12:46–12:47:** the activation variables from packet Revision 1, including
+  `PMUS_RN1_PILOT_LOSS_USD=8`, were set with lock `1`. The source was pinned
+  to `1c1d546b6`; deployment `82ef7365` booted at 12:47:32 with lock
+  `locked`.
+- **Failure:** from 12:47:33 the loop raised
+  `ImportError: cannot import name 'pmus_duration_rank' from 'src'` every
+  pass.
+  - At 12:48:22 the safety latch tripped (`loop_errors`, 10 consecutive,
+    id `2026-11-27T12:48:22.780628+00:00`).
+  - No order was possible: lock held, latch on, 0 open orders throughout.
+- **Root cause:** the image copies `src/` files one by one, and its
+  Dockerfile has no COPY line for three lazily imported modules:
+  `pmus_duration_rank`, `pmus_reward_calibration` and
+  `pmus_campaign_economics`. The tests run against the repository, so they
+  passed.
+- **Rollback (packet rule):** source back to `31ddf1b06`, lock still `1`.
+  Deployment `0ad38815` was live at 12:51:51.
+  - No loop errors.
+  - Account risk ok: lifetime −66.8569, room 8.1431, drawdown 6.4098 of 20.
+  - Watchdog 12:52:02: 0 open orders, all registries OK.
+  - The latch persists in the book and stays in force until the owner sets
+    `PMUS_TWO_SIDED_SAFETY_LATCH_ACK`. It has not been acknowledged.
+- **The campaign was not armed and no window was set.** The authorization
+  in 75 covered SHA `1c1d546b6` only, so it does not extend to a fixed
+  build.
+- **Fix candidate, not deployed:**
+  - SHA `a51cfdbd2c1b0a16dacce93e9b089c8caf4c9183`, branch
+    `release/pmus-sports-next-imagefix-a51cfdbd2`.
+  - Contents: `1c1d546b6` plus three Dockerfile COPY lines, a trigger line,
+    and a test that every src module referenced by a copied src file is
+    itself copied. The test fails on `1c1d546b6` and passes on the fix.
+  - `src/` is unchanged.
+  - Verification:
+    - simulated image contents import all six entry modules with the flags
+      on;
+    - the targeted suites pass (enabled-mode safety, duration rank,
+      live-first slots, reward calibration: 106).
+- **Note:** the new activation variables remain set on the service. They
+  are inert under `31ddf1b06` apart from the fill-rate and fill-loss values
+  shown in boot, and the service stays locked.
+
+## 76. Corrected release a51cfdbd2 authorized; latch acknowledgment conditional — 27 Nov 2026, about 12:58 UTC
+
+**Owner (verbatim):** "I explicitly authorize deployment of corrected sports release a51cfdbd2c1b0a16dacce93e9b089c8caf4c9183 under the existing Revision 1 authorization terms. Keep the submission lock held throughout deployment and verification. I authorize acknowledgment of safety latch 2026-11-27T12:48:22.780628+00:00 only after confirming: The actual deployed image contains all required modules. All activated controller paths initialize successfully. At least five minutes of healthy runtime without loop or import errors. Fresh venue reconciliation with zero open orders and positions. Account risk is readable and the remaining lifetime allowance supports the $8 campaign stop. The independent watchdog is healthy. After verification, record the exact UTC timestamps and arm one three-hour campaign beginning at the next quarter hour, followed by two hours of completions-only grace. All existing Revision 1 limits and protections remain unchanged. Maker-only, two accumulation markets, $8 campaign loss stop, crypto disarmed and no automatic repeat. If verification fails, remain locked and roll back. Add actual Docker image import and startup verification to the permanent release checklist. Proceed immediately. No additional strategy changes or unrelated development."
+
+### 76a. a51cfdbd2 verified; latch acknowledged; window recorded before arming — 27 Nov 2026, 13:35 UTC
+
+- **Deployment:** `6f8b81ce` (`a51cfdbd2`), live 13:27:57; boot 13:28:02
+  with lock `locked`. Boot shows `rn1_duration_rank`, `economics_report`,
+  fill rate 4.0/1.5, fill loss 0.089 and `0.042,atp:0.063,atpdb:0.06,wtadb:0.06`,
+  and max markets 2.
+- **Modules in the image:**
+  - Built locally from `a51cfdbd2`. Local build only: a CA and proxy were
+    added for pip; the COPY set is identical.
+  - All 61 `src` modules import inside the image with the activated flags,
+    with no failures. `pmus_duration_rank`, `pmus_reward_calibration` and
+    `pmus_campaign_economics` are all present.
+  - In production, the same call site that raised ImportError on every
+    `1c1d546b6` pass ran cleanly from 13:28.
+- **Controller paths:**
+  - `REWARD_CALIBRATION` 13:30:05 ok.
+  - `CAMPAIGN_ECONOMICS` 13:31:44 ok.
+  - Selection with live-first and duration rank ran each pass, active 2.
+  - `PILOT_PNL` 13:31:44 shows `loss_stop_usd` 8.
+  - `ACCOUNT_AUDIT` complete.
+  - No `loop_error`, ImportError, Traceback, `gate_error` or
+    `market_error` from 13:28:02 to 13:35. That is over five minutes, the
+    loop was never stalled, and there was no new latch. The combo maker is
+    shadow only (`mode_shadow`, nothing sent).
+- **Venue reconcile 13:31:43:** ok, 0 positions, 0 open orders, 0
+  mismatches.
+- **Account risk 13:28:05:** readable. Lifetime −66.8569, ceiling 75,
+  `loss_room_usd` 8.1431, which is at least the $8 campaign stop with
+  resting, in-flight and uncertain orders counted (§75). Drawdown 6.4098 of
+  20.
+- **Ledger 13:34:06:** unresolved 0, unattributed 0, cash 306.0004.
+- **Watchdog 13:34:33:** 0 open orders, cancel enabled, all registries OK.
+- **Latch:** acknowledged per §76:
+  `PMUS_TWO_SIDED_SAFETY_LATCH_ACK=2026-11-27T12:48:22.780628+00:00`.
+- **Campaign window (one only, no repeat):**
+  - start **2026-11-27T13:45:00Z**;
+  - end **2026-11-27T16:45:00Z**;
+  - completions-only grace end **2026-11-27T18:45:00Z** (7,200 s).
+  - Lock value: `window:2026-11-27T13:45:00Z/2026-11-27T16:45:00Z`.
+- **Limits:** Revision 1 unchanged: two markets, maker-only, $8 campaign
+  stop, $75 lifetime ceiling, esports and cricket off, crypto disarmed.
+
+### 76b. Armed — 27 Nov 2026, 13:36:56 UTC
+
+- **Deployment `5f31e8a3`** (`a51cfdbd2`, restart for the variables) booted
+  at 13:36:56.
+  - `SAFETY_LATCH_CLEARED` for id `2026-11-27T12:48:22.780628+00:00`
+    ("owner acknowledged this latch by its id").
+  - `SUBMISSION_LOCK_STATE`: `window_not_started`, window
+    13:45:00Z–16:45:00Z, grace 7,200 s.
+  - `campaign_since` 1795787100 (13:45:00Z), so the new campaign meter
+    starts from zero.
+- **13:37:05:** account risk ok (room 8.1431), heartbeat `safety_latch`
+  null, loop healthy. The account audit had not yet completed since boot,
+  and the bot fails closed until it does (`stale_blocks_new`).
+- **Reports scheduled:** 14:46, 15:46, 16:47 (window close) and 18:47
+  (close-out, lock back to `1`).
+
+## 77. Directional allocation release candidate prepared; not authorized — 27 Nov 2026, about 14:15 UTC
+
+- **Branches:**
+  - `dev/pmus-directional-allocation` (`f185c712b`);
+  - disarmed release candidate `release/pmus-sports-directional-996f45a9a`
+    (`996f45a9a9ce233f8b74f5df011a765ac9384404`), built on the deployed
+    `a51cfdbd2`.
+- **Flag:** `PMUS_RN1_DIRECTIONAL` defaults to `0`. With it off, behaviour is
+  that of `a51cfdbd2`. Regression failure names are identical (26
+  pre-existing); 28 new tests pass.
+- **Not deployed.** The running campaign on `a51cfdbd2` was not touched.
+- **Evidence and economics:**
+  `analysis/l5/sports/directional/DIRECTIONAL_ALLOCATION_20261127.md` on the
+  dev branch; the live-fill study is in `analysis/l5/sports/adverse/`.
+- Activation needs separate owner authorization.
+
+## 78. RN1/Bonereaper hybrid allocator v2 prepared; not authorized — 27 Nov 2026, about 15:45 UTC
+
+- **Sports release candidate:** `release/pmus-sports-hybrid-8da588386`
+  (`8da58838600e1e772cc30c3f0a0c2ed2983710bf`), on top of the deployed
+  `a51cfdbd2`.
+  - Every new behaviour is default off: `PMUS_RN1_DIRECTIONAL`,
+    `PMUS_RN1_DIR_SHARP`, `PMUS_RN1_DIR_PRICE_ADDS`,
+    `PMUS_RN1_DIR_EXTRA_LEVELS`, `PMUS_RN1_DIR_UP_MULT`. Upsizing is capped
+    at the final gate's per-order maximum.
+  - Regression failure names are identical to `a51cfdbd2` (26
+    pre-existing).
+  - The image was built locally: 62/62 modules import, and the engine booted
+    with every flag on and the lock held.
+- **Crypto:** `dev/l5-crypto-shared-allocator` (`693174069`), built from
+  `19ca55ad2`. The adapter only; the controller is unchanged and nothing is
+  wired. Regression failure and error names are identical. The crypto
+  development session was informed.
+- **Results** (THEORETICAL): `HYBRID_ALLOCATOR_20261127.md` on the sports
+  branch. Residual losses fall in both lanes. No configuration is
+  profitable before incentives.
+- **Not deployed or armed.** The running campaign was not touched.
+  Activation needs separate owner authorization.
+
+### 76c/76d. Campaign hours 1–2 (13:45–15:55 UTC, a51cfdbd2), combined; written late at 15:56
+
+- **Fills (venue-reconciled):** 8 fills, 8 contracts, $3.77 spent.
+  - `atpdb-fominkrutyk-ovcharwhiteh`: YES 2 @0.40 (opening, live) at about
+    14:24. NO completions 0.58 @0.57, 1 @0.56 and 0.42 @0.57 between 14:26
+    and 14:29. 300 s markouts −0.5c to +1.5c.
+  - A Setka UA market: 4 fills, paired.
+  - Completed pairs: 4.00, average pair cost 0.943, pair edge **+$0.2275**
+    (atpdb +$0.07, setkameua +$0.1575). Residual 0 contracts.
+- **Inventory now:** flat. 0 open orders (watchdog 15:55:10, all
+  registries OK).
+- **Rewards:** PAID unchanged at $24.09; PENDING $0.86 (rows from earlier
+  dates). No campaign reward credited.
+- **Settled trading:** the campaign meter shows realized cash +$0.2275 and
+  unexplained $0. The ledger booked one more feed settlement (CONFIRMED 3 →
+  4; day −5.8631 → −5.7056).
+- **Ledger 15:54:**
+  - lifetime −66.6994 (room 8.30); unresolved 0; unattributed 0;
+  - drawdown 6.18 of 20; cash 306.2279.
+- **Stop conditions:** none tripped.
+  - Campaign stop $8: realized +$0.23.
+  - No `gate_error`, latch, final-gate refusal or loop error.
+  - Maker-only throughout; reward check ok; reconcile ok at 15:40.
+  - The cricket filter learned and excluded two new leagues (`hjs`,
+    `plunket`) at 15:30; nothing was traded there.
+
+### 76e. Window closed 16:45 UTC; completions-only to 18:45 — report at 17:15 UTC
+
+- **Lock:** `SUBMISSION_LOCK_STATE` at 16:45:02 shows `window_completions_only`:
+  new exposure locked, completions allowed.
+- **Fills since 15:55:** none. The campaign total stands at 8 fills (8
+  contracts, $3.77), 4.00 completed pairs at average cost 0.943, pair edge
+  **+$0.2275**, residual 0.
+- **Inventory:** flat; 0 open orders (watchdog 17:14:24, all registries
+  OK). Reconcile at 16:40: ok, 0 positions, 0 mismatches.
+- **Rewards:** PAID still $24.09. No campaign reward has been credited
+  (see the reward-qualification investigation, 16:02 discrepancy).
+- **Ledger 17:14:**
+  - day −5.6356, lifetime −66.6294 (room 8.37);
+  - drawdown 6.18 of 20; unresolved 0; unattributed 0;
+  - sibling-feed settlements CONFIRMED 5, CONTRADICTED 0.
+- **Stop conditions:** none tripped. Close-out at 18:47 sets lock `1`.
+
+## 79. Integrated hybrid release candidate prepared; not authorized — 27 Nov 2026, about 18:15 UTC
+
+- **Candidate:** `release/pmus-sports-hybrid-integrated-05f4996f6`
+  (`05f4996f68c097b8721a239d71003cc0602a92d4`), on top of the deployed
+  `a51cfdbd2`. It contains:
+  - the account/day reward qualification;
+  - ChatGPT's feasible-ladder commit `3981feabf`, integrated, plus its
+    completion on the regular path and a fix for the refused-result
+    `KeyError`;
+  - the directional allocator;
+  - adaptive pause depth and paused-market rotation.
+  All default off.
+- **Validation:**
+  - full regression failure names identical to `a51cfdbd2`;
+  - clean Docker build: 62/62 modules import, and the engine boots with
+    every flag on and the lock held.
+- **Backtest:** production pauses protect. Pause depth is not supported
+  (stays off). The allocator's sign depends on the fill model. Rewards are
+  not modelled.
+- **Not deployed or armed.** The campaign close-out at 18:47 proceeds
+  unchanged.
+
+## 80. Integrated hybrid v2 release candidate (program_period); not authorized — 27 Nov 2026, about 19:05 UTC
+
+- **Candidate:** `release/pmus-sports-hybrid-integrated-d595c47d0`
+  (`d595c47d045042bff8e39fcfc99c45d250d9eacc`).
+- **Reward qualification:**
+  - adds `program_period` (pool-keyed);
+  - `account_day` is not to be activated: no source supports it and our
+    reward rows argue against it;
+  - the scope of the $1 minimum stays unverified: the CFTC text is
+    unreachable from this environment and our rows carry no programme id.
+- **Validation:**
+  - full regression failure names identical to `a51cfdbd2`;
+  - suites pass in all three scopes;
+  - clean Docker build boots with every flag on.
+- **Not deployed or armed.**
+
+## 76f. Campaign close-out (a51cfdbd2, window 13:45–16:45 UTC) — 27 Nov 2026, about 19:25 UTC
+
+- **Lock:** set `PMUS_TWO_SIDED_SUBMISSION_LOCK=1` at 18:48 (no automatic
+  repeat). New deployment `0c3d98b6` (same `a51cfdbd2`) booted at 19:23:35
+  with `SUBMISSION_LOCK_STATE why: "locked"`: new exposure and completions
+  both locked. Before that, the window end had held the lock (`window_ended`)
+  from 16:45.
+- **Orders:** watchdog 19:22: 0 open orders, all registries OK. Heartbeat:
+  resting $0, unpaired $0, paired awaiting settlement $0.
+- **Venue reconcile (18:40:49):** ok; 0 positions; 0 mismatches.
+- **Fills / inventory:** 8 fills, 38 orders; 4 pairs at average pair cost
+  0.943; no residual.
+- **Settled trading P&L (PILOT_PNL 18:40:50):** +$0.2275 realized
+  (paired_flat 2, no_fills 4); outstanding 0; unexplained 0.
+- **Reward qualification:** RN1_QUOTE in `below_minimum_payout` 98.5% of the
+  window; qualifying time accruing in 7.8% of window minutes.
+- **Confirmed incentive payments for the campaign:** $0 (REWARD_CHECK 18:39:
+  PAID $24.09 lifetime unchanged, PENDING $0.86, SKIPPED $4.00; no 27 Nov
+  rows).
+- **Ledger (19:22):** day −$5.6356; lifetime −$66.6294 (room $8.37);
+  drawdown $6.1823 of $20; unresolved 0; unattributed 0; sibling feed
+  CONFIRMED 5 / CONTRADICTED 0. The day figure includes activity outside
+  this campaign's markets; the campaign's own settled result is +$0.2275.
+- **No further live window is authorized.** The next candidate (section 80)
+  awaits an owner decision.
+
+## 81. Close-out accepted; release candidate 8373069fe prepared; not authorized — 27 Nov 2026, about 20:05 UTC
+
+**Owner (verbatim):** "Accept the campaign close-out. Keep production
+locked. Proceed immediately with final release preparation for the
+integrated RN1/Bonereaper controller. [...] Return the exact authorization
+packet for approval. Do not deploy or arm until explicitly authorized."
+
+- **Production:** `a51cfdbd2`, locked (`why: locked`); watchdog 19:59 with 0
+  open orders.
+- **Candidate:** `8373069fe532a4f4f7075805d8c97e7210645e7e` on
+  `release/pmus-sports-hybrid-integrated-8373069fe`. It supersedes
+  `d595c47d0` (section 80).
+- **Reward scope:**
+  - adds `contract_period`;
+  - the venue payloads show one programme id spanning many contracts, so
+    `program_period` pooled other matches' accrual and is not to be
+    activated;
+  - unknown programme terms (a possible cap or minimum volume) fail closed;
+  - the CFTC text remains unreadable here (network).
+- **Loss bound:** maximum feasible campaign loss is $8.00 (the campaign
+  stop counts resting, in-flight and uncertain orders). Lifetime room is
+  $8.3706 (ceiling $75.00), and drawdown room is $13.8177.
+- **Packet:** `analysis/l5/sports/RELEASE_PACKET_8373069fe_20261127.md`.
+  Report tool: `analysis/l5/sports/campaign_report.py`.
+- **Not deployed or armed.**
+
+## 82. Next campaign on a51cfdbd2 prepared; awaiting authorization — 27 Nov 2026, about 20:10 UTC
+
+**Owner (verbatim, excerpt):** "Prepare the next three-hour live sports
+campaign using deployed SHA a51cfdbd2. [...] Present the exact live
+authorization packet. Once explicitly approved, execute the campaign and
+reconcile venue-confirmed fills, settlements, fees, liquidity rewards and
+rebates."
+
+**Verified independently (20:06Z):**
+- deployment `0c3d98b6` = `a51cfdbd2`, lock `why: locked`;
+- latch null; loop healthy; WS connected;
+- watchdog 19:59 with 0 open orders, all registries OK;
+- INVENTORY_RECONCILE 19:27: ok, 0 positions, 0 mismatches, open unmatched
+  $0;
+- ACCOUNT_RISK: lifetime −$66.6294 against a $75.00 ceiling, so room
+  **$8.3706**;
+- drawdown capacity $13.8177; account daily halt $50 (day −$5.6356).
+
+**The binding figure is the lifetime room, not the drawdown capacity.** The
+$8 campaign stop (counting resting, in-flight and uncertain orders) fits
+with $0.37 to spare.
+
+**Only change at arming:**
+`PMUS_TWO_SIDED_SUBMISSION_LOCK=window:<START>/<START+3h>`, with the
+existing 7,200 s completion grace.
+
+**Known a51 limitations, not fixable without new code:**
+- the reward minimum is tested per market (98.5% below the minimum last
+  campaign);
+- touch EV credits reward without the minimum.
+
+`8373069fe` corrects these and remains available, but is not part of this
+campaign.
+
+Not armed.
+
+### 82a. Authorized and armed — 27 Nov 2026
+
+**Owner (verbatim):** "I authorize one three-hour live sports campaign on
+deployed a51cfdbd2 beginning at the next quarter hour, followed by two hours
+of completions-only grace, with only the submission-lock window changed. All
+existing limits unchanged: $8 campaign loss stop, maker-only, two markets,
+2-contract orders, crypto disarmed, no automatic repeat."
+
+- **Preflight (20:20–20:21Z):**
+  - ledger lifetime −$66.6294 against a $75.00 ceiling, room $8.3706
+    (≥ $8.00);
+  - drawdown room $13.8177; unresolved 0; unattributed 0;
+  - watchdog 20:20: 0 open orders, no halt.
+- **Set:** `PMUS_TWO_SIDED_SUBMISSION_LOCK=window:2026-11-27T20:30:00Z/2026-11-27T23:30:00Z`.
+  That is the only change.
+- **Late start:** this session's worker restarted during the call, and the
+  restart deployment `9f22fd1c` (`a51cfdbd2`) was only created at 20:46:01Z.
+  Its first SUBMISSION_LOCK_STATE was at 20:46:58Z: window
+  20:30–23:30Z, grace 7,200 s, campaign marker 20:30Z, new exposure
+  unlocked. Trading time is therefore about 2 h 43 min. The authorized end is
+  kept and not extended.
+- **First minutes:** quoting at the touch (Setka MD, two markets); no loop
+  error and no latch.
+- **Scheduled:** mid-checks 21:50 and 22:50; window report 23:32; close-out
+  and relock to `1` at 01:32Z (28 Nov).
+
+## 83. Reward economics bottleneck corrected on dev; release candidate c6fdc12b1 prepared; not authorized — 27 Nov 2026, about 22:20 UTC
+
+**Owner (verbatim, excerpt):** "PRIORITY: Make L5 a profitable reward-aware
+inventory accumulation system. [...] Do not modify the running campaign,
+weaken safety gates, increase capital or deploy without authorization."
+
+- **Running campaign untouched:** `9f22fd1c`, `a51cfdbd2`, window to 23:30Z.
+- **Bottleneck:**
+  - the $1 minimum is applied as a per-market projection, so every reward
+    is credited $0 at a 2-contract clip, contradicted by our rows (34/39
+    groups paid under $1; paid fraction 0.858);
+  - pregame markets are charged live fill rates (measured pregame 0.20 vs
+    live 3.0 fills per contract-hour);
+  - a completed pair holds a quoting slot.
+- **Candidate:** `c6fdc12b1efd859364931ddd2c0a7985853afffa` on
+  `release/pmus-sports-reward-economics-c6fdc12b1`, built on `8373069fe`.
+  New flags, default off:
+  - `PMUS_RN1_REWARD_MIN_RULE=paid_fraction`;
+  - `PMUS_RN1_FILL_RATE_PREGAME_MULT=0.25`;
+  - `PMUS_RN1_RELEASE_BALANCED=1`.
+- **Evidence:** `analysis/l5/sports/REWARD_ECONOMICS_BOTTLENECK_20261127.md`
+  and `reward_economics_20261127/`.
+- **Regression:** 6,090 passed; the 26 failure names are identical to a51.
+- **Not deployed or armed.**
+
+## 84. Reward-economics release candidate 6e6cc2d5d (pre-activation checks done); next campaign prepared; not authorized — 27 Nov 2026, about 22:45 UTC
+
+**Owner (verbatim, excerpt):** "Make c6fdc12b1 our next sports release
+candidate. Complete the running campaign without interruption. [...] Do
+not increase capital or deploy without explicit authorization."
+
+- **Candidate:** `6e6cc2d5d27d2e169010fc853760962707b1a2f2` on
+  `release/pmus-sports-reward-economics-6e6cc2d5d`; code `e3ef7eb79`. It is
+  `c6fdc12b1` plus the pre-activation corrections:
+  - per-sport pregame fill multipliers;
+  - `PMUS_RN1_RANK_BY=net_per_hour`;
+  - pool-identity and balanced-release tests.
+- **Regression:** 6,100 passed; the 26 failure names are identical to a51.
+- **Image:** clean boot with the exact activation set, lock held.
+- **Checks and capacity:**
+  `analysis/l5/sports/PRE_ACTIVATION_CHECKS_20261127.md`.
+- **The running campaign is untouched.** Not deployed or armed.
+
+### 82b. Window-end report (20:30–23:30Z; trading 20:47–23:30) — 27 Nov 2026, 23:35 UTC
+
+- **Lock:** 23:30:01 `window_completions_only` (new exposure locked).
+  Watchdog 23:33: 0 open orders, all registries OK.
+- **Orders and fills:** 11 orders (7 openings, 4 completions); 3 fills, 4
+  contracts:
+  - opening NO 2 @ 0.36;
+  - completions YES 2 @ 0.61 (pair cost 0.97);
+  - **same-side additions: 0**.
+- **Realized:** PILOT_PNL +$0.06 (one paired-flat market); residual 0;
+  nothing awaiting completion. $1.94 is paired, awaiting settlement.
+- **Capital:** time-weighted mean $1.13 (max $3.20), 1.9% of $60, 5.7% of
+  the $20 at-risk budget; 64 minutes with zero capital deployed.
+- **Qualifying time:** resting in 11.7% of minutes, qualifying accruing in
+  5.5%. Live 361 / 1,220 qualifying / resting contract-seconds; **pregame
+  0 / 0**. RN1_QUOTE in `below_minimum_payout` 98.8% of the time.
+- **Blocks:** jump pause 130, volatility pause 82, `net_not_positive` 69 (of
+  them pregame Setka 6, with reward credited $0 and fill cost at live
+  rates). 29 flat releases (rotation working).
+- **Rewards:** none confirmed for the campaign (rows post later). PAID
+  $24.09 lifetime is unchanged.
+- **Ledger 23:32:** day −$5.5756; lifetime −$66.5694 (room $8.4306);
+  drawdown $6.1223 of $20; unresolved 0.
+
+### 82c. Close-out and explicit relock — 27 Nov 2026, about 23:55 UTC
+
+**Owner (verbatim, excerpt):** "Complete the current campaign
+reconciliation and explicitly relock production."
+
+- **Before the relock (23:48–23:49):**
+  - nothing resting, unpaired or awaiting completion;
+  - the WTA doubles pair had settled ($1.94 released);
+  - no fills or orders after 23:25.
+- **Relock:** `PMUS_TWO_SIDED_SUBMISSION_LOCK=1` set at about 23:53Z.
+  Deployment `6fb57e27` (`a51cfdbd2`) booted at 23:54:26 with
+  `SUBMISSION_LOCK_STATE why: locked` (new exposure and completions
+  locked). The 01:32 close-out task was cancelled, since this replaces it.
+  No automatic repeat.
+- **INVENTORY_RECONCILE 23:50:52:** ok; 0 venue positions; 0 mismatches;
+  open unmatched $0; 1,479 markets settled flat.
+- **PILOT_PNL 23:50:53:**
+  - realized net **+$0.0600** (one market paired-flat, one no-fill);
+  - fees $0; rebates $0; outstanding 0;
+  - cash change +$0.0600, fully explained (unexplained $0).
+- **CAMPAIGN_ECONOMICS:**
+  - 3 fills, 4 contracts, spend $1.94;
+  - pair edge +$0.06; settled trading $0 (pair cash realized at pairing);
+  - rewards paid / pending / skipped for the campaign: $0 / $0 / $0.
+- **REWARD_CHECK 23:56:** PAID $24.09 lifetime, unchanged; no 27 Nov rows
+  yet.
+- **ACCOUNT_AUDIT:** settled realized lifetime −$46.56; fees $4.36; rebates
+  $0; unmatched open $0.
+- **Ledger 23:32:** day −$5.5756; lifetime −$66.5694 (room $8.4306);
+  drawdown $6.1223 of $20; unresolved 0; unattributed 0.
+
+## 85. Release 6e6cc2d5d and one three-hour campaign authorized — 28 Nov 2026
+
+**Owner (verbatim):** "I authorize deployment of sports release
+6e6cc2d5d27d2e169010fc853760962707b1a2f2 with exactly the activation
+variables in AUTHORIZATION_PACKET_6e6cc2d5d_20261128 §3, lock held through
+verification, then one three-hour live campaign from the next quarter hour
+plus two hours of completions-only grace. All existing limits unchanged: $8
+campaign loss stop, maker-only, two markets, 2-contract orders, crypto
+disarmed, no automatic repeat. Verify fresh account reconciliation,
+lifetime loss allowance, reward data and independent watchdog health before
+arming. Report actual inventory accumulation, reward qualification, capital
+utilization and settled net profitability."
+
+### 85a. Deployed, verified and armed — 28 Nov 2026
+
+- **00:05–00:06Z:**
+  - packet §3 variables set with no restart and the lock at `1`:
+    `PMUS_RN1_REWARD_QUAL_SCOPE=contract_period`,
+    `PMUS_RN1_REWARD_MIN_RULE=paid_fraction`,
+    `PMUS_RN1_FILL_RATE_PREGAME_MULT=0.1,setkameua:0.35,setkamemd:0.35`,
+    `PMUS_RN1_RELEASE_BALANCED=1`, `PMUS_RN1_RANK_BY=net_per_hour`,
+    `PMUS_RN1_LIVE_FIRST=0`, `PMUS_RN1_DIRECTIONAL=1`;
+  - service source pinned to `release/pmus-sports-reward-economics-6e6cc2d5d`
+    at `6e6cc2d5d27d2e169010fc853760962707b1a2f2`.
+- **Deployment `1d211fea` (6e6cc2d5d), boot 00:07:25:**
+  - `why: locked`; no loop, import, latch or market error through 00:13;
+  - ACCOUNT_RISK ok (lifetime −$66.5694, ceiling $75.00, **room
+    $8.4306**; drawdown capacity $13.8777);
+  - REWARD_CHECK 00:09:29 ok (PAID $24.09, SKIPPED $4.00: paid fraction
+    0.858);
+  - INVENTORY_RECONCILE 00:11:08 ok (0 positions, 0 mismatches, $0 open
+    unmatched); ACCOUNT_AUDIT 00:11:09 complete;
+  - watchdog 00:10: 0 open orders, all registries OK;
+  - ledger 00:10:42: day $0, lifetime −$66.5694, unresolved 0,
+    unattributed 0.
+- **Armed:**
+  `PMUS_TWO_SIDED_SUBMISSION_LOCK=window:2026-11-28T00:15:00Z/2026-11-28T03:15:00Z`.
+  Deployment `e1bd7039` booted at 00:16:33 with the window open and grace
+  7,200 s; campaign marker 00:15Z. Active: two pregame Setka UA markets.
+- **Scheduled:** first-orders check 00:27; mid-checks 01:20 and 02:20;
+  window report 03:17; close-out and relock 05:17.
+
+### 85b. Window report (00:16:33–03:15Z) — 28 Nov 2026, 03:25 UTC
+
+- **Lock:** 03:15:01 `window_completions_only`. Watchdog 03:18: 5 open
+  orders, all ours, none overdue, all registries OK.
+
+| Measure | 27 Nov baseline (a51) | This window (6e6cc2d5d) |
+|---|---|---|
+| Minutes with resting orders | 11.7% | **91.6%** |
+| Minutes accruing reward-qualifying time | 5.5% | **91.6%** (RN1_QUOTE `qualifies` 100% of time) |
+| Pregame resting / qualifying contract-seconds | 0 / 0 | **33,475 / 31,878** (live 194 / 97) |
+| Capital deployed (time-weighted mean, share of $60) | $1.13, 1.9% | **$3.91, 6.5%** (max $11.43; 19.6% of the $20 at-risk budget) |
+| Orders / fills / filled contracts | 11 / 3 / 4 | 138 / 24 / 21.7 |
+| Same-side additions | 0 | **8 fills, 6.6 contracts** (avg 0.467) |
+| Openings / completions | 1 / 2 | 7 fills 9.1 contracts (avg 0.448) / 9 fills 6.0 contracts (avg 0.536) |
+| Completed pairs (book) | 2 at 0.97, +$0.06 | **6.02 at about 0.97, +$0.175 locked** |
+
+- **Unpaired at the window end:** 9.68 contracts, $4.54 cost (masyev YES 2.36,
+  makyar NO 3.55, beldmy YES 1.85, bokrom YES 1.11, plivol YES 0.81).
+  Completion bids continue in grace; the worst case if all lose is −$4.54,
+  inside the $8 stop.
+- **Blocks:** jump pause 151, `net_not_positive` 118, volatility 52,
+  `account_risk` 49, `max_markets` 33.
+- **Request budget:** 33 orders deferred (30 of them completions), each sent
+  on a later pass.
+- **P&L:** PILOT_PNL (02:20) realized +$0.0447, venue-reconciled. The book
+  pair edge at the window end is +$0.175; the venue-reconciled figure comes
+  at close-out. Rewards: none confirmed yet (rows post 1–7 days).
+- **Report files:** `campaign_20261128/campaign_report_window.json`,
+  `inventory_at_window_end.txt`.
+
+## 86. Disarmed deploy of ac1c1bbaf with the coverage log authorized — 28 Nov 2026, 04:34 UTC
+
+Owner, verbatim: "I explicitly authorize deployment of release
+ac1c1bbafb007107b592a4a5732b94c4403be899 to the existing sports service,
+strictly disarmed, after the current campaign's grace period and close-out.
+Keep PMUS_TWO_SIDED_SUBMISSION_LOCK=1 and enable PMUS_SHARP_COVERAGE_LOG=1.
+[...] No live trading, arming, taker execution, capital increases or weakened
+safety limits are authorized."
+
+- **Scope:** one deploy of `ac1c1bbaf` to sports service `d84d9a68`, after the
+  6e6cc2d5d grace ends (05:15Z) and the close-out (lock=1, `why: locked`,
+  reconciliation) is done. Variable changes: `PMUS_TWO_SIDED_SUBMISSION_LOCK=1`
+  and `PMUS_SHARP_COVERAGE_LOG=1` only.
+- **Purpose:** read-only measurement of provider coverage, live vs pregame
+  odds, Pinnacle availability and quota, event matching, and independent fair
+  coverage across eligible markets.
+- **Not authorized:** live trading, arming, taker, capital increases, weaker
+  limits, crypto changes, automatic repeat.

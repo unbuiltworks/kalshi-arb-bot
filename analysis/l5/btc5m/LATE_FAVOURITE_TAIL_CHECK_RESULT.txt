@@ -1,0 +1,64 @@
+-- paid >= 0.90 with <= 120 s to expiry
+   2026-11-17..20         markets  705  lost  25  rate 3.55% (<= 5.18%)  avg paid 0.9786  PMUS net/share -0.0161, at the bound -0.0324
+   2026-03-25 + 08-30/31  markets  134  lost   3  rate 2.24% (<= 6.38%)  avg paid 0.9787  PMUS net/share -0.0031, at the bound -0.0445
+   BOTH                   markets  839  lost  28  rate 3.34% (<= 4.78%)  avg paid 0.9786  PMUS net/share -0.0140, at the bound -0.0284
+-- paid >= 0.90 with <= 60 s to expiry
+   2026-11-17..20         markets  293  lost   9  rate 3.07% (<= 5.73%)  avg paid 0.9774  PMUS net/share -0.0102, at the bound -0.0368
+   2026-03-25 + 08-30/31  markets   74  lost   0  rate 0.00% (<= 4.94%)  avg paid 0.9811  PMUS net/share +0.0172, at the bound -0.0322
+   BOTH                   markets  367  lost   9  rate 2.45% (<= 4.59%)  avg paid 0.9781  PMUS net/share -0.0047, at the bound -0.0261
+-- paid >= 0.90 with <= 30 s to expiry
+   2026-11-17..20         markets  108  lost   3  rate 2.78% (<= 7.85%)  avg paid 0.9804  PMUS net/share -0.0100, at the bound -0.0607
+   2026-03-25 + 08-30/31  markets   39  lost   0  rate 0.00% (<= 8.97%)  avg paid 0.9844  PMUS net/share +0.0141, at the bound -0.0756
+   BOTH                   markets  147  lost   3  rate 2.04% (<= 5.83%)  avg paid 0.9814  PMUS net/share -0.0036, at the bound -0.0415
+-- paid >= 0.90 with <= 10 s to expiry
+   2026-11-17..20         markets   32  lost   0  rate 0.00% (<= 10.72%)  avg paid 0.9840  PMUS net/share +0.0145, at the bound -0.0927
+   2026-03-25 + 08-30/31  markets   11  lost   0  rate 0.00% (<= 25.88%)  avg paid 0.9900  PMUS net/share +0.0091, at the bound -0.2498
+   BOTH                   markets   43  lost   0  rate 0.00% (<= 8.20%)  avg paid 0.9855  PMUS net/share +0.0131, at the bound -0.0689
+-- paid >= 0.95 with <= 120 s to expiry
+   2026-11-17..20         markets  603  lost  13  rate 2.16% (<= 3.65%)  avg paid 0.9827  PMUS net/share -0.0059, at the bound -0.0208
+   2026-03-25 + 08-30/31  markets   98  lost   1  rate 1.02% (<= 5.56%)  avg paid 0.9863  PMUS net/share +0.0022, at the bound -0.0431
+   BOTH                   markets  701  lost  14  rate 2.00% (<= 3.32%)  avg paid 0.9832  PMUS net/share -0.0047, at the bound -0.0180
+-- paid >= 0.95 with <= 60 s to expiry
+   2026-11-17..20         markets  238  lost   5  rate 2.10% (<= 4.82%)  avg paid 0.9814  PMUS net/share -0.0042, at the bound -0.0314
+   2026-03-25 + 08-30/31  markets   62  lost   0  rate 0.00% (<= 5.83%)  avg paid 0.9868  PMUS net/share +0.0120, at the bound -0.0464
+   BOTH                   markets  300  lost   5  rate 1.67% (<= 3.84%)  avg paid 0.9825  PMUS net/share -0.0008, at the bound -0.0226
+-- paid >= 0.95 with <= 30 s to expiry
+   2026-11-17..20         markets   90  lost   1  rate 1.11% (<= 6.03%)  avg paid 0.9831  PMUS net/share +0.0042, at the bound -0.0450
+   2026-03-25 + 08-30/31  markets   38  lost   0  rate 0.00% (<= 9.18%)  avg paid 0.9867  PMUS net/share +0.0120, at the bound -0.0798
+   BOTH                   markets  128  lost   1  rate 0.78% (<= 4.29%)  avg paid 0.9842  PMUS net/share +0.0065, at the bound -0.0286
+-- paid >= 0.95 with <= 10 s to expiry
+   2026-11-17..20         markets   32  lost   0  rate 0.00% (<= 10.72%)  avg paid 0.9853  PMUS net/share +0.0133, at the bound -0.0938
+   2026-03-25 + 08-30/31  markets   11  lost   0  rate 0.00% (<= 25.88%)  avg paid 0.9900  PMUS net/share +0.0091, at the bound -0.2498
+   BOTH                   markets   43  lost   0  rate 0.00% (<= 8.20%)  avg paid 0.9865  PMUS net/share +0.0123, at the bound -0.0698
+-- paid >= 0.97 with <= 120 s to expiry
+   2026-11-17..20         markets  519  lost   8  rate 1.54% (<= 3.01%)  avg paid 0.9861  PMUS net/share -0.0028, at the bound -0.0175
+   2026-03-25 + 08-30/31  markets   90  lost   1  rate 1.11% (<= 6.03%)  avg paid 0.9884  PMUS net/share -0.0006, at the bound -0.0498
+   BOTH                   markets  609  lost   9  rate 1.48% (<= 2.78%)  avg paid 0.9864  PMUS net/share -0.0025, at the bound -0.0155
+-- paid >= 0.97 with <= 60 s to expiry
+   2026-11-17..20         markets  188  lost   3  rate 1.60% (<= 4.59%)  avg paid 0.9851  PMUS net/share -0.0024, at the bound -0.0323
+   2026-03-25 + 08-30/31  markets   58  lost   0  rate 0.00% (<= 6.21%)  avg paid 0.9887  PMUS net/share +0.0102, at the bound -0.0519
+   BOTH                   markets  246  lost   3  rate 1.22% (<= 3.52%)  avg paid 0.9859  PMUS net/share +0.0005, at the bound -0.0225
+-- paid >= 0.97 with <= 30 s to expiry
+   2026-11-17..20         markets   76  lost   0  rate 0.00% (<= 4.81%)  avg paid 0.9864  PMUS net/share +0.0123, at the bound -0.0358
+   2026-03-25 + 08-30/31  markets   35  lost   0  rate 0.00% (<= 9.89%)  avg paid 0.9895  PMUS net/share +0.0095, at the bound -0.0894
+   BOTH                   markets  111  lost   0  rate 0.00% (<= 3.35%)  avg paid 0.9874  PMUS net/share +0.0114, at the bound -0.0220
+-- paid >= 0.97 with <= 10 s to expiry
+   2026-11-17..20         markets   31  lost   0  rate 0.00% (<= 11.03%)  avg paid 0.9869  PMUS net/share +0.0119, at the bound -0.0984
+   2026-03-25 + 08-30/31  markets   11  lost   0  rate 0.00% (<= 25.88%)  avg paid 0.9900  PMUS net/share +0.0091, at the bound -0.2498
+   BOTH                   markets   42  lost   0  rate 0.00% (<= 8.38%)  avg paid 0.9877  PMUS net/share +0.0111, at the bound -0.0727
+-- paid >= 0.99 with <= 120 s to expiry
+   2026-11-17..20         markets  366  lost   5  rate 1.37% (<= 3.16%)  avg paid 0.9900  PMUS net/share -0.0046, at the bound -0.0225
+   2026-03-25 + 08-30/31  markets   81  lost   1  rate 1.23% (<= 6.67%)  avg paid 0.9900  PMUS net/share -0.0033, at the bound -0.0576
+   BOTH                   markets  447  lost   6  rate 1.34% (<= 2.90%)  avg paid 0.9900  PMUS net/share -0.0044, at the bound -0.0199
+-- paid >= 0.99 with <= 60 s to expiry
+   2026-11-17..20         markets  127  lost   3  rate 2.36% (<= 6.72%)  avg paid 0.9900  PMUS net/share -0.0146, at the bound -0.0581
+   2026-03-25 + 08-30/31  markets   56  lost   0  rate 0.00% (<= 6.42%)  avg paid 0.9900  PMUS net/share +0.0091, at the bound -0.0551
+   BOTH                   markets  183  lost   3  rate 1.64% (<= 4.71%)  avg paid 0.9900  PMUS net/share -0.0073, at the bound -0.0380
+-- paid >= 0.99 with <= 30 s to expiry
+   2026-11-17..20         markets   60  lost   0  rate 0.00% (<= 6.02%)  avg paid 0.9900  PMUS net/share +0.0091, at the bound -0.0511
+   2026-03-25 + 08-30/31  markets   34  lost   0  rate 0.00% (<= 10.15%)  avg paid 0.9900  PMUS net/share +0.0091, at the bound -0.0925
+   BOTH                   markets   94  lost   0  rate 0.00% (<= 3.93%)  avg paid 0.9900  PMUS net/share +0.0091, at the bound -0.0302
+-- paid >= 0.99 with <= 10 s to expiry
+   2026-11-17..20         markets   29  lost   0  rate 0.00% (<= 11.70%)  avg paid 0.9900  PMUS net/share +0.0091, at the bound -0.1079
+   2026-03-25 + 08-30/31  markets   11  lost   0  rate 0.00% (<= 25.88%)  avg paid 0.9900  PMUS net/share +0.0091, at the bound -0.2498
+   BOTH                   markets   40  lost   0  rate 0.00% (<= 8.76%)  avg paid 0.9900  PMUS net/share +0.0091, at the bound -0.0786

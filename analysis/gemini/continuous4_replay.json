@@ -1,0 +1,135 @@
+{
+  "label": "GEMINI_CONTINUOUS4_REPLAY_V1",
+  "symbol": "GEMI-BTC05M2609181730-UP",
+  "source": "analysis/gemini/continuous_wire_20260918T172750Z.json",
+  "chronology": [
+    {
+      "t": "17:27:59.440",
+      "op": "place",
+      "leg": "YES",
+      "price": "0.77",
+      "orderId": "145828836246611817"
+    },
+    {
+      "t": "17:27:59.521",
+      "op": "place",
+      "leg": "NO",
+      "price": "0.14",
+      "orderId": "145828836246611835"
+    },
+    {
+      "t": "17:28:05.645",
+      "op": "cancel",
+      "leg": "YES",
+      "price": "0.77",
+      "orderId": "145828836246611817"
+    },
+    {
+      "t": "17:28:05.759",
+      "op": "cancel",
+      "leg": "NO",
+      "price": "0.14",
+      "orderId": "145828836246611835"
+    },
+    {
+      "t": "17:28:05.977",
+      "op": "place",
+      "leg": "YES",
+      "price": "0.92",
+      "orderId": "145828836246613472"
+    },
+    {
+      "t": "17:28:06.206",
+      "op": "place",
+      "leg": "NO",
+      "price": "0.01",
+      "orderId": "145828836246613510"
+    },
+    {
+      "t": "17:28:12.376",
+      "op": "cancel",
+      "leg": "NO",
+      "price": "0.01",
+      "orderId": "145828836246613510"
+    },
+    {
+      "t": "17:28:12.491",
+      "op": "place",
+      "leg": "NO",
+      "price": "0.04",
+      "orderId": "145828836246614326"
+    },
+    {
+      "t": "17:28:38.473",
+      "op": "cancel",
+      "leg": "YES",
+      "price": "0.92",
+      "orderId": "145828836246613472"
+    }
+  ],
+  "labels": "READ-ONLY replay. No session, no credentials, no order path. REALIZED is not computed here: settlement has not paid and a cost basis is not a profit.",
+  "without_refresh": {
+    "state_at_every_decision": {
+      "yes_qty": "0",
+      "no_qty": "0",
+      "matched_qty": "0",
+      "directional_residual": "0",
+      "inventory_imbalance": "0",
+      "total_spend_usd": "0",
+      "avg_yes_cost": null,
+      "avg_no_cost": null,
+      "n_fills": 0
+    },
+    "why": "apply_fill had no caller in the live loop and the orders@account queue was never drained, so this never moved for the whole window"
+  },
+  "with_refresh_at_the_yes_0_92_decision": {
+    "state": {
+      "yes_qty": "0",
+      "no_qty": "0.01",
+      "matched_qty": "0",
+      "directional_residual": "-0.01",
+      "inventory_imbalance": "0.01",
+      "total_spend_usd": "0.0014",
+      "avg_yes_cost": null,
+      "avg_no_cost": "0.14",
+      "n_fills": 1
+    },
+    "why": "NO 0.14 had FILLED and its cancel returned 200 with an empty result. The reconciliation the fix adds observes the NO leg before the next decision instead of after the window."
+  },
+  "cancel_seam": {
+    "ack": {
+      "status": 200,
+      "result": {
+        "orderId": "",
+        "symbol": "",
+        "status": ""
+      }
+    },
+    "confirmed_before_fix": true,
+    "confirmed_after_fix": false,
+    "consequence_before": "the order was dropped from the working set, so a filled position became invisible",
+    "consequence_after": "the order stays in the working set and the authoritative refresh decides"
+  },
+  "completed_pair": {
+    "yes_price": "0.92",
+    "no_price": "0.14",
+    "combined_cost": "1.06",
+    "redeems_at": "1.00",
+    "cost_basis_delta_per_unit": "-0.06",
+    "units": "0.01",
+    "spring_discipline_target": "<= 0.96",
+    "label": "COST BASIS, NOT A LOSS. Settlement has not paid, so nothing here is REALIZED."
+  },
+  "final_reconciled_inventory": {
+    "yes_qty": "0.01",
+    "no_qty": "0.01",
+    "matched_qty": "0.01",
+    "directional_residual": "0.00",
+    "inventory_imbalance": "0.00",
+    "total_spend_usd": "0.0106",
+    "avg_yes_cost": "0.92",
+    "avg_no_cost": "0.14",
+    "n_fills": 2
+  },
+  "behavioural_difference": "Before: every decision in the window was computed against yes_qty 0 / no_qty 0, because CP.plan builds state['inventory'] FROM the Inventory object and that object never moved. The oscillator therefore never saw the NO leg, and no risk gate could refuse a rung on inventory it did not know existed. After: the venue is re-read before every decision and again after cancels when a place is pending, so the YES 0.92 decision is taken against no_qty 0.01 rather than 0."
+}

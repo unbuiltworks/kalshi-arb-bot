@@ -1,0 +1,46 @@
+{
+  "schema": "btc15m_campaign_reconciliation/1",
+  "evidence_class": "VENUE_CONFIRMED -- our own PMUS orders, fills and settlements",
+  "scope": "the four owner-authorized BTC15m windows of 2026-11-02 22:15z-23:15z",
+  "why_this_file_exists": "the 2300z settlement booked a cost basis that no venue fill supports. History is PRESERVED: every as-booked figure is recorded beside the venue-derived one, and nothing in the original L5_LIVE_SETTLED record is overwritten.",
+  "provenance": {
+    "orders_and_fills": "L5_FILL_CALIB_PRESUBMIT / fill / fees_actual rows, service l5-pmus-live, deployment 134fba3a (SHA b8d2743c)",
+    "settlements": "L5_LIVE_SETTLED rows, same deployment, resolution_source VENUE_SETTLEMENT_PX",
+    "collected_utc": "2026-11-03"
+  },
+  "windows": [
+    {"slug": "cpc-btc-updown-15m-2026-11-02-2215z", "side": "DOWN", "fill_qty": "1.92", "fill_price_own": "0.39",
+     "venue_derived_cost": "0.7488", "as_booked_cost": "0.748800", "committed_released": "0.748800",
+     "agrees": true, "winner": "UP", "residual_pnl_as_booked": "-0.748800", "residual_pnl_venue_derived": "-0.7488"},
+    {"slug": "cpc-btc-updown-15m-2026-11-02-2230z", "side": "UP", "fill_qty": "2.04", "fill_price_own": "0.47",
+     "venue_derived_cost": "0.9588", "as_booked_cost": "0.958800", "committed_released": "0.958800",
+     "agrees": true, "winner": "DOWN", "residual_pnl_as_booked": "-0.958800", "residual_pnl_venue_derived": "-0.9588"},
+    {"slug": "cpc-btc-updown-15m-2026-11-02-2245z", "side": "DOWN", "fill_qty": "2", "fill_price_own": "0.45",
+     "venue_derived_cost": "0.9000", "as_booked_cost": "0.9000", "committed_released": "0.9000",
+     "agrees": true, "winner": "UP", "residual_pnl_as_booked": "-0.9000", "residual_pnl_venue_derived": "-0.9000"},
+    {"slug": "cpc-btc-updown-15m-2026-11-02-2300z", "side": "UP", "fill_qty": "1.68", "fill_price_own": "0.21",
+     "venue_derived_cost": "0.3528", "as_booked_cost": "1.6800", "committed_released": "0.352800",
+     "agrees": false, "winner": "DOWN", "residual_pnl_as_booked": "-1.68000000", "residual_pnl_venue_derived": "-0.3528",
+     "discrepancy_usd": "1.3272",
+     "as_booked_cost_per_share": "1.00",
+     "finding": "up_cost equals up_qty exactly, i.e. $1.00 a share, for a maker buy whose only venue fill was 1.68 @ own 0.21. committed_released on the same record carries the correct 0.352800, so the record disagrees with itself.",
+     "why_undetected": "book_violations raises COST_PER_SHARE_IMPOSSIBLE on `per > MAX_OWN_COST_PER_SHARE` (strictly greater). 1.6800/1.6800 is exactly 1.00, so the book sat ON the exclusive bound and passed require_coherent_book.",
+     "fill_evidence": {"coid": "l5f-71bcdba390b23622922c76c1", "fill_utc": "2026-11-02T23:00:21.372391+00:00",
+                       "qty": "1.68", "price": "0.2100", "cumulative_qty": "1.68", "remaining": "0",
+                       "fee_usd": "0.0000", "fee_source": "venue_order_progress.commission"}}
+  ],
+  "totals": {
+    "pairs_completed": 0,
+    "matched_pnl": "0.0000",
+    "residual_pnl_as_booked": "-4.2876",
+    "residual_pnl_venue_derived": "-2.9604",
+    "overstatement_usd": "1.3272",
+    "labels": "SETTLED realized money. The as-booked column is what was posted to realized_today and therefore to the $5 UTC-day loss halt; the venue-derived column is what the fills support."
+  },
+  "impact": {
+    "realized_today_after_last_window_as_booked": "-10.62110000",
+    "effect": "the overstatement is posted to realized_today and consumes the $5 UTC-day loss halt, so a phantom $1.3272 can halt a campaign earlier than real losses justify.",
+    "not_affected": "no order, price, size or risk gate read this field; the defect is in accounting, not in trading."
+  },
+  "disposition": "RECORDED, NOT REWRITTEN. The original L5_LIVE_SETTLED rows remain the primary evidence. No executor code is changed by this file."
+}

@@ -1,0 +1,111 @@
+fills 110, opening/addition fills 66
+
+fill_t              market                                 sd  role   px    qty  fav    trend              d30     d60    d120 pos Y/N   settle
+2026-11-22T21:36:22 nba-det-atl-2026-11-22                 Y   open   0.57  2    fav    strengthening     0.01    0.04    None 0/0         None
+2026-11-22T21:57:02 nba-det-atl-2026-11-22                 Y   extend 0.55  2    fav    weakening          0.0   -0.07   -0.02 2/2         None
+2026-11-22T22:00:01 nba-det-atl-2026-11-22                 Y   extend 0.58  2    fav    strengthening     0.08    0.06     0.1 4/4         None
+2026-11-22T22:08:54 nba-det-atl-2026-11-22                 N   extend 0.23  2    dog    weakening       -0.055  -0.035   -0.09 6/6         None
+2026-11-23T17:15:25 atp-robstr-tiaper-2026-11-23           Y   open   0.66  2    fav    flat               0.0     0.0   0.005 0/0         None
+2026-11-23T17:33:54 atp-karpol-benwei-2026-11-23           Y   open   0.65  1    fav    weakening          0.0   -0.02   -0.04 0/0         None
+2026-11-23T17:54:10 atp-gabdeb-sankop-2026-11-23           Y   open   0.66  2    fav    strengthening      0.0    0.01    0.03 0/0         None
+2026-11-23T18:10:02 atp-gabdeb-sankop-2026-11-23           Y   extend 0.61  2    fav    weakening        -0.01   -0.03   -0.01 2/2         None
+2026-11-24T02:14:08 atp-cescru-joagui-2026-11-23           Y   open   0.31  1    dog    flat               0.0    None    None 0/0        -0.31
+2026-11-24T17:02:39 atp-matsca-wisabd-2026-11-24           Y   open   0.55  1    fav    flat              0.02     0.0     0.0 0/0         0.45
+2026-11-24T17:11:42 atp-juaoso-olibon-2026-11-23           Y   open   0.57  1    fav    weakening        -0.01   -0.02   -0.03 0/0        -0.57
+2026-11-24T18:25:59 atp-juagom-bengeo-2026-11-23           N   open   0.44  1    dog    strengthening     0.01    0.03    0.03 0/0        -0.44
+2026-11-24T18:29:20 atp-samher-yanale-2026-11-23           N   open   0.61  1    fav    weakening        -0.02   -0.02   -0.03 0/0        -0.61
+2026-11-24T21:46:26 atp-axenef-alarub-2026-11-24           N   open   0.45  1    dog    weakening          0.0   -0.02   -0.04 0/0        -0.45
+2026-11-24T21:55:45 atp-jiecui-benhas-2026-11-22           Y   open   0.51  1    fav    flat               0.0     0.0    None 0/0        -0.51
+2026-11-25T00:32:36 setkameua-korvol-kozden-2026-11-25     Y   open   0.63  1    fav    unknown           None    None    None 0/0        -0.63
+2026-11-25T00:45:15 utr-traemm-zylame-2026-11-23           N   open   0.51  1    fav    strengthening      0.0     0.0    0.05 0/0         0.49
+2026-11-25T01:32:10 utr-traemm-zylame-2026-11-23           N   extend 0.44  1    dog    strengthening      0.0     0.0    0.07 1/1         0.56
+2026-11-25T01:44:29 utr-traemm-zylame-2026-11-23           Y   extend 0.39  1    dog    weakening         None     0.0  -0.065 2/2        -0.39
+2026-11-25T02:14:00 utr-traemm-zylame-2026-11-23           N   extend 0.41  1    dog    weakening          0.0   -0.02   -0.06 3/3         0.59
+2026-11-25T02:16:49 utr-traemm-zylame-2026-11-23           N   extend 0.39  1    dog    flat               0.0     0.0   0.005 3/4         0.61
+2026-11-25T03:22:29 utr-carjem-caltes-2026-11-23           N   open   0.45  1    dog    strengthening      0.0    0.02    None 0/0        -0.45
+2026-11-25T03:26:37 utr-carjem-caltes-2026-11-23           N   extend 0.45  1    dog    strengthening      0.0   0.025   0.025 0/1        -0.45
+2026-11-25T14:06:23 utr-gubtri-mcdcia-2026-11-23           N   open   0.30  1    dog    flat               0.0     0.0     0.0 0/0         -0.3
+2026-11-25T14:15:46 setkameua-shyole-tymole-2026-11-25     N   open   0.36  1    dog    unknown           None    None    None 0/0        -0.36
+2026-11-25T14:17:15 utr-gubtri-mcdcia-2026-11-23           N   extend 0.30  1    dog    strengthening      0.0  -0.005    0.01 0.97/1      -0.3
+2026-11-25T14:23:38 utr-viebru-jarnic-2026-11-24           N   open   0.62  1    fav    unknown           None    None    None 0/0         0.38
+2026-11-25T14:24:01 utr-dolhey-monmic-2026-11-24           Y   open   0.28  1    dog    weakening         None     0.0   -0.07 0/0        -0.28
+2026-11-25T14:32:42 utr-dolhey-monmic-2026-11-24           Y   open   0.30  1    dog    weakening          0.0     0.0   -0.05 1/1         -0.3
+2026-11-25T16:32:50 atp-joagui-lucamb-2026-11-25           Y   open   0.42  2    dog    unknown           None    None    None 0/0        -0.42
+2026-11-25T16:37:21 atp-matalm-carzar-2026-11-22           N   open   0.39  1    dog    weakening        -0.01   -0.02  -0.025 0/0         0.61
+2026-11-25T18:32:59 utr-ciugab-mentad-2026-11-24           N   open   0.89  2    fav    flat               0.0     0.0   0.005 0/0         0.11
+2026-11-25T18:40:56 utr-garcar-borvic-2026-11-23           Y   open   0.66  2    fav    unknown           None    None    None 0/0        -0.66
+2026-11-25T18:40:56 utr-garcar-borvic-2026-11-23           Y   open   0.64  2    fav    unknown           None    None    None 0/0        -0.64
+2026-11-25T23:47:05 utr-quioli-kimeli-2026-11-23           Y   open   0.46  1    dog    strengthening    0.005    0.03    0.04 0/0         0.54
+2026-11-25T23:47:05 utr-quioli-kimeli-2026-11-23           Y   open   0.45  1    dog    strengthening    0.005    0.03    0.04 0/0         0.55
+2026-11-26T00:41:02 setkameua-slomyk-fasiva-2026-11-26     Y   open   0.50  1.68 fav    flat               0.0    None    None 0/0          0.5
+2026-11-26T00:41:31 setkameua-slomyk-fasiva-2026-11-26     Y   extend 0.50  1.5  fav    flat               0.0    None    None 1.68/0       0.5
+2026-11-26T01:05:06 atp-jaskub-carove-2026-11-25           Y   open   0.43  2    dog    unknown           None    None    None 0/0        -0.43
+2026-11-26T01:05:06 atp-jaskub-carove-2026-11-25           Y   open   0.41  2    dog    unknown           None    None    None 0/0        -0.41
+2026-11-26T01:50:02 atpdb-delanedelane-falcksuarez-2026-11 N   open   0.54  0.34 fav    unknown           None    None    None None/None   0.46
+2026-11-26T21:17:44 atpdb-alvvalflores-alvesperez-2026-11- N   open   0.30  2    dog    flat              None     0.0     0.0 0/0         -0.3
+2026-11-26T21:17:44 atpdb-alvvalflores-alvesperez-2026-11- N   open   0.28  2    dog    flat              None     0.0     0.0 0/0        -0.28
+2026-11-26T21:17:44 atpdb-alvvalflores-alvesperez-2026-11- N   open   0.26  2    dog    flat              None     0.0     0.0 0/0        -0.26
+2026-11-26T23:51:55 setkameua-kobvit-khaser-2026-11-27     Y   open   0.48  1    dog    unknown           None    None    None 0/0        -0.48
+2026-11-27T00:46:33 setkameua-paryur-stoole-2026-11-27     N   open   0.47  2    dog    unknown           None    None    None 0/0        -0.47
+2026-11-27T00:46:33 setkameua-paryur-stoole-2026-11-27     N   open   0.45  1.72 dog    unknown           None    None    None 0/0        -0.45
+2026-11-27T00:47:51 atp-timleg-karpol-2026-11-25           Y   open   0.49  2    fav    weakening        0.015   0.005  -0.115 0/0         0.51
+2026-11-27T00:47:51 atp-timleg-karpol-2026-11-25           Y   open   0.48  2    fav    weakening        0.015   0.005  -0.115 0/0         0.52
+2026-11-27T00:48:03 setkameua-paryur-stoole-2026-11-27     N   extend 0.47  1.73 dog    strengthening    0.005   0.025    None 0/3.72     -0.47
+2026-11-27T00:48:33 setkameua-paryur-stoole-2026-11-27     N   extend 0.45  1.75 dog    flat            -0.005     0.0  -0.005 0/5.45     -0.45
+2026-11-27T00:57:02 setkameua-savvol-hryevh-2026-11-27     N   open   0.49  2    fav    flat              None    None     0.0 0/0        -0.49
+2026-11-27T00:57:02 setkameua-savvol-hryevh-2026-11-27     N   open   0.47  2    fav    flat              None    None     0.0 0/0        -0.47
+2026-11-27T00:57:03 setkameua-savvol-hryevh-2026-11-27     N   open   0.45  1.19 dog    weakening         None    None  -0.025 0/0        -0.45
+2026-11-27T00:57:32 setkameua-kuzdmy-kurole-2026-11-27     Y   open   0.47  1    dog    flat               0.0    None    None 0/0         0.53
+2026-11-27T01:00:02 setkameua-kuzdmy-kurole-2026-11-27     Y   extend 0.46  1    dog    flat               0.0     0.0     0.0 1/0         0.54
+2026-11-27T02:30:35 setkameua-sydvik-dunvol-2026-11-27     Y   open   0.47  1    dog    flat              None    None     0.0 0/0        -0.47
+2026-11-27T02:30:35 setkameua-sydvik-dunvol-2026-11-27     Y   open   0.45  1    dog    flat              None    None     0.0 0/0        -0.45
+2026-11-27T02:30:36 setkameua-sydvik-dunvol-2026-11-27     Y   open   0.43  0.45 dog    flat              None    None     0.0 0/0        -0.43
+2026-11-27T02:31:35 setkameua-paryur-stoole-2026-11-27     N   extend 0.47  1    dog    flat               0.0     0.0    None 0/7.20     -0.47
+2026-11-27T02:31:35 setkameua-paryur-stoole-2026-11-27     N   extend 0.45  0.75 dog    flat               0.0     0.0    None 0/7.20     -0.45
+2026-11-27T03:55:04 setkameua-sydvik-dunvol-2026-11-27     Y   extend 0.41  1    dog    unknown           None    None    None 2.45/0     -0.41
+2026-11-27T03:55:35 setkameua-savvol-hryevh-2026-11-27     N   extend 0.40  0.5  dog    unknown           None    None    None 0/5.19      -0.4
+2026-11-27T04:01:46 setkameua-kolval-volyur-2026-11-27     Y   open   0.47  1    dog    unknown           None    None    None 0/0         0.53
+2026-11-27T05:42:00 setkameua-sydvik-dunvol-2026-11-27     N   open   0.50  0.1  fav    unknown           None    None    None 3.45/0       0.5
+2026-11-27T05:42:34 setkameua-savvol-hryevh-2026-11-27     N   extend 0.39  1    dog    unknown           None    None    None 0/5.69     -0.39
+
+ALL opening/addition fills, settlement return by group
+fav    trend             n      ctr    ret/ctr      se       usd      mkts
+dog    flat             14    16.95     -0.196   0.174    -3.318         7
+dog    strengthening     8     8.73     -0.092   0.205    -0.803         6
+dog    unknown          11    15.22     -0.364   0.120    -5.544         8
+dog    weakening         7     7.19     -0.105   0.203    -0.756         5
+fav    flat              7    11.18     -0.015   0.218    -0.170         5
+fav    strengthening     1     1.00      0.490       -     0.490         1
+fav    unknown           6     6.44     -0.410   0.267    -2.644         5
+fav    weakening         4     6.00      0.147   0.369     0.880         3
+
+STAGE 1 only (from 26 Nov 23:45)
+fav    trend             n      ctr    ret/ctr      se       usd      mkts
+dog    flat              8     7.95     -0.206   0.330    -1.638         3
+dog    strengthening     1     1.73     -0.470       -    -0.813         1
+dog    unknown           7     8.22     -0.324   0.194    -2.664         5
+dog    weakening         1     1.19     -0.450       -    -0.535         1
+fav    flat              2     4.00     -0.480       -    -1.920         1
+fav    unknown           1     0.10      0.500       -     0.050         1
+fav    weakening         2     4.00      0.515       -     2.060         1
+
+EXTENSIONS only
+fav    trend             n      ctr    ret/ctr      se       usd      mkts
+dog    flat              5     5.50     -0.081   0.344    -0.445         3
+dog    strengthening     4     4.73     -0.212   0.245    -1.003         4
+dog    unknown           3     2.50     -0.400   0.008    -1.000         2
+dog    weakening         2     2.00      0.100       -     0.200         1
+fav    flat              1     1.50      0.500       -     0.750         1
+fav    strengthening     0     0.00          -       -     0.000         0
+fav    weakening         0     0.00          -       -     0.000         0
+
+MARKET-CLUSTERED (per contract): settlement return | 300 s markout
+all                            66 fills | -0.116 +/- 0.084 (mkts 30) | -0.045 +/- 0.015 (mkts 34)
+favourite (side mid > 0.5)     25 fills | -0.003 +/- 0.140 (mkts 14) | -0.040 +/- 0.028 (mkts 18)
+underdog (side mid < 0.5)      41 fills | -0.156 +/- 0.096 (mkts 19) | -0.038 +/- 0.012 (mkts 20)
+weakening before fill          15 fills | -0.143 +/- 0.173 (mkts 8) | -0.057 +/- 0.015 (mkts 11)
+flat before fill               22 fills | -0.049 +/- 0.131 (mkts 12) | -0.004 +/- 0.016 (mkts 13)
+strengthening before fill      12 fills | -0.098 +/- 0.202 (mkts 6) | -0.025 +/- 0.030 (mkts 8)
+opening                        47 fills | -0.113 +/- 0.085 (mkts 30) | -0.039 +/- 0.016 (mkts 34)
+extension                      19 fills | -0.079 +/- 0.160 (mkts 8) | -0.036 +/- 0.022 (mkts 10)
+stage 1                        22 fills | -0.033 +/- 0.198 (mkts 7) | -0.027 +/- 0.013 (mkts 7)

@@ -1,0 +1,160 @@
+{
+ "by_state": {
+  "p10-25c|tte>10m|imb>50": {
+   "abs_inventory_units": {
+    "p50": 76.503,
+    "p90": 146.617
+   },
+   "matched_units": {
+    "p50": 29.514,
+    "p90": 61.39
+   },
+   "n_decisions": 1936,
+   "p_next_fill_opposite_side": 0.2758,
+   "p_next_fill_same_side": 0.7242,
+   "residual_shares": {
+    "p50": 180.17,
+    "p90": 302.214
+   },
+   "residual_units": {
+    "max": 124.877,
+    "p50": 15.608,
+    "p75": 23.053,
+    "p90": 30.54
+   },
+   "residual_usd": {
+    "p50": 30.161,
+    "p90": 62.372
+   },
+   "share_of_decisions_above_our_6_unit_cap": 0.9241
+  },
+  "p25-45c|tte>10m|imb10-50": {
+   "abs_inventory_units": {
+    "p50": 23.354,
+    "p90": 75.722
+   },
+   "matched_units": {
+    "p50": 10.235,
+    "p90": 36.663
+   },
+   "n_decisions": 1413,
+   "p_next_fill_opposite_side": 0.3227,
+   "p_next_fill_same_side": 0.6773,
+   "residual_shares": {
+    "p50": 27.16,
+    "p90": 45.13
+   },
+   "residual_units": {
+    "max": 9.018,
+    "p50": 2.314,
+    "p75": 3.5,
+    "p90": 4.483
+   },
+   "residual_usd": {
+    "p50": 9.531,
+    "p90": 16.591
+   },
+   "share_of_decisions_above_our_6_unit_cap": 0.0283
+  },
+  "p25-45c|tte>10m|imb>50": {
+   "abs_inventory_units": {
+    "p50": 50.177,
+    "p90": 106.325
+   },
+   "matched_units": {
+    "p50": 17.704,
+    "p90": 44.418
+   },
+   "n_decisions": 3554,
+   "p_next_fill_opposite_side": 0.2743,
+   "p_next_fill_same_side": 0.7257,
+   "residual_shares": {
+    "p50": 139.708,
+    "p90": 260.199
+   },
+   "residual_units": {
+    "max": 73.544,
+    "p50": 12.281,
+    "p75": 18.973,
+    "p90": 25.457
+   },
+   "residual_usd": {
+    "p50": 45.366,
+    "p90": 88.036
+   },
+   "share_of_decisions_above_our_6_unit_cap": 0.8467
+  },
+  "p45-55c|tte>10m|imb10-50": {
+   "abs_inventory_units": {
+    "p50": 8.049,
+    "p90": 47.079
+   },
+   "matched_units": {
+    "p50": 2.84,
+    "p90": 21.806
+   },
+   "n_decisions": 1145,
+   "p_next_fill_opposite_side": 0.324,
+   "p_next_fill_same_side": 0.676,
+   "residual_shares": {
+    "p50": 27.321,
+    "p90": 44.948
+   },
+   "residual_units": {
+    "max": 9.049,
+    "p50": 2.303,
+    "p75": 3.272,
+    "p90": 4.361
+   },
+   "residual_usd": {
+    "p50": 13.362,
+    "p90": 22.331
+   },
+   "share_of_decisions_above_our_6_unit_cap": 0.0236
+  },
+  "p<10c|tte>10m|imb10-50": {
+   "abs_inventory_units": {
+    "p50": 93.116,
+    "p90": 99.274
+   },
+   "matched_units": {
+    "p50": 44.69,
+    "p90": 48.898
+   },
+   "n_decisions": 15,
+   "p_next_fill_opposite_side": 0.4667,
+   "p_next_fill_same_side": 0.5333,
+   "residual_shares": {
+    "p50": 36.975,
+    "p90": 46.945
+   },
+   "residual_units": {
+    "max": 4.905,
+    "p50": 2.465,
+    "p75": 4.395,
+    "p90": 4.695
+   },
+   "residual_usd": {
+    "p50": 3.206,
+    "p90": 4.216
+   },
+   "share_of_decisions_above_our_6_unit_cap": 0.0
+  }
+ },
+ "labels": "L5 canonical history, normalised by HIS OWN per-window median clip so his bankroll is not imported into our units; read-only research",
+ "our_live_cap_units": 6,
+ "window_level": {
+  "matched_fraction_of_inventory": {
+   "n": 2216,
+   "p50": 0.623,
+   "p90": 0.958
+  },
+  "terminal_residual_units": {
+   "max": 146.867,
+   "n": 2216,
+   "p50": 2.0,
+   "p75": 4.137,
+   "p90": 14.978
+  }
+ }
+}

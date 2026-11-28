@@ -1,0 +1,135 @@
+windows: 187 (first half 93, second half 94)
+== PART A: one quote round, USD per share, mean of window means [95% over windows] ==
+   net = pair gain + lone leg at SETTLEMENT;  net@mark = pair gain + lone leg at its bid when filled
+-- all rounds
+   FIRST HALF  n= 2077 both 18.5% one 76.1%  pair +0.0025 [+0.002,+0.003]  lone -0.0373 [-0.053,-0.023]
+               net -0.0347 [-0.050,-0.020]   net@mark -0.0257 [-0.028,-0.024]
+   SECOND HALF n= 2081 both 20.7% one 72.0%  pair +0.0026 [+0.002,+0.003]  lone -0.0400 [-0.052,-0.027]
+               net -0.0374 [-0.050,-0.025]   net@mark -0.0239 [-0.027,-0.021]
+-- t < 60 s
+   FIRST HALF  n=  495 both 23.0% one 73.5%  pair +0.0030 [+0.002,+0.004]  lone -0.0257 [-0.062,+0.011]
+               net -0.0227 [-0.059,+0.014]   net@mark -0.0250 [-0.028,-0.022]
+   SECOND HALF n=  523 both 22.0% one 73.6%  pair +0.0027 [+0.002,+0.003]  lone -0.0117 [-0.053,+0.031]
+               net -0.0090 [-0.050,+0.034]   net@mark -0.0232 [-0.026,-0.020]
+-- t 60-150 s
+   FIRST HALF  n=  828 both 19.3% one 76.4%  pair +0.0025 [+0.002,+0.003]  lone -0.0370 [-0.066,-0.009]
+               net -0.0345 [-0.063,-0.007]   net@mark -0.0261 [-0.029,-0.024]
+   SECOND HALF n=  824 both 22.3% one 71.0%  pair +0.0028 [+0.002,+0.003]  lone -0.0456 [-0.072,-0.021]
+               net -0.0428 [-0.069,-0.018]   net@mark -0.0228 [-0.026,-0.020]
+-- t >= 150 s
+   FIRST HALF  n=  754 both 14.7% one 77.3%  pair +0.0019 [+0.002,+0.002]  lone -0.0408 [-0.057,-0.024]
+               net -0.0388 [-0.055,-0.022]   net@mark -0.0235 [-0.028,-0.020]
+   SECOND HALF n=  734 both 17.8% one 72.1%  pair +0.0020 [+0.001,+0.003]  lone -0.0478 [-0.064,-0.033]
+               net -0.0458 [-0.063,-0.031]   net@mark -0.0229 [-0.029,-0.018]
+-- spread 0.01
+   FIRST HALF  n= 1449 both 19.5% one 76.3%  pair +0.0019 [+0.002,+0.002]  lone -0.0375 [-0.054,-0.021]
+               net -0.0356 [-0.052,-0.020]   net@mark -0.0250 [-0.027,-0.023]
+   SECOND HALF n= 1464 both 22.7% one 70.8%  pair +0.0023 [+0.002,+0.003]  lone -0.0324 [-0.050,-0.014]
+               net -0.0301 [-0.047,-0.012]   net@mark -0.0210 [-0.024,-0.018]
+-- spread 0.02
+   FIRST HALF  n=  512 both 18.2% one 75.2%  pair +0.0041 [+0.003,+0.005]  lone -0.0498 [-0.081,-0.017]
+               net -0.0457 [-0.077,-0.014]   net@mark -0.0254 [-0.030,-0.021]
+   SECOND HALF n=  456 both 17.3% one 75.4%  pair +0.0036 [+0.003,+0.005]  lone -0.0575 [-0.088,-0.028]
+               net -0.0538 [-0.085,-0.024]   net@mark -0.0237 [-0.029,-0.019]
+-- spread >= 0.03
+   FIRST HALF  n=  116 both  7.8% one 77.6%  pair +0.0034 [+0.001,+0.006]  lone -0.0425 [-0.118,+0.032]
+               net -0.0391 [-0.115,+0.036]   net@mark -0.0353 [-0.047,-0.025]
+   SECOND HALF n=  161 both 11.2% one 73.3%  pair +0.0031 [+0.001,+0.005]  lone -0.0438 [-0.110,+0.025]
+               net -0.0407 [-0.107,+0.029]   net@mark -0.0480 [-0.061,-0.036]
+-- favourite bid < 0.60
+   FIRST HALF  n=  429 both 26.6% one 71.3%  pair +0.0034 [+0.003,+0.004]  lone -0.0629 [-0.107,-0.018]
+               net -0.0595 [-0.104,-0.015]   net@mark -0.0320 [-0.037,-0.027]
+   SECOND HALF n=  456 both 23.9% one 71.1%  pair +0.0031 [+0.002,+0.004]  lone -0.0894 [-0.142,-0.037]
+               net -0.0863 [-0.139,-0.033]   net@mark -0.0341 [-0.040,-0.028]
+-- favourite bid 0.60-0.80
+   FIRST HALF  n=  794 both 20.9% one 76.8%  pair +0.0028 [+0.002,+0.003]  lone -0.0865 [-0.113,-0.061]
+               net -0.0837 [-0.111,-0.058]   net@mark -0.0320 [-0.036,-0.028]
+   SECOND HALF n=  730 both 26.3% one 71.8%  pair +0.0031 [+0.003,+0.004]  lone -0.0805 [-0.111,-0.051]
+               net -0.0774 [-0.108,-0.048]   net@mark -0.0299 [-0.034,-0.026]
+-- favourite bid >= 0.80
+   FIRST HALF  n=  854 both 12.3% one 77.8%  pair +0.0016 [+0.001,+0.002]  lone -0.0215 [-0.041,-0.003]
+               net -0.0199 [-0.039,-0.001]   net@mark -0.0196 [-0.024,-0.016]
+   SECOND HALF n=  895 both 14.4% one 72.7%  pair +0.0020 [+0.002,+0.003]  lone -0.0364 [-0.062,-0.016]
+               net -0.0344 [-0.060,-0.014]   net@mark -0.0188 [-0.024,-0.015]
+-- moved < 1c in last 10 s
+   FIRST HALF  n=  458 both 15.3% one 76.4%  pair +0.0024 [+0.002,+0.003]  lone -0.0189 [-0.056,+0.021]
+               net -0.0165 [-0.053,+0.023]   net@mark -0.0235 [-0.028,-0.019]
+   SECOND HALF n=  545 both 13.8% one 71.9%  pair +0.0017 [+0.001,+0.002]  lone -0.0237 [-0.058,+0.011]
+               net -0.0220 [-0.057,+0.013]   net@mark -0.0228 [-0.028,-0.018]
+-- moved 1-3c in last 10 s
+   FIRST HALF  n=  429 both 16.8% one 77.2%  pair +0.0028 [+0.002,+0.004]  lone -0.0372 [-0.072,-0.004]
+               net -0.0344 [-0.070,-0.001]   net@mark -0.0223 [-0.026,-0.018]
+   SECOND HALF n=  473 both 19.9% one 72.5%  pair +0.0025 [+0.002,+0.003]  lone -0.0359 [-0.071,-0.002]
+               net -0.0333 [-0.068,+0.000]   net@mark -0.0208 [-0.025,-0.017]
+-- moved >= 3c in last 10 s
+   FIRST HALF  n= 1095 both 20.5% one 75.9%  pair +0.0024 [+0.002,+0.003]  lone -0.0462 [-0.068,-0.024]
+               net -0.0438 [-0.066,-0.022]   net@mark -0.0284 [-0.031,-0.026]
+   SECOND HALF n=  968 both 25.5% one 72.0%  pair +0.0031 [+0.003,+0.004]  lone -0.0511 [-0.071,-0.032]
+               net -0.0480 [-0.068,-0.028]   net@mark -0.0254 [-0.029,-0.022]
+-- model within 3c of mid
+   FIRST HALF  n=  494 both 17.2% one 75.9%  pair +0.0028 [+0.002,+0.004]  lone -0.0717 [-0.108,-0.036]
+               net -0.0689 [-0.105,-0.033]   net@mark -0.0272 [-0.032,-0.023]
+   SECOND HALF n=  490 both 15.7% one 70.2%  pair +0.0023 [+0.002,+0.003]  lone -0.0696 [-0.108,-0.033]
+               net -0.0673 [-0.107,-0.030]   net@mark -0.0256 [-0.031,-0.020]
+-- model >= 8c from mid
+   FIRST HALF  n=  860 both 16.4% one 77.8%  pair +0.0020 [+0.002,+0.002]  lone -0.0421 [-0.066,-0.019]
+               net -0.0401 [-0.064,-0.017]   net@mark -0.0256 [-0.028,-0.023]
+   SECOND HALF n=  932 both 22.0% one 73.9%  pair +0.0029 [+0.002,+0.003]  lone -0.0579 [-0.077,-0.039]
+               net -0.0550 [-0.074,-0.036]   net@mark -0.0243 [-0.028,-0.021]
+-- calm: spread>=0.02, moved<1c, t<150
+   FIRST HALF  n=   76 both 15.8% one 77.6%  pair +0.0032 [+0.002,+0.005]  lone -0.0168 [-0.108,+0.085]
+               net -0.0136 [-0.105,+0.088]   net@mark -0.0263 [-0.034,-0.019]
+   SECOND HALF n=   89 both 11.2% one 78.7%  pair +0.0024 [+0.001,+0.004]  lone -0.0515 [-0.132,+0.032]
+               net -0.0490 [-0.131,+0.034]   net@mark -0.0285 [-0.042,-0.019]
+
+== PART B: the existing controller, USD per window, mean [95% over windows] ==
+-- live configuration
+   FIRST HALF  fills 1541  matched -0.0075 [-0.014,-0.000]  residual -0.0122 [-0.028,+0.005]
+               net -0.0197 [-0.040,+0.002]   avg matched pair cost 1.0171
+   SECOND HALF fills 1543  matched -0.0094 [-0.015,-0.003]  residual -0.0200 [-0.034,-0.004]
+               net -0.0294 [-0.047,-0.010]   avg matched pair cost 1.0227
+-- pair ceiling 0.98
+   FIRST HALF  fills  642  matched -0.0013 [-0.006,+0.003]  residual -0.0148 [-0.022,-0.007]
+               net -0.0161 [-0.025,-0.007]   avg matched pair cost 1.0073
+   SECOND HALF fills  613  matched -0.0011 [-0.005,+0.002]  residual -0.0179 [-0.026,-0.010]
+               net -0.0190 [-0.028,-0.010]   avg matched pair cost 1.0065
+-- pair ceiling 0.97
+   FIRST HALF  fills  107  matched +0.0005 [-0.001,+0.002]  residual -0.0025 [-0.008,+0.003]
+               net -0.0020 [-0.008,+0.004]   avg matched pair cost 0.9765
+   SECOND HALF fills  150  matched +0.0019 [+0.000,+0.004]  residual -0.0063 [-0.013,+0.000]
+               net -0.0044 [-0.012,+0.003]   avg matched pair cost 0.9437
+-- no new entry after 150 s
+   FIRST HALF  fills 1284  matched -0.0182 [-0.023,-0.014]  residual -0.0040 [-0.019,+0.013]
+               net -0.0222 [-0.037,-0.005]   avg matched pair cost 1.0457
+   SECOND HALF fills 1300  matched -0.0184 [-0.023,-0.015]  residual -0.0094 [-0.024,+0.007]
+               net -0.0278 [-0.043,-0.011]   avg matched pair cost 1.0484
+-- no new entry after 60 s
+   FIRST HALF  fills  568  matched -0.0058 [-0.008,-0.004]  residual +0.0017 [-0.010,+0.014]
+               net -0.0041 [-0.016,+0.008]   avg matched pair cost 1.0311
+   SECOND HALF fills  573  matched -0.0069 [-0.009,-0.005]  residual +0.0012 [-0.012,+0.015]
+               net -0.0058 [-0.019,+0.009]   avg matched pair cost 1.0400
+-- unmatched cap $0.03
+   FIRST HALF  fills 1025  matched -0.0088 [-0.012,-0.005]  residual -0.0092 [-0.012,-0.006]
+               net -0.0180 [-0.023,-0.013]   avg matched pair cost 1.0322
+   SECOND HALF fills 1048  matched -0.0070 [-0.011,-0.002]  residual -0.0094 [-0.012,-0.006]
+               net -0.0165 [-0.022,-0.010]   avg matched pair cost 1.0261
+-- shade heavy side 1 tick/clip
+   FIRST HALF  fills 1409  matched -0.0117 [-0.018,-0.006]  residual -0.0101 [-0.023,+0.004]
+               net -0.0218 [-0.039,-0.004]   avg matched pair cost 1.0262
+   SECOND HALF fills 1417  matched -0.0132 [-0.019,-0.007]  residual -0.0162 [-0.028,-0.004]
+               net -0.0294 [-0.043,-0.014]   avg matched pair cost 1.0305
+-- shade heavy side 3 ticks/clip
+   FIRST HALF  fills 1334  matched -0.0164 [-0.021,-0.011]  residual -0.0099 [-0.021,+0.002]
+               net -0.0263 [-0.040,-0.012]   avg matched pair cost 1.0370
+   SECOND HALF fills 1326  matched -0.0187 [-0.024,-0.014]  residual -0.0121 [-0.023,+0.000]
+               net -0.0307 [-0.043,-0.017]   avg matched pair cost 1.0441
+-- one-sided rule
+   FIRST HALF  fills 1425  matched -0.0099 [-0.017,-0.003]  residual -0.0102 [-0.022,+0.004]
+               net -0.0201 [-0.036,-0.003]   avg matched pair cost 1.0230
+   SECOND HALF fills 1453  matched -0.0117 [-0.018,-0.006]  residual -0.0166 [-0.028,-0.003]
+               net -0.0282 [-0.044,-0.011]   avg matched pair cost 1.0284
+-- ceiling 0.98 + cap $0.03 + stop 150 s
+   FIRST HALF  fills  167  matched -0.0000 [-0.001,+0.001]  residual -0.0029 [-0.008,+0.003]
+               net -0.0029 [-0.008,+0.003]   avg matched pair cost 1.0006
+   SECOND HALF fills  171  matched -0.0001 [-0.001,+0.001]  residual -0.0031 [-0.007,+0.001]
+               net -0.0033 [-0.007,+0.001]   avg matched pair cost 1.0038

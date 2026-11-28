@@ -1,0 +1,3 @@
+timestamp,datetime_utc,condition_id,market_slug,event_slug,title,asset,window_minutes,window_source,exclusion_reason,market_flags,side,outcome,price,shares,dollars
+1750000100,2025-06-15T15:08:20Z,0xbtc1h,bitcoin-up-or-down-hourly,event,title,BTC,,none,window_not_5_or_15:none,duration_off_bucket:3600s,BUY,Up,0.6,10.0,6.0
+1750000100,2025-06-15T15:08:20Z,0xsol5m,solana-up-or-down-5m,event,title,,5,both_agree,asset_not_btc_eth,asset_unknown,BUY,Up,0.6,10.0,6.0

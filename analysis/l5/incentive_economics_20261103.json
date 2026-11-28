@@ -1,0 +1,177 @@
+{
+  "schema": "incentive_economics/1",
+  "retrieved_utc": "2026-11-03T05:10:00Z",
+  "question": "Is there a verified incentive program that makes BTC15m -- or any accessible PMUS/Kalshi market -- net profitable at our capital?",
+  "labels": {
+    "CONFIRMED_PAID": "the venue credited this account and we hold the record",
+    "MEASURED_PROGRAM": "fetched live from the venue's own program API today; a published program, NOT money received",
+    "ESTIMATED": "arithmetic on measured program parameters at our size; never counted as realized",
+    "UNVERIFIED": "a unit or formula we have not confirmed against a credited payout"
+  },
+
+  "confirmed_paid": {
+    "pmus_maker_rebate": {
+      "credited_usd": "10.3600",
+      "charged_usd": "2.8600",
+      "net_usd": "7.5000",
+      "fills_with_a_credit": 825,
+      "fills_at_or_above_rebate_floor": 944,
+      "source": "pmus_incentive_audit single run, 2026-10-07T03:07:47Z, recovered from Railway deploy logs",
+      "mechanism": "per-fill NEGATIVE commission, not a program. credit = round_half_even(0.0125 * qty * p * (1-p), $0.01)",
+      "rate_per_contract_usd": "0.00351",
+      "rate_basis": "the separate 25-row credit set: $0.4200 over 119.4900 contracts. Believed a SUBSET of the 825 credited fills; never summed with them.",
+      "program_attribution": "NONE -- this is an exchange-wide fee rebate, attributable to no programId"
+    },
+    "pmus_liquidity_program_payouts": {
+      "usd": "0.00",
+      "why": "0 published programs have ever covered a market we traded"
+    },
+    "kalshi": {"usd": "0.00", "why": "no incentivised Kalshi market has ever been traded by this account"},
+    "gemini": {"usd": "NOT_INGESTED", "why": "AdminCredit export unreachable; venue illustration is not our executions"},
+    "btc15m_specifically": {
+      "liquidity_program_credits_ever_usd": "0.00",
+      "maker_rebate_on_the_4_nov2_fills": {
+        "expected_usd": "0.03",
+        "confirmed_usd": null,
+        "per_fill": [
+          {"window": "2215z", "qty": "1.92", "p": "0.39", "raw": "0.005710", "expected_credit": "0.01"},
+          {"window": "2230z", "qty": "2.04", "p": "0.47", "raw": "0.006352", "expected_credit": "0.01"},
+          {"window": "2245z", "qty": "2.00", "p": "0.45", "raw": "0.006188", "expected_credit": "0.01"},
+          {"window": "2300z", "qty": "1.68", "p": "0.21", "raw": "0.003484", "expected_credit": "0.00", "note": "below the $0.005 rounding floor"}
+        ],
+        "why_unconfirmed": "all four fees_actual rows carry rebate_usd: None. The executor reads commissionNotionalTotalCollected on /v1/order/{id}; the credit is posted as commissionNotionalCollected on /v1/portfolio/activities -- a different field on a different object."
+      }
+    },
+    "unresolved": [
+      {"item": "earnings_endpoint_vs_per_fill", "endpoint_usd": "10.5100", "per_fill_usd": "10.3600",
+       "difference_usd": "0.1500", "rule": "two venue measures of one quantity; neither discarded, never summed"},
+      {"item": "per_fill_credit_detail_lost", "why": "written to container-local /tmp and lost when the deployment was removed",
+       "remedy": "re-run pmus_incentive_audit where the credentials live"},
+      {"item": "no_audit_run_since_2026_10_07", "why": "service emitted nothing after 2026-11-01T15:40Z"}
+    ]
+  },
+
+  "measured_program_state": {
+    "method": "gateway.polymarket.us/v1/incentives (public, unauthenticated) swept to 700 pages; api.elections.kalshi.com/trade-api/v2/incentive_programs swept to exhaustion. No credentials used; nothing submitted.",
+    "pmus": {
+      "entries_swept": 70000,
+      "categories": {"POL": 70000},
+      "distinct_programs": 1,
+      "program": {
+        "programId": "politics_t4_coverage_20261103",
+        "programType": "liquidityProgram",
+        "rewardPool": 2,
+        "targetSize": 2000,
+        "maxSpread": 0.06,
+        "discountFactor": 0.4,
+        "period": "daily_event",
+        "status": "active",
+        "distinct_markets": 100,
+        "instrumentProducts": ["ewc", "cmovcusg", "cmovcuss", "nocc", "nphc"],
+        "venue_wide_spend_usd_per_day": "200.00"
+      },
+      "crypto_entries": 0,
+      "cpc_slug_entries": 0,
+      "updown_entries": 0,
+      "sports_entries": 0,
+      "btc15m_direct_check": {
+        "slug": "cpc-btc-updown-15m-2026-11-03-0500z",
+        "http": 200,
+        "reward_fields_present": "NONE",
+        "verdict": "NOT ELIGIBLE -- the market object carries no rewards/incentive block of any kind"
+      }
+    },
+    "kalshi": {
+      "programs_swept": 60000,
+      "active_now": 4220,
+      "target_sizes": {"1000.00": 4160, "2500.00": 60},
+      "discount_factor_bps": 5000,
+      "incentive_type": "liquidity",
+      "period_reward_unit": "UNVERIFIED -- centi-cents assumed (10,000 = $1), which fits Kalshi's advertised $1-$1,000 per market per day",
+      "largest_active_usd_per_day": [
+        {"ticker": "KXRAINDPARIS-03SEP27-T0", "pool_raw": 10000000, "days": 5.9, "usd_per_day": "168.41"},
+        {"ticker": "KXONIONACT-30JAN01-30JAN01", "pool_raw": 8600000, "days": 6.0, "usd_per_day": "142.53"},
+        {"ticker": "KXBAA-28JANDELIV-650", "pool_raw": 5000000, "days": 14.0, "usd_per_day": "35.71"}
+      ],
+      "measured_books_on_the_largest_pools": "EMPTY on both sides (yes and no) for all six sampled",
+      "fifteen_minute_series_active_programs": {
+        "KXBTC15M": "absent from the program list entirely",
+        "KXCRYPTOLEAD15M": {"programs": 4050, "active": 0},
+        "KXNATGAS15M": {"programs": 642, "active": 0},
+        "KXCOPPER15M": {"programs": 583, "active": 0},
+        "KXPLATINUM15M": {"programs": 583, "active": 0},
+        "KXPALLADIUM15M": {"programs": 583, "active": 0},
+        "KXBRENT15M": {"programs": 429, "active": 0},
+        "KXEURUSD15M": {"programs": 617, "active": 0},
+        "KXUSDJPY15M": {"programs": 617, "active": 0},
+        "KX10YRRATE15M": {"programs": 166, "active": 0}
+      },
+      "verdict": "every 15-minute series has ZERO active programs. The August 2026 KXCRYPTOLEAD15M opportunity has expired."
+    },
+    "pmus_fee_schedule_confirmed": {
+      "taker_theta": "0.06", "maker_theta": "-0.0125", "taker_max_usd": "1.50", "maker_rebate_max_usd": "0.31",
+      "rounding": "banker's, to $0.01",
+      "reduced_taker_tier_threshold_usd": "250000 prior-calendar-month taker volume",
+      "our_tier": "base rate; orders of magnitude below the first tier",
+      "source": "docs.polymarket.us/fees fetched 2026-09-13, effective 2026-07-01",
+      "note": "the deployed executor uses taker theta 0.0695; the documented exchange-wide figure is 0.06. The maker rebate 0.0125 agrees in both and is the only term that matters here."
+    }
+  },
+
+  "estimated_achievable_share": {
+    "basis": "our capital converted to contracts at p=0.50, against the program's own targetSize. ESTIMATED, never realized.",
+    "capital": {"cash_usd": "12", "exposure_cap_usd": "20", "contracts_at_12": 24, "contracts_at_20": 40},
+    "pmus_politics": {"share_of_target_pct": "1.20", "usd_per_day_per_market": "0.0240",
+                      "at_exposure_cap": {"share_pct": "2.00", "usd_per_day": "0.0400"},
+                      "venue_wide_ceiling_usd_per_day": "200.00"},
+    "kalshi_best_active": {"share_of_target_pct": "2.40", "usd_per_day": "4.0418",
+                           "at_exposure_cap": {"share_pct": "4.00", "usd_per_day": "6.7364"},
+                           "caveat": "assumes scoring against targetSize with no competing qualifier. The sampled books are EMPTY, which is both the upside and the warning: no price discovery, maximum adverse selection, and settlement in 2027-2030."},
+    "kalshi_median_active": {"usd_per_day": "1.0286", "at_exposure_cap": "1.7144"}
+  },
+
+  "target_arithmetic": {
+    "confirmed_rate_usd_per_contract": "0.00351",
+    "contracts_per_day_for_480": 136752,
+    "notional_per_day_usd": 68376,
+    "contracts_per_15m_window": 1425,
+    "deployed_clip_contracts": 3,
+    "shortfall_multiple": "475x",
+    "verdict": "the confirmed maker-rebate rate cannot reach $480/day at any size this account can fund."
+  },
+
+  "integrated_ledger_no_double_count": {
+    "rule": "realized net = matched-pair P&L + residual P&L + CONFIRMED credited incentives - fees. Published programs and formula estimates are excluded.",
+    "btc15m_89_usable_basis_windows": {"matched_pnl_usd": "+13.4089", "residual_pnl_usd": "-15.0963", "settlement_net_usd": "-1.6874"},
+    "nov2_campaign_4_windows": {"matched_pnl_usd": "0.0000", "residual_pnl_usd": "-2.9604", "confirmed_incentive_usd": "0.00", "expected_incentive_usd": "0.03"},
+    "account_confirmed_incentive_usd": "+7.5000",
+    "double_count_guards": [
+      "the $10.51 earnings endpoint and the $10.36 per-fill total are two measures of one quantity -- never summed",
+      "the $0.42 / 25-row set is believed a subset of the 825 credited fills -- never summed with them",
+      "the $7.50 net account incentive spans markets far beyond BTC15m and is NOT attributable to the BTC15m ledger",
+      "L5's international MAKER_REBATE/REWARD/TAKER_REBATE streams are another venue and another era -- never cross-attributed"
+    ]
+  },
+
+  "ranking": [
+    {"rank": 1, "opportunity": "PMUS maker rebate on existing BTC15m flow",
+     "expected_net": "+$0.03 per four-window campaign", "capital": "none beyond current",
+     "ops_cost": "zero -- already in force", "adverse_selection": "unchanged",
+     "verdict": "the only incentive that has ever paid this account, and far too small to offset a -$2.96 campaign."},
+    {"rank": 2, "opportunity": "Kalshi liquidity programs on active long-dated markets",
+     "expected_net": "$1-$7/day gross at our capital, before adverse selection",
+     "capital": "targetSize 1000 contracts is ~$500/market, 25x our cash and above the $20 exposure cap",
+     "ops_cost": "a Kalshi executor does not exist -- new venue integration, which is out of scope",
+     "adverse_selection": "unquantifiable: the sampled books are empty, settlement is 2027-2030, capital locks for years",
+     "verdict": "largest measured pools, least executable."},
+    {"rank": 3, "opportunity": "PMUS politics liquidity program politics_t4_coverage_20261103",
+     "expected_net": "$0.024/day/market; $200/day is the entire venue-wide ceiling",
+     "capital": "targetSize 2000 contracts ~ $1,000/market", "ops_cost": "needs a politics model we do not have",
+     "adverse_selection": "6c max spread forces tight two-sided quoting in markets we cannot price",
+     "verdict": "capturing 100% of PMUS's entire reward spend would still not reach $480/day."}
+  ],
+
+  "recommendation": "NO-GO on incentives as a path to profitability at current capital. BTC15m is confirmed ineligible for every PMUS program; every 15-minute series on both venues has zero active programs; and the one incentive that has ever paid this account -- the exchange-wide maker rebate at $0.00351/contract -- is 475x short of the $480/day target at our clip.",
+  "next_executable_action": "Re-run pmus_incentive_audit where the credentials live (the Railway service), to (a) close the $0.15 earnings-vs-per-fill gap, (b) recover the per-fill credit detail lost with the removed deployment, and (c) confirm or refute the $0.03 expected rebate on the four Nov-2 BTC15m fills. Read-only, no orders, no new service. Until that runs, no incentive-inclusive realized figure can be claimed for BTC15m at all.",
+  "also_worth_fixing": "the executor reads commissionNotionalTotalCollected on /v1/order/{id} while the credit is posted as commissionNotionalCollected on /v1/portfolio/activities. Until that is reconciled, maker rebates on live fills will keep recording as UNKNOWN."
+}

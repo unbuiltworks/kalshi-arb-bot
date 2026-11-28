@@ -1,0 +1,272 @@
+sample: fills 3854 (maker 3062, taker 792), conditions 345, games 305; fill time 2026-11-18T19:19 .. 2026-11-21T21:17 UTC
+tape covers the fill time: 3854 of 3854 fills; conditions with tape 345, tape rows 161927, truncated by page cap 0
+fill found on the public tape (same tx, same price): {('maker', 'found'): 2818, ('maker', 'side as expected'): 2818, ('taker', 'found'): 792, ('taker', 'side as expected'): 792, ('maker', 'tx found, price differs'): 244}
+5-min history price vs tape prints: {'outside': 936, 'between bid-side and ask-side print': 2183}
+
+## A. HEADLINE markout by horizon (cents per share)
+
+MAKER
+| cell | n | coverage | games | mean c/share | 95% CI (mean) | median c | mean % of price | share-weighted mean c |
+|---|---|---|---|---|---|---|---|---|
+| 5s tape, last print | 1414 | 46% | 152 | +0.17 | [+0.04, +0.28] | +0.00 | +1.15% | +0.34 |
+| 5s tape, same-side print | 1037 | 34% | 135 | -0.21 | [-0.37, -0.09] | +0.00 | -0.86% | -0.13 |
+| 5s tape, bid/ask-print average | 271 | 9% | 60 | +0.02 | [-0.48, +0.37] | +0.50 | +0.57% | +0.35 |
+| 30s tape, last print | 2373 | 78% | 175 | +0.18 | [+0.03, +0.34] | +0.00 | +0.77% | +0.35 |
+| 30s tape, same-side print | 2072 | 68% | 160 | -0.28 | [-0.45, -0.13] | +0.00 | -1.32% | -0.29 |
+| 30s tape, bid/ask-print average | 1267 | 41% | 111 | +0.23 | [+0.01, +0.46] | +0.50 | +1.34% | +0.37 |
+| 30s 1-min history | 1382 | 45% | 197 | +0.45 | [+0.31, +0.57] | +0.50 | +9.91% | +0.35 |
+| 120s tape, last print | 2807 | 92% | 202 | -0.08 | [-0.43, +0.27] | +0.00 | +0.23% | +0.45 |
+| 120s tape, same-side print | 2603 | 85% | 182 | -0.70 | [-1.03, -0.37] | -0.00 | -4.10% | -0.45 |
+| 120s tape, bid/ask-print average | 2106 | 69% | 147 | -0.26 | [-0.67, +0.11] | +0.00 | -1.75% | +0.15 |
+| 120s 1-min history | 2929 | 96% | 251 | +0.16 | [-0.09, +0.41] | +0.35 | +7.83% | +0.45 |
+| 300s tape, last print | 2944 | 96% | 219 | -0.90 | [-2.03, +0.05] | +0.00 | -3.14% | -0.72 |
+| 300s tape, same-side print | 2830 | 92% | 201 | -1.48 | [-2.67, -0.59] | -0.00 | -7.98% | -1.22 |
+| 300s tape, bid/ask-print average | 2563 | 84% | 170 | -1.04 | [-2.34, -0.04] | -0.00 | -3.89% | -0.82 |
+| 300s 1-min history | 2894 | 94% | 250 | -0.59 | [-1.63, +0.30] | +0.15 | +1.60% | -0.41 |
+| 900s tape, last print | 3031 | 99% | 234 | -1.44 | [-3.34, +0.15] | -0.00 | -9.70% | -1.39 |
+| 900s tape, same-side print | 2978 | 97% | 219 | -1.87 | [-3.72, -0.34] | -0.60 | -10.87% | -1.75 |
+| 900s tape, bid/ask-print average | 2847 | 93% | 200 | -1.35 | [-3.44, +0.23] | -0.20 | -6.63% | -1.18 |
+| 900s 1-min history | 2893 | 94% | 248 | -1.27 | [-3.18, +0.34] | -0.05 | -6.06% | -0.82 |
+
+TAKER
+| cell | n | coverage | games | mean c/share | 95% CI (mean) | median c | mean % of price | share-weighted mean c |
+|---|---|---|---|---|---|---|---|---|
+| 5s tape, last print | 509 | 64% | 57 | +1.16 | [+0.79, +1.59] | +1.00 | +2.94% | +1.23 |
+| 5s tape, same-side print | 374 | 47% | 49 | +1.56 | [+1.18, +1.99] | +1.00 | +4.29% | +1.70 |
+| 5s tape, bid/ask-print average | 176 | 22% | 38 | +1.22 | [+0.86, +1.62] | +1.00 | +3.48% | +1.50 |
+| 30s tape, last print | 726 | 92% | 71 | +1.38 | [+1.04, +1.79] | +1.00 | +3.85% | +1.49 |
+| 30s tape, same-side print | 669 | 84% | 63 | +1.96 | [+1.60, +2.34] | +2.00 | +5.51% | +2.08 |
+| 30s tape, bid/ask-print average | 596 | 75% | 49 | +1.38 | [+1.02, +1.82] | +1.00 | +3.96% | +1.58 |
+| 30s 1-min history | 343 | 43% | 65 | +0.63 | [+0.24, +1.03] | +0.50 | +1.63% | +0.47 |
+| 120s tape, last print | 770 | 97% | 80 | +1.67 | [+1.26, +2.11] | +1.00 | +6.25% | +1.52 |
+| 120s tape, same-side print | 747 | 94% | 75 | +2.22 | [+1.80, +2.67] | +2.00 | +7.19% | +1.99 |
+| 120s tape, bid/ask-print average | 719 | 91% | 64 | +1.60 | [+1.20, +2.06] | +1.00 | +4.97% | +1.41 |
+| 120s 1-min history | 708 | 89% | 90 | +1.62 | [+1.24, +2.00] | +1.29 | +5.98% | +1.42 |
+| 300s tape, last print | 782 | 99% | 86 | +1.71 | [+1.19, +2.25] | +1.17 | +6.43% | +1.14 |
+| 300s tape, same-side print | 766 | 97% | 79 | +2.26 | [+1.75, +2.82] | +2.00 | +7.87% | +1.68 |
+| 300s tape, bid/ask-print average | 750 | 95% | 70 | +1.56 | [+1.03, +2.10] | +1.39 | +6.26% | +1.07 |
+| 300s 1-min history | 730 | 92% | 89 | +1.70 | [+1.24, +2.26] | +1.50 | +7.54% | +1.01 |
+| 900s tape, last print | 788 | 100% | 88 | +1.46 | [+0.14, +2.75] | +1.00 | +9.12% | +1.54 |
+| 900s tape, same-side print | 777 | 98% | 83 | +2.08 | [+0.83, +3.44] | +1.70 | +11.01% | +2.03 |
+| 900s tape, bid/ask-print average | 769 | 97% | 80 | +1.45 | [+0.18, +2.77] | +1.00 | +9.55% | +1.55 |
+| 900s 1-min history | 731 | 92% | 89 | +1.54 | [+0.32, +2.96] | +1.50 | +9.97% | +1.50 |
+
+print age (s) for usable tape values, median / p90, and stale (not usable) share
+  MAKER    5s: usable n 1414, age median 2 p90 4 | no print in window: 1648 of 3062 | STALE last-print mean +0.10c (n 3062, includes the fill itself as the last print)
+  MAKER   30s: usable n 2373, age median 5 p90 25 | no print in window: 689 of 3062 | STALE last-print mean +0.16c (n 3062, includes the fill itself as the last print)
+  MAKER  120s: usable n 2807, age median 11 p90 72 | no print in window: 255 of 3062 | STALE last-print mean -0.07c (n 3062, includes the fill itself as the last print)
+  MAKER  300s: usable n 2944, age median 13 p90 115 | no print in window: 118 of 3062 | STALE last-print mean -0.87c (n 3062, includes the fill itself as the last print)
+  MAKER  900s: usable n 3031, age median 22 p90 246 | no print in window: 31 of 3062 | STALE last-print mean -1.42c (n 3062, includes the fill itself as the last print)
+  TAKER    5s: usable n 509, age median 2 p90 4 | no print in window: 283 of 792 | STALE last-print mean +0.80c (n 792, includes the fill itself as the last print)
+  TAKER   30s: usable n 726, age median 3 p90 14 | no print in window: 66 of 792 | STALE last-print mean +1.29c (n 792, includes the fill itself as the last print)
+  TAKER  120s: usable n 770, age median 4 p90 32 | no print in window: 22 of 792 | STALE last-print mean +1.62c (n 792, includes the fill itself as the last print)
+  TAKER  300s: usable n 782, age median 4 p90 36 | no print in window: 10 of 792 | STALE last-print mean +1.69c (n 792, includes the fill itself as the last print)
+  TAKER  900s: usable n 788, age median 6 p90 69 | no print in window: 4 of 792 | STALE last-print mean +1.45c (n 792, includes the fill itself as the last print)
+
+## B. BREAKDOWNS, 1-min history price, 2 min and 5 min
+
+MAKER by timing
+| cell | n | coverage | games | mean c/share | 95% CI (mean) | median c | mean % of price | share-weighted mean c |
+|---|---|---|---|---|---|---|---|---|
+| before start 2min (fills 36) | 35 | 97% | 22 | +0.81 | [+0.38, +1.46] | +0.50 | +3.26% | +0.43 | SMALL-N
+| before start 5min (fills 36) | 35 | 97% | 22 | +0.99 | [+0.35, +1.71] | +0.50 | +3.95% | +0.37 | SMALL-N
+| in game 2min (fills 3026) | 2894 | 96% | 248 | +0.15 | [-0.10, +0.41] | +0.33 | +7.88% | +0.45 |
+| in game 5min (fills 3026) | 2859 | 94% | 247 | -0.61 | [-1.74, +0.27] | +0.10 | +1.57% | -0.44 |
+
+MAKER by price
+| cell | n | coverage | games | mean c/share | 95% CI (mean) | median c | mean % of price | share-weighted mean c |
+|---|---|---|---|---|---|---|---|---|
+| <0.20 2min (fills 868) | 813 | 94% | 163 | +0.02 | [-0.38, +0.45] | +0.10 | +28.42% | -0.08 |
+| <0.20 5min (fills 868) | 798 | 92% | 162 | -0.45 | [-1.19, +0.38] | -0.50 | +12.33% | -1.28 |
+| 0.20-0.40 2min (fills 559) | 542 | 97% | 119 | -0.93 | [-1.84, -0.09] | -0.50 | -3.04% | -0.57 |
+| 0.20-0.40 5min (fills 559) | 531 | 95% | 118 | -1.90 | [-3.61, -0.31] | -0.50 | -6.10% | -1.50 |
+| 0.40-0.60 2min (fills 721) | 698 | 97% | 86 | +0.45 | [-0.20, +1.25] | +0.50 | +0.88% | +0.80 |
+| 0.40-0.60 5min (fills 721) | 694 | 96% | 87 | -1.76 | [-5.24, +1.18] | -0.50 | -4.49% | -2.64 |
+| 0.60-0.80 2min (fills 405) | 382 | 94% | 100 | +0.94 | [+0.28, +1.58] | +0.50 | +1.42% | +1.11 |
+| 0.60-0.80 5min (fills 405) | 393 | 97% | 103 | +1.29 | [-0.98, +3.34] | +1.00 | +1.88% | +2.84 |
+| >0.80 2min (fills 509) | 494 | 97% | 103 | +0.56 | [+0.31, +0.85] | +0.40 | +0.63% | +0.74 |
+| >0.80 5min (fills 509) | 478 | 94% | 101 | +0.77 | [+0.06, +1.46] | +0.50 | +0.87% | +1.20 |
+
+MAKER by role
+| cell | n | coverage | games | mean c/share | 95% CI (mean) | median c | mean % of price | share-weighted mean c |
+|---|---|---|---|---|---|---|---|---|
+| OPEN 2min (fills 274) | 258 | 94% | 230 | +0.45 | [+0.04, +0.85] | +0.50 | +11.99% | +0.01 |
+| OPEN 5min (fills 274) | 262 | 96% | 230 | -0.12 | [-1.03, +0.71] | +0.50 | +7.33% | -0.52 |
+| EXTEND 2min (fills 517) | 504 | 98% | 128 | +0.57 | [-0.07, +1.20] | +0.50 | +25.52% | +1.92 |
+| EXTEND 5min (fills 517) | 498 | 96% | 128 | +0.76 | [-0.54, +2.05] | +0.50 | +14.62% | +3.95 |
+| COMPLETE 2min (fills 152) | 146 | 96% | 128 | +0.20 | [-0.31, +0.76] | +0.23 | +7.03% | -0.23 |
+| COMPLETE 5min (fills 152) | 143 | 94% | 126 | -0.04 | [-1.18, +1.09] | +0.50 | +13.03% | +0.02 |
+| ADD_BOTH 2min (fills 2119) | 2021 | 95% | 125 | +0.02 | [-0.33, +0.38] | +0.15 | +2.94% | +0.19 |
+| ADD_BOTH 5min (fills 2119) | 1991 | 94% | 126 | -1.03 | [-2.68, +0.24] | -0.05 | -3.23% | -1.56 |
+
+MAKER by sport
+| cell | n | coverage | games | mean c/share | 95% CI (mean) | median c | mean % of price | share-weighted mean c |
+|---|---|---|---|---|---|---|---|---|
+| tennis 2min (fills 636) | 631 | 99% | 57 | +0.23 | [-0.42, +1.02] | +0.50 | -1.64% | +0.75 |
+| tennis 5min (fills 636) | 626 | 98% | 57 | -0.63 | [-2.07, +0.90] | -0.50 | -6.82% | +0.66 |
+| basketball 2min (fills 546) | 511 | 94% | 40 | -0.08 | [-0.59, +0.44] | +0.50 | +0.41% | -0.18 |
+| basketball 5min (fills 546) | 501 | 92% | 38 | +0.60 | [-0.21, +1.40] | +0.50 | +0.17% | -0.16 |
+| am.football 2min (fills 309) | 286 | 93% | 18 | +0.66 | [-0.19, +1.21] | +0.50 | +4.26% | +1.22 |
+| am.football 5min (fills 309) | 275 | 89% | 19 | +0.93 | [-1.36, +2.41] | +0.50 | +5.30% | +1.63 |
+| soccer+other 2min (fills 1509) | 1441 | 96% | 131 | +0.09 | [-0.22, +0.45] | +0.15 | +15.63% | -0.12 |
+| soccer+other 5min (fills 1509) | 1437 | 95% | 131 | -1.19 | [-2.95, +0.30] | +0.10 | +5.55% | -2.13 |
+| hockey 2min (fills 27) | 27 | 100% | 3 | +0.94 | [+0.69, +1.50] | +0.50 | +2.48% | +1.30 | SMALL-N
+| hockey 5min (fills 27) | 27 | 100% | 3 | -6.32 | [-56.95, +0.67] | +0.50 | -19.41% | -11.76 | SMALL-N
+| esports 2min (fills 35) | 33 | 94% | 2 | +0.29 | [-0.12, +4.33] | +0.50 | -1.72% | -0.83 | SMALL-N
+| esports 5min (fills 35) | 28 | 80% | 2 | +0.30 | [-0.34, +5.67] | +1.00 | -3.12% | -0.54 | SMALL-N
+
+MAKER by size
+| cell | n | coverage | games | mean c/share | 95% CI (mean) | median c | mean % of price | share-weighted mean c |
+|---|---|---|---|---|---|---|---|---|
+| <$20 2min (fills 1336) | 1267 | 95% | 209 | +0.07 | [-0.30, +0.47] | +0.35 | +18.36% | +0.27 |
+| <$20 5min (fills 1336) | 1243 | 93% | 207 | -0.29 | [-1.23, +0.68] | +0.10 | +9.05% | -0.18 |
+| $20-100 2min (fills 652) | 623 | 96% | 136 | +0.04 | [-0.37, +0.44] | +0.25 | -1.07% | -0.17 |
+| $20-100 5min (fills 652) | 625 | 96% | 136 | -0.80 | [-2.63, +0.68] | +0.30 | -4.96% | -1.14 |
+| $100-500 2min (fills 674) | 648 | 96% | 141 | +0.21 | [-0.19, +0.67] | +0.20 | +0.06% | -0.08 |
+| $100-500 5min (fills 674) | 641 | 95% | 142 | -0.87 | [-2.14, +0.32] | +0.05 | -3.69% | -1.61 |
+| >=$500 2min (fills 400) | 391 | 98% | 87 | +0.56 | [+0.04, +1.05] | +0.50 | +0.73% | +0.76 |
+| >=$500 5min (fills 400) | 385 | 96% | 87 | -0.76 | [-3.29, +1.38] | +0.50 | -2.96% | +0.16 |
+
+TAKER by timing
+| cell | n | coverage | games | mean c/share | 95% CI (mean) | median c | mean % of price | share-weighted mean c |
+|---|---|---|---|---|---|---|---|---|
+| before start 2min (fills 1) | 1 | 100% | 1 | -3.50 | [-3.50, -3.50] | -3.50 | -5.22% | -3.50 | SMALL-N
+| before start 5min (fills 1) | 1 | 100% | 1 | +7.50 | [+7.50, +7.50] | +7.50 | +11.19% | +7.50 | SMALL-N
+| in game 2min (fills 791) | 707 | 89% | 90 | +1.62 | [+1.25, +2.04] | +1.34 | +5.99% | +1.42 |
+| in game 5min (fills 791) | 729 | 92% | 89 | +1.70 | [+1.16, +2.21] | +1.50 | +7.53% | +1.01 |
+
+TAKER by price
+| cell | n | coverage | games | mean c/share | 95% CI (mean) | median c | mean % of price | share-weighted mean c |
+|---|---|---|---|---|---|---|---|---|
+| <0.20 2min (fills 109) | 92 | 84% | 41 | +1.31 | [+0.46, +2.29] | +0.50 | +20.98% | +0.84 |
+| <0.20 5min (fills 109) | 101 | 93% | 41 | +1.48 | [-0.02, +3.29] | +0.50 | +30.64% | +0.93 |
+| 0.20-0.40 2min (fills 196) | 176 | 90% | 43 | +1.97 | [+0.91, +3.10] | +0.51 | +6.79% | +1.94 |
+| 0.20-0.40 5min (fills 196) | 185 | 94% | 44 | +1.83 | [-0.01, +3.68] | +0.50 | +6.20% | +2.08 |
+| 0.40-0.60 2min (fills 181) | 156 | 86% | 33 | +1.66 | [+0.83, +2.35] | +1.42 | +3.40% | +2.52 |
+| 0.40-0.60 5min (fills 181) | 166 | 92% | 32 | +1.58 | [+0.23, +2.70] | +1.50 | +3.49% | +1.04 |
+| 0.60-0.80 2min (fills 186) | 173 | 93% | 44 | +1.78 | [+0.98, +2.42] | +1.50 | +2.63% | +0.30 |
+| 0.60-0.80 5min (fills 186) | 168 | 90% | 45 | +2.17 | [+0.84, +3.59] | +1.50 | +3.25% | -0.13 |
+| >0.80 2min (fills 120) | 111 | 92% | 46 | +1.01 | [+0.35, +1.71] | +1.00 | +1.09% | +0.95 |
+| >0.80 5min (fills 120) | 110 | 92% | 45 | +1.17 | [+0.14, +2.40] | +1.50 | +1.23% | +0.76 |
+
+TAKER by role
+| cell | n | coverage | games | mean c/share | 95% CI (mean) | median c | mean % of price | share-weighted mean c |
+|---|---|---|---|---|---|---|---|---|
+| OPEN 2min (fills 52) | 47 | 90% | 47 | +1.73 | [+0.50, +3.04] | +1.00 | +10.90% | +6.80 | SMALL-N
+| OPEN 5min (fills 52) | 48 | 92% | 48 | +3.74 | [+1.72, +5.73] | +3.08 | +13.86% | +4.16 | SMALL-N
+| EXTEND 2min (fills 39) | 28 | 72% | 21 | +1.23 | [-0.47, +2.97] | +1.50 | +14.60% | +0.53 | SMALL-N
+| EXTEND 5min (fills 39) | 37 | 95% | 23 | +2.57 | [+0.02, +5.14] | +1.50 | +18.77% | +2.66 | SMALL-N
+| COMPLETE 2min (fills 25) | 22 | 88% | 21 | +1.30 | [-0.13, +2.49] | +1.77 | +11.45% | +0.83 | SMALL-N
+| COMPLETE 5min (fills 25) | 24 | 96% | 23 | +2.70 | [+0.33, +5.20] | +2.73 | +31.24% | +2.35 | SMALL-N
+| ADD_BOTH 2min (fills 676) | 611 | 90% | 64 | +1.64 | [+1.24, +2.04] | +1.20 | +5.01% | +1.11 |
+| ADD_BOTH 5min (fills 676) | 621 | 92% | 64 | +1.46 | [+0.88, +2.03] | +1.00 | +5.46% | +0.72 |
+
+TAKER by sport
+| cell | n | coverage | games | mean c/share | 95% CI (mean) | median c | mean % of price | share-weighted mean c |
+|---|---|---|---|---|---|---|---|---|
+| tennis 2min (fills 175) | 174 | 99% | 46 | +2.22 | [+1.31, +2.89] | +2.00 | +5.46% | -0.77 |
+| tennis 5min (fills 175) | 173 | 99% | 46 | +2.67 | [+1.48, +3.63] | +1.65 | +6.49% | -2.76 |
+| basketball 2min (fills 595) | 512 | 86% | 26 | +1.33 | [+0.94, +1.74] | +0.50 | +3.66% | +1.37 |
+| basketball 5min (fills 595) | 536 | 90% | 26 | +1.20 | [+0.69, +1.72] | +0.68 | +3.36% | +1.52 |
+| soccer+other 2min (fills 22) | 22 | 100% | 18 | +3.51 | [+1.26, +5.72] | +3.50 | +64.04% | +8.37 | SMALL-N
+| soccer+other 5min (fills 22) | 21 | 96% | 17 | +6.45 | [+3.09, +9.91] | +3.00 | +122.86% | +2.99 | SMALL-N
+
+TAKER by size
+| cell | n | coverage | games | mean c/share | 95% CI (mean) | median c | mean % of price | share-weighted mean c |
+|---|---|---|---|---|---|---|---|---|
+| <$20 2min (fills 210) | 194 | 92% | 70 | +2.08 | [+1.29, +2.73] | +1.83 | +12.37% | +1.98 |
+| <$20 5min (fills 210) | 203 | 97% | 72 | +2.23 | [+0.99, +3.27] | +1.50 | +17.07% | +2.44 |
+| $20-100 2min (fills 240) | 214 | 89% | 51 | +1.72 | [+1.07, +2.43] | +1.46 | +4.23% | +1.04 |
+| $20-100 5min (fills 240) | 221 | 92% | 49 | +1.77 | [+0.83, +2.87] | +1.50 | +4.90% | +1.51 |
+| $100-500 2min (fills 227) | 197 | 87% | 32 | +1.21 | [+0.20, +2.18] | +0.50 | +3.63% | +1.37 |
+| $100-500 5min (fills 227) | 203 | 89% | 31 | +1.54 | [+0.21, +2.91] | +0.67 | +3.96% | +1.36 |
+| >=$500 2min (fills 115) | 103 | 90% | 32 | +1.31 | [+0.42, +2.27] | +1.50 | +2.06% | +1.56 |
+| >=$500 5min (fills 115) | 103 | 90% | 33 | +0.83 | [-1.15, +2.79] | +1.50 | +1.47% | +0.42 |
+
+MAKER by league (top 10 by fills), 5 min
+| cell | n | coverage | games | mean c/share | 95% CI (mean) | median c | mean % of price | share-weighted mean c |
+|---|---|---|---|---|---|---|---|---|
+| nba | 442 | 91% | 9 | +0.48 | [-0.42, +1.24] | -0.05 | -1.63% | -0.22 | SMALL-N
+| atp | 391 | 98% | 23 | -1.22 | [-3.29, +0.56] | -0.50 | -9.87% | +0.97 |
+| cfb | 267 | 90% | 18 | +0.91 | [-1.59, +2.49] | +0.50 | +5.31% | +1.61 |
+| jap | 221 | 100% | 7 | -7.37 | [-12.60, -1.22] | -1.50 | -20.90% | -8.09 | SMALL-N
+| bra | 164 | 90% | 6 | -2.07 | [-3.30, +0.36] | +0.05 | -6.01% | -1.43 | SMALL-N
+| itf | 152 | 97% | 28 | -0.40 | [-2.72, +2.30] | -0.50 | -4.15% | +1.79 |
+| bun | 126 | 96% | 6 | +0.81 | [+0.17, +1.47] | +0.50 | -0.23% | +1.35 | SMALL-N
+| sea | 89 | 90% | 3 | -0.24 | [-1.52, +0.04] | +0.05 | +25.02% | +0.38 | SMALL-N
+| wta | 83 | 100% | 6 | +1.73 | [-2.39, +7.24] | +0.50 | +2.64% | -1.95 | SMALL-N
+| uwcl | 82 | 100% | 3 | -2.55 | [-3.83, +14.00] | -2.50 | -32.13% | -0.54 | SMALL-N
+
+## C. SETTLEMENT vs 5-min markout (history price). settled = final outcome price - fill price, cents per share
+
+MAKER all sampled fills
+| cell | n | coverage | games | mean c/share | 95% CI (mean) | median c | mean % of price | share-weighted mean c |
+|---|---|---|---|---|---|---|---|---|
+| settled result | 3062 | 100% | 254 | +1.71 | [-1.83, +5.38] | -2.00 | -8.08% | -0.07 |
+| lowest third of 5-min markout: markout mean -8.35c (range -90.8..-1.5) -> settled mean -5.89c [-12.41, +0.84], median -13.0c, n 964, games 156 |
+| middle third of 5-min markout: markout mean -0.00c (range -1.5..+1.0) -> settled mean +2.64c [-1.80, +7.82], median -0.2c, n 964, games 173 |
+| highest third of 5-min markout: markout mean +6.56c (range +1.0..+85.5) -> settled mean +9.55c [+3.48, +15.52], median +10.0c, n 966, games 165 |
+correlation(5-min markout, settled result) = 0.271; sd of markout 9.4c, sd of settled result 37.3c
+
+TAKER all sampled fills
+| cell | n | coverage | games | mean c/share | 95% CI (mean) | median c | mean % of price | share-weighted mean c |
+|---|---|---|---|---|---|---|---|---|
+| settled result | 792 | 100% | 90 | +0.25 | [-2.69, +3.21] | +2.75 | +4.24% | +1.32 |
+| settled result after taker fee | 792 | 100% | 90 | -0.66 | [-3.38, +2.25] | +2.62 | +1.75% | +0.41 |
+| lowest third of 5-min markout: markout mean -6.58c (range -39.5..-1.5) -> settled mean -10.95c [-17.38, -3.94], median -20.8c, n 243, games 57 |
+| middle third of 5-min markout: markout mean +1.20c (range -1.5..+3.7) -> settled mean -0.52c [-4.54, +3.38], median +3.0c, n 243, games 57 |
+| highest third of 5-min markout: markout mean +10.45c (range +3.8..+48.4) -> settled mean +11.43c [+5.19, +17.96], median +18.5c, n 244, games 67 |
+correlation(5-min markout, settled result) = 0.246; sd of markout 8.6c, sd of settled result 45.2c
+
+ALL all sampled fills
+| cell | n | coverage | games | mean c/share | 95% CI (mean) | median c | mean % of price | share-weighted mean c |
+|---|---|---|---|---|---|---|---|---|
+| settled result | 3854 | 100% | 305 | +1.41 | [-1.36, +4.34] | -1.62 | -5.55% | +0.17 |
+| lowest third of 5-min markout: markout mean -7.99c (range -90.8..-1.5) -> settled mean -6.87c [-12.21, -1.64], median -14.0c, n 1208, games 197 |
+| middle third of 5-min markout: markout mean +0.13c (range -1.5..+1.5) -> settled mean +2.34c [-2.02, +6.99], median -0.2c, n 1208, games 208 |
+| highest third of 5-min markout: markout mean +7.46c (range +1.5..+85.5) -> settled mean +9.57c [+5.05, +14.48], median +11.0c, n 1208, games 205 |
+correlation(5-min markout, settled result) = 0.260; sd of markout 9.3c, sd of settled result 39.1c
+
+## D. ADVERSE SELECTION, maker fills
+history price just before the fill minus fill price (how far below the prevailing price the resting bid was filled):
+| cell | n | coverage | games | mean c/share | 95% CI (mean) | median c | mean % of price | share-weighted mean c |
+|---|---|---|---|---|---|---|---|---|
+| pre-fill history price - fill | 2935 | 96% | 248 | +0.62 | [+0.44, +0.84] | +0.50 | +14.42% | +0.85 |
+
+bid-side prints after a maker fill vs the fill price (same-side: no bid/ask bounce): share lower / equal / higher
+     5s n 1037: lower 31.5% equal 46.7% higher 21.8% mean -0.21c
+    30s n 2072: lower 38.2% equal 31.6% higher 30.2% mean -0.28c
+   120s n 2603: lower 47.9% equal 17.7% higher 34.3% mean -0.70c
+   300s n 2830: lower 51.6% equal 10.5% higher 37.8% mean -1.48c
+   900s n 2978: lower 52.7% equal 6.1% higher 41.1% mean -1.87c
+
+balanced panel: maker fills with a usable history price before the fill AND at 2, 5 and 15 min
+| cell | n | coverage | games | mean c/share | 95% CI (mean) | median c | mean % of price | share-weighted mean c |
+|---|---|---|---|---|---|---|---|---|
+| edge at fill: pre-fill price - fill | 2557 | 84% | 237 | +0.59 | [+0.38, +0.83] | +0.50 | +13.80% | +0.82 |
+| markout 2 min: price - fill | 2557 | 84% | 237 | +0.31 | [+0.03, +0.59] | +0.50 | +7.65% | +0.65 |
+| price move 2 min: price - pre-fill price | 2557 | 84% | 237 | -0.29 | [-0.70, +0.13] | +0.00 | -6.15% | -0.17 |
+| markout 5 min: price - fill | 2557 | 84% | 237 | -0.51 | [-1.78, +0.47] | +0.20 | +1.27% | -0.15 |
+| price move 5 min: price - pre-fill price | 2557 | 84% | 237 | -1.10 | [-2.28, -0.11] | +0.00 | -12.54% | -0.97 |
+| markout 15 min: price - fill | 2557 | 84% | 237 | -1.14 | [-3.35, +0.71] | +0.00 | -5.36% | -0.89 |
+| price move 15 min: price - pre-fill price | 2557 | 84% | 237 | -1.74 | [-3.89, +0.13] | -0.30 | -19.17% | -1.71 |
+
+same for TAKER fills (pre-fill price - fill is negative when the taker paid above the prevailing price)
+| cell | n | coverage | games | mean c/share | 95% CI (mean) | median c | mean % of price | share-weighted mean c |
+|---|---|---|---|---|---|---|---|---|
+| pre-fill price - fill | 579 | 73% | 87 | -1.55 | [-1.88, -1.25] | -1.38 | -4.02% | -1.09 |
+| markout 2 min | 579 | 73% | 87 | +1.70 | [+1.32, +2.10] | +1.45 | +6.62% | +1.09 |
+| price move 2 min: price - pre-fill price | 579 | 73% | 87 | +3.25 | [+2.74, +3.79] | +3.00 | +10.63% | +2.18 |
+| markout 5 min | 579 | 73% | 87 | +1.73 | [+1.18, +2.33] | +1.50 | +8.26% | +0.34 |
+| price move 5 min: price - pre-fill price | 579 | 73% | 87 | +3.29 | [+2.61, +3.96] | +2.00 | +12.28% | +1.43 |
+| markout 15 min | 579 | 73% | 87 | +1.64 | [+0.24, +2.91] | +1.50 | +11.82% | +0.29 |
+| price move 15 min: price - pre-fill price | 579 | 73% | 87 | +3.19 | [+1.73, +4.69] | +3.00 | +15.84% | +1.37 |
+
+## E. DISTRIBUTION of markout (history price), cents per share: p5 / p25 / p50 / p75 / p95, share <= -5c, share >= +5c, mean with the 1% tails clipped
+  MAKER  2 min n 2929: [-6.5, -0.5, 0.35, 1.0, 6.12] | <=-5c 6.2% | >=+5c 6.2% | clipped mean +0.14c
+  MAKER  5 min n 2894: [-15.64, -2.5, 0.15, 2.12, 10.5] | <=-5c 16.5% | >=+5c 13.8% | clipped mean -0.67c
+  MAKER 15 min n 2893: [-30.0, -7.5, -0.05, 3.9, 25.99] | <=-5c 30.1% | >=+5c 22.2% | clipped mean -1.31c
+  TAKER  2 min n 708: [-6.29, -1.5, 1.29, 4.5, 10.5] | <=-5c 7.8% | >=+5c 20.3% | clipped mean +1.62c
+  TAKER  5 min n 730: [-10.5, -2.93, 1.5, 5.5, 16.27] | <=-5c 16.2% | >=+5c 28.1% | clipped mean +1.69c
+  TAKER 15 min n 731: [-21.25, -6.5, 1.5, 8.5, 28.9] | <=-5c 27.5% | >=+5c 35.0% | clipped mean +1.49c
+fills within 15 min of the market's close time: 0

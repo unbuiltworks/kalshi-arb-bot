@@ -1,0 +1,456 @@
+{
+ "fee_coefficient_status": {
+  "consequence": "fee is carried as a sensitivity range, and no economics below is stated as if the coefficient were known",
+  "state": "UNVERIFIED_FROM_SOURCE",
+  "value": null,
+  "why": "kalshi.com returns HTTP 429 through this container's egress proxy, so the published fee schedule could not be read. fee_type/fee_multiplier ARE source-confirmed."
+ },
+ "fee_models": {
+  "KXBTC15M": {
+   "category": "Crypto",
+   "fee_multiplier": 1,
+   "fee_type": "quadratic",
+   "frequency": "fifteen_min",
+   "provenance": "GET /trade-api/v2/series/KXBTC15M",
+   "series_ticker": "KXBTC15M"
+  },
+  "KXCOPPER15M": {
+   "category": "Commodities",
+   "fee_multiplier": 1,
+   "fee_type": "quadratic",
+   "frequency": "fifteen_min",
+   "provenance": "GET /trade-api/v2/series/KXCOPPER15M",
+   "series_ticker": "KXCOPPER15M"
+  },
+  "KXCRYPTOLEAD15M": {
+   "category": "Crypto",
+   "fee_multiplier": 1,
+   "fee_type": "quadratic",
+   "frequency": "fifteen_min",
+   "provenance": "GET /trade-api/v2/series/KXCRYPTOLEAD15M",
+   "series_ticker": "KXCRYPTOLEAD15M"
+  },
+  "KXETH15M": {
+   "category": "Crypto",
+   "fee_multiplier": 1,
+   "fee_type": "quadratic",
+   "frequency": "fifteen_min",
+   "provenance": "GET /trade-api/v2/series/KXETH15M",
+   "series_ticker": "KXETH15M"
+  },
+  "KXGOLD15M": {
+   "category": "Commodities",
+   "fee_multiplier": 1,
+   "fee_type": "quadratic",
+   "frequency": "fifteen_min",
+   "provenance": "GET /trade-api/v2/series/KXGOLD15M",
+   "series_ticker": "KXGOLD15M"
+  },
+  "KXNATGAS15M": {
+   "category": "Commodities",
+   "fee_multiplier": 1,
+   "fee_type": "quadratic",
+   "frequency": "fifteen_min",
+   "provenance": "GET /trade-api/v2/series/KXNATGAS15M",
+   "series_ticker": "KXNATGAS15M"
+  },
+  "KXSILVER15M": {
+   "category": "Commodities",
+   "fee_multiplier": 1,
+   "fee_type": "quadratic",
+   "frequency": "fifteen_min",
+   "provenance": "GET /trade-api/v2/series/KXSILVER15M",
+   "series_ticker": "KXSILVER15M"
+  },
+  "KXWTI15M": {
+   "category": "Commodities",
+   "fee_multiplier": 1,
+   "fee_type": "quadratic",
+   "frequency": "fifteen_min",
+   "provenance": "GET /trade-api/v2/series/KXWTI15M",
+   "series_ticker": "KXWTI15M"
+  }
+ },
+ "generated_utc": "2026-09-23T13:19:30.575019+00:00",
+ "incentive_corpus": {
+  "cursor_exhausted": true,
+  "programs_returned": 238339,
+  "reward_units": "period_reward is centi-cents ($0.0001), per the published IncentiveProgram schema",
+  "types": {
+   "liquidity": 215979,
+   "volume": 22360
+  }
+ },
+ "incentives": {
+  "KXBTC15M": {
+   "all_paid_out": true,
+   "descriptions": {
+    "": 9781
+   },
+   "first_start": "2026-01-26T21:17:14.515184Z",
+   "last_start": "2026-05-12T16:32:51.798705Z",
+   "live_now": 0,
+   "live_now_posted_usd": 0.0,
+   "programs_all_time": 9781,
+   "types": {
+    "volume": 9781
+   },
+   "upcoming": 0,
+   "upcoming_posted_usd": 0.0
+  },
+  "KXCOPPER15M": {
+   "all_paid_out": false,
+   "descriptions": {
+    "series_lip": 1922
+   },
+   "first_start": "2026-08-27T21:32:06.404978Z",
+   "last_start": "2026-09-24T03:45:00Z",
+   "live_now": 1,
+   "live_now_posted_usd": 20.0,
+   "programs_all_time": 1922,
+   "types": {
+    "liquidity": 1922
+   },
+   "upcoming": 58,
+   "upcoming_posted_usd": 1160.0
+  },
+  "KXCRYPTOLEAD15M": {
+   "all_paid_out": false,
+   "descriptions": {
+    "series_lip": 14365
+   },
+   "first_start": "2026-08-24T16:46:35.800022Z",
+   "last_start": "2026-09-24T03:45:00Z",
+   "live_now": 5,
+   "live_now_posted_usd": 100.0,
+   "programs_all_time": 14365,
+   "types": {
+    "liquidity": 14365
+   },
+   "upcoming": 290,
+   "upcoming_posted_usd": 5800.0
+  },
+  "KXETH15M": {
+   "all_paid_out": true,
+   "descriptions": {
+    "": 8299
+   },
+   "first_start": "2026-02-13T18:47:19.35879Z",
+   "last_start": "2026-05-12T16:32:32.560448Z",
+   "live_now": 0,
+   "live_now_posted_usd": 0.0,
+   "programs_all_time": 8299,
+   "types": {
+    "volume": 8299
+   },
+   "upcoming": 0,
+   "upcoming_posted_usd": 0.0
+  },
+  "KXGOLD15M": {
+   "all_paid_out": false,
+   "descriptions": {
+    "series_lip": 3388
+   },
+   "first_start": "2026-08-03T16:46:30.882831Z",
+   "last_start": "2026-09-19T03:45:00Z",
+   "live_now": 0,
+   "live_now_posted_usd": 0.0,
+   "programs_all_time": 3388,
+   "types": {
+    "liquidity": 3388
+   },
+   "upcoming": 0,
+   "upcoming_posted_usd": 0.0
+  },
+  "KXNATGAS15M": {
+   "all_paid_out": false,
+   "descriptions": {
+    "series_lip": 1922
+   },
+   "first_start": "2026-08-27T21:32:06.404978Z",
+   "last_start": "2026-09-24T03:45:00Z",
+   "live_now": 1,
+   "live_now_posted_usd": 20.0,
+   "programs_all_time": 1922,
+   "types": {
+    "liquidity": 1922
+   },
+   "upcoming": 58,
+   "upcoming_posted_usd": 1160.0
+  },
+  "KXSILVER15M": {
+   "all_paid_out": false,
+   "descriptions": {
+    "series_lip": 3388
+   },
+   "first_start": "2026-08-03T16:46:30.882831Z",
+   "last_start": "2026-09-19T03:45:00Z",
+   "live_now": 0,
+   "live_now_posted_usd": 0.0,
+   "programs_all_time": 3388,
+   "types": {
+    "liquidity": 3388
+   },
+   "upcoming": 0,
+   "upcoming_posted_usd": 0.0
+  },
+  "KXWTI15M": {
+   "all_paid_out": false,
+   "descriptions": {
+    "series_lip": 3388
+   },
+   "first_start": "2026-08-03T16:46:30.882831Z",
+   "last_start": "2026-09-19T03:45:00Z",
+   "live_now": 0,
+   "live_now_posted_usd": 0.0,
+   "programs_all_time": 3388,
+   "types": {
+    "liquidity": 3388
+   },
+   "upcoming": 0,
+   "upcoming_posted_usd": 0.0
+  }
+ },
+ "pair_cost_sensitivity": [
+  {
+   "coefficient": 0.0,
+   "fee_no_usd": 0.0,
+   "fee_yes_usd": 0.0,
+   "max_combined_price_to_break_even": 1.0,
+   "pair_fee_usd": 0.0,
+   "yes_price": 0.1
+  },
+  {
+   "coefficient": 0.0,
+   "fee_no_usd": 0.0,
+   "fee_yes_usd": 0.0,
+   "max_combined_price_to_break_even": 1.0,
+   "pair_fee_usd": 0.0,
+   "yes_price": 0.25
+  },
+  {
+   "coefficient": 0.0,
+   "fee_no_usd": 0.0,
+   "fee_yes_usd": 0.0,
+   "max_combined_price_to_break_even": 1.0,
+   "pair_fee_usd": 0.0,
+   "yes_price": 0.4
+  },
+  {
+   "coefficient": 0.0,
+   "fee_no_usd": 0.0,
+   "fee_yes_usd": 0.0,
+   "max_combined_price_to_break_even": 1.0,
+   "pair_fee_usd": 0.0,
+   "yes_price": 0.5
+  },
+  {
+   "coefficient": 0.0,
+   "fee_no_usd": 0.0,
+   "fee_yes_usd": 0.0,
+   "max_combined_price_to_break_even": 1.0,
+   "pair_fee_usd": 0.0,
+   "yes_price": 0.6
+  },
+  {
+   "coefficient": 0.0,
+   "fee_no_usd": 0.0,
+   "fee_yes_usd": 0.0,
+   "max_combined_price_to_break_even": 1.0,
+   "pair_fee_usd": 0.0,
+   "yes_price": 0.75
+  },
+  {
+   "coefficient": 0.0,
+   "fee_no_usd": 0.0,
+   "fee_yes_usd": 0.0,
+   "max_combined_price_to_break_even": 1.0,
+   "pair_fee_usd": 0.0,
+   "yes_price": 0.9
+  },
+  {
+   "coefficient": 0.035,
+   "fee_no_usd": 0.00315,
+   "fee_yes_usd": 0.003151,
+   "max_combined_price_to_break_even": 0.993699,
+   "pair_fee_usd": 0.006301,
+   "yes_price": 0.1
+  },
+  {
+   "coefficient": 0.035,
+   "fee_no_usd": 0.006563,
+   "fee_yes_usd": 0.006563,
+   "max_combined_price_to_break_even": 0.986874,
+   "pair_fee_usd": 0.013126,
+   "yes_price": 0.25
+  },
+  {
+   "coefficient": 0.035,
+   "fee_no_usd": 0.008401,
+   "fee_yes_usd": 0.008401,
+   "max_combined_price_to_break_even": 0.983198,
+   "pair_fee_usd": 0.016802,
+   "yes_price": 0.4
+  },
+  {
+   "coefficient": 0.035,
+   "fee_no_usd": 0.00875,
+   "fee_yes_usd": 0.00875,
+   "max_combined_price_to_break_even": 0.9825,
+   "pair_fee_usd": 0.0175,
+   "yes_price": 0.5
+  },
+  {
+   "coefficient": 0.035,
+   "fee_no_usd": 0.008401,
+   "fee_yes_usd": 0.008401,
+   "max_combined_price_to_break_even": 0.983198,
+   "pair_fee_usd": 0.016802,
+   "yes_price": 0.6
+  },
+  {
+   "coefficient": 0.035,
+   "fee_no_usd": 0.006563,
+   "fee_yes_usd": 0.006563,
+   "max_combined_price_to_break_even": 0.986874,
+   "pair_fee_usd": 0.013126,
+   "yes_price": 0.75
+  },
+  {
+   "coefficient": 0.035,
+   "fee_no_usd": 0.00315,
+   "fee_yes_usd": 0.00315,
+   "max_combined_price_to_break_even": 0.9937,
+   "pair_fee_usd": 0.0063,
+   "yes_price": 0.9
+  },
+  {
+   "coefficient": 0.07,
+   "fee_no_usd": 0.0063,
+   "fee_yes_usd": 0.006301,
+   "max_combined_price_to_break_even": 0.987399,
+   "pair_fee_usd": 0.012601,
+   "yes_price": 0.1
+  },
+  {
+   "coefficient": 0.07,
+   "fee_no_usd": 0.013126,
+   "fee_yes_usd": 0.013126,
+   "max_combined_price_to_break_even": 0.973748,
+   "pair_fee_usd": 0.026252,
+   "yes_price": 0.25
+  },
+  {
+   "coefficient": 0.07,
+   "fee_no_usd": 0.016801,
+   "fee_yes_usd": 0.016801,
+   "max_combined_price_to_break_even": 0.966398,
+   "pair_fee_usd": 0.033602,
+   "yes_price": 0.4
+  },
+  {
+   "coefficient": 0.07,
+   "fee_no_usd": 0.0175,
+   "fee_yes_usd": 0.0175,
+   "max_combined_price_to_break_even": 0.965,
+   "pair_fee_usd": 0.035,
+   "yes_price": 0.5
+  },
+  {
+   "coefficient": 0.07,
+   "fee_no_usd": 0.016801,
+   "fee_yes_usd": 0.016801,
+   "max_combined_price_to_break_even": 0.966398,
+   "pair_fee_usd": 0.033602,
+   "yes_price": 0.6
+  },
+  {
+   "coefficient": 0.07,
+   "fee_no_usd": 0.013126,
+   "fee_yes_usd": 0.013126,
+   "max_combined_price_to_break_even": 0.973748,
+   "pair_fee_usd": 0.026252,
+   "yes_price": 0.75
+  },
+  {
+   "coefficient": 0.07,
+   "fee_no_usd": 0.0063,
+   "fee_yes_usd": 0.0063,
+   "max_combined_price_to_break_even": 0.9874,
+   "pair_fee_usd": 0.0126,
+   "yes_price": 0.9
+  },
+  {
+   "coefficient": 0.1,
+   "fee_no_usd": 0.009,
+   "fee_yes_usd": 0.009001,
+   "max_combined_price_to_break_even": 0.981999,
+   "pair_fee_usd": 0.018001,
+   "yes_price": 0.1
+  },
+  {
+   "coefficient": 0.1,
+   "fee_no_usd": 0.018751,
+   "fee_yes_usd": 0.018751,
+   "max_combined_price_to_break_even": 0.962498,
+   "pair_fee_usd": 0.037502,
+   "yes_price": 0.25
+  },
+  {
+   "coefficient": 0.1,
+   "fee_no_usd": 0.024,
+   "fee_yes_usd": 0.024001,
+   "max_combined_price_to_break_even": 0.951999,
+   "pair_fee_usd": 0.048001,
+   "yes_price": 0.4
+  },
+  {
+   "coefficient": 0.1,
+   "fee_no_usd": 0.025,
+   "fee_yes_usd": 0.025,
+   "max_combined_price_to_break_even": 0.95,
+   "pair_fee_usd": 0.05,
+   "yes_price": 0.5
+  },
+  {
+   "coefficient": 0.1,
+   "fee_no_usd": 0.024001,
+   "fee_yes_usd": 0.024,
+   "max_combined_price_to_break_even": 0.951999,
+   "pair_fee_usd": 0.048001,
+   "yes_price": 0.6
+  },
+  {
+   "coefficient": 0.1,
+   "fee_no_usd": 0.018751,
+   "fee_yes_usd": 0.018751,
+   "max_combined_price_to_break_even": 0.962498,
+   "pair_fee_usd": 0.037502,
+   "yes_price": 0.75
+  },
+  {
+   "coefficient": 0.1,
+   "fee_no_usd": 0.009,
+   "fee_yes_usd": 0.009,
+   "max_combined_price_to_break_even": 0.982,
+   "pair_fee_usd": 0.018,
+   "yes_price": 0.9
+  }
+ ],
+ "pending_fee_changes": [],
+ "provenance": "Kalshi public REST, unauthenticated, no credentials",
+ "venue_posted_reward_usd_per_day": {
+  "2026-09-15": 176865.0,
+  "2026-09-16": 173145.0,
+  "2026-09-17": 234305.0,
+  "2026-09-18": 206430.0,
+  "2026-09-19": 144955.0,
+  "2026-09-20": 275095.0,
+  "2026-09-21": 349410.0,
+  "2026-09-22": 230565.0,
+  "2026-09-23": 100165.0,
+  "2026-09-24": 2880.0,
+  "2026-09-28": 1800.0,
+  "2026-09-29": 1400.0
+ }
+}

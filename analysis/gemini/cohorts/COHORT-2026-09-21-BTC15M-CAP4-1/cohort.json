@@ -1,0 +1,13 @@
+{
+  "label": "GEMINI_MUTATION_COHORT_V1",
+  "cohort_id": "COHORT-2026-09-21-BTC15M-CAP4-1",
+  "created_utc": "2026-09-21T18:21:02.752010+00:00",
+  "budget": 12,
+  "ledger_path": "analysis/gemini/cohorts/COHORT-2026-09-21-BTC15M-CAP4-1/ledger.jsonl",
+  "predecessor_ledger": "analysis/gemini/cohorts/COHORT-2026-09-21-BTC15M-Q1LIVE-1/ledger.jsonl",
+  "predecessor_sha256": "b4623d94049b28eeed4c6150edab036d38a4c7c0c10c46781ee4dabaa7e259b2",
+  "predecessor_consumed": 3,
+  "envelope_max_actions": 12,
+  "note": "ONE BTC15m q=1 CAP-4 window under OWNER-2026-09-21-GEMINI-BTC15M-Q1-CAP4-LIVE-1. Capacity exactly 12 action attempts. Chained to COHORT-2026-09-21-BTC15M-Q1LIVE-1, which is 3/12 SPENT and whose 9 unused slots stay unused -- this is a FRESH ledger, not a continuation of that budget. No reset, replenishment, rollover or second window.",
+  "labels": "NO ROLLOVER: this budget is fixed and unused slots never carry. NO REWRITE: the predecessor ledger is hashed, never modified. NO AUTOMATIC CREATION: nothing in the package calls create()."
+}

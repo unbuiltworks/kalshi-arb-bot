@@ -1,0 +1,21 @@
+2026-11-20-1420z (settled UP)
+   INCREASING shares  0.22 | spread $+0.0011 | move $+0.0006 | hold $-0.0139 | settled $-0.0122
+   REDUCING   shares  0.16 | spread $+0.0008 | move $-0.0264 | hold $+0.0264 | settled $+0.0008
+   ALL        shares  0.38 | spread $+0.0019 | move $-0.0258 | hold $+0.0125 | settled $-0.0114
+2026-11-20-1705z (settled UP)
+   INCREASING shares  0.83 | spread $+0.0052 | move $+0.0215 | hold $+0.0585 | settled $+0.0851
+   REDUCING   shares  0.43 | spread $+0.0027 | move $-0.0357 | hold $-0.0673 | settled $-0.1002
+   ALL        shares  1.26 | spread $+0.0079 | move $-0.0142 | hold $-0.0088 | settled $-0.0151
+2026-11-21-0620z (settled DOWN)
+   INCREASING shares  0.45 | spread $+0.0025 | move $+0.0286 | hold $+0.2031 | settled $+0.2343
+   REDUCING   shares  0.65 | spread $+0.0032 | move $-0.0634 | hold $-0.1547 | settled $-0.2148
+   ALL        shares  1.10 | spread $+0.0058 | move $-0.0348 | hold $+0.0485 | settled $+0.0195
+2026-11-21-1420z (settled UP)
+   INCREASING shares  0.29 | spread $+0.0019 | move $-0.0424 | hold $-0.0984 | settled $-0.1389
+   REDUCING   shares  0.47 | spread $+0.0028 | move $+0.0462 | hold $+0.0490 | settled $+0.0981
+   ALL        shares  0.76 | spread $+0.0047 | move $+0.0038 | hold $-0.0493 | settled $-0.0408
+ALL FOUR WINDOWS
+   INCREASING shares  1.79 | spread $+0.0106 | move $+0.0083 | hold $+0.1494 | settled $+0.1683
+   REDUCING   shares  1.71 | spread $+0.0096 | move $-0.0793 | hold $-0.1465 | settled $-0.2161
+   ALL        shares  3.50 | spread $+0.0203 | move $-0.0710 | hold $+0.0029 | settled $-0.0478
+  per share: spread +0.0058, move -0.0203, hold +0.0008, settled -0.0137

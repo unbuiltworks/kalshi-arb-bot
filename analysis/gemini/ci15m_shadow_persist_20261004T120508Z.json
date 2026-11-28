@@ -1,0 +1,49 @@
+{
+  "acceptance": {
+    "checks": {
+      "no_duplicate_open": true,
+      "no_forgotten_resting_order": true,
+      "no_unresolved_prior_window": true,
+      "not_halted": true,
+      "policy_fingerprint_unchanged": true,
+      "stayed_alive_across_windows": true,
+      "within_order_budget": true,
+      "within_window_budget": true,
+      "writes_were_disabled": true
+    },
+    "failed": [],
+    "labels": "a NO_TRADE window is VALID: this counts windows discovered and rolled through, never submissions.",
+    "pass": true,
+    "windows_required": 4,
+    "windows_seen": 4
+  },
+  "elapsed_s": 2472.6,
+  "exit": {
+    "detail": "WINDOW_BUDGET_EXHAUSTED: 4 of 4 live windows completed (profile PERSIST4). There is no replenishment.",
+    "kind": "EXIT",
+    "known_reason": true,
+    "reason": "COHORT_EXPIRED",
+    "utc": "2026-10-04T12:46:21.528566+00:00"
+  },
+  "halted": null,
+  "label": "CI15M_PERSISTENT_SHADOW_V1",
+  "n_windows_seen": 4,
+  "open_states": {
+    "BTC15M2610041215": "OPEN_CANCELLED",
+    "BTC15M2610041230": "OPEN_FILLED",
+    "BTC15M2610041245": "OPEN_FILLED",
+    "BTC15M2610041300": "OPEN_FILLED"
+  },
+  "order_slots_consumed": 7,
+  "policy_fingerprint": "5c113fab1f85b5c0327c1d9eb447661753921e25cb21393845d90fd810536329",
+  "telemetry_rows": 30,
+  "unresolved_windows": [],
+  "windows_completed": 4,
+  "windows_seen": {
+    "BTC15M2610041215": "NO_FILL",
+    "BTC15M2610041230": "RESIDUAL",
+    "BTC15M2610041245": "RESIDUAL",
+    "BTC15M2610041300": "RESIDUAL"
+  },
+  "write_mode_at_exit": "SHADOW"
+}

@@ -1,0 +1,1072 @@
+{
+ "generated_utc": "2026-09-07T18:00:52.562553+00:00",
+ "program": "L5 is the strategy; pairing, rebates, residual caps and sports selection are implementation/economic considerations, not replacements for his behavior; any safety override is recorded as OUR deviation from L5; a hard catastrophic-loss shell around the account, maximum L5 fidelity inside it.",
+ "l5": {
+  "source": "analysis/l5/l5_canonical_sequence.csv.gz",
+  "fills": 71984,
+  "windows": 2216,
+  "taker_share": {
+   "of_known": 0.1659,
+   "counts": {
+    "unknown": 5269,
+    "maker": 55647,
+    "taker": 11068
+   },
+   "labels": "maker/taker known only inside takerOnly feed coverage; unknown never treated as maker"
+  },
+  "shares_per_fill": {
+   "p25": 5.0,
+   "p50": 12.5,
+   "p75": 40.0
+  },
+  "dollars_per_fill": {
+   "p50": 4.5,
+   "p90": 31.0
+  },
+  "pair_unit_cost_at_completion": {
+   "n": 66642,
+   "p10": 0.9318,
+   "p25": 0.9605,
+   "p50": 0.9876,
+   "p75": 1.0151,
+   "p90": 1.0553,
+   "share_above_1_00": 0.3723,
+   "share_above_1_02": 0.2209,
+   "share_above_1_05": 0.1127
+  },
+  "residual_usd_per_window": {
+   "p50": 18.5701,
+   "p90": 121.159,
+   "p99": 354.4883,
+   "max": 660.2,
+   "share_windows_with_residual": 0.8497
+  },
+  "spend_usd_per_window": {
+   "p50": 92.9151,
+   "p90": 1305.0901,
+   "max": 4848.55
+  },
+  "residual_over_spend_p50": 0.1999,
+  "price_band_share": {
+   "fills_with_price_in_0_35_0_65": 0.2909
+  },
+  "labels": "DERIVED from L5's executed fills on the public feed; a fill is not a quote"
+ },
+ "studies": {
+  "reprice_cadence_s": {
+   "l5_multi_print_cluster_duration_s": {
+    "max": 384,
+    "mean": 5.9143,
+    "n": 11807,
+    "p10": 0,
+    "p25": 0,
+    "p50": 2,
+    "p75": 6,
+    "p90": 15
+   },
+   "l5_clusters_longer_than_our_deadline_share": 0.0389,
+   "ours": {
+    "deadline_cancels": 23,
+    "deadline_rest_s": {
+     "max": 32.602,
+     "mean": 31.4914,
+     "n": 23,
+     "p10": 31.067,
+     "p25": 31.187,
+     "p50": 31.461,
+     "p75": 31.685,
+     "p90": 31.945
+    },
+    "deadline_s": 30.0,
+    "fill_share": 0.2,
+    "filled": 9,
+    "fills_after_20s_share": 0.2222,
+    "labels": "R4 order records: rest_s is submit-to-terminal; a reprice is our own cancel when the touch moved",
+    "orders": 45,
+    "post_only_rejects": 10,
+    "reject_rest_s": {
+     "max": 0.876,
+     "mean": 0.7011,
+     "n": 10,
+     "p10": 0.36,
+     "p25": 0.396,
+     "p50": 0.835,
+     "p75": 0.864,
+     "p90": 0.876
+    },
+    "reprice_step_cents": [
+     1,
+     1,
+     2
+    ],
+    "reprices": 3,
+    "rest_s_all": {
+     "max": 32.602,
+     "mean": 20.8614,
+     "n": 45,
+     "p10": 0.832,
+     "p25": 6.389,
+     "p50": 30.858,
+     "p75": 31.461,
+     "p90": 31.734
+    },
+    "time_to_fill_s": {
+     "max": 24.453,
+     "mean": 13.0592,
+     "n": 9,
+     "p10": 2.936,
+     "p25": 8.3,
+     "p50": 11.65,
+     "p75": 17.027,
+     "p90": 24.453
+    }
+   },
+   "source": "analysis/l5/l5_patience_study.json"
+  },
+  "simultaneous_windows": {
+   "median_time_weighted": 2,
+   "mean_time_weighted": 1.7765,
+   "share_at_2_or_more": 0.507929,
+   "share_at_3_or_more": 0.255405,
+   "max_simultaneous": 4,
+   "source": "analysis/l5/l5_concurrency_switching.json"
+  },
+  "extend_vs_cap": {
+   "extend_unmatched_after_in_action_units": {
+    "max": 208.6259,
+    "mean": 21.3701,
+    "n": 35576,
+    "p10": 2.5746,
+    "p25": 5.9295,
+    "p50": 15.114,
+    "p75": 30.7324,
+    "p90": 48.7205,
+    "p95": 62.4081,
+    "p99": 90.9307
+   },
+   "extends_refused_by_cap_in_action_units": {
+    "1.0": {
+     "refused": 34991,
+     "share_of_extends": 0.9836
+    },
+    "1.5": {
+     "refused": 34234,
+     "share_of_extends": 0.9623
+    },
+    "2.0": {
+     "refused": 33119,
+     "share_of_extends": 0.9309
+    },
+    "3.0": {
+     "refused": 31210,
+     "share_of_extends": 0.8773
+    },
+    "4.0": {
+     "refused": 29451,
+     "share_of_extends": 0.8278
+    }
+   },
+   "action_unit_usd": {
+    "max": 77.02,
+    "mean": 13.18,
+    "n": 2216,
+    "p10": 2.5,
+    "p25": 4.25,
+    "p50": 8.47,
+    "p75": 19.63,
+    "p90": 31.13,
+    "p95": 38.17,
+    "p99": 46.26
+   },
+   "source": "analysis/l5/l5_cap_override_study.json"
+  },
+  "extend_episodes": {
+   "episodes": 1763,
+   "p_complement_before_end": 0.748,
+   "latency_to_first_complement_s": {
+    "median": 60.0,
+    "p90": 170.0
+   },
+   "pair_cost_when_complemented_median": 0.968,
+   "source": "analysis/l5/l5_extension_study.json"
+  },
+  "execution_constraints_classification": {
+   "maker_rest_30s": {
+    "class": "(b) execution policy set by the owner for sports books, NOT a venue requirement: Polymarket US accepts immediate cancel/replace (post-only orders cancelled after 1-2 s of rest all day without rejection); L5's own cadence on BTC/ETH 5m books is ~2 s",
+    "where": "src/pmus_spring_l5_session.py SPORTS_MAKER_REST_MAX_S = 30.0 (OWNER 5552475548 item 1)"
+   },
+   "complete_fee_safe_bound": {
+    "class": "(a) owner risk/fee rule (OWNER DECISION 5533476555): safety_override, kept explicit",
+    "where": "spring_complement_price(): min(pair <= 0.98 target, >= 1c after known fees, opposite ask - tick)"
+   },
+   "taker_disabled": {
+    "class": "(a) owner rule",
+    "where": null
+   },
+   "residual_cap_3_units": {
+    "class": "(a) owner rule",
+    "where": null
+   },
+   "size_cap_0_05_usd_and_venue_minimum": {
+    "class": "(a) owner rule (rung R1)",
+    "where": null
+   }
+  }
+ },
+ "live_bindings": {
+  "decisions": 427,
+  "log_dirs": [
+   "/tmp/claude-0/-home-user-kalshi-arb-bot/8c34d955-4313-5061-8a7e-36a12fdf396d/scratchpad/r4_logs",
+   "/tmp/claude-0/-home-user-kalshi-arb-bot/8c34d955-4313-5061-8a7e-36a12fdf396d/scratchpad/all_logs"
+  ],
+  "refusals": [
+   {
+    "key": [
+     "R4",
+     "unmatched_usd_cap"
+    ],
+    "n": 54
+   },
+   {
+    "key": [
+     "pre-R2",
+     "residual_cap"
+    ],
+    "n": 34
+   },
+   {
+    "key": [
+     "R4",
+     "off_distribution_hold"
+    ],
+    "n": 24
+   },
+   {
+    "key": [
+     "R4",
+     "complement_not_priceable"
+    ],
+    "n": 21
+   },
+   {
+    "key": [
+     "R4",
+     "entry_band_left"
+    ],
+    "n": 8
+   },
+   {
+    "key": [
+     "R3L",
+     "complement_not_priceable"
+    ],
+    "n": 6
+   },
+   {
+    "key": [
+     "pre-R2",
+     "spend_cap_reached"
+    ],
+    "n": 3
+   },
+   {
+    "key": [
+     "pre-R2",
+     "complete_without_residual"
+    ],
+    "n": 3
+   },
+   {
+    "key": [
+     "R2C",
+     "complete_without_residual"
+    ],
+    "n": 3
+   },
+   {
+    "key": [
+     "R2C",
+     "residual_cap"
+    ],
+    "n": 2
+   },
+   {
+    "key": [
+     "R4",
+     "spend_cap_reached"
+    ],
+    "n": 1
+   },
+   {
+    "key": [
+     "R4",
+     "complete_without_residual"
+    ],
+    "n": 1
+   },
+   {
+    "key": [
+     "pre-R2",
+     "entry_band_left"
+    ],
+    "n": 1
+   },
+   {
+    "key": [
+     "R3L",
+     "complete_without_residual"
+    ],
+    "n": 1
+   },
+   {
+    "key": [
+     "R3L",
+     "spend_cap_reached"
+    ],
+    "n": 1
+   }
+  ],
+  "l5_recommended_vs_acted": [
+   {
+    "key": [
+     "pre-R2",
+     "extend",
+     "complete"
+    ],
+    "n": 77
+   },
+   {
+    "key": [
+     "R4",
+     "extend",
+     "hold"
+    ],
+    "n": 54
+   },
+   {
+    "key": [
+     "pre-R2",
+     "complete",
+     "complete"
+    ],
+    "n": 51
+   },
+   {
+    "key": [
+     "pre-R2",
+     "extend",
+     "extend"
+    ],
+    "n": 36
+   },
+   {
+    "key": [
+     "R4",
+     "complete",
+     "hold"
+    ],
+    "n": 30
+   },
+   {
+    "key": [
+     "R4",
+     "extend",
+     "complete"
+    ],
+    "n": 26
+   },
+   {
+    "key": [
+     "R4",
+     "open",
+     "hold"
+    ],
+    "n": 25
+   },
+   {
+    "key": [
+     "R2C",
+     "open",
+     "open"
+    ],
+    "n": 22
+   },
+   {
+    "key": [
+     "pre-R2",
+     "open",
+     "open"
+    ],
+    "n": 21
+   },
+   {
+    "key": [
+     "R2C",
+     "extend",
+     "complete"
+    ],
+    "n": 18
+   },
+   {
+    "key": [
+     "R4",
+     "open",
+     "open"
+    ],
+    "n": 13
+   },
+   {
+    "key": [
+     "R2C",
+     "extend",
+     "extend"
+    ],
+    "n": 13
+   },
+   {
+    "key": [
+     "R4",
+     "complete",
+     "complete"
+    ],
+    "n": 7
+   },
+   {
+    "key": [
+     "R3L",
+     "complete",
+     "hold"
+    ],
+    "n": 7
+   },
+   {
+    "key": [
+     "pre-R2",
+     "complete",
+     "extend"
+    ],
+    "n": 5
+   },
+   {
+    "key": [
+     "R3L",
+     "extend",
+     "extend"
+    ],
+    "n": 4
+   },
+   {
+    "key": [
+     "pre-R2",
+     "extend",
+     "hold"
+    ],
+    "n": 3
+   },
+   {
+    "key": [
+     "R2C",
+     "extend",
+     "hold"
+    ],
+    "n": 3
+   },
+   {
+    "key": [
+     "R3L",
+     "complete",
+     "complete"
+    ],
+    "n": 3
+   },
+   {
+    "key": [
+     "pre-R2",
+     "complete",
+     "hold"
+    ],
+    "n": 2
+   },
+   {
+    "key": [
+     "pre-R2",
+     "open",
+     "hold"
+    ],
+    "n": 2
+   },
+   {
+    "key": [
+     "R4",
+     "extend",
+     "extend"
+    ],
+    "n": 1
+   },
+   {
+    "key": [
+     "R2C",
+     "complete",
+     "complete"
+    ],
+    "n": 1
+   },
+   {
+    "key": [
+     "R3L",
+     "open",
+     "hold"
+    ],
+    "n": 1
+   },
+   {
+    "key": [
+     "R3L",
+     "open",
+     "open"
+    ],
+    "n": 1
+   },
+   {
+    "key": [
+     "R3L",
+     "extend",
+     "complete"
+    ],
+    "n": 1
+   }
+  ],
+  "would_act_without_safety_cap_vs_acted": [
+   {
+    "key": [
+     "R4",
+     "extend",
+     "hold"
+    ],
+    "n": 62
+   },
+   {
+    "key": [
+     "R4",
+     "complete",
+     "hold"
+    ],
+    "n": 22
+   },
+   {
+    "key": [
+     "pre-R2",
+     "extend",
+     "complete"
+    ],
+    "n": 20
+   },
+   {
+    "key": [
+     "R3L",
+     "complete",
+     "hold"
+    ],
+    "n": 7
+   },
+   {
+    "key": [
+     "pre-R2",
+     "complete",
+     "hold"
+    ],
+    "n": 3
+   },
+   {
+    "key": [
+     "R2C",
+     "complete",
+     "hold"
+    ],
+    "n": 3
+   },
+   {
+    "key": [
+     "pre-R2",
+     "extend",
+     "hold"
+    ],
+    "n": 2
+   },
+   {
+    "key": [
+     "pre-R2",
+     "open",
+     "hold"
+    ],
+    "n": 2
+   },
+   {
+    "key": [
+     "R2C",
+     "extend",
+     "complete"
+    ],
+    "n": 2
+   },
+   {
+    "key": [
+     "R4",
+     "open",
+     "hold"
+    ],
+    "n": 1
+   },
+   {
+    "key": [
+     "R4",
+     "extend",
+     "complete"
+    ],
+    "n": 1
+   },
+   {
+    "key": [
+     "R3L",
+     "extend",
+     "complete"
+    ],
+    "n": 1
+   },
+   {
+    "key": [
+     "R3L",
+     "open",
+     "hold"
+    ],
+    "n": 1
+   }
+  ],
+  "complete_counterfactuals": {
+   "n": 211,
+   "l5_touch_pair_above_1_00": 101,
+   "l5_touch_pair_above_1_00_share": 0.4787,
+   "pair_at_touch_p50": 0.9992,
+   "pair_at_touch_p90": 1.1475
+  },
+  "orders": [
+   {
+    "key": [
+     "pre-R2",
+     "complete",
+     "no_fill_cancelled"
+    ],
+    "n": 265
+   },
+   {
+    "key": [
+     "R4",
+     "complete",
+     "no_fill_cancelled"
+    ],
+    "n": 96
+   },
+   {
+    "key": [
+     "pre-R2",
+     "extend",
+     "no_fill_cancelled"
+    ],
+    "n": 40
+   },
+   {
+    "key": [
+     "pre-R2",
+     "complete",
+     "filled"
+    ],
+    "n": 30
+   },
+   {
+    "key": [
+     "pre-R2",
+     "open",
+     "no_fill_cancelled"
+    ],
+    "n": 25
+   },
+   {
+    "key": [
+     "R4",
+     "open",
+     "no_fill_cancelled"
+    ],
+    "n": 23
+   },
+   {
+    "key": [
+     "pre-R2",
+     "extend",
+     "filled"
+    ],
+    "n": 17
+   },
+   {
+    "key": [
+     "R4",
+     "complete",
+     "filled"
+    ],
+    "n": 15
+   },
+   {
+    "key": [
+     "R2C",
+     "open",
+     "no_fill_cancelled"
+    ],
+    "n": 15
+   },
+   {
+    "key": [
+     "pre-R2",
+     "acceptance",
+     "no_fill_cancelled"
+    ],
+    "n": 11
+   },
+   {
+    "key": [
+     "R2C",
+     "complete",
+     "no_fill_cancelled"
+    ],
+    "n": 11
+   },
+   {
+    "key": [
+     "pre-R2",
+     "open",
+     "filled"
+    ],
+    "n": 10
+   },
+   {
+    "key": [
+     "R4",
+     "open",
+     "filled"
+    ],
+    "n": 8
+   },
+   {
+    "key": [
+     "R2C",
+     "extend",
+     "no_fill_cancelled"
+    ],
+    "n": 8
+   },
+   {
+    "key": [
+     "R2C",
+     "complete",
+     "filled"
+    ],
+    "n": 8
+   },
+   {
+    "key": [
+     "R2C",
+     "open",
+     "filled"
+    ],
+    "n": 7
+   },
+   {
+    "key": [
+     "R2C",
+     "extend",
+     "filled"
+    ],
+    "n": 5
+   },
+   {
+    "key": [
+     "R4",
+     "extend",
+     "filled"
+    ],
+    "n": 4
+   },
+   {
+    "key": [
+     "R3L",
+     "complete",
+     "no_fill_cancelled"
+    ],
+    "n": 3
+   },
+   {
+    "key": [
+     "R3L",
+     "extend",
+     "filled"
+    ],
+    "n": 2
+   },
+   {
+    "key": [
+     "R3L",
+     "extend",
+     "no_fill_cancelled"
+    ],
+    "n": 2
+   },
+   {
+    "key": [
+     "R3L",
+     "complete",
+     "filled"
+    ],
+    "n": 1
+   },
+   {
+    "key": [
+     "R3L",
+     "open",
+     "filled"
+    ],
+    "n": 1
+   }
+  ],
+  "labels": "deduplicated by decision_id across every saved session_end row; shells as persisted"
+ },
+ "shell": {
+  "bankroll_usd": 111.1422,
+  "per_market_cap_usd": 7.5,
+  "concurrency": 2,
+  "worst_case_simultaneous_usd": 15.0,
+  "worst_case_share_of_bankroll": 0.135,
+  "daily_loss_stop_usd": 15.0,
+  "daily_stop_share_of_bankroll": 0.135,
+  "preflight_deployed_required_usd": 45.0,
+  "preflight_ok": true,
+  "labels": "hard shell; nothing inside it is a strategy rule"
+ },
+ "removals": [
+  {
+   "id": "pair_cost_ceiling",
+   "name": "Completion pair-cost ceiling",
+   "where": "spring_complement_price(): pair_cost_max 1.00 hard (R4), observation cap 0.98",
+   "ours": "COMPLETE only at pair <= 1.00 (fee-safe bound price)",
+   "class": "safety cap (owner)",
+   "l5_field": "pair_unit_cost_at_completion",
+   "ledger_refusal": "complement_not_priceable",
+   "blocks": "COMPLETE at L5's touch when the pair would exceed 1.00",
+   "l5_does": "pair unit cost at completion p50 0.9876, p75 1.0151, p90 1.0553; 0.3723 of his completions above 1.00, 0.2209 above 1.02, 0.1127 above 1.05",
+   "bound_live": {
+    "R4_complete_held": 22,
+    "R4_complement_not_priceable": 21,
+    "complete_counterfactuals_touch_above_1_00": 101
+   },
+   "removal": "price the complement at L5's touch (deficit-side touch join), whatever the pair; the loss on an above-par pair is (pair - 1) x matched shares and is bounded by the per-market cap",
+   "worst_case_usd": 0.83,
+   "worst_case_note": "DERIVED: at L5's p90 pair 1.0553 on the whole per-market cap the above-par cost is this many dollars; the shell already bounds it",
+   "recommend": "REMOVE in R5 (record pair > 1.00 as L5-consistent, not as a deviation)"
+  },
+  {
+   "id": "unmatched_usd_cap",
+   "name": "Per-market unmatched-dollar cap",
+   "where": "src/pmus_spring_l5_session.py max_unmatched_usd (R4 approval 5567269295: $2.50)",
+   "ours": "2.50 USD unmatched per market",
+   "class": "safety cap (owner)",
+   "l5_field": "residual_usd_per_window",
+   "ledger_refusal": "unmatched_usd_cap",
+   "blocks": "EXTEND (L5's most frequent post-fill action)",
+   "l5_does": "residual per window p50 $18.5701, p90 $121.159 on spend p50 $92.9151 (residual/spend p50 0.1999); 0.9836 of his EXTENDs would be refused by a 1-action-unit cap",
+   "bound_live": {
+    "R4_extend_held": 62,
+    "R4_refusals": 54
+   },
+   "removal": "remove the separate unmatched cap; the per-market cap ($7.5) is the only inventory bound, exactly as L5's residual is bounded only by what he committed",
+   "worst_case_usd": 7.5,
+   "worst_case_note": "already the per-market cap; no new dollars at risk",
+   "recommend": "REMOVE in R5"
+  },
+  {
+   "id": "maker_rest_30s",
+   "name": "Maker rest floor before cancel/replace",
+   "where": "src/pmus_spring_l5_session.py SPORTS_MAKER_REST_MAX_S = 30.0",
+   "ours": "30 s rest, then cancel; reprice cadence >= 30 s",
+   "class": "(b) owner execution policy, not a venue requirement",
+   "l5_field": "reprice_cadence_s",
+   "ledger_refusal": null,
+   "blocks": "L5's 2-6 s reprice; fills after 20 s are 22% of ours",
+   "l5_does": "multi-print cluster duration p50 2 s, p90 15 s; clusters longer than our 30 s deadline 0.0389",
+   "bound_live": {
+    "ours": 23,
+    "fill_share": 0.2
+   },
+   "removal": "reprice at the model's own reevaluation cadence (2 s / 30 s per state) with cancel/replace; class (b): an owner execution policy, not a venue requirement",
+   "worst_case_usd": 0.0,
+   "worst_case_note": "no new dollars at risk; more cancel/replace messages",
+   "recommend": "REMOVE in R5"
+  },
+  {
+   "id": "concurrency_1",
+   "name": "Concurrency (markets worked at once)",
+   "where": "R4 rung concurrency 1; CAMPAIGN_HOLD:POSITION_HELD while a residual is held",
+   "ours": "1 market at a time; a held residual blocks every other candidate",
+   "class": "safety cap (owner)",
+   "l5_field": "simultaneous_windows",
+   "ledger_refusal": "position_held",
+   "blocks": "L5 works 2+ windows 51% of his active time (median 2)",
+   "l5_does": "median 2 simultaneous windows, 0.507929 of active time at 2+, max 4",
+   "bound_live": {
+    "R4_open_held": 1,
+    "note": "every candidate cycle while a residual was held was skipped (CAMPAIGN_HOLD:POSITION_HELD)"
+   },
+   "removal": "concurrency 2 (L5's median), worst case 2 x $7.5 = $15.0",
+   "worst_case_usd": 15.0,
+   "worst_case_note": "the shell's worst case",
+   "recommend": "REMOVE to 2 in R5"
+  },
+  {
+   "id": "cohort_3_markets",
+   "name": "Campaign cohort stop",
+   "where": "R4 rung markets_allowed 3; rung stop at 3 settled",
+   "ours": "3 markets then stop and report",
+   "class": "approval ladder (owner)",
+   "l5_field": null,
+   "ledger_refusal": "rung_reached",
+   "blocks": "continuous operation between reports",
+   "l5_does": "continuous; 2,216 windows over the history",
+   "bound_live": {
+    "R4": "campaign stops at 3 settled; the 6 h horizon stopped it once at 14:48Z"
+   },
+   "removal": "continuous operation under the shell: daily loss stop and the 7-day horizon are the stops; report per settlement instead of per cohort",
+   "worst_case_usd": 15.0,
+   "worst_case_note": "the daily stop",
+   "recommend": "REMOVE in R5 (report cadence unchanged)"
+  },
+  {
+   "id": "observation_band",
+   "name": "Entry price band",
+   "where": "OWNER DECISION 5533476555: observation 0.35-0.65 (spring_watch prefilter + entry_band gate)",
+   "ours": "enter only with YES bid in 0.35-0.65",
+   "class": "observation scope (owner)",
+   "l5_field": "price_band_share",
+   "ledger_refusal": "entry_band_left",
+   "blocks": "L5 states outside the band (p<25c, p>65c) which the model already covers",
+   "l5_does": "share of L5 fills priced inside 0.35-0.65: 0.2909",
+   "bound_live": {
+    "R4_entry_band_left": 8
+   },
+   "removal": "widen entry to every state the frozen model covers with evidence (the off-distribution hold still protects unknown states); size unchanged so the worst case is unchanged. This is the largest fidelity gap by share of his activity (71% of his fills are outside the band)",
+   "worst_case_usd": 7.5,
+   "worst_case_note": "unchanged per market",
+   "recommend": "STAGE (R5b) after the band-inside sample is compared out of sample"
+  },
+  {
+   "id": "maker_only",
+   "name": "Maker-only (post-only), taker disabled",
+   "where": "executor post_only=True everywhere; live_policy 'maker/post-only only; taker disabled'",
+   "ours": "0% taker",
+   "class": "fee/risk policy (owner)",
+   "l5_field": "taker_share",
+   "ledger_refusal": null,
+   "blocks": "L5's taker actions (2-3% of actions by state, 15% of fills overall)",
+   "l5_does": "taker share of known-side fills 0.1659; model p_taker 2-3% of actions by tte bucket",
+   "bound_live": {
+    "live_policy": "taker disabled on every row"
+   },
+   "removal": "allow taker only when the model's p_taker draw says so for that state (2-3% of actions); fee 0.06 x p(1-p) per share, bounded by the per-market cap",
+   "worst_case_usd": 0.22,
+   "worst_case_note": "DERIVED: max taker fee if every share of the per-market cap were taken at p=0.5",
+   "recommend": "STAGE (R5b) after the fee is measured on the first taker fills"
+  },
+  {
+   "id": "off_distribution_hold",
+   "name": "Off-distribution hold",
+   "where": "frozen model: state not in the canonical history -> hold",
+   "ours": "hold when the (state, relation) key is unknown",
+   "class": "fidelity rule (frozen spec)",
+   "l5_field": null,
+   "ledger_refusal": "off_distribution_hold",
+   "blocks": "acting where we have no L5 evidence; a fidelity protection, not a deviation",
+   "l5_does": "n/a (states without L5 evidence)",
+   "bound_live": {
+    "R4_refusals": 24
+   },
+   "removal": "none; fidelity protection. Shrinks as the versioned lookup refreshes from his newest activity",
+   "worst_case_usd": 0.0,
+   "worst_case_note": "n/a",
+   "recommend": "KEEP (refresh the lookup)"
+  },
+  {
+   "id": "action_size",
+   "name": "Per-action size / size cap",
+   "where": "R4 per_action_target_usd 2.50, per_market_cap 7.50, venue minimum",
+   "ours": "~5 shares / $2.50 per action",
+   "class": "bankroll sizing (owner)",
+   "l5_field": "shares_per_fill",
+   "ledger_refusal": "spend_cap_reached",
+   "blocks": "L5's size (p50 12.5 shares); size_divergence=venue_minimum_vs_l5_target on every row",
+   "l5_does": "shares per fill p25/p50/p75 5.0/12.5/40.0; dollars per fill p50 $4.5",
+   "bound_live": {
+    "every_row": "size_divergence=venue_minimum_vs_l5_target",
+    "R4_spend_cap_reached": 1
+   },
+   "removal": "keep the action size where it is; size scales with the bankroll after profitability is measured (owner: profitability tells how far to scale, not how to rewrite)",
+   "worst_case_usd": 7.5,
+   "worst_case_note": "unchanged",
+   "recommend": "KEEP (scale later)"
+  },
+  {
+   "id": "strict_evidence_gate",
+   "name": "Strict evidence gate (prints in window, two-sided flow, q1 touch depth)",
+   "where": "src/pmus_l5_continuous_session.py strict admission (thin_flow, market_closed, no_q1_touch_depth)",
+   "ours": "admit only markets with recent prints and served two-sided books",
+   "class": "evidence requirement (owner 5526683554)",
+   "l5_field": null,
+   "ledger_refusal": "strict_evidence",
+   "blocks": "nothing L5 does (L5 trades where flow exists); it excludes quiet books we could not evaluate honestly",
+   "l5_does": "trades where flow exists",
+   "bound_live": {
+    "R4_refusals": "thin_flow dominated while the feed was dead; honest refusals"
+   },
+   "removal": "none; this is the evidence requirement, not a deviation",
+   "worst_case_usd": 0.0,
+   "worst_case_note": "n/a",
+   "recommend": "KEEP"
+  }
+ ],
+ "r5_rung": {
+  "candidate_id": "R5-FIDELITY (owner writes the approval identity)",
+  "shell": {
+   "per_market_cap_usd": 7.5,
+   "concurrency": 2,
+   "worst_case_simultaneous_usd": 15.0,
+   "daily_loss_stop_usd": 15.0,
+   "preflight_deployed_required_usd": 45.0,
+   "horizon_s": 604800,
+   "maker_only": true,
+   "per_action_target_usd": 2.5
+  },
+  "removed": [
+   "pair_cost_ceiling",
+   "unmatched_usd_cap",
+   "maker_rest_30s",
+   "concurrency_1",
+   "cohort_3_markets"
+  ],
+  "kept": [
+   "off_distribution_hold",
+   "action_size",
+   "strict_evidence_gate"
+  ],
+  "staged_r5b": [
+   "observation_band",
+   "maker_only"
+  ],
+  "deviation_recording": "every live decision keeps would_act_without_safety_cap, divergence_class and counterfactual_l5_price; under R5 a pair above 1.00 at L5's touch is L5-consistent (no deviation); the per-market cap and the daily stop are the only deviations and are labelled shell_cap",
+  "stop": "daily loss stop, the 7-day horizon, or the owner; no cohort stop; report per settlement",
+  "labels": "PROPOSAL derived from the audit; not an approval; nothing mutates until the owner writes the rung id"
+ }
+}

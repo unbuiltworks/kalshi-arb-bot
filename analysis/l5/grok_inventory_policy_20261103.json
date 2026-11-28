@@ -1,0 +1,165 @@
+{
+ "schema": "grok_inventory_policy/1",
+ "generated_utc": "2026-11-03T13:00:00Z",
+ "verdict": "NO-GO",
+ "basis": "REPLAY on 19 harvested BTC15m windows (2026-10-28..11-02), chronological 11 train / 8 holdout. Openings and completions simulated; conservative fill rule (wire must trade through a resting price), queue ignored which is OPTIMISTIC on fills. Fees at venue-verified taker 0.0695 / maker rebate 0.0125, bankers cent. Incentives counted at ZERO. No look-ahead.",
+ "penalty_calibration": {
+  "method": "adverse-selection penalty per unit = (paid - redeemed)/unit on venue-settled residual legs, calibrated ONLY on legs settled BEFORE the tape begins (2026-10-28), so it is temporally out-of-sample w.r.t. the replay",
+  "calibration_legs": 30,
+  "held_out_legs": 14,
+  "by_band": {
+   "0.00-0.20": -0.078,
+   "0.20-0.35": 0.0472,
+   "0.35-0.50": 0.3994,
+   "0.50-0.65": 0.568,
+   "0.65-1.01": 0.7122,
+   "POOLED": 0.2306
+  },
+  "gross_maker_edge_per_unit": 0.02,
+  "ev_per_unit_at_full_penalty": {
+   "0.00-0.20": 0.098,
+   "0.20-0.35": -0.0272,
+   "0.35-0.50": -0.3794,
+   "0.50-0.65": -0.548,
+   "0.65-1.01": -0.6922
+  },
+  "reading": "the ONLY band with positive risk-adjusted EV is own price BELOW 0.20, which the deployed band floor explicitly excludes. Every band the engine actually trades (proved to be 0.20-0.47 at depth 2) is negative."
+ },
+ "arms": [
+  {
+   "arm": "BASELINE existing executor",
+   "traded_pct": 84,
+   "pairs": 7,
+   "stranded": 9,
+   "matched": 1.89,
+   "residual": -3.66,
+   "hedge": 0.0,
+   "max_dd": -1.77,
+   "net": -1.77,
+   "train": -0.74,
+   "holdout": -1.03
+  },
+  {
+   "arm": "G1 time-decaying budget ONLY",
+   "traded_pct": 84,
+   "pairs": 7,
+   "stranded": 9,
+   "net": -1.77,
+   "train": -0.74,
+   "holdout": -1.03,
+   "verdict": "IDENTICAL to baseline. 44 BUDGET refusals changed no outcome: component 1 has NO measurable effect."
+  },
+  {
+   "arm": "G2 EV side-select ONLY",
+   "traded_pct": 74,
+   "pairs": 5,
+   "net": -3.62,
+   "train": -3.43,
+   "holdout": -0.19,
+   "verdict": "unstable: at lam=0 both sides have identical EV so the sort is an arbitrary tie-break. Noise, not signal."
+  },
+  {
+   "arm": "G3 penalty lam=0.25",
+   "traded_pct": 74,
+   "pairs": 5,
+   "net": -1.77,
+   "train": -1.44,
+   "holdout": -0.33,
+   "verdict": "divergent: worse train, better holdout"
+  },
+  {
+   "arm": "G4 penalty lam=0.50",
+   "traded_pct": 0,
+   "pairs": 0,
+   "net": 0.0,
+   "train": 0.0,
+   "holdout": 0.0,
+   "verdict": "REFUSES EVERY TRADE. 294 EV_NEGATIVE refusals, zero orders."
+  },
+  {
+   "arm": "G5 penalty lam=1.00",
+   "traded_pct": 0,
+   "pairs": 0,
+   "net": 0.0,
+   "verdict": "REFUSES EVERY TRADE"
+  },
+  {
+   "arm": "G6 FULL Grok policy",
+   "traded_pct": 0,
+   "pairs": 0,
+   "net": 0.0,
+   "verdict": "REFUSES EVERY TRADE -- the no-trade baseline in a policy costume"
+  },
+  {
+   "arm": "G7 lam=1 + decay + floor 0.05",
+   "traded_pct": 58,
+   "pairs": 4,
+   "stranded": 7,
+   "matched": 0.53,
+   "residual": -1.96,
+   "max_dd": -1.43,
+   "net": -1.43,
+   "train": -0.94,
+   "holdout": -0.49,
+   "verdict": "the only arm that both trades and improves holdout; but worsens train, and its edge rests on the sub-0.20 band (5 calibration legs / 8.86 units)"
+  },
+  {
+   "arm": "G9 band floor 0.05 ONLY",
+   "traded_pct": 100,
+   "pairs": 7,
+   "stranded": 12,
+   "net": -2.31,
+   "train": -1.28,
+   "holdout": -1.03,
+   "verdict": "opening the floor WITHOUT the penalty is worse than baseline: the penalty is doing real filtering work in G7"
+  }
+ ],
+ "refusal_disclosure": "EXPLICIT, as asked: at the fully calibrated penalty (lam>=0.5) the policy refuses 100% of trades and returns exactly 0.0000. Its apparent improvement over a losing baseline is REFUSAL, not edge. No arm improves BOTH chronological halves.",
+ "l5_fidelity": {
+  "actions": 63686,
+  "cap_used": "L5 own p95 |post_imb| = 427 contracts, so the budget is scaled to HIM not to our 2",
+  "permitted_pct": {
+   "ADD": 4.1,
+   "REDUCE": 7.7,
+   "REVERSE": 7.1,
+   "OPEN": 0.5,
+   "ALL": 5.7
+  },
+  "ev_test_alone_pct": 26.4,
+  "budget_alone_pct": 42.9,
+  "l5_own_px_distribution": {
+   "0.00-0.20": 26.4,
+   "0.20-0.35": 18.1,
+   "0.35-0.50": 14.0,
+   "0.50-0.65": 14.9,
+   "0.65-1.01": 26.7
+  },
+  "verdict": "Grok policy permits 5.7% of L5 actions and 0.5% of his openings. It does NOT explain L5; it is close to his complement. He puts 26.7% of actions above own 0.65 where our calibrated penalty says EV is -0.69.",
+  "why": "our adverse-selection penalty is a property of OUR execution -- 2 contracts resting 2 ticks behind a 52,000-100,000 share touch -- not of the market. Applying it to a size-scale liquidity provider is a category error, which is what the 5.7% measures."
+ },
+ "existing_controls_gap": {
+  "quantity_only_gate": "ValidationGates.refuse() gate 1 is abs(unmatched_after) > 5 contracts. 18 parameters, NO clock parameter and NO expected-value parameter (verified by signature inspection). 5 contracts at own 0.47 is .35 of adversely-selected residual; 5 at own 0.20 is .00; the gate treats them identically.",
+  "static_price_band": "the first-leg band [0.20,0.60] is a price filter derived ONCE from an out-of-sample EV curve on L5 history, never re-evaluated per order and blind to current inventory, so the 5th contract of residual passes the same test as the 1st",
+  "dead_ev_machinery": "l5_two_sided_probe.expected_value() has ZERO call sites; min_completion_probability() has 2, both outside the decision path. The machinery to do exactly what Grok proposes is already written and wired to nothing.",
+  "only_economic_bound": "max_worst_case_deficit_usd = 1.50 -- static, and a worst-case CASH bound rather than an expected-value test",
+  "conclusion": "the gap Grok names is REAL and is not a duplicate of an existing safeguard. Component 3 (completion) already works and was preserved untouched."
+ },
+ "fee_schedule": {
+  "taker": "CORRECTED and verified: feeCoefficient 0.0695 on every retained BTC15m market 2026-09-30..2026-11-03; the reported 2026-10-19 change is NOT corroborated",
+  "maker_by_effective_date": "NOT POSSIBLE from available data. The gateway market object carries ONE feeCoefficient (the taker side) and no maker field. The 0.0125 rests on a docs read of 2026-09-13 plus 23/25 print-level reproductions, and analysis/l5/venue_rebate_credits.json carries NO timestamp and NO price field (fields: at_or_above_floor, credited_to_us, id, market, our_commission, our_side, qty, raw_source_id, venue, venue_evidence). Missing input named: timestamps and per-print prices on the credit rows, or a dated maker coefficient from the venue."
+ },
+ "cancellation_margin": {
+  "status": "ALREADY SHORTENED in commit f2ad5c69 (300 -> code floor 180) BEFORE this instruction arrived; committed but NOT DEPLOYED -- the running service is 2a545a9d and still carries the 300 override",
+  "safety_evidence_held": [
+   "ORDER_TTL_S=120 bounds every order age, vs watchdog overdue at 300s -> 180s headroom",
+   "180s between terminal and settlement",
+   "measured cancel round-trip 1.021s and 1.072s; ack 0.09-0.42s"
+  ],
+  "what_is_NOT_proven": "venue cancellation behaviour under load or near settlement. The latency evidence is TWO observations. That does not meet the standard of proving venue safety, so the change should not be deployed on it."
+ },
+ "missing_to_do_better": [
+  "an independent probability estimate: BTC15m settles UP iff BRTI at window end >= BRTI at window start, and no BRTI series is reachable (no gateway route, cfbenchmarks/coinbase/binance refused by network policy, local series covers none of the replay windows)",
+  "queue position: our own pre-submit rows carry our_position_within_level UNKNOWN",
+  "sample size: 8 holdout windows, and the sub-0.20 band rests on 5 calibration legs"
+ ]
+}

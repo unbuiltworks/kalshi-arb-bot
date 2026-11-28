@@ -1,0 +1,15 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/l5_pmus_live/Dockerfile",
+    "watchPatterns": [
+      "deploy/l5_pmus_live/DEPLOY_TRIGGER"
+    ]
+  },
+  "deploy": {
+    "startCommand": "python3 -m src.l5_pmus_live_runner",
+    "restartPolicyType": "ALWAYS"
+  },
+  "_status": "THE MONEY-CAPABLE EXECUTOR. This manifest RECORDS the Railway service-level configuration that was already in force; it grants nothing and changes no effective setting. Every field was read back from the live service before being written here, so committing it is a no-op at deploy time and a reviewable record thereafter. WATCH PATTERN IS A SAFETY PROPERTY: this service deploys only when DEPLOY_TRIGGER changes, so ordinary code pushes cannot restart a process that may hold a resting order. Trading permission is NOT here and never will be: it is L5_SHADOW_ONLY plus the owner arm token plus the durable halt latch, all outside this file."
+}

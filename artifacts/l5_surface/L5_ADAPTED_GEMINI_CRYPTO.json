@@ -1,0 +1,150 @@
+{
+  "kind": "ADAPTED",
+  "label": "L5_ADAPTED_GEMINI_CRYPTO",
+  "notes": "derived from FIDELITY_OBSERVABLE_V1@d583fa4005d1b815; every inherited field is TRANSFERRED, never observed here",
+  "params": {
+    "TTE_policy": {
+      "evidence": null,
+      "name": "TTE_policy",
+      "pending_source": null,
+      "prior_evidence": "OURS for L5_ADAPTED_GEMINI_CRYPTO. Not a finding about this venue and never citable as one.",
+      "status": "OURS_ADAPTED",
+      "transferred_from": null,
+      "value": {
+        "quote_between_tte_s": [
+          0,
+          300
+        ]
+      }
+    },
+    "base_parent_qty": {
+      "evidence": null,
+      "name": "base_parent_qty",
+      "pending_source": null,
+      "prior_evidence": "OURS for L5_ADAPTED_GEMINI_CRYPTO. Not a finding about this venue and never citable as one.",
+      "status": "OURS_ADAPTED",
+      "transferred_from": null,
+      "value": "1"
+    },
+    "both_sides_policy": {
+      "evidence": null,
+      "name": "both_sides_policy",
+      "pending_source": null,
+      "prior_evidence": "observed on Polymarket BTC15m: both-outcome share 0.7278 over 2788 readable snapshots",
+      "status": "TRANSFERRED",
+      "transferred_from": "FIDELITY_OBSERVABLE_V1@d583fa4005d1b815",
+      "value": {
+        "outcomes": [
+          "Up",
+          "Down"
+        ]
+      }
+    },
+    "inventory_price_skew": {
+      "evidence": null,
+      "name": "inventory_price_skew",
+      "pending_source": null,
+      "prior_evidence": "OURS for L5_ADAPTED_GEMINI_CRYPTO. Not a finding about this venue and never citable as one.",
+      "status": "OURS_ADAPTED",
+      "transferred_from": null,
+      "value": {
+        "reducing_ticks": 0,
+        "widening_ticks": 0
+      }
+    },
+    "inventory_size_skew": {
+      "evidence": null,
+      "name": "inventory_size_skew",
+      "pending_source": null,
+      "prior_evidence": "OURS for L5_ADAPTED_GEMINI_CRYPTO. Not a finding about this venue and never citable as one.",
+      "status": "OURS_ADAPTED",
+      "transferred_from": null,
+      "value": {
+        "reducing_multiplier": 1,
+        "widening_multiplier": 1
+      }
+    },
+    "max_residual": {
+      "evidence": null,
+      "name": "max_residual",
+      "pending_source": null,
+      "prior_evidence": "OURS for L5_ADAPTED_GEMINI_CRYPTO. Not a finding about this venue and never citable as one.",
+      "status": "OURS_ADAPTED",
+      "transferred_from": null,
+      "value": "3.00"
+    },
+    "minimum_rest_time": {
+      "evidence": null,
+      "name": "minimum_rest_time",
+      "pending_source": null,
+      "prior_evidence": "OURS for L5_ADAPTED_GEMINI_CRYPTO. Not a finding about this venue and never citable as one.",
+      "status": "OURS_ADAPTED",
+      "transferred_from": null,
+      "value": 30.0
+    },
+    "refresh_policy": {
+      "evidence": null,
+      "name": "refresh_policy",
+      "pending_source": null,
+      "prior_evidence": "observed on Polymarket BTC15m: opposite-already-present share 0.9208 over 101 resolved reversals",
+      "status": "TRANSFERRED",
+      "transferred_from": "FIDELITY_OBSERVABLE_V1@d583fa4005d1b815",
+      "value": {
+        "mode": "STANDING"
+      }
+    },
+    "replenishment_policy": {
+      "evidence": null,
+      "name": "replenishment_policy",
+      "pending_source": null,
+      "prior_evidence": "OURS for L5_ADAPTED_GEMINI_CRYPTO. Not a finding about this venue and never citable as one.",
+      "status": "OURS_ADAPTED",
+      "transferred_from": null,
+      "value": {
+        "mode": "REPLACE_AFTER_FILL"
+      }
+    },
+    "rung_count": {
+      "evidence": null,
+      "name": "rung_count",
+      "pending_source": null,
+      "prior_evidence": "observed on Polymarket BTC15m: the established offset set has 1 rungs",
+      "status": "TRANSFERRED",
+      "transferred_from": "FIDELITY_OBSERVABLE_V1@d583fa4005d1b815",
+      "value": 1
+    },
+    "secondary_rung_qty": {
+      "evidence": null,
+      "name": "secondary_rung_qty",
+      "pending_source": null,
+      "prior_evidence": "OURS for L5_ADAPTED_GEMINI_CRYPTO. Not a finding about this venue and never citable as one.",
+      "status": "OURS_ADAPTED",
+      "transferred_from": null,
+      "value": "1"
+    },
+    "tick_offsets": {
+      "evidence": null,
+      "name": "tick_offsets",
+      "pending_source": null,
+      "prior_evidence": "observed on Polymarket BTC15m: 73 of 108 parents (0.68) rested at offsets [0]",
+      "status": "TRANSFERRED",
+      "transferred_from": "FIDELITY_OBSERVABLE_V1@d583fa4005d1b815",
+      "value": [
+        0
+      ]
+    },
+    "withdrawal_policy": {
+      "evidence": null,
+      "name": "withdrawal_policy",
+      "pending_source": null,
+      "prior_evidence": "OURS for L5_ADAPTED_GEMINI_CRYPTO. Not a finding about this venue and never citable as one.",
+      "status": "OURS_ADAPTED",
+      "transferred_from": null,
+      "value": {
+        "mode": "WITHDRAW_ON_TTE_FLOOR",
+        "tte_floor_s": 0
+      }
+    }
+  },
+  "spec_sha256": "62d004d80b4af8b97823e239d8919ee3abff5420c0318d18623c2810bdb3c2a6"
+}

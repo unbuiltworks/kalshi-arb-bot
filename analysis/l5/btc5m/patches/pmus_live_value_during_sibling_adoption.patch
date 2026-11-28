@@ -1,0 +1,384 @@
+From 7c3d69ba055c986ec8cf7d1583eb290579644390 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 21 Nov 2026 17:11:25 +0000
+Subject: [PATCH] Account service: keep publishing the conservative portfolio
+ value while the only uncertainty is another strategy's just-adopted position
+
+2026-11-21 16:40Z: the 5-minute lane's first fill made this service mark its
+order state uncertain for one reconciliation cycle. The published portfolio
+value was withheld for the same 22 s; the lane refused on the missing value,
+cancelled its resting bid and held its first leg unquoted while UP went
+0.41 -> 0.61.
+
+The reconciliation now records what its uncertainty consists of. When that
+is exactly: no incoherent book, no order of ours awaiting a terminal read,
+no quarantined order, every disputed market in ANOTHER registered strategy's
+series and no live order of ours there -- the value (venue buying power plus
+guaranteed pairs, which an adopted net position cannot raise) is still
+published and says so. This service's own submission gate is unchanged.
+OFF unless L5_PUBLISH_VALUE_DURING_SIBLING_ADOPTION is exactly
+OTHER_STRATEGY_POSITION_ONLY. 30 tests.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01HTk927uH8zwpj6gLES92PF
+---
+ src/l5_live_execution.py                      |  57 ++++++
+ src/l5_pmus_live_runner.py                    |  41 +++-
+ .../test_l5_value_during_sibling_adoption.py  | 184 ++++++++++++++++++
+ 3 files changed, 280 insertions(+), 2 deletions(-)
+ create mode 100644 tests/test_l5_value_during_sibling_adoption.py
+
+diff --git a/src/l5_live_execution.py b/src/l5_live_execution.py
+index 817ef9a76..531729ecc 100644
+--- a/src/l5_live_execution.py
++++ b/src/l5_live_execution.py
+@@ -1191,6 +1191,8 @@ VENUE_ORDER_LINK = "venue_order_ids"
+ #: which ORDER an `orders_uncertain` mark is about, when it is about one.
+ #: Evidence for `resolve_cancel_uncertainty`; never read as permission.
+ UNCERTAIN_CAUSE = "orders_uncertain_cause"
++#: what the last reconciliation's uncertainty consisted of (evidence only)
++UNCERTAIN_SCOPE = "orders_uncertain_scope"
+ #: the only causes the venue's terminal read of that order can end: both
+ #: say "we cancelled it and could not see it finish".
+ CANCEL_UNCERTAINTY_KINDS = ("CANCEL_STILL_OPEN", "CANCEL_UNVERIFIED")
+@@ -2197,6 +2199,52 @@ class InventoryStore:
+         """
+         return self.state.get("orders_uncertain") or None
+ 
++    def uncertainty_confined_to_other_strategy(self) -> Optional[List[str]]:
++        """The markets, when the WHOLE of the current uncertainty is another
++        registered strategy's position that this ledger had not booked.
++        None in every other case, including "not uncertain at all".
++
++        WHY IT EXISTS. This ledger is the account-wide one. When the
++        5-minute strategy's first fill of a window appears at the venue,
++        the next reconciliation adopts it ("venue holds a market we never
++        booked"), and marks the order state uncertain until the following
++        reconciliation, about 15-20 s later. That is right for THIS
++        service's own submissions and is not changed. But the published
++        portfolio value was withheld for the same seconds, and the other
++        strategy -- whose fill it was -- then refused on a missing value,
++        cancelled its resting bid and held its first leg unquoted while
++        the market moved (2026-11-21 16:40Z: 22 s, UP 0.41 -> 0.61).
++
++        READS ONLY, and every condition is required:
++          * the uncertainty's reason is exactly the one the last
++            reconciliation wrote (a later mark of any kind does not match);
++          * that reconciliation found NO incoherent book, NO order of ours
++            awaiting a terminal read and NO quarantined order;
++          * every disputed market is in ANOTHER registered strategy's
++            series; and
++          * this ledger has no live order in any of them.
++        """
++        unc = self.state.get("orders_uncertain")
++        scope = self.state.get(UNCERTAIN_SCOPE)
++        if not unc or not isinstance(scope, Mapping):
++            return None
++        if scope.get("why") != unc:
++            return None
++        if scope.get("incoherent") or scope.get("pending") \
++                or scope.get("quarantine"):
++            return None
++        markets = scope.get("disputed")
++        if not isinstance(markets, list) or not markets:
++            return None
++        live = {str((o or {}).get("market")) for o in
++                (self.state.get("live_orders") or {}).values()
++                if isinstance(o, Mapping)}
++        for m in markets:
++            owner = ORIGIN.strategy_of_market(str(m))
++            if owner is None or owner == OWN_STRATEGY or str(m) in live:
++                return None
++        return [str(m) for m in markets]
++
+     def mark_uncertain(self, why: str, *,
+                        cause: Optional[Mapping[str, Any]] = None) -> None:
+         """Record that the book is uncertain, and optionally WHICH ORDER.
+@@ -6687,6 +6735,7 @@ class InventoryStore:
+         # An authoritative answer is the ONLY thing that clears uncertainty
+         # -- and only when what it leaves behind is a book that could exist.
+         self.state["orders_uncertain"] = None
++        self.state[UNCERTAIN_SCOPE] = None
+         incoherent: Dict[str, Any] = {}
+         for m in sorted({k.rsplit("|", 1)[0]
+                          for k in (self.state.get("positions") or {})}):
+@@ -6733,6 +6782,14 @@ class InventoryStore:
+                 % (sorted(set(disputed)), sorted(incoherent), pending,
+                    quarantine))
+             self.state["orders_uncertain"] = _why
++            # WHAT THE UNCERTAINTY IS MADE OF, kept beside the reason it
++            # belongs to. Evidence only: see
++            # `uncertainty_confined_to_other_strategy`. Any later mark
++            # writes a different reason and this no longer matches it.
++            self.state[UNCERTAIN_SCOPE] = {
++                "why": _why, "disputed": sorted(set(disputed)),
++                "incoherent": sorted(incoherent), "pending": list(pending),
++                "quarantine": list(quarantine)}
+             # WHICH ORDERS, when they are the whole of it. Evidence for
+             # `resolve_pending_uncertainty`; a divergence, an incoherent
+             # book or a quarantine records NO cause and is cleared only by
+diff --git a/src/l5_pmus_live_runner.py b/src/l5_pmus_live_runner.py
+index f2dc7c491..a57672391 100644
+--- a/src/l5_pmus_live_runner.py
++++ b/src/l5_pmus_live_runner.py
+@@ -2949,13 +2949,32 @@ class Runner:
+             age = (None if self.available_cash_t is None
+                    else t - self.available_cash_t)
+             val = None
++            unc_seen, sibling_seen = None, None
+             if self.available_cash_usd is None or age is None:
+                 why = "BUYING_POWER_NOT_READ"
+             elif age > EQUITY_CASH_MAX_AGE_S or age < -5:
+                 why = "BUYING_POWER_STALE"
+             else:
+                 unc = self.store.orders_uncertain()
+-                if unc:
++                #: THE VALUE IS STILL PUBLISHED when the whole uncertainty
++                #: is another strategy's position this ledger had not
++                #: booked yet -- see `uncertainty_confined_to_other_
++                #: strategy`. The figure is the venue's own buying power
++                #: plus guaranteed pair redemption, and an adopted net
++                #: position adds nothing to it, so it can only read LOWER
++                #: than the truth. This service's own submission gate is
++                #: untouched. OFF unless the switch is exactly the token.
++                sibling_only = None
++                if unc and publish_value_during_sibling_adoption():
++                    try:
++                        sibling_only = self.store \
++                            .uncertainty_confined_to_other_strategy()
++                    except BaseException as exc:               # noqa: BLE001
++                        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
++                            raise
++                        sibling_only = None
++                unc_seen, sibling_seen = unc, sibling_only
++                if unc and not sibling_only:
+                     why = "ORDER_STATE_UNCERTAIN"
+                 else:
+                     val = PDD.worst_case_value(
+@@ -2999,7 +3018,14 @@ class Runner:
+                     "unavailable_why": why,
+                     "buying_power_age_s": (None if age is None
+                                            else round(age, 1)),
+-                    "max_age_s": EQUITY_CASH_MAX_AGE_S},
++                    "max_age_s": EQUITY_CASH_MAX_AGE_S,
++                    #: present ONLY when the value was published DURING an
++                    #: uncertainty, with the markets it was confined to;
++                    #: otherwise the block is exactly what it always was
++                    **({} if not (unc_seen and sibling_seen) else {
++                        "published_while_uncertain": {
++                            "scope": SIBLING_VALUE_TOKEN,
++                            "markets": list(sibling_seen)}})},
+             }
+         except BaseException as exc:                           # noqa: BLE001
+             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+@@ -13115,6 +13141,17 @@ def completion_requote_enabled() -> bool:
+             in ("1", "YES", "TRUE", "ON"))
+ 
+ 
++#: keep publishing the conservative portfolio value while the ONLY
++#: uncertainty is another strategy's just-adopted position. Exactly the
++#: token, or off.
++SIBLING_VALUE_ENV = "L5_PUBLISH_VALUE_DURING_SIBLING_ADOPTION"
++SIBLING_VALUE_TOKEN = "OTHER_STRATEGY_POSITION_ONLY"
++
++
++def publish_value_during_sibling_adoption() -> bool:
++    return (os.getenv(SIBLING_VALUE_ENV) or "").strip() == SIBLING_VALUE_TOKEN
++
++
+ #: names the guard service's READ-ONLY halt endpoint. Unset = inert.
+ HALT_URL_ENV = "L5_HALT_URL"
+ #: the BTC5m service's read-only fills feed. Unset: 5-minute positions this
+diff --git a/tests/test_l5_value_during_sibling_adoption.py b/tests/test_l5_value_during_sibling_adoption.py
+new file mode 100644
+index 000000000..94d4483a7
+--- /dev/null
++++ b/tests/test_l5_value_during_sibling_adoption.py
+@@ -0,0 +1,184 @@
++"""The portfolio value stays published while the ONLY uncertainty is another
++strategy's position this ledger had not booked yet.
++
++2026-11-21 16:40Z: the 5-minute lane's first fill made this service mark the
++order state uncertain for one reconciliation cycle; the published value was
++withheld; the lane refused for 22 s, cancelled its resting bid and held its
++first leg unquoted while UP went 0.41 -> 0.61.
++
++Nothing here changes this service's own submission gate.
++"""
++from decimal import Decimal as D
++
++import pytest
++
++from src import l5_live_execution as LX
++from src import l5_pmus_live_runner as R
++
++from tests.test_l5_equity_publication import (     # noqa: F401
++    NOW, Rn, env, refusals, store, watched)
++
++M5 = "cpc-btc-updown-5m-2026-11-21-1640z"
++M15 = "cpc-btc-updown-15m-2026-11-21-1630z"
++
++
++def scope(store, disputed, why="gross/net divergence", /, **over):
++    sc = {"why": why, "disputed": list(disputed), "incoherent": [],
++          "pending": [], "quarantine": []}
++    sc.update(over)
++    store.state["orders_uncertain"] = why
++    store.state[LX.UNCERTAIN_SCOPE] = sc
++    store.save()
++
++
++@pytest.fixture
++def on(monkeypatch):
++    monkeypatch.setenv(R.SIBLING_VALUE_ENV, R.SIBLING_VALUE_TOKEN)
++
++
++# ------------------------------------------------------------ the store
++
++def test_not_uncertain_is_none(store):
++    assert store.uncertainty_confined_to_other_strategy() is None
++
++
++def test_another_strategys_market_alone_is_recognised(store):
++    scope(store, [M5])
++    assert store.uncertainty_confined_to_other_strategy() == [M5]
++
++
++@pytest.mark.parametrize("over", [
++    {"incoherent": [M5]}, {"pending": ["coid-1"]},
++    {"quarantine": ["coid-2"]}, {"disputed": []},
++    {"disputed": [M5, M15]}, {"disputed": [M15]},
++    {"disputed": ["aec-nba-det-sa-2026-11-21"]},
++    {"disputed": "cpc-btc-updown-5m-"},
++])
++def test_anything_else_in_the_uncertainty_is_not(store, over):
++    scope(store, [M5], **over)
++    assert store.uncertainty_confined_to_other_strategy() is None
++
++
++def test_a_later_mark_of_any_kind_no_longer_matches(store):
++    scope(store, [M5])
++    store.mark_uncertain("cancel outcome unknown")
++    assert store.uncertainty_confined_to_other_strategy() is None
++
++
++def test_a_scope_for_a_different_reason_does_not_match(store):
++    scope(store, [M5])
++    store.state["orders_uncertain"] = "something else"
++    assert store.uncertainty_confined_to_other_strategy() is None
++
++
++def test_a_live_order_of_ours_in_that_market_disqualifies_it(store):
++    scope(store, [M5])
++    store.state["live_orders"] = {"c1": {"market": M5, "side": "UP"}}
++    assert store.uncertainty_confined_to_other_strategy() is None
++
++
++def test_the_submission_gate_still_reads_uncertain(store):
++    scope(store, [M5])
++    assert store.orders_uncertain() == "gross/net divergence"
++
++
++# ------------------------------------------------------ the publication
++
++def test_off_by_default_the_value_is_withheld_as_before(store, env):
++    scope(store, [M5])
++    out = watched(store).equity_risk_lines(NOW)
++    assert out["equity_value"]["unavailable_why"] == "ORDER_STATE_UNCERTAIN"
++    assert refusals(out) == ("PORTFOLIO_VALUE_UNAVAILABLE",
++                             "EQUITY_UNAVAILABLE")
++
++
++@pytest.mark.parametrize("raw", ["1", "ON", "YES",
++                                 "other_strategy_position_only"])
++def test_only_the_exact_token_switches_it_on(store, env, monkeypatch, raw):
++    monkeypatch.setenv(R.SIBLING_VALUE_ENV, raw)
++    scope(store, [M5])
++    out = watched(store).equity_risk_lines(NOW)
++    assert out["equity_value"]["unavailable_why"] == "ORDER_STATE_UNCERTAIN"
++
++
++def test_on_the_value_is_published_and_says_so(store, env, on):
++    scope(store, [M5])
++    store.state["positions"] = {M5 + "|DOWN": "0.08"}   # the adopted net
++    out = watched(store).equity_risk_lines(NOW)
++    ev = out["equity_value"]
++    #: buying power only: an unmatched adopted leg adds nothing
++    assert ev["usd"] == "321.4782" and ev["unavailable_why"] is None
++    assert ev["published_while_uncertain"] == {
++        "scope": R.SIBLING_VALUE_TOKEN, "markets": [M5]}
++    assert out["portfolio_drawdown"]["refusal"] \
++        != "PORTFOLIO_VALUE_UNAVAILABLE"
++    assert out["equity_baseline"]["refusal"] != "EQUITY_UNAVAILABLE"
++
++
++def test_on_the_drawdown_limit_still_binds_on_that_value(store, env, on):
++    scope(store, [M5])
++    out = watched(store).equity_risk_lines(NOW)
++    #: the fixture's anchor is 336.68 with a 15 limit: breached, as before
++    assert out["portfolio_drawdown"]["refusal"].startswith(
++        "PORTFOLIO_DRAWDOWN_LIMIT")
++
++
++@pytest.mark.parametrize("over", [
++    {"pending": ["coid-1"]}, {"incoherent": [M5]},
++    {"disputed": [M5, M15]}, {"quarantine": ["c"]}])
++def test_on_any_wider_uncertainty_is_still_withheld(store, env, on, over):
++    scope(store, [M5], **over)
++    out = watched(store).equity_risk_lines(NOW)
++    assert out["equity_value"]["unavailable_why"] == "ORDER_STATE_UNCERTAIN"
++    assert "published_while_uncertain" not in out["equity_value"]
++
++
++def test_on_an_ordinary_uncertain_mark_is_still_withheld(store, env, on):
++    store.mark_uncertain("cancel outcome unknown")
++    out = watched(store).equity_risk_lines(NOW)
++    assert refusals(out) == ("PORTFOLIO_VALUE_UNAVAILABLE",
++                             "EQUITY_UNAVAILABLE")
++
++
++def test_on_and_not_uncertain_nothing_is_flagged(store, env, on):
++    out = watched(store).equity_risk_lines(NOW)
++    assert "published_while_uncertain" not in out["equity_value"]
++    assert out["equity_value"]["usd"] == "321.4782"
++
++
++# ------------------------- through the real reconciliation, end to end
++
++def _row(market, bought, sold):
++    net = float(bought) - float(sold)
++    return {"marketSlug": market, "netPositionDecimal": "%.4f" % net,
++            "qtyBoughtDecimal": bought, "qtySoldDecimal": sold,
++            "netPosition": str(int(net)), "qtyBought": "0", "qtySold": "0",
++            "cost": "0.0464", "avgPx": "0.42"}
++
++
++def test_the_16_40z_sequence_end_to_end(store, env, on):
++    """The lane's first DOWN fill appears at the venue; this ledger had
++    never booked that market."""
++    out = store.reconcile_from_venue([_row(M5, "0.0000", "0.0800")], [])
++    assert out["ALERT"]                                  # adopted, as before
++    assert store.orders_uncertain()                      # own gate: closed
++    assert store.uncertainty_confined_to_other_strategy() == [M5]
++    pub = watched(store).equity_risk_lines(NOW)
++    assert pub["equity_value"]["usd"] == "321.4782"      # still published
++    assert pub["equity_value"]["published_while_uncertain"]["markets"] \
++        == [M5]
++    #: the next reconciliation clears it, exactly as before
++    store.reconcile_from_venue([_row(M5, "0.0000", "0.0800")], [])
++    assert store.orders_uncertain() is None
++    assert store.state[LX.UNCERTAIN_SCOPE] is None
++    pub = watched(store).equity_risk_lines(NOW)
++    assert "published_while_uncertain" not in pub["equity_value"]
++
++
++def test_the_same_event_in_this_services_own_series_is_still_withheld(
++        store, env, on):
++    store.reconcile_from_venue([_row(M15, "0.0000", "0.0800")], [])
++    assert store.orders_uncertain()
++    assert store.uncertainty_confined_to_other_strategy() is None
++    pub = watched(store).equity_risk_lines(NOW)
++    assert pub["equity_value"]["unavailable_why"] == "ORDER_STATE_UNCERTAIN"
+-- 
+2.43.0
+

@@ -1,0 +1,147 @@
+{
+ "schema": "l5_decision_discrepancy/1",
+ "generated_utc": "2026-11-03T14:00:00Z",
+ "verdict": "NO-GO -- no candidate improves chronological out-of-sample net P&L while retaining trading activity",
+ "item5_sub_020_hypothesis": {
+  "verdict": "REFUTED, and the selection bias is identified and measured",
+  "our_evidence_that_suggested_it": "5 venue-settled residual legs, 8.86 units, paid 0.1455/unit, redeemed 0.2235/unit = +0.0780/unit",
+  "the_selection_bias": "those 5 legs were conditioned on STRANDING. A cheap leg becomes residual only when the complement never arrived, and whether it arrived correlates with the price move that also determines the payoff. Conditioning on the outcome is the bias; n=5 made it look like signal.",
+  "powered_test": {
+   "source": "L5 own fills, unconditioned on whether they later paired",
+   "n_sub_020": 16786,
+   "px_mean": 0.1034,
+   "realized_P_win": 0.079,
+   "alpha": -0.0244,
+   "z": -11.7,
+   "train": {
+    "n": 10071,
+    "alpha": -0.0211,
+    "z": -7.7
+   },
+   "holdout": {
+    "n": 6715,
+    "alpha": -0.0292,
+    "z": -9.2
+   }
+  },
+  "by_band_alpha": {
+   "0.00-0.05": -0.0089,
+   "0.05-0.10": -0.0161,
+   "0.10-0.15": -0.0325,
+   "0.15-0.20": -0.0343,
+   "0.20-0.35": -0.0158,
+   "0.35-0.50": 0.0043,
+   "0.50-0.65": 0.0098,
+   "0.65-1.01": 0.0177
+  },
+  "conclusion": "sub-0.20 is ADVERSELY priced, not favourably priced -- the opposite sign to our 5-leg sample, stable across a chronological split at z<-7 in both halves. The favourable end is 0.65-1.01 (alpha +0.0177, z+6.0), consistent with the favourite-longshot bias already in the record.",
+  "not_enabled": "no flag, band or limit was changed. The hypothesis was tested and refused."
+ },
+ "item6_highest_frequency_discrepancy": {
+  "l5_transitions": {
+   "ADD->ADD": {
+    "n": 23059,
+    "pct": 36.5
+   },
+   "REDUCE->REDUCE": {
+    "n": 18386,
+    "pct": 29.1
+   },
+   "ADD->REDUCE": {
+    "n": 9617,
+    "pct": 15.2
+   },
+   "REDUCE->ADD": {
+    "n": 8868,
+    "pct": 14.0
+   },
+   "OPEN->ADD": {
+    "n": 398,
+    "pct": 0.6
+   }
+  },
+  "add_followed_by": {
+   "another ADD": 69.6,
+   "a REDUCE": 29.0
+  },
+  "per_window_median": {
+   "actions": 114.0,
+   "peak_residual_contracts": 251.5,
+   "final_residual_contracts": 100.0,
+   "bought_usd": 918.6,
+   "final_residual_usd": 38.88,
+   "final_residual_usd_over_bought_usd": 0.072,
+   "avg_own_price_of_residual": 0.395,
+   "final_over_peak_residual_ratio": 0.773
+  },
+  "cross_check": "final residual 8.88 median here vs 3.57 from the independent completion_vs_hold study -- consistent",
+  "the_discrepancy": "ADD->ADD is L5s single most common transition at 36.5%, and our engine cannot ADD at all (imbalance_cap defaults to D(0)). He accumulates persistently same-side, carries a median 100-contract residual to settlement, and only works off 23% of his peak.",
+  "why_it_is_NOT_a_candidate": "his residual sits at median own price 0.395, where HIS OWN fill-conditioned alpha is +0.0043 at z=0.8 -- statistically indistinguishable from fairly priced. OURS in that same band lost 0.3994/unit. Same price band, opposite fill-conditioned outcome. The difference is EXECUTION QUALITY, not inventory policy: his fills are size-scale liquidity provision, ours are 2 contracts resting 2 ticks behind a 52,000-100,000 share touch and therefore fill only when the market has moved against us. Copying ADD->ADD transfers the accumulation without the fill quality that makes it survivable."
+ },
+ "item7_candidate_search": {
+  "basis": "REPLAY, 19 windows, chronological 11 train / 8 holdout, conservative fills, verified fees, incentives at ZERO",
+  "arms": [
+   {
+    "arm": "BASELINE d2 cap0.96",
+    "net": -1.77,
+    "train": -0.74,
+    "holdout": -1.03,
+    "traded_pct": 84
+   },
+   {
+    "arm": "d0 cap0.99",
+    "net": -2.3,
+    "train": -1.09,
+    "holdout": -1.21,
+    "traded_pct": 84
+   },
+   {
+    "arm": "d0 cap1.00",
+    "net": -1.27,
+    "train": 0.02,
+    "holdout": -1.29,
+    "traded_pct": 84
+   },
+   {
+    "arm": "d0 cap1.00 nofloor",
+    "net": -1.45,
+    "train": -0.04,
+    "holdout": -1.41,
+    "traded_pct": 84
+   },
+   {
+    "arm": "d1 cap0.98",
+    "net": -2.09,
+    "train": -0.92,
+    "holdout": -1.17,
+    "traded_pct": 84
+   },
+   {
+    "arm": "d1 cap1.00",
+    "net": -2.82,
+    "train": -1.16,
+    "holdout": -1.66,
+    "traded_pct": 84
+   },
+   {
+    "arm": "d2 cap1.00",
+    "net": -1.14,
+    "train": 0.13,
+    "holdout": -1.27,
+    "traded_pct": 84
+   }
+  ],
+  "result": "NO arm beats the baseline holdout of -1.03. Every arm trades at 84%, so none of them is refusing trades -- the economics simply do not improve.",
+  "depth0_is_INCONCLUSIVE_not_negative": "the conservative fill rule requires the wire to trade THROUGH a resting price, which at depth 0 still demands an adverse move. The model therefore cannot represent a queue-priority fill at the touch, which is exactly what depth 0 is for. Evaluating depth 0 honestly needs a queue model -- the same missing input named before (our pre-submit rows carry our_position_within_level UNKNOWN)."
+ },
+ "preserved": {
+  "taker_theta": "0.0695, venue-verified across 13 dates 2026-09-30..2026-11-03; the reported 2026-10-19 change is NOT corroborated",
+  "maker_theta": "0.0125 retained unchanged; NOT verifiable by effective date and NOT invented -- the gateway market object carries no maker field and venue_rebate_credits.json has no timestamp or price column",
+  "inventory_epoch": "retained; closes the duplicate-suppression precondition. Both continuous-inventory flags remain OFF.",
+  "historical_rebates": "the .50 net confirmed credit is historical and is NOT assumed to apply today; current PMUS programs cover politics only and BTC15m is confirmed ineligible"
+ },
+ "reverted": {
+  "cancel_margin": "300 -> 180 REVERTED. APPROVED values restored to 300/600/540/585. The original implementation is preserved in git history at f2ad5c69 for future review. The code floor CANCEL_MARGIN_S=180 is untouched and remains raise-only, so the margin can only ever be widened by configuration.",
+  "why": "shortening it was not approved and the safety case rested on two cancel round-trip observations, which is not independent venue-safety evidence"
+ }
+}

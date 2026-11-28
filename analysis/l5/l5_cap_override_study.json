@@ -1,0 +1,1138 @@
+{
+ "by_era": {
+  "2026-03": {
+   "action_unit_usd": {
+    "max": 9.7,
+    "mean": 3.97,
+    "n": 88,
+    "p10": 1.0,
+    "p25": 2.38,
+    "p50": 4.4,
+    "p75": 4.8,
+    "p90": 5.7,
+    "p95": 6.95,
+    "p99": 9.7
+   },
+   "actions": 1929,
+   "extend_unmatched_after_in_action_units": {
+    "max": 26.949,
+    "mean": 5.1066,
+    "n": 963,
+    "p10": 1.6967,
+    "p25": 2.4625,
+    "p50": 4.066,
+    "p75": 6.682,
+    "p90": 9.9669,
+    "p95": 12.4851,
+    "p99": 16.9869
+   },
+   "extend_unmatched_before_in_action_units": {
+    "max": 25.6888,
+    "mean": 4.0814,
+    "n": 963,
+    "p10": 0.6942,
+    "p25": 1.3827,
+    "p50": 3.0356,
+    "p75": 5.5855,
+    "p90": 8.9792,
+    "p95": 11.4202,
+    "p99": 15.4779
+   },
+   "extends_refused_by_cap_in_action_units": {
+    "1.0": {
+     "refused": 947,
+     "share_of_extends": 0.9834
+    },
+    "1.5": {
+     "refused": 895,
+     "share_of_extends": 0.9294
+    },
+    "2.0": {
+     "refused": 804,
+     "share_of_extends": 0.8349
+    },
+    "3.0": {
+     "refused": 645,
+     "share_of_extends": 0.6698
+    },
+    "4.0": {
+     "refused": 493,
+     "share_of_extends": 0.5119
+    }
+   },
+   "of_those_reduced_back_under_one_unit_before_settlement": {
+    "share": 0.6849,
+    "windows": 50
+   },
+   "peak_units_per_window": {
+    "max": 26.949,
+    "mean": 6.0768,
+    "n": 88,
+    "p10": 1.0,
+    "p25": 2.8696,
+    "p50": 5.1673,
+    "p75": 8.5777,
+    "p90": 11.8449,
+    "p95": 13.9391,
+    "p99": 26.949
+   },
+   "relation_mix": {
+    "complete": 838,
+    "extend": 963,
+    "extend_share_of_actions": 0.4992,
+    "open": 128
+   },
+   "share_of_windows_extending_beyond_one_unit": 0.8295,
+   "windows": 88,
+   "windows_with_an_extend_beyond_one_unit": 73
+  },
+  "2026-04": {
+   "action_unit_usd": {
+    "max": 13.65,
+    "mean": 5.74,
+    "n": 128,
+    "p10": 3.0,
+    "p25": 4.12,
+    "p50": 5.53,
+    "p75": 7.05,
+    "p90": 8.8,
+    "p95": 9.6,
+    "p99": 12.3
+   },
+   "actions": 3338,
+   "extend_unmatched_after_in_action_units": {
+    "max": 32.4065,
+    "mean": 4.2499,
+    "n": 1404,
+    "p10": 1.2136,
+    "p25": 1.9241,
+    "p50": 3.1576,
+    "p75": 5.5595,
+    "p90": 8.5479,
+    "p95": 10.4792,
+    "p99": 17.2163
+   },
+   "extend_unmatched_before_in_action_units": {
+    "max": 27.1108,
+    "mean": 3.0341,
+    "n": 1404,
+    "p10": 0.3012,
+    "p25": 0.943,
+    "p50": 2.0462,
+    "p75": 4.1623,
+    "p90": 7.1377,
+    "p95": 8.8671,
+    "p99": 14.7099
+   },
+   "extends_refused_by_cap_in_action_units": {
+    "1.0": {
+     "refused": 1318,
+     "share_of_extends": 0.9387
+    },
+    "1.5": {
+     "refused": 1167,
+     "share_of_extends": 0.8312
+    },
+    "2.0": {
+     "refused": 1026,
+     "share_of_extends": 0.7308
+    },
+    "3.0": {
+     "refused": 747,
+     "share_of_extends": 0.5321
+    },
+    "4.0": {
+     "refused": 548,
+     "share_of_extends": 0.3903
+    }
+   },
+   "of_those_reduced_back_under_one_unit_before_settlement": {
+    "share": 0.7438,
+    "windows": 90
+   },
+   "peak_units_per_window": {
+    "max": 32.4065,
+    "mean": 5.9088,
+    "n": 128,
+    "p10": 1.6315,
+    "p25": 3.0319,
+    "p50": 4.7108,
+    "p75": 7.6866,
+    "p90": 10.4585,
+    "p95": 13.1629,
+    "p99": 21.2141
+   },
+   "relation_mix": {
+    "complete": 1757,
+    "extend": 1404,
+    "extend_share_of_actions": 0.4206,
+    "open": 177
+   },
+   "share_of_windows_extending_beyond_one_unit": 0.9453,
+   "windows": 128,
+   "windows_with_an_extend_beyond_one_unit": 121
+  },
+  "2026-08": {
+   "action_unit_usd": {
+    "max": 77.02,
+    "mean": 14.06,
+    "n": 2000,
+    "p10": 2.6,
+    "p25": 4.37,
+    "p50": 9.81,
+    "p75": 21.34,
+    "p90": 32.7,
+    "p95": 39.36,
+    "p99": 46.76
+   },
+   "actions": 66715,
+   "extend_unmatched_after_in_action_units": {
+    "max": 208.6259,
+    "mean": 22.5656,
+    "n": 33209,
+    "p10": 2.9596,
+    "p25": 6.9833,
+    "p50": 16.6979,
+    "p75": 32.0735,
+    "p90": 50.1161,
+    "p95": 63.5232,
+    "p99": 93.199
+   },
+   "extend_unmatched_before_in_action_units": {
+    "max": 187.9855,
+    "mean": 20.1133,
+    "n": 33209,
+    "p10": 1.5478,
+    "p25": 4.954,
+    "p50": 14.2008,
+    "p75": 29.1698,
+    "p90": 46.7073,
+    "p95": 60.2273,
+    "p99": 87.8383
+   },
+   "extends_refused_by_cap_in_action_units": {
+    "1.0": {
+     "refused": 32726,
+     "share_of_extends": 0.9855
+    },
+    "1.5": {
+     "refused": 32172,
+     "share_of_extends": 0.9688
+    },
+    "2.0": {
+     "refused": 31289,
+     "share_of_extends": 0.9422
+    },
+    "3.0": {
+     "refused": 29818,
+     "share_of_extends": 0.8979
+    },
+    "4.0": {
+     "refused": 28410,
+     "share_of_extends": 0.8555
+    }
+   },
+   "of_those_reduced_back_under_one_unit_before_settlement": {
+    "share": 0.4375,
+    "windows": 676
+   },
+   "peak_units_per_window": {
+    "max": 208.6259,
+    "mean": 12.0001,
+    "n": 2000,
+    "p10": 1.0,
+    "p25": 2.0,
+    "p50": 3.381,
+    "p75": 7.6937,
+    "p90": 42.2832,
+    "p95": 59.4891,
+    "p99": 99.3697
+   },
+   "relation_mix": {
+    "complete": 31386,
+    "extend": 33209,
+    "extend_share_of_actions": 0.4978,
+    "open": 2120
+   },
+   "share_of_windows_extending_beyond_one_unit": 0.7725,
+   "windows": 2000,
+   "windows_with_an_extend_beyond_one_unit": 1545
+  }
+ },
+ "by_lane": {
+  "BTC-15m": {
+   "action_unit_usd": {
+    "max": 13.65,
+    "mean": 4.41,
+    "n": 527,
+    "p10": 2.24,
+    "p25": 3.06,
+    "p50": 4.25,
+    "p75": 5.3,
+    "p90": 7.0,
+    "p95": 8.1,
+    "p99": 10.3
+   },
+   "actions": 63569,
+   "extend_unmatched_after_in_action_units": {
+    "max": 208.6259,
+    "mean": 23.3452,
+    "n": 31931,
+    "p10": 3.5115,
+    "p25": 7.9401,
+    "p50": 17.6064,
+    "p75": 32.8801,
+    "p90": 50.9363,
+    "p95": 64.2091,
+    "p99": 94.8054
+   },
+   "extend_unmatched_before_in_action_units": {
+    "max": 187.9855,
+    "mean": 20.8675,
+    "n": 31931,
+    "p10": 2.0103,
+    "p25": 5.8809,
+    "p50": 15.0895,
+    "p75": 29.9479,
+    "p90": 47.6199,
+    "p95": 60.9049,
+    "p99": 88.6144
+   },
+   "extends_refused_by_cap_in_action_units": {
+    "1.0": {
+     "refused": 31516,
+     "share_of_extends": 0.987
+    },
+    "1.5": {
+     "refused": 31039,
+     "share_of_extends": 0.9721
+    },
+    "2.0": {
+     "refused": 30502,
+     "share_of_extends": 0.9552
+    },
+    "3.0": {
+     "refused": 29353,
+     "share_of_extends": 0.9193
+    },
+    "4.0": {
+     "refused": 28179,
+     "share_of_extends": 0.8825
+    }
+   },
+   "of_those_reduced_back_under_one_unit_before_settlement": {
+    "share": 0.7968,
+    "windows": 404
+   },
+   "peak_units_per_window": {
+    "max": 208.6259,
+    "mean": 34.9456,
+    "n": 527,
+    "p10": 2.9625,
+    "p25": 6.0099,
+    "p50": 30.5273,
+    "p75": 51.661,
+    "p90": 78.306,
+    "p95": 89.9465,
+    "p99": 138.1586
+   },
+   "relation_mix": {
+    "complete": 31010,
+    "extend": 31931,
+    "extend_share_of_actions": 0.5023,
+    "open": 628
+   },
+   "share_of_windows_extending_beyond_one_unit": 0.962,
+   "windows": 527,
+   "windows_with_an_extend_beyond_one_unit": 507
+  },
+  "BTC-5m": {
+   "action_unit_usd": {
+    "max": 77.02,
+    "mean": 19.66,
+    "n": 957,
+    "p10": 4.77,
+    "p25": 9.35,
+    "p50": 18.22,
+    "p75": 27.37,
+    "p90": 38.08,
+    "p95": 42.47,
+    "p99": 50.8
+   },
+   "actions": 6227,
+   "extend_unmatched_after_in_action_units": {
+    "max": 43.3849,
+    "mean": 4.1545,
+    "n": 2762,
+    "p10": 1.3213,
+    "p25": 2.0,
+    "p50": 3.1175,
+    "p75": 4.9703,
+    "p90": 8.0088,
+    "p95": 10.915,
+    "p99": 19.0594
+   },
+   "extend_unmatched_before_in_action_units": {
+    "max": 31.6833,
+    "mean": 2.7903,
+    "n": 2762,
+    "p10": 0.3972,
+    "p25": 1.0,
+    "p50": 1.8924,
+    "p75": 3.5551,
+    "p90": 6.011,
+    "p95": 8.6482,
+    "p99": 15.7054
+   },
+   "extends_refused_by_cap_in_action_units": {
+    "1.0": {
+     "refused": 2634,
+     "share_of_extends": 0.9537
+    },
+    "1.5": {
+     "refused": 2406,
+     "share_of_extends": 0.8711
+    },
+    "2.0": {
+     "refused": 2049,
+     "share_of_extends": 0.7419
+    },
+    "3.0": {
+     "refused": 1450,
+     "share_of_extends": 0.525
+    },
+    "4.0": {
+     "refused": 981,
+     "share_of_extends": 0.3552
+    }
+   },
+   "of_those_reduced_back_under_one_unit_before_settlement": {
+    "share": 0.4213,
+    "windows": 340
+   },
+   "peak_units_per_window": {
+    "max": 150.9741,
+    "mean": 4.8535,
+    "n": 957,
+    "p10": 1.188,
+    "p25": 2.0009,
+    "p50": 3.4787,
+    "p75": 5.5208,
+    "p90": 9.3385,
+    "p95": 12.9973,
+    "p99": 28.436
+   },
+   "relation_mix": {
+    "complete": 2411,
+    "extend": 2762,
+    "extend_share_of_actions": 0.4436,
+    "open": 1054
+   },
+   "share_of_windows_extending_beyond_one_unit": 0.8433,
+   "windows": 957,
+   "windows_with_an_extend_beyond_one_unit": 807
+  },
+  "ETH-15m": {
+   "action_unit_usd": {
+    "max": 18.92,
+    "mean": 8.4,
+    "n": 29,
+    "p10": 3.82,
+    "p25": 4.81,
+    "p50": 6.84,
+    "p75": 10.65,
+    "p90": 16.58,
+    "p95": 17.39,
+    "p99": 18.92
+   },
+   "actions": 117,
+   "extend_unmatched_after_in_action_units": {
+    "max": 7.5866,
+    "mean": 2.8963,
+    "n": 55,
+    "p10": 1.6875,
+    "p25": 2.0,
+    "p50": 2.451,
+    "p75": 3.5379,
+    "p90": 4.7501,
+    "p95": 5.684,
+    "p99": 7.5866
+   },
+   "extend_unmatched_before_in_action_units": {
+    "max": 4.654,
+    "mean": 1.5948,
+    "n": 55,
+    "p10": 0.451,
+    "p25": 0.7805,
+    "p50": 1.6124,
+    "p75": 2.058,
+    "p90": 3.5379,
+    "p95": 3.8429,
+    "p99": 4.654
+   },
+   "extends_refused_by_cap_in_action_units": {
+    "1.0": {
+     "refused": 53,
+     "share_of_extends": 0.9636
+    },
+    "1.5": {
+     "refused": 51,
+     "share_of_extends": 0.9273
+    },
+    "2.0": {
+     "refused": 38,
+     "share_of_extends": 0.6909
+    },
+    "3.0": {
+     "refused": 23,
+     "share_of_extends": 0.4182
+    },
+    "4.0": {
+     "refused": 10,
+     "share_of_extends": 0.1818
+    }
+   },
+   "of_those_reduced_back_under_one_unit_before_settlement": {
+    "share": 0.3478,
+    "windows": 8
+   },
+   "peak_units_per_window": {
+    "max": 7.5866,
+    "mean": 2.9797,
+    "n": 29,
+    "p10": 1.0,
+    "p25": 2.0,
+    "p50": 2.6168,
+    "p75": 3.533,
+    "p90": 5.684,
+    "p95": 6.9877,
+    "p99": 7.5866
+   },
+   "relation_mix": {
+    "complete": 32,
+    "extend": 55,
+    "extend_share_of_actions": 0.4701,
+    "open": 30
+   },
+   "share_of_windows_extending_beyond_one_unit": 0.7931,
+   "windows": 29,
+   "windows_with_an_extend_beyond_one_unit": 23
+  },
+  "ETH-5m": {
+   "action_unit_usd": {
+    "max": 48.16,
+    "mean": 11.12,
+    "n": 703,
+    "p10": 1.72,
+    "p25": 3.78,
+    "p50": 7.73,
+    "p75": 15.75,
+    "p90": 25.14,
+    "p95": 32.38,
+    "p99": 45.79
+   },
+   "actions": 2069,
+   "extend_unmatched_after_in_action_units": {
+    "max": 20.373,
+    "mean": 3.8584,
+    "n": 828,
+    "p10": 1.4585,
+    "p25": 2.0,
+    "p50": 2.6841,
+    "p75": 4.9788,
+    "p90": 8.0846,
+    "p95": 9.695,
+    "p99": 14.1805
+   },
+   "extend_unmatched_before_in_action_units": {
+    "max": 20.2037,
+    "mean": 2.4396,
+    "n": 828,
+    "p10": 0.3856,
+    "p25": 0.9174,
+    "p50": 1.5763,
+    "p75": 3.0399,
+    "p90": 5.8776,
+    "p95": 8.0368,
+    "p99": 11.9412
+   },
+   "extends_refused_by_cap_in_action_units": {
+    "1.0": {
+     "refused": 788,
+     "share_of_extends": 0.9517
+    },
+    "1.5": {
+     "refused": 738,
+     "share_of_extends": 0.8913
+    },
+    "2.0": {
+     "refused": 530,
+     "share_of_extends": 0.6401
+    },
+    "3.0": {
+     "refused": 384,
+     "share_of_extends": 0.4638
+    },
+    "4.0": {
+     "refused": 281,
+     "share_of_extends": 0.3394
+    }
+   },
+   "of_those_reduced_back_under_one_unit_before_settlement": {
+    "share": 0.1592,
+    "windows": 64
+   },
+   "peak_units_per_window": {
+    "max": 36.4807,
+    "mean": 3.0495,
+    "n": 703,
+    "p10": 1.0,
+    "p25": 1.0,
+    "p50": 2.0,
+    "p75": 3.4638,
+    "p90": 6.9669,
+    "p95": 9.0182,
+    "p99": 16.464
+   },
+   "relation_mix": {
+    "complete": 528,
+    "extend": 828,
+    "extend_share_of_actions": 0.4002,
+    "open": 713
+   },
+   "share_of_windows_extending_beyond_one_unit": 0.5718,
+   "windows": 703,
+   "windows_with_an_extend_beyond_one_unit": 402
+  }
+ },
+ "by_size_band": {
+  "spend$100-500": {
+   "action_unit_usd": {
+    "max": 69.51,
+    "mean": 19.99,
+    "n": 736,
+    "p10": 5.15,
+    "p25": 9.67,
+    "p50": 18.88,
+    "p75": 27.37,
+    "p90": 37.54,
+    "p95": 41.06,
+    "p99": 50.92
+   },
+   "actions": 8700,
+   "extend_unmatched_after_in_action_units": {
+    "max": 78.4736,
+    "mean": 4.9324,
+    "n": 4007,
+    "p10": 1.3235,
+    "p25": 2.056,
+    "p50": 3.3678,
+    "p75": 5.6495,
+    "p90": 9.7263,
+    "p95": 13.2353,
+    "p99": 28.9418
+   },
+   "extend_unmatched_before_in_action_units": {
+    "max": 78.4617,
+    "mean": 3.6069,
+    "n": 4007,
+    "p10": 0.395,
+    "p25": 1.0066,
+    "p50": 2.1169,
+    "p75": 4.2256,
+    "p90": 7.8839,
+    "p95": 11.2192,
+    "p99": 25.1522
+   },
+   "extends_refused_by_cap_in_action_units": {
+    "1.0": {
+     "refused": 3828,
+     "share_of_extends": 0.9553
+    },
+    "1.5": {
+     "refused": 3485,
+     "share_of_extends": 0.8697
+    },
+    "2.0": {
+     "refused": 3060,
+     "share_of_extends": 0.7637
+    },
+    "3.0": {
+     "refused": 2267,
+     "share_of_extends": 0.5658
+    },
+    "4.0": {
+     "refused": 1648,
+     "share_of_extends": 0.4113
+    }
+   },
+   "of_those_reduced_back_under_one_unit_before_settlement": {
+    "share": 0.5218,
+    "windows": 371
+   },
+   "peak_units_per_window": {
+    "max": 78.4736,
+    "mean": 5.6626,
+    "n": 736,
+    "p10": 2.0046,
+    "p25": 2.9383,
+    "p50": 4.2543,
+    "p75": 6.4809,
+    "p90": 10.4121,
+    "p95": 13.7752,
+    "p99": 26.949
+   },
+   "relation_mix": {
+    "complete": 3836,
+    "extend": 4007,
+    "extend_share_of_actions": 0.4606,
+    "open": 857
+   },
+   "share_of_windows_extending_beyond_one_unit": 0.966,
+   "windows": 736,
+   "windows_with_an_extend_beyond_one_unit": 711
+  },
+  "spend$25-100": {
+   "action_unit_usd": {
+    "max": 77.02,
+    "mean": 14.98,
+    "n": 708,
+    "p10": 3.64,
+    "p25": 5.7,
+    "p50": 11.08,
+    "p75": 21.44,
+    "p90": 33.34,
+    "p95": 42.47,
+    "p99": 47.67
+   },
+   "actions": 3608,
+   "extend_unmatched_after_in_action_units": {
+    "max": 38.1109,
+    "mean": 4.0236,
+    "n": 1537,
+    "p10": 1.4023,
+    "p25": 2.0,
+    "p50": 3.0588,
+    "p75": 5.1382,
+    "p90": 8.1375,
+    "p95": 9.7529,
+    "p99": 15.537
+   },
+   "extend_unmatched_before_in_action_units": {
+    "max": 21.7299,
+    "mean": 2.696,
+    "n": 1537,
+    "p10": 0.407,
+    "p25": 0.9942,
+    "p50": 1.9015,
+    "p75": 3.5853,
+    "p90": 6.2209,
+    "p95": 8.0846,
+    "p99": 12.8347
+   },
+   "extends_refused_by_cap_in_action_units": {
+    "1.0": {
+     "refused": 1466,
+     "share_of_extends": 0.9538
+    },
+    "1.5": {
+     "refused": 1353,
+     "share_of_extends": 0.8803
+    },
+    "2.0": {
+     "refused": 1107,
+     "share_of_extends": 0.7202
+    },
+    "3.0": {
+     "refused": 798,
+     "share_of_extends": 0.5192
+    },
+    "4.0": {
+     "refused": 544,
+     "share_of_extends": 0.3539
+    }
+   },
+   "of_those_reduced_back_under_one_unit_before_settlement": {
+    "share": 0.301,
+    "windows": 158
+   },
+   "peak_units_per_window": {
+    "max": 150.9741,
+    "mean": 4.4251,
+    "n": 708,
+    "p10": 1.0,
+    "p25": 1.9435,
+    "p50": 2.8088,
+    "p75": 5.3123,
+    "p90": 8.7088,
+    "p95": 11.3569,
+    "p99": 23.1354
+   },
+   "relation_mix": {
+    "complete": 1290,
+    "extend": 1537,
+    "extend_share_of_actions": 0.426,
+    "open": 781
+   },
+   "share_of_windows_extending_beyond_one_unit": 0.7415,
+   "windows": 708,
+   "windows_with_an_extend_beyond_one_unit": 525
+  },
+  "spend<$25": {
+   "action_unit_usd": {
+    "max": 24.91,
+    "mean": 5.75,
+    "n": 455,
+    "p10": 1.0,
+    "p25": 2.07,
+    "p50": 4.2,
+    "p75": 7.66,
+    "p90": 12.74,
+    "p95": 17.61,
+    "p99": 24.03
+   },
+   "actions": 856,
+   "extend_unmatched_after_in_action_units": {
+    "max": 12.9573,
+    "mean": 3.0769,
+    "n": 276,
+    "p10": 1.7162,
+    "p25": 2.0,
+    "p50": 2.0,
+    "p75": 3.7775,
+    "p90": 5.7572,
+    "p95": 7.1686,
+    "p99": 11.7141
+   },
+   "extend_unmatched_before_in_action_units": {
+    "max": 12.1919,
+    "mean": 2.0362,
+    "n": 276,
+    "p10": 0.5714,
+    "p25": 0.9792,
+    "p50": 1.4677,
+    "p75": 2.1543,
+    "p90": 4.8685,
+    "p95": 6.3806,
+    "p99": 9.6649
+   },
+   "extends_refused_by_cap_in_action_units": {
+    "1.0": {
+     "refused": 268,
+     "share_of_extends": 0.971
+    },
+    "1.5": {
+     "refused": 256,
+     "share_of_extends": 0.9275
+    },
+    "2.0": {
+     "refused": 134,
+     "share_of_extends": 0.4855
+    },
+    "3.0": {
+     "refused": 88,
+     "share_of_extends": 0.3188
+    },
+    "4.0": {
+     "refused": 59,
+     "share_of_extends": 0.2138
+    }
+   },
+   "of_those_reduced_back_under_one_unit_before_settlement": {
+    "share": 0.0968,
+    "windows": 18
+   },
+   "peak_units_per_window": {
+    "max": 36.4807,
+    "mean": 2.0136,
+    "n": 455,
+    "p10": 1.0,
+    "p25": 1.0,
+    "p50": 1.0,
+    "p75": 2.0,
+    "p90": 3.4638,
+    "p95": 5.5926,
+    "p99": 12.9573
+   },
+   "relation_mix": {
+    "complete": 125,
+    "extend": 276,
+    "extend_share_of_actions": 0.3224,
+    "open": 455
+   },
+   "share_of_windows_extending_beyond_one_unit": 0.4088,
+   "windows": 455,
+   "windows_with_an_extend_beyond_one_unit": 186
+  },
+  "spend>=$500": {
+   "action_unit_usd": {
+    "max": 11.07,
+    "mean": 4.01,
+    "n": 317,
+    "p10": 2.09,
+    "p25": 2.93,
+    "p50": 3.83,
+    "p75": 5.0,
+    "p90": 6.02,
+    "p95": 6.99,
+    "p99": 8.5
+   },
+   "actions": 58818,
+   "extend_unmatched_after_in_action_units": {
+    "max": 208.6259,
+    "mean": 24.6494,
+    "n": 29756,
+    "p10": 4.4876,
+    "p25": 9.3417,
+    "p50": 19.21,
+    "p75": 34.2151,
+    "p90": 52.2089,
+    "p95": 65.3922,
+    "p99": 96.2773
+   },
+   "extend_unmatched_before_in_action_units": {
+    "max": 187.9855,
+    "mean": 22.0787,
+    "n": 29756,
+    "p10": 2.665,
+    "p25": 7.1126,
+    "p50": 16.616,
+    "p75": 31.1983,
+    "p90": 49.0124,
+    "p95": 62.2003,
+    "p99": 89.8802
+   },
+   "extends_refused_by_cap_in_action_units": {
+    "1.0": {
+     "refused": 29429,
+     "share_of_extends": 0.989
+    },
+    "1.5": {
+     "refused": 29140,
+     "share_of_extends": 0.9793
+    },
+    "2.0": {
+     "refused": 28818,
+     "share_of_extends": 0.9685
+    },
+    "3.0": {
+     "refused": 28057,
+     "share_of_extends": 0.9429
+    },
+    "4.0": {
+     "refused": 27200,
+     "share_of_extends": 0.9141
+    }
+   },
+   "of_those_reduced_back_under_one_unit_before_settlement": {
+    "share": 0.8486,
+    "windows": 269
+   },
+   "peak_units_per_window": {
+    "max": 208.6259,
+    "mean": 53.8628,
+    "n": 317,
+    "p10": 25.0068,
+    "p25": 35.658,
+    "p50": 47.8803,
+    "p75": 66.7831,
+    "p90": 88.2092,
+    "p95": 107.8804,
+    "p99": 150.8685
+   },
+   "relation_mix": {
+    "complete": 28730,
+    "extend": 29756,
+    "extend_share_of_actions": 0.5059,
+    "open": 332
+   },
+   "share_of_windows_extending_beyond_one_unit": 1.0,
+   "windows": 317,
+   "windows_with_an_extend_beyond_one_unit": 317
+  }
+ },
+ "classification": "safety-cap override (R4 dollar residual cap): the refusals are L5-consistent actions blocked by the cap, reported separately per OWNER 5567269295; no cap change is made here",
+ "implied_vs_observed": {
+  "implied_refusal_share_of_l5_actions_at_k1": 0.4861,
+  "l5_extend_share_of_actions": 0.4942,
+  "l5_extends_refused_share_at_k1": 0.9836,
+  "live": {
+   "action_usd": 2.5,
+   "by_draw": {
+    "extend": 44
+   },
+   "by_market": {
+    "aec-atpcq-aleher-tundur-2026-09-07": 9,
+    "aec-atpcq-norgom-ollwal-2026-09-07": 35
+   },
+   "by_state": {
+    "p45-55c|tte>10m|imb1-10": 35,
+    "p45-55c|tte>10m|imb10-50": 9
+   },
+   "cap_in_action_units": 1.0,
+   "cap_usd": 2.5,
+   "decisions": 144,
+   "extend_draws": 54,
+   "extend_draws_refused_share": 0.8148,
+   "reading": "every refusal is an EXTEND draw whose after-if-filled exposure exceeded one action's notional; a residual of a few cents is enough because the cap equals one action",
+   "refusal_share_of_decisions": 0.3056,
+   "refusals": 44,
+   "source": "analysis/l5/r4_decisions.jsonl",
+   "unmatched_after_if_filled_usd": {
+    "max": 5.0202,
+    "mean": 4.6005,
+    "n": 44,
+    "p10": 2.6104,
+    "p25": 4.7755,
+    "p50": 4.963,
+    "p75": 4.999,
+    "p90": 5.0202,
+    "p95": 5.0202,
+    "p99": 5.0202
+   },
+   "unmatched_after_in_action_units": {
+    "max": 2.0081,
+    "mean": 1.8402,
+    "n": 44,
+    "p10": 1.0442,
+    "p25": 1.9102,
+    "p50": 1.9852,
+    "p75": 1.9996,
+    "p90": 2.0081,
+    "p95": 2.0081,
+    "p99": 2.0081
+   },
+   "unmatched_before_usd": {
+    "max": 2.499,
+    "mean": 2.1287,
+    "n": 44,
+    "p10": 0.0517,
+    "p25": 2.4509,
+    "p50": 2.4509,
+    "p75": 2.4509,
+    "p90": 2.4957,
+    "p95": 2.499,
+    "p99": 2.499
+   }
+  }
+ },
+ "mechanism": {
+  "cap_in_action_units": 1.0,
+  "r4_action_usd": 2.5,
+  "r4_cap_usd": 2.5,
+  "statement": "the cap equals one action's notional, so any EXTEND drawn with unmatched exposure above ~0 is refused"
+ },
+ "overall": {
+  "action_unit_usd": {
+   "max": 77.02,
+   "mean": 13.18,
+   "n": 2216,
+   "p10": 2.5,
+   "p25": 4.25,
+   "p50": 8.47,
+   "p75": 19.63,
+   "p90": 31.13,
+   "p95": 38.17,
+   "p99": 46.26
+  },
+  "actions": 71982,
+  "extend_unmatched_after_in_action_units": {
+   "max": 208.6259,
+   "mean": 21.3701,
+   "n": 35576,
+   "p10": 2.5746,
+   "p25": 5.9295,
+   "p50": 15.114,
+   "p75": 30.7324,
+   "p90": 48.7205,
+   "p95": 62.4081,
+   "p99": 90.9307
+  },
+  "extend_unmatched_before_in_action_units": {
+   "max": 187.9855,
+   "mean": 19.0053,
+   "n": 35576,
+   "p10": 1.2954,
+   "p25": 4.1104,
+   "p50": 12.7167,
+   "p75": 27.7876,
+   "p90": 45.3498,
+   "p95": 58.7447,
+   "p99": 86.2873
+  },
+  "extends_refused_by_cap_in_action_units": {
+   "1.0": {
+    "refused": 34991,
+    "share_of_extends": 0.9836
+   },
+   "1.5": {
+    "refused": 34234,
+    "share_of_extends": 0.9623
+   },
+   "2.0": {
+    "refused": 33119,
+    "share_of_extends": 0.9309
+   },
+   "3.0": {
+    "refused": 31210,
+    "share_of_extends": 0.8773
+   },
+   "4.0": {
+    "refused": 29451,
+    "share_of_extends": 0.8278
+   }
+  },
+  "of_those_reduced_back_under_one_unit_before_settlement": {
+   "share": 0.4692,
+   "windows": 816
+  },
+  "peak_units_per_window": {
+   "max": 208.6259,
+   "mean": 11.4131,
+   "n": 2216,
+   "p10": 1.0,
+   "p25": 2.0,
+   "p50": 3.5117,
+   "p75": 7.737,
+   "p90": 38.5614,
+   "p95": 57.7227,
+   "p99": 97.8973
+  },
+  "relation_mix": {
+   "complete": 33981,
+   "extend": 35576,
+   "extend_share_of_actions": 0.4942,
+   "open": 2425
+  },
+  "share_of_windows_extending_beyond_one_unit": 0.7847,
+  "windows": 2216,
+  "windows_with_an_extend_beyond_one_unit": 1739
+ },
+ "owner_direction": "chat 2026-09-07 ~11:00Z: analyze why the $2.50 residual cap has overridden L5 EXTEND decisions",
+ "provenance": {
+  "content_sha256_16": "3b98847233684612",
+  "limits": [
+   "derived from EXECUTED TRADES on the public activity feed: a fill is not a quote",
+   "concurrency here is FILL concurrency, a lower bound on quoting concurrency",
+   "'unknown' maker_taker is outside takerOnly coverage and is never treated as maker",
+   "relations derived from the canonical inventory columns: BUY from flat = open; BUY on the residual side = extend; BUY on the other side = complete; SELL rows skipped",
+   "action unit = the window's own median BUY notional; a cap of k units refuses an EXTEND iff unmatched exposure after it exceeds k units",
+   "fills only: what L5 tried and could not fill is invisible"
+  ],
+  "maker_taker_counts": {
+   "maker": 55647,
+   "taker": 11068,
+   "unknown": 5269
+  },
+  "meta_rows": 71984,
+  "rows_read": 71984,
+  "source_file": "analysis/l5/l5_canonical_sequence.csv.gz",
+  "source_meta": "analysis/l5/l5_canonical_sequence.meta.json",
+  "upstream_sources": [
+   "/home/user/kalshi-arb-bot/analysis/l5/l5_window_sequences.csv",
+   "/home/user/kalshi-arb-bot/analysis/l5/l5_windows_summary.csv",
+   "/home/user/kalshi-arb-bot/analysis/l5/l5_all_trades.csv",
+   "/home/user/kalshi-arb-bot/data/l5/raw/trades_takeronly.jsonl"
+  ]
+ }
+}

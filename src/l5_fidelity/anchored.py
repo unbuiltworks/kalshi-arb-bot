@@ -1,0 +1,232 @@
+"""ESTIMAND A, fill-anchored, with the feed's latency handled honestly.
+
+WHY THIS FILE EXISTS. Freezing predictions at wall-clock moments and resolving
+them from this feed cannot measure ACT/WAIT at all. Measured 2026-09-15 over 12
+samples: L5's fills reach us a MEDIAN 15.0 SECONDS after the venue stamps
+them (p95 29.8s, n=208; the earlier 28.5s came from 12 samples and overstated it)
+(7.6-55.2s), and the age sawtooths -- the signature of batched ingestion, not
+streaming. L5's BTC15m inter-fill median is 2 s. So a 30 s prediction window is
+mostly invisible at resolution time, and the "ACT within 30s = 0.46" seen under
+v0 is predominantly a FEED ARTIFACT rather than L5 behaviour.
+
+THE FIX IS THE ESTIMAND AND THE ANCHOR, NOT THE SCORE. Anchor on a fill's own
+timestamp and measure the gap to the next fill's own timestamp. Both come from
+the same feed with the same clock, so the latency delays WHEN we can score and
+not WHAT we score.
+
+AND ONE MORE DISCIPLINE, BECAUSE SEALING IS NOT ENOUGH. A prediction sealed
+before we OBSERVE an event is not prospective if the event had already OCCURRED.
+The anchor is therefore the newest fill visible at freeze time, and at
+resolution the successor's own timestamp is compared against the seal: a
+successor that predates the seal means the outcome was already determined when
+we froze, and that row is marked NOT_PROSPECTIVE and EXCLUDED from scoring
+rather than counted as a hit or a miss.
+"""
+from __future__ import annotations
+
+import math
+import time
+from typing import Any, Dict, List, Optional, Sequence
+
+from src.l5_fidelity import baselines as B
+from src.l5_fidelity import clocks as C
+from src.l5_fidelity import model as M
+from src.l5_fidelity import store
+from src.l5_fidelity.model import ESTIMAND_A, HORIZONS_S, FidelityV0
+
+MAX_H = max(HORIZONS_S)
+# resolve only once the feed has demonstrably propagated past anchor+MAX_H.
+# 55.2s was the worst observed lag; 180s is a deliberate multiple of it.
+PROPAGATION_MARGIN_S = 180.0
+
+
+def state_after_fill(*, cohort: str, anchor: dict,
+                     window_fills: Sequence[dict]) -> Dict[str, Any]:
+    """Observable state immediately AFTER the anchor fill. Only fills at or
+    before the anchor's own timestamp are included."""
+    past = [f for f in window_fills if f["t"] <= anchor["t"]]
+    up = sum(f["size"] for f in past if f["outcome"] == "Up")
+    dn = sum(f["size"] for f in past if f["outcome"] != "Up")
+    tot = up + dn
+    # SPEND, so L5's own running pair cost is observable rather than inferred.
+    # Same `past` list, so no lookahead is introduced: this is what he had paid
+    # as of his own fill, and it is the MEASUREMENT quantity
+    # (l5_observed_pair_cost) that must be kept apart from our execution
+    # ceiling. Without it the only pair-cost number in the system was our
+    # policy's, which is how a policy becomes a definition of fidelity.
+    up_sp = sum(f["size"] * float(f["price"]) for f in past
+                if f["outcome"] == "Up")
+    dn_sp = sum(f["size"] * float(f["price"]) for f in past
+                if f["outcome"] != "Up")
+    l5_pair = ((up_sp / up) + (dn_sp / dn)) if (up > 0 and dn > 0) else None
+    return {
+        "cohort": cohort,
+        # the condition id is what lets a RESTARTED runner find this window's
+        # later fills again. Without it an unresolved prediction is orphaned
+        # the moment the process dies, which silently drops every prediction
+        # frozen within MAX_H+margin of a restart.
+        "cid": anchor.get("cid"),
+        "anchor_t": anchor["t"],
+        "anchor_outcome": anchor["outcome"],
+        "anchor_price": anchor["price"],
+        "anchor_size": anchor["size"],
+        "window_end": anchor["window_end"],
+        "tte_s": anchor["window_end"] - anchor["t"],
+        "n_fills_so_far": len(past),
+        "inv_up": up, "inv_dn": dn,
+        "up_spend": up_sp, "dn_spend": dn_sp,
+        # None until he holds BOTH sides: a one-sided position has a cost, not
+        # a pair cost, and reporting 0 would read as the cheapest possible pair
+        "l5_observed_pair_cost": l5_pair,
+        "matched_qty": min(up, dn),
+        "residual_abs": abs(up - dn),
+        "residual_rel": ((up - dn) / tot) if tot else None,
+        "labels": ("state as of the anchor fill's own timestamp; no later fill "
+                   "is included"),
+    }
+
+
+def freeze_anchored(out_dir: str, model: FidelityV0, state: Dict[str, Any],
+                    *, now: Optional[float] = None) -> Dict[str, Any]:
+    """The frozen row carries all three clocks, because the two questions we
+    ultimately ask of it are answered from different ones (see clocks.py):
+
+      EVENT-TIME FIDELITY     did the model describe L5's eventual action from
+                              contemporaneous state? Answered on the EVENT
+                              clock. Feed latency does not touch it -- the
+                              state contains only fills at or before the
+                              anchor's own timestamp, and the outcome is the
+                              next fill in event order.
+
+      REALTIME REPLICABILITY  could we have known in time to do anything?
+                              Answered on the OBSERVATION clock. If the anchor
+                              only became visible to us L seconds after it
+                              happened, then every horizon h <= L was already
+                              in the past when we learned of it.
+
+    Conflating them is how a model that describes L5 perfectly gets mistaken
+    for one we could trade."""
+    p = model.predict(tte=state["tte_s"], since=None,
+                      resid_rel=state["residual_rel"],
+                      last_outcome=state["anchor_outcome"],
+                      price=state["anchor_price"],
+                      estimand=ESTIMAND_A)
+    base = {
+        "always_WAIT": B.always_wait(),
+        "always_ACT": B.always_act(),
+        "repeat_previous_outcome": B.repeat_previous(state["anchor_outcome"]),
+        "DEARER": B.dearer(state["anchor_price"]),
+        "CHEAPER": B.cheaper(state["anchor_price"]),
+        "cohort_empirical_frequency": B.cohort_frequency(p["p_outcome_up"]),
+        "historical_cadence": B.historical_rate(
+            p["p_act_within"][str(min(HORIZONS_S))]),
+    }
+    t_obs = time.time() if now is None else now
+    state = {**state, "clocks": C.stamp(event_ts=state["anchor_t"],
+                                        observed_at=t_obs, source="data-api"),
+             "observation_lag_s": round(t_obs - state["anchor_t"], 3)}
+    return store.freeze(out_dir, model_version=model.version,
+                        cohort=model.cohort, state=state,
+                        prediction={**p, "baselines": base},
+                        horizon_s=list(HORIZONS_S), now=now)
+
+
+def resolve_anchored(out_dir: str, rec: Dict[str, Any],
+                     window_fills: Sequence[dict], *,
+                     now: Optional[float] = None) -> Dict[str, Any]:
+    """Score one anchored prediction. Gaps are measured between the fills' OWN
+    timestamps, so feed latency cannot distort them."""
+    anchor_t = rec["state"]["anchor_t"]
+    seal_t = rec["prediction_utc"]
+    fut = sorted((f for f in window_fills if f["t"] > anchor_t),
+                 key=lambda f: f["t"])
+    nxt = fut[0] if fut else None
+    p = rec["prediction"]
+
+    # THE PROSPECTIVITY CHECK. A successor that already existed when we sealed
+    # was never predicted, whatever the seal says.
+    prospective = True
+    reason = None
+    if nxt is not None and nxt["t"] <= seal_t:
+        prospective = False
+        reason = (f"successor at {nxt['t']} predates the seal at {seal_t:.0f}: "
+                  "the outcome was already determined when the prediction was "
+                  "frozen, so this row is EXCLUDED from scoring")
+
+    acted = {str(h): bool(nxt and (nxt["t"] - anchor_t) <= h) for h in HORIZONS_S}
+    actual = {
+        "prospective": prospective,
+        "not_prospective_reason": reason,
+        "acted_within": acted,
+        "next_fill_gap_s": ((nxt["t"] - anchor_t) if nxt else None),
+        "next_outcome": (nxt["outcome"] if nxt else None),
+        "next_size": (nxt["size"] if nxt else None),
+        "next_price": (nxt["price"] if nxt else None),
+        "observed_fee_bearing": (nxt.get("fee_bearing") if nxt else None),
+        "no_fill_within_max_horizon": nxt is None or (nxt["t"] - anchor_t) > MAX_H,
+    }
+    dis: Dict[str, Any] = {"estimand": ESTIMAND_A, "act": {}, "outcome": None,
+                           "size": None, "timing_err_s": None,
+                           "scored": prospective}
+
+    # REALTIME REPLICABILITY -- a SEPARATE question from whether the model was
+    # right, and computed from a different clock. The anchor became visible to
+    # us `lag` seconds after it happened; a predicted action within horizon h
+    # was therefore already in the past when we learned of the anchor unless
+    # h > lag. This is not a defect in the model and must never be netted
+    # against event-time fidelity -- a model can describe L5 perfectly and
+    # still be unreplicable, and that is exactly the situation to be able to
+    # state plainly.
+    lag = (rec.get("state") or {}).get("observation_lag_s")
+    if lag is not None:
+        dis["replicability"] = {
+            "observation_lag_s": lag,
+            "per_horizon": {str(h): {"knowable_in_time": bool(h > lag),
+                                     "slack_s": round(h - lag, 3)}
+                            for h in HORIZONS_S},
+            "any_horizon_knowable": any(h > lag for h in HORIZONS_S),
+            "labels": ("REALTIME REPLICABILITY ONLY. Event-time fidelity is "
+                       "scored separately in `act`/`outcome`/`size` and is "
+                       "unaffected by this: those are statements about L5's "
+                       "behaviour in event time, which feed latency does not "
+                       "alter."),
+        }
+    for h in HORIZONS_S:
+        k = str(h)
+        pv = p["p_act_within"][k]
+        dis["act"][k] = {"p_pred": pv, "actual": acted[k],
+                         "brier": (round((pv - (1.0 if acted[k] else 0.0)) ** 2, 6)
+                                   if pv is not None else None)}
+    if nxt and prospective:
+        dis["outcome"] = {"predicted": p["predicted_outcome"],
+                          "actual": nxt["outcome"],
+                          "correct": p["predicted_outcome"] == nxt["outcome"]}
+        # SIZE IS SCORED AS A DISTRIBUTION. The recorded number is the mass
+        # the model put on the bin L5 actually landed in, against a 1/6
+        # uniform reference -- not a median-minus-actual difference, which on
+        # a p10=2 / p99=80 distribution measured nothing.
+        szb = p.get("predicted_size_bins")
+        if szb:
+            actual_bin = M.size_bin(float(nxt["size"]))
+            p_on = float(szb.get(actual_bin, 0.0))
+            dis["size"] = {
+                "actual_size": nxt["size"],
+                "actual_bin": actual_bin,
+                "predicted_mode_bin": p.get("predicted_size_mode_bin"),
+                "mode_bin_correct": p.get("predicted_size_mode_bin") == actual_bin,
+                "p_on_actual_bin": round(p_on, 6),
+                "log_score": (round(math.log(p_on), 6) if p_on > 0 else None),
+                "uniform_reference_p": round(1.0 / len(M.SIZE_BIN_LABELS), 6),
+            }
+        if p.get("predicted_size_p50_summary_only") is not None:
+            dis["size_err_summary_only"] = round(
+                nxt["size"] - p["predicted_size_p50_summary_only"], 6)
+        if p.get("predicted_next_gap_s_p50") is not None:
+            dis["timing_err_s"] = round((nxt["t"] - anchor_t)
+                                        - p["predicted_next_gap_s_p50"], 6)
+    elif not prospective:
+        dis["outcome_reason"] = reason
+    else:
+        dis["outcome_reason"] = "no fill within the maximum horizon"
+    return store.resolve(out_dir, prediction_id=rec["prediction_id"],
+                         actual=actual, disagreement=dis, now=now)

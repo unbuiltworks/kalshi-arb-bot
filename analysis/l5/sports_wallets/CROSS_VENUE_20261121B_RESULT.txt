@@ -1,0 +1,61 @@
+usable samples 62004 over 41 games, 116 min
+1. crossed: US ask below intl bid in 3.92% of samples (mean gap 0.0155); US bid above intl ask in 3.68% (mean gap 0.0217)
+   intl mid minus US mid: mean -0.0008, mean abs 0.0057, share with |diff| >= 1c: 17.5%
+2. lead/lag: corr( intl change over 9 s ending at t , US change over 9 s ending at t+lag )
+   lag  -60s  corr -0.013  (n 20016)   [positive lag = US moves AFTER intl]
+   lag  -30s  corr +0.026  (n 20172)   [positive lag = US moves AFTER intl]
+   lag  -15s  corr +0.027  (n 20315)   [positive lag = US moves AFTER intl]
+   lag   -9s  corr -0.000  (n 20386)   [positive lag = US moves AFTER intl]
+   lag   -6s  corr +0.203  (n 20429)   [positive lag = US moves AFTER intl]
+   lag   -3s  corr +0.235  (n 20469)   [positive lag = US moves AFTER intl]
+   lag   +0s  corr +0.359  (n 20508)   [positive lag = US moves AFTER intl]
+   lag   +3s  corr +0.205  (n 20503)   [positive lag = US moves AFTER intl]
+   lag   +6s  corr +0.256  (n 20506)   [positive lag = US moves AFTER intl]
+   lag   +9s  corr +0.233  (n 20508)   [positive lag = US moves AFTER intl]
+   lag  +15s  corr +0.267  (n 20508)   [positive lag = US moves AFTER intl]
+   lag  +30s  corr +0.153  (n 20337)   [positive lag = US moves AFTER intl]
+   lag  +60s  corr -0.017  (n 20114)   [positive lag = US moves AFTER intl]
+3. US mid drops >=1c: 357 events; international mid was already >=0.5c below the US mid one sample earlier in 93%
+   (mirror) intl mid drops >=1c: 940 events; US mid already >=0.5c below in 31%
+4. take US ask when it is at or below the intl bid minus x; value at US mid later, net of taker fee
+   (one signal per game per 30 s; mean / median / share positive / equal-weight-by-game mean / games)
+   gap>=0.000 +  60s: mean +0.0025  median -0.0053  positive 33%  by-game +0.0039  (signals 954, games 24)
+   gap>=0.000 + 300s: mean +0.0013  median -0.0053  positive 32%  by-game +0.0067  (signals 905, games 23)
+   gap>=0.000 + 900s: mean -0.0011  median -0.0053  positive 29%  by-game +0.0101  (signals 778, games 20)
+   gap>=0.005 +  60s: mean +0.0169  median +0.0107  positive 69%  by-game +0.0099  (signals 357, games 22)
+   gap>=0.005 + 300s: mean +0.0146  median +0.0074  positive 55%  by-game +0.0096  (signals 328, games 22)
+   gap>=0.005 + 900s: mean +0.0238  median -0.0062  positive 49%  by-game +0.0277  (signals 261, games 16)
+   gap>=0.010 +  60s: mean +0.0277  median +0.0223  positive 80%  by-game +0.0192  (signals 231, games 20)
+   gap>=0.010 + 300s: mean +0.0277  median +0.0264  positive 61%  by-game +0.0259  (signals 209, games 20)
+   gap>=0.010 + 900s: mean +0.0377  median +0.0151  positive 53%  by-game +0.0325  (signals 167, games 15)
+5. resting US bid vs intl mid: next move of the US mid, by where the US best bid sits relative to the intl mid
+   + 60s  bid >= intl mid+0.5c   later US mid minus that bid: -0.0020  (n 2238)
+   + 60s  bid ~ intl mid         later US mid minus that bid: +0.0030  (n 3634)
+   + 60s  bid 0.5-1c below       later US mid minus that bid: +0.0035  (n 5668)
+   + 60s  bid >1c below          later US mid minus that bid: +0.0200  (n 609)
+   +300s  bid >= intl mid+0.5c   later US mid minus that bid: -0.0010  (n 2119)
+   +300s  bid ~ intl mid         later US mid minus that bid: +0.0029  (n 3454)
+   +300s  bid 0.5-1c below       later US mid minus that bid: +0.0026  (n 5411)
+   +300s  bid >1c below          later US mid minus that bid: +0.0186  (n 559)
+
+games 41, 116 min
+gap>=0.005: 357 signals in 22 games (183.9 an hour)
+  edge a share at +60 s: mean +0.0169 median +0.0107 positive 69%
+  contracts at the US ask: p10 1 p25 88 median 4336 p75 22884 p90 40092
+  contracts at the intl bid: median 654
+  how long the gap stayed open: p25 3s median 9s p75 18s
+  buyer capped at   10 contracts a signal: modelled $53.54 over the recording ($27.58 an hour) on $1397 bought
+  buyer capped at   50 contracts a signal: modelled $259.90 over the recording ($133.87 an hour) on $6625 bought
+  buyer capped at  200 contracts a signal: modelled $973.75 over the recording ($501.57 an hour) on $24686 bought
+  buyer capped at 1000 contracts a signal: modelled $4516.47 over the recording ($2326.37 an hour) on $113041 bought
+  largest games at cap 200: cfb-ucla-mich-2026-11- $210.44, cfb-ind-wash-2026-11-2 $190.86, cfb-lsu-tenn-2026-11-2 $139.78, cfb-txtech-bayl-2026-1 $125.75, cfb-ncst-flst-2026-11- $109.29
+gap>=0.010: 231 signals in 20 games (119.0 an hour)
+  edge a share at +60 s: mean +0.0277 median +0.0223 positive 80%
+  contracts at the US ask: p10 1 p25 57 median 3475 p75 22207 p90 42806
+  contracts at the intl bid: median 576
+  how long the gap stayed open: p25 3s median 9s p75 15s
+  buyer capped at   10 contracts a signal: modelled $56.74 over the recording ($29.23 an hour) on $952 bought
+  buyer capped at   50 contracts a signal: modelled $275.65 over the recording ($141.99 an hour) on $4458 bought
+  buyer capped at  200 contracts a signal: modelled $1040.32 over the recording ($535.85 an hour) on $16611 bought
+  buyer capped at 1000 contracts a signal: modelled $4912.19 over the recording ($2530.20 an hour) on $77308 bought
+  largest games at cap 200: cfb-ind-wash-2026-11-2 $239.21, cfb-ucla-mich-2026-11- $232.41, cfb-lsu-tenn-2026-11-2 $133.64, cfb-ncst-flst-2026-11- $122.21, cfb-txtech-bayl-2026-1 $120.36

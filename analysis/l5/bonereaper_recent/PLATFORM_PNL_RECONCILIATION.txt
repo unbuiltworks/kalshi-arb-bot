@@ -1,0 +1,49 @@
+points 241   2026-03-26 -> 2026-11-20   identity failures: 0
+
+== LIFETIME, 2026-03-25 to 2026-11-20 ==
+   volume $166,252,197 in 9,343,665 trades
+   trades, before fees             1,423,717   +0.856% of volume
+   fees charged (gross)           -2,480,161   -1.492% of volume
+   fees refunded                     906,915   +0.546% of volume
+   = market P&L after fees          -149,529   -0.090% of volume
+   taker rebate                      494,310   +0.297% of volume
+   maker rebate                      161,992   +0.097% of volume
+   liquidity rewards                   3,525   +0.002% of volume
+   referral income                     1,430   +0.001% of volume
+   = TOTAL                           511,728   +0.308% of volume
+
+== BY MONTH (USD; each row is that month's change) ==
+   month     volume      trades_pre_fee  net_fees   market_pnl  taker_reb  maker_reb   TOTAL   total%vol
+   2026-03   6,780,174       +111,447    -38,550     +72,897         +0     +1,024   +73,975  +1.091%
+   2026-04  36,291,871       +264,180   -365,240    -101,060         +0    +26,071   -74,202  -0.204%
+   2026-05  30,594,203       +340,215   -223,697    +116,518         +0    +24,219  +140,889  +0.461%
+   2026-06  34,315,482       +224,165   -278,471     -54,306    +47,864    +44,643   +38,409  +0.112%
+   2026-07  19,516,928        +87,829   -147,367     -59,538   +127,126    +24,767   +92,707  +0.475%
+   2026-08  17,253,111       +134,535   -199,586     -65,051   +156,536    +27,559  +121,406  +0.704%
+   2026-09   7,613,909        +84,109   -117,928     -33,819    +77,903     +9,733   +54,855  +0.720%
+   2026-10   5,950,276        +76,387    -84,884      -8,497    +41,771     +3,479   +36,753  +0.618%
+   2026-11   7,936,241       +100,851   -117,522     -16,671    +43,109       +497   +26,935  +0.339%
+
+== LAST 30 DAYS (2026-10-22 to 2026-11-20) ==
+   volume $9,175,332 in 295,368 trades
+   trades, before fees               110,580   +1.205% of volume
+   fees charged (gross)             -136,997   -1.493% of volume
+   fees refunded                           0   +0.000% of volume
+   = market P&L after fees           -26,418   -0.288% of volume
+   taker rebate                       54,938   +0.599% of volume
+   maker rebate                        1,109   +0.012% of volume
+   liquidity rewards                       0   +0.000% of volume
+   referral income                         0   +0.000% of volume
+   = TOTAL                            29,629   +0.323% of volume
+
+== LAST 7 DAYS (2026-11-14 to 2026-11-20) ==
+   volume $3,478,343 in 95,410 trades
+   trades, before fees                43,880   +1.262% of volume
+   fees charged (gross)              -58,371   -1.678% of volume
+   fees refunded                           0   +0.000% of volume
+   = market P&L after fees           -14,491   -0.417% of volume
+   taker rebate                       19,170   +0.551% of volume
+   maker rebate                          115   +0.003% of volume
+   liquidity rewards                       0   +0.000% of volume
+   referral income                         0   +0.000% of volume
+   = TOTAL                             4,794   +0.138% of volume

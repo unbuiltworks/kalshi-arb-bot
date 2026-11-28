@@ -1,0 +1,1563 @@
+{
+  "cohort": "BTC15m",
+  "n_pairs": 631556,
+  "n_residual_lots": 60685,
+  "convention_reconciliation": {
+    "fifo_matched_pnl": 57344.14,
+    "fifo_residual_pnl": -39276.92,
+    "avgcost_matched_pnl": 162256.93,
+    "avgcost_residual_pnl": -144189.7,
+    "total": 18067.22,
+    "windows": 5504,
+    "reallocated_matched_minus_avgcost": -104912.78,
+    "totals_agree": true,
+    "note": "FIFO and average cost REALLOCATE between the matched and residual legs and preserve payout - spend. The authoritative cash account is unchanged and remains the average-cost decomposition; FIFO exists only to say WHICH shares paired."
+  },
+  "matched_economics_by_acquisition_state": {
+    "abs_dp_60s": {
+      "train": {
+        ">0.10": {
+          "n": 186753,
+          "qty": 1717781.14,
+          "cost_usd": 1698768.59,
+          "pnl": 19012.55,
+          "pnl_per_share": 0.011068,
+          "bp_per_dollar": 111.9
+        },
+        "0.05-0.10": {
+          "n": 88223,
+          "qty": 813583.25,
+          "cost_usd": 805580.65,
+          "pnl": 8002.6,
+          "pnl_per_share": 0.009836,
+          "bp_per_dollar": 99.3
+        },
+        "<=0.01": {
+          "n": 18323,
+          "qty": 171442.0,
+          "cost_usd": 169670.23,
+          "pnl": 1771.76,
+          "pnl_per_share": 0.010334,
+          "bp_per_dollar": 104.4
+        },
+        "0.02-0.05": {
+          "n": 68281,
+          "qty": 634377.29,
+          "cost_usd": 627170.21,
+          "pnl": 7207.08,
+          "pnl_per_share": 0.011361,
+          "bp_per_dollar": 114.9
+        },
+        "0.01-0.02": {
+          "n": 25458,
+          "qty": 236210.4,
+          "cost_usd": 233667.9,
+          "pnl": 2542.49,
+          "pnl_per_share": 0.010764,
+          "bp_per_dollar": 108.8
+        }
+      },
+      "oos": {
+        ">0.10": {
+          "n": 78829,
+          "qty": 856693.63,
+          "cost_usd": 847224.31,
+          "pnl": 9469.32,
+          "pnl_per_share": 0.011053,
+          "bp_per_dollar": 111.8
+        },
+        "0.05-0.10": {
+          "n": 41573,
+          "qty": 438040.16,
+          "cost_usd": 434921.31,
+          "pnl": 3118.85,
+          "pnl_per_share": 0.00712,
+          "bp_per_dollar": 71.7
+        },
+        "0.01-0.02": {
+          "n": 10956,
+          "qty": 113888.1,
+          "cost_usd": 113185.73,
+          "pnl": 702.37,
+          "pnl_per_share": 0.006167,
+          "bp_per_dollar": 62.1
+        },
+        "<=0.01": {
+          "n": 8304,
+          "qty": 84024.16,
+          "cost_usd": 83483.23,
+          "pnl": 540.93,
+          "pnl_per_share": 0.006438,
+          "bp_per_dollar": 64.8
+        },
+        "0.02-0.05": {
+          "n": 30165,
+          "qty": 317962.56,
+          "cost_usd": 315671.42,
+          "pnl": 2291.13,
+          "pnl_per_share": 0.007206,
+          "bp_per_dollar": 72.6
+        }
+      }
+    },
+    "range_60s": {
+      "train": {
+        "<=0.02": {
+          "n": 28842,
+          "qty": 270063.38,
+          "cost_usd": 266967.42,
+          "pnl": 3095.95,
+          "pnl_per_share": 0.011464,
+          "bp_per_dollar": 116.0
+        },
+        "0.05-0.15": {
+          "n": 173587,
+          "qty": 1588655.55,
+          "cost_usd": 1576229.2,
+          "pnl": 12426.36,
+          "pnl_per_share": 0.007822,
+          "bp_per_dollar": 78.8
+        },
+        "0.02-0.05": {
+          "n": 61256,
+          "qty": 574183.88,
+          "cost_usd": 568459.4,
+          "pnl": 5724.48,
+          "pnl_per_share": 0.00997,
+          "bp_per_dollar": 100.7
+        },
+        ">0.15": {
+          "n": 147886,
+          "qty": 1359557.16,
+          "cost_usd": 1341806.34,
+          "pnl": 17750.82,
+          "pnl_per_share": 0.013056,
+          "bp_per_dollar": 132.3
+        }
+      },
+      "oos": {
+        ">0.15": {
+          "n": 75711,
+          "qty": 830181.41,
+          "cost_usd": 820416.5,
+          "pnl": 9764.9,
+          "pnl_per_share": 0.011762,
+          "bp_per_dollar": 119.0
+        },
+        "0.05-0.15": {
+          "n": 82699,
+          "qty": 855607.52,
+          "cost_usd": 852323.4,
+          "pnl": 3284.12,
+          "pnl_per_share": 0.003838,
+          "bp_per_dollar": 38.5
+        },
+        "0.02-0.05": {
+          "n": 20189,
+          "qty": 214115.04,
+          "cost_usd": 212358.21,
+          "pnl": 1756.83,
+          "pnl_per_share": 0.008205,
+          "bp_per_dollar": 82.7
+        },
+        "<=0.02": {
+          "n": 5958,
+          "qty": 63741.58,
+          "cost_usd": 63491.86,
+          "pnl": 249.72,
+          "pnl_per_share": 0.003918,
+          "bp_per_dollar": 39.3
+        }
+      }
+    },
+    "reversals_60s": {
+      "train": {
+        "0": {
+          "n": 108023,
+          "qty": 1010753.17,
+          "cost_usd": 1000648.78,
+          "pnl": 10104.4,
+          "pnl_per_share": 0.009997,
+          "bp_per_dollar": 101.0
+        },
+        "1-2": {
+          "n": 118432,
+          "qty": 1077806.94,
+          "cost_usd": 1070279.52,
+          "pnl": 7527.43,
+          "pnl_per_share": 0.006984,
+          "bp_per_dollar": 70.3
+        },
+        "3-5": {
+          "n": 105303,
+          "qty": 971180.56,
+          "cost_usd": 961383.37,
+          "pnl": 9797.19,
+          "pnl_per_share": 0.010088,
+          "bp_per_dollar": 101.9
+        },
+        "6+": {
+          "n": 110331,
+          "qty": 1036128.39,
+          "cost_usd": 1021234.46,
+          "pnl": 14893.93,
+          "pnl_per_share": 0.014375,
+          "bp_per_dollar": 145.8
+        }
+      },
+      "oos": {
+        "3-5": {
+          "n": 46476,
+          "qty": 487949.75,
+          "cost_usd": 484129.83,
+          "pnl": 3819.92,
+          "pnl_per_share": 0.007829,
+          "bp_per_dollar": 78.9
+        },
+        "6+": {
+          "n": 95072,
+          "qty": 1017284.61,
+          "cost_usd": 1007817.2,
+          "pnl": 9467.41,
+          "pnl_per_share": 0.009307,
+          "bp_per_dollar": 93.9
+        },
+        "0": {
+          "n": 17048,
+          "qty": 190379.6,
+          "cost_usd": 190097.62,
+          "pnl": 281.99,
+          "pnl_per_share": 0.001481,
+          "bp_per_dollar": 14.8
+        },
+        "1-2": {
+          "n": 30871,
+          "qty": 326870.06,
+          "cost_usd": 325418.18,
+          "pnl": 1451.88,
+          "pnl_per_share": 0.004442,
+          "bp_per_dollar": 44.6
+        }
+      }
+    },
+    "p_up": {
+      "train": {
+        "0.50-0.70": {
+          "n": 97722,
+          "qty": 896469.91,
+          "cost_usd": 890195.06,
+          "pnl": 6274.85,
+          "pnl_per_share": 0.007,
+          "bp_per_dollar": 70.5
+        },
+        "0.70-0.90": {
+          "n": 86477,
+          "qty": 784796.93,
+          "cost_usd": 777411.32,
+          "pnl": 7385.61,
+          "pnl_per_share": 0.009411,
+          "bp_per_dollar": 95.0
+        },
+        "0.30-0.50": {
+          "n": 103713,
+          "qty": 957076.47,
+          "cost_usd": 949323.25,
+          "pnl": 7753.22,
+          "pnl_per_share": 0.008101,
+          "bp_per_dollar": 81.7
+        },
+        "0.10-0.30": {
+          "n": 87048,
+          "qty": 783212.88,
+          "cost_usd": 773445.06,
+          "pnl": 9767.82,
+          "pnl_per_share": 0.012471,
+          "bp_per_dollar": 126.3
+        },
+        ">0.90": {
+          "n": 31068,
+          "qty": 316419.27,
+          "cost_usd": 310315.39,
+          "pnl": 6103.88,
+          "pnl_per_share": 0.01929,
+          "bp_per_dollar": 196.7
+        },
+        "<=0.10": {
+          "n": 36061,
+          "qty": 357893.6,
+          "cost_usd": 352856.04,
+          "pnl": 5037.56,
+          "pnl_per_share": 0.014076,
+          "bp_per_dollar": 142.8
+        }
+      },
+      "oos": {
+        "0.10-0.30": {
+          "n": 40027,
+          "qty": 410145.78,
+          "cost_usd": 407254.59,
+          "pnl": 2891.19,
+          "pnl_per_share": 0.007049,
+          "bp_per_dollar": 71.0
+        },
+        "<=0.10": {
+          "n": 13231,
+          "qty": 159096.1,
+          "cost_usd": 155980.23,
+          "pnl": 3115.87,
+          "pnl_per_share": 0.019585,
+          "bp_per_dollar": 199.8
+        },
+        "0.30-0.50": {
+          "n": 45300,
+          "qty": 470965.18,
+          "cost_usd": 470219.82,
+          "pnl": 745.36,
+          "pnl_per_share": 0.001583,
+          "bp_per_dollar": 15.9
+        },
+        "0.50-0.70": {
+          "n": 37940,
+          "qty": 407437.42,
+          "cost_usd": 406163.4,
+          "pnl": 1274.02,
+          "pnl_per_share": 0.003127,
+          "bp_per_dollar": 31.4
+        },
+        "0.70-0.90": {
+          "n": 40691,
+          "qty": 419986.77,
+          "cost_usd": 416895.96,
+          "pnl": 3090.8,
+          "pnl_per_share": 0.007359,
+          "bp_per_dollar": 74.1
+        },
+        ">0.90": {
+          "n": 12278,
+          "qty": 154852.77,
+          "cost_usd": 150948.83,
+          "pnl": 3903.94,
+          "pnl_per_share": 0.025211,
+          "bp_per_dollar": 258.6
+        }
+      }
+    },
+    "tte_s": {
+      "train": {
+        ">700s": {
+          "n": 106592,
+          "qty": 988482.0,
+          "cost_usd": 983744.63,
+          "pnl": 4737.37,
+          "pnl_per_share": 0.004793,
+          "bp_per_dollar": 48.2
+        },
+        "420-700s": {
+          "n": 140218,
+          "qty": 1273492.42,
+          "cost_usd": 1263751.32,
+          "pnl": 9741.1,
+          "pnl_per_share": 0.007649,
+          "bp_per_dollar": 77.1
+        },
+        "180-420s": {
+          "n": 125544,
+          "qty": 1178417.71,
+          "cost_usd": 1165680.12,
+          "pnl": 12737.58,
+          "pnl_per_share": 0.010809,
+          "bp_per_dollar": 109.3
+        },
+        "60-180s": {
+          "n": 54955,
+          "qty": 522166.09,
+          "cost_usd": 510421.6,
+          "pnl": 11744.49,
+          "pnl_per_share": 0.022492,
+          "bp_per_dollar": 230.1
+        },
+        "<=60s": {
+          "n": 14780,
+          "qty": 133310.85,
+          "cost_usd": 129948.44,
+          "pnl": 3362.41,
+          "pnl_per_share": 0.025222,
+          "bp_per_dollar": 258.7
+        }
+      },
+      "oos": {
+        "420-700s": {
+          "n": 64333,
+          "qty": 647519.65,
+          "cost_usd": 644619.66,
+          "pnl": 2899.99,
+          "pnl_per_share": 0.004479,
+          "bp_per_dollar": 45.0
+        },
+        "180-420s": {
+          "n": 52462,
+          "qty": 589060.12,
+          "cost_usd": 582228.4,
+          "pnl": 6831.72,
+          "pnl_per_share": 0.011598,
+          "bp_per_dollar": 117.3
+        },
+        "60-180s": {
+          "n": 20765,
+          "qty": 253801.01,
+          "cost_usd": 249778.04,
+          "pnl": 4022.97,
+          "pnl_per_share": 0.015851,
+          "bp_per_dollar": 161.1
+        },
+        "<=60s": {
+          "n": 2836,
+          "qty": 29852.02,
+          "cost_usd": 28031.99,
+          "pnl": 1820.03,
+          "pnl_per_share": 0.060969,
+          "bp_per_dollar": 649.3
+        },
+        ">700s": {
+          "n": 49071,
+          "qty": 502251.22,
+          "cost_usd": 502804.75,
+          "pnl": -553.52,
+          "pnl_per_share": -0.001102,
+          "bp_per_dollar": -11.0
+        }
+      }
+    },
+    "run_position": {
+      "train": {
+        "1": {
+          "n": 111651,
+          "qty": 1091663.05,
+          "cost_usd": 1077687.95,
+          "pnl": 13975.1,
+          "pnl_per_share": 0.012802,
+          "bp_per_dollar": 129.7
+        },
+        "2-3": {
+          "n": 137911,
+          "qty": 1298074.56,
+          "cost_usd": 1285198.0,
+          "pnl": 12876.55,
+          "pnl_per_share": 0.00992,
+          "bp_per_dollar": 100.2
+        },
+        "4-5": {
+          "n": 74438,
+          "qty": 671903.3,
+          "cost_usd": 667040.35,
+          "pnl": 4862.94,
+          "pnl_per_share": 0.007238,
+          "bp_per_dollar": 72.9
+        },
+        "6-8": {
+          "n": 58499,
+          "qty": 518337.24,
+          "cost_usd": 514756.97,
+          "pnl": 3580.27,
+          "pnl_per_share": 0.006907,
+          "bp_per_dollar": 69.6
+        },
+        "9-12": {
+          "n": 34274,
+          "qty": 300040.28,
+          "cost_usd": 296941.71,
+          "pnl": 3098.57,
+          "pnl_per_share": 0.010327,
+          "bp_per_dollar": 104.3
+        },
+        "13+": {
+          "n": 25316,
+          "qty": 215850.65,
+          "cost_usd": 211921.14,
+          "pnl": 3929.51,
+          "pnl_per_share": 0.018205,
+          "bp_per_dollar": 185.4
+        }
+      },
+      "oos": {
+        "2-3": {
+          "n": 55398,
+          "qty": 606561.64,
+          "cost_usd": 601964.52,
+          "pnl": 4597.13,
+          "pnl_per_share": 0.007579,
+          "bp_per_dollar": 76.4
+        },
+        "1": {
+          "n": 48901,
+          "qty": 550126.66,
+          "cost_usd": 544325.91,
+          "pnl": 5800.75,
+          "pnl_per_share": 0.010544,
+          "bp_per_dollar": 106.6
+        },
+        "4-5": {
+          "n": 28818,
+          "qty": 301096.34,
+          "cost_usd": 299817.03,
+          "pnl": 1279.31,
+          "pnl_per_share": 0.004249,
+          "bp_per_dollar": 42.7
+        },
+        "6-8": {
+          "n": 24209,
+          "qty": 247286.31,
+          "cost_usd": 246032.69,
+          "pnl": 1253.61,
+          "pnl_per_share": 0.005069,
+          "bp_per_dollar": 51.0
+        },
+        "9-12": {
+          "n": 16264,
+          "qty": 163010.41,
+          "cost_usd": 161934.68,
+          "pnl": 1075.73,
+          "pnl_per_share": 0.006599,
+          "bp_per_dollar": 66.4
+        },
+        "13+": {
+          "n": 15877,
+          "qty": 154402.67,
+          "cost_usd": 153388.01,
+          "pnl": 1014.66,
+          "pnl_per_share": 0.006572,
+          "bp_per_dollar": 66.1
+        }
+      }
+    },
+    "residual_before": {
+      "train": {
+        "<=2": {
+          "n": 18540,
+          "qty": 190604.36,
+          "cost_usd": 188404.63,
+          "pnl": 2199.73,
+          "pnl_per_share": 0.011541,
+          "bp_per_dollar": 116.8
+        },
+        "2-10": {
+          "n": 33986,
+          "qty": 331206.96,
+          "cost_usd": 328780.95,
+          "pnl": 2426.01,
+          "pnl_per_share": 0.007325,
+          "bp_per_dollar": 73.8
+        },
+        "10-30": {
+          "n": 69788,
+          "qty": 626906.04,
+          "cost_usd": 621499.65,
+          "pnl": 5406.39,
+          "pnl_per_share": 0.008624,
+          "bp_per_dollar": 87.0
+        },
+        ">30": {
+          "n": 319775,
+          "qty": 2947151.71,
+          "cost_usd": 2914860.89,
+          "pnl": 32290.82,
+          "pnl_per_share": 0.010957,
+          "bp_per_dollar": 110.8
+        }
+      },
+      "oos": {
+        ">30": {
+          "n": 152097,
+          "qty": 1606481.44,
+          "cost_usd": 1592380.04,
+          "pnl": 14101.4,
+          "pnl_per_share": 0.008778,
+          "bp_per_dollar": 88.6
+        },
+        "10-30": {
+          "n": 21527,
+          "qty": 240175.08,
+          "cost_usd": 239593.46,
+          "pnl": 581.62,
+          "pnl_per_share": 0.002422,
+          "bp_per_dollar": 24.3
+        },
+        "2-10": {
+          "n": 10818,
+          "qty": 117296.74,
+          "cost_usd": 117002.27,
+          "pnl": 294.46,
+          "pnl_per_share": 0.00251,
+          "bp_per_dollar": 25.2
+        },
+        "<=2": {
+          "n": 5025,
+          "qty": 58530.77,
+          "cost_usd": 58487.06,
+          "pnl": 43.71,
+          "pnl_per_share": 0.000747,
+          "bp_per_dollar": 7.5
+        }
+      }
+    },
+    "inventory_direction": {
+      "train": {
+        "flat": {
+          "n": 9118,
+          "qty": 99731.54,
+          "cost_usd": 98637.21,
+          "pnl": 1094.33,
+          "pnl_per_share": 0.010973,
+          "bp_per_dollar": 110.9
+        },
+        "long_up": {
+          "n": 211249,
+          "qty": 1960330.53,
+          "cost_usd": 1938880.06,
+          "pnl": 21450.47,
+          "pnl_per_share": 0.010942,
+          "bp_per_dollar": 110.6
+        },
+        "long_down": {
+          "n": 221722,
+          "qty": 2035807.0,
+          "cost_usd": 2016028.85,
+          "pnl": 19778.15,
+          "pnl_per_share": 0.009715,
+          "bp_per_dollar": 98.1
+        }
+      },
+      "oos": {
+        "long_down": {
+          "n": 105425,
+          "qty": 1124478.85,
+          "cost_usd": 1117319.95,
+          "pnl": 7158.9,
+          "pnl_per_share": 0.006366,
+          "bp_per_dollar": 64.1
+        },
+        "long_up": {
+          "n": 81902,
+          "qty": 870203.43,
+          "cost_usd": 862257.35,
+          "pnl": 7946.08,
+          "pnl_per_share": 0.009131,
+          "bp_per_dollar": 92.2
+        },
+        "flat": {
+          "n": 2140,
+          "qty": 27801.75,
+          "cost_usd": 27885.54,
+          "pnl": -83.79,
+          "pnl_per_share": -0.003014,
+          "bp_per_dollar": -30.0
+        }
+      }
+    },
+    "acquiring_the_long_side": {
+      "train": {
+        "False": {
+          "n": 48276,
+          "qty": 475443.17,
+          "cost_usd": 470801.99,
+          "pnl": 4641.18,
+          "pnl_per_share": 0.009762,
+          "bp_per_dollar": 98.6
+        },
+        "True": {
+          "n": 393813,
+          "qty": 3620425.89,
+          "cost_usd": 3582744.13,
+          "pnl": 37681.77,
+          "pnl_per_share": 0.010408,
+          "bp_per_dollar": 105.2
+        }
+      },
+      "oos": {
+        "True": {
+          "n": 169706,
+          "qty": 1797419.94,
+          "cost_usd": 1782843.09,
+          "pnl": 14576.85,
+          "pnl_per_share": 0.00811,
+          "bp_per_dollar": 81.8
+        },
+        "False": {
+          "n": 19761,
+          "qty": 225064.08,
+          "cost_usd": 224619.74,
+          "pnl": 444.35,
+          "pnl_per_share": 0.001974,
+          "bp_per_dollar": 19.8
+        }
+      }
+    },
+    "fee_bearing": {
+      "train": {
+        "False": {
+          "n": 340632,
+          "qty": 3122376.37,
+          "cost_usd": 3087969.11,
+          "pnl": 34407.27,
+          "pnl_per_share": 0.01102,
+          "bp_per_dollar": 111.4
+        },
+        "True": {
+          "n": 101457,
+          "qty": 973492.69,
+          "cost_usd": 965577.01,
+          "pnl": 7915.68,
+          "pnl_per_share": 0.008131,
+          "bp_per_dollar": 82.0
+        }
+      },
+      "oos": {
+        "False": {
+          "n": 179368,
+          "qty": 1890682.94,
+          "cost_usd": 1877280.66,
+          "pnl": 13402.28,
+          "pnl_per_share": 0.007089,
+          "bp_per_dollar": 71.4
+        },
+        "True": {
+          "n": 10099,
+          "qty": 131801.09,
+          "cost_usd": 130182.17,
+          "pnl": 1618.92,
+          "pnl_per_share": 0.012283,
+          "bp_per_dollar": 124.4
+        }
+      }
+    }
+  },
+  "matched_economics_by_outcome_state": {
+    "time_to_complement_s": {
+      "train": {
+        "5-30s": {
+          "n": 115851,
+          "qty": 1126797.77,
+          "cost_usd": 1110350.57,
+          "pnl": 16447.2,
+          "pnl_per_share": 0.014596,
+          "bp_per_dollar": 148.1
+        },
+        "30-120s": {
+          "n": 196998,
+          "qty": 1795282.1,
+          "cost_usd": 1780226.97,
+          "pnl": 15055.13,
+          "pnl_per_share": 0.008386,
+          "bp_per_dollar": 84.6
+        },
+        "120-300s": {
+          "n": 88726,
+          "qty": 769057.48,
+          "cost_usd": 762880.86,
+          "pnl": 6176.62,
+          "pnl_per_share": 0.008031,
+          "bp_per_dollar": 81.0
+        },
+        ">300s": {
+          "n": 9415,
+          "qty": 79220.43,
+          "cost_usd": 79005.22,
+          "pnl": 215.21,
+          "pnl_per_share": 0.002717,
+          "bp_per_dollar": 27.2
+        },
+        "<=5s": {
+          "n": 31099,
+          "qty": 325511.29,
+          "cost_usd": 321082.49,
+          "pnl": 4428.79,
+          "pnl_per_share": 0.013606,
+          "bp_per_dollar": 137.9
+        }
+      },
+      "oos": {
+        "30-120s": {
+          "n": 85864,
+          "qty": 864795.35,
+          "cost_usd": 858272.94,
+          "pnl": 6522.4,
+          "pnl_per_share": 0.007542,
+          "bp_per_dollar": 76.0
+        },
+        "5-30s": {
+          "n": 64205,
+          "qty": 725288.86,
+          "cost_usd": 715442.13,
+          "pnl": 9846.73,
+          "pnl_per_share": 0.013576,
+          "bp_per_dollar": 137.6
+        },
+        "<=5s": {
+          "n": 17760,
+          "qty": 227757.24,
+          "cost_usd": 224864.2,
+          "pnl": 2893.04,
+          "pnl_per_share": 0.012702,
+          "bp_per_dollar": 128.7
+        },
+        "120-300s": {
+          "n": 20853,
+          "qty": 196807.38,
+          "cost_usd": 200657.84,
+          "pnl": -3850.47,
+          "pnl_per_share": -0.019565,
+          "bp_per_dollar": -191.9
+        },
+        ">300s": {
+          "n": 785,
+          "qty": 7835.21,
+          "cost_usd": 8225.72,
+          "pnl": -390.51,
+          "pnl_per_share": -0.04984,
+          "bp_per_dollar": -474.7
+        }
+      }
+    },
+    "pair_cost": {
+      "train": {
+        "0.96-1.00": {
+          "n": 90819,
+          "qty": 892880.41,
+          "cost_usd": 877348.79,
+          "pnl": 15531.61,
+          "pnl_per_share": 0.017395,
+          "bp_per_dollar": 177.0
+        },
+        "<=0.90": {
+          "n": 99086,
+          "qty": 832682.35,
+          "cost_usd": 660290.95,
+          "pnl": 172391.4,
+          "pnl_per_share": 0.207031,
+          "bp_per_dollar": 2610.8
+        },
+        "1.00-1.05": {
+          "n": 68717,
+          "qty": 670081.04,
+          "cost_usd": 685790.04,
+          "pnl": -15708.99,
+          "pnl_per_share": -0.023443,
+          "bp_per_dollar": -229.1
+        },
+        "0.90-0.96": {
+          "n": 76328,
+          "qty": 680053.01,
+          "cost_usd": 635366.29,
+          "pnl": 44686.72,
+          "pnl_per_share": 0.065711,
+          "bp_per_dollar": 703.3
+        },
+        ">1.05": {
+          "n": 107139,
+          "qty": 1020172.26,
+          "cost_usd": 1194750.05,
+          "pnl": -174577.79,
+          "pnl_per_share": -0.171126,
+          "bp_per_dollar": -1461.2
+        }
+      },
+      "oos": {
+        "0.96-1.00": {
+          "n": 46440,
+          "qty": 520382.6,
+          "cost_usd": 511575.35,
+          "pnl": 8807.25,
+          "pnl_per_share": 0.016925,
+          "bp_per_dollar": 172.2
+        },
+        "1.00-1.05": {
+          "n": 35160,
+          "qty": 392957.7,
+          "cost_usd": 402276.17,
+          "pnl": -9318.47,
+          "pnl_per_share": -0.023714,
+          "bp_per_dollar": -231.6
+        },
+        ">1.05": {
+          "n": 40949,
+          "qty": 451725.79,
+          "cost_usd": 518188.97,
+          "pnl": -66463.18,
+          "pnl_per_share": -0.147132,
+          "bp_per_dollar": -1282.6
+        },
+        "0.90-0.96": {
+          "n": 34853,
+          "qty": 350257.75,
+          "cost_usd": 327655.77,
+          "pnl": 22601.98,
+          "pnl_per_share": 0.06453,
+          "bp_per_dollar": 689.8
+        },
+        "<=0.90": {
+          "n": 32065,
+          "qty": 307160.18,
+          "cost_usd": 247766.58,
+          "pnl": 59393.61,
+          "pnl_per_share": 0.193364,
+          "bp_per_dollar": 2397.2
+        }
+      }
+    }
+  },
+  "residual_economics_by_acquisition_state": {
+    "abs_dp_60s": {
+      "train": {
+        "0.01-0.02": {
+          "n": 3664,
+          "qty": 63904.8,
+          "cost_usd": 29003.22,
+          "pnl": -352.95,
+          "pnl_per_share": -0.005523,
+          "bp_per_dollar": -121.7
+        },
+        "0.05-0.10": {
+          "n": 8129,
+          "qty": 138324.51,
+          "cost_usd": 41221.54,
+          "pnl": -4204.32,
+          "pnl_per_share": -0.030395,
+          "bp_per_dollar": -1019.9
+        },
+        "0.02-0.05": {
+          "n": 8757,
+          "qty": 157105.31,
+          "cost_usd": 54410.85,
+          "pnl": -2744.78,
+          "pnl_per_share": -0.017471,
+          "bp_per_dollar": -504.5
+        },
+        ">0.10": {
+          "n": 18792,
+          "qty": 300478.2,
+          "cost_usd": 92238.77,
+          "pnl": -12526.12,
+          "pnl_per_share": -0.041687,
+          "bp_per_dollar": -1358.0
+        },
+        "<=0.01": {
+          "n": 2905,
+          "qty": 51306.95,
+          "cost_usd": 24707.66,
+          "pnl": 151.77,
+          "pnl_per_share": 0.002958,
+          "bp_per_dollar": 61.4
+        }
+      },
+      "oos": {
+        ">0.10": {
+          "n": 7304,
+          "qty": 148821.65,
+          "cost_usd": 27978.46,
+          "pnl": -9788.36,
+          "pnl_per_share": -0.065772,
+          "bp_per_dollar": -3498.5
+        },
+        "0.05-0.10": {
+          "n": 4091,
+          "qty": 95058.4,
+          "cost_usd": 12919.32,
+          "pnl": -4614.59,
+          "pnl_per_share": -0.048545,
+          "bp_per_dollar": -3571.9
+        },
+        "<=0.01": {
+          "n": 1110,
+          "qty": 23423.76,
+          "cost_usd": 5946.75,
+          "pnl": -769.55,
+          "pnl_per_share": -0.032853,
+          "bp_per_dollar": -1294.1
+        },
+        "0.02-0.05": {
+          "n": 4149,
+          "qty": 98789.24,
+          "cost_usd": 17665.77,
+          "pnl": -3681.38,
+          "pnl_per_share": -0.037265,
+          "bp_per_dollar": -2083.9
+        },
+        "0.01-0.02": {
+          "n": 1509,
+          "qty": 32160.64,
+          "cost_usd": 8039.74,
+          "pnl": -1241.87,
+          "pnl_per_share": -0.038615,
+          "bp_per_dollar": -1544.7
+        }
+      }
+    },
+    "range_60s": {
+      "train": {
+        "<=0.02": {
+          "n": 3173,
+          "qty": 62443.08,
+          "cost_usd": 24462.16,
+          "pnl": -379.6,
+          "pnl_per_share": -0.006079,
+          "bp_per_dollar": -155.2
+        },
+        "0.05-0.15": {
+          "n": 12814,
+          "qty": 216612.16,
+          "cost_usd": 65500.02,
+          "pnl": -7789.16,
+          "pnl_per_share": -0.035959,
+          "bp_per_dollar": -1189.2
+        },
+        ">0.15": {
+          "n": 16694,
+          "qty": 258770.24,
+          "cost_usd": 87999.69,
+          "pnl": -10502.33,
+          "pnl_per_share": -0.040586,
+          "bp_per_dollar": -1193.5
+        },
+        "0.02-0.05": {
+          "n": 8260,
+          "qty": 144584.46,
+          "cost_usd": 51418.36,
+          "pnl": -696.77,
+          "pnl_per_share": -0.004819,
+          "bp_per_dollar": -135.5
+        }
+      },
+      "oos": {
+        ">0.15": {
+          "n": 7893,
+          "qty": 154707.34,
+          "cost_usd": 32165.37,
+          "pnl": -11063.79,
+          "pnl_per_share": -0.071514,
+          "bp_per_dollar": -3439.7
+        },
+        "0.05-0.15": {
+          "n": 6134,
+          "qty": 134884.6,
+          "cost_usd": 20135.87,
+          "pnl": -6644.26,
+          "pnl_per_share": -0.049259,
+          "bp_per_dollar": -3299.7
+        },
+        "0.02-0.05": {
+          "n": 3263,
+          "qty": 82373.02,
+          "cost_usd": 14465.94,
+          "pnl": -1864.01,
+          "pnl_per_share": -0.022629,
+          "bp_per_dollar": -1288.6
+        },
+        "<=0.02": {
+          "n": 777,
+          "qty": 21332.11,
+          "cost_usd": 4511.94,
+          "pnl": -187.07,
+          "pnl_per_share": -0.00877,
+          "bp_per_dollar": -414.6
+        }
+      }
+    },
+    "reversals_60s": {
+      "train": {
+        "0": {
+          "n": 7673,
+          "qty": 144112.19,
+          "cost_usd": 53833.51,
+          "pnl": -1244.11,
+          "pnl_per_share": -0.008633,
+          "bp_per_dollar": -231.1
+        },
+        "1-2": {
+          "n": 9902,
+          "qty": 168830.49,
+          "cost_usd": 59793.73,
+          "pnl": -4110.47,
+          "pnl_per_share": -0.024347,
+          "bp_per_dollar": -687.4
+        },
+        "3-5": {
+          "n": 10116,
+          "qty": 166421.68,
+          "cost_usd": 53386.82,
+          "pnl": -5510.18,
+          "pnl_per_share": -0.03311,
+          "bp_per_dollar": -1032.1
+        },
+        "6+": {
+          "n": 14788,
+          "qty": 234919.55,
+          "cost_usd": 76353.34,
+          "pnl": -8639.21,
+          "pnl_per_share": -0.036775,
+          "bp_per_dollar": -1131.5
+        }
+      },
+      "oos": {
+        "6+": {
+          "n": 11260,
+          "qty": 228791.49,
+          "cost_usd": 43378.73,
+          "pnl": -14468.79,
+          "pnl_per_share": -0.06324,
+          "bp_per_dollar": -3335.5
+        },
+        "1-2": {
+          "n": 2213,
+          "qty": 52877.42,
+          "cost_usd": 8975.53,
+          "pnl": -1688.8,
+          "pnl_per_share": -0.031938,
+          "bp_per_dollar": -1881.6
+        },
+        "0": {
+          "n": 1245,
+          "qty": 37570.56,
+          "cost_usd": 7216.07,
+          "pnl": -519.16,
+          "pnl_per_share": -0.013818,
+          "bp_per_dollar": -719.5
+        },
+        "3-5": {
+          "n": 3488,
+          "qty": 79752.47,
+          "cost_usd": 13388.15,
+          "pnl": -3096.2,
+          "pnl_per_share": -0.038823,
+          "bp_per_dollar": -2312.6
+        }
+      }
+    },
+    "p_up": {
+      "train": {
+        "0.70-0.90": {
+          "n": 6791,
+          "qty": 100863.34,
+          "cost_usd": 37641.65,
+          "pnl": -4915.66,
+          "pnl_per_share": -0.048736,
+          "bp_per_dollar": -1305.9
+        },
+        "0.30-0.50": {
+          "n": 2437,
+          "qty": 34166.62,
+          "cost_usd": 16607.45,
+          "pnl": -4324.96,
+          "pnl_per_share": -0.126584,
+          "bp_per_dollar": -2604.2
+        },
+        "0.10-0.30": {
+          "n": 5787,
+          "qty": 85261.47,
+          "cost_usd": 33893.53,
+          "pnl": -2204.5,
+          "pnl_per_share": -0.025856,
+          "bp_per_dollar": -650.4
+        },
+        "0.50-0.70": {
+          "n": 2466,
+          "qty": 34285.83,
+          "cost_usd": 16315.22,
+          "pnl": -3194.33,
+          "pnl_per_share": -0.093168,
+          "bp_per_dollar": -1957.9
+        },
+        ">0.90": {
+          "n": 12424,
+          "qty": 230379.47,
+          "cost_usd": 63024.57,
+          "pnl": -2921.54,
+          "pnl_per_share": -0.012681,
+          "bp_per_dollar": -463.6
+        },
+        "<=0.10": {
+          "n": 12574,
+          "qty": 229327.17,
+          "cost_usd": 75884.98,
+          "pnl": -1942.98,
+          "pnl_per_share": -0.008473,
+          "bp_per_dollar": -256.0
+        }
+      },
+      "oos": {
+        "0.10-0.30": {
+          "n": 1938,
+          "qty": 32439.79,
+          "cost_usd": 8922.32,
+          "pnl": -3211.34,
+          "pnl_per_share": -0.098994,
+          "bp_per_dollar": -3599.2
+        },
+        "<=0.10": {
+          "n": 5742,
+          "qty": 133739.35,
+          "cost_usd": 22470.83,
+          "pnl": -2321.38,
+          "pnl_per_share": -0.017358,
+          "bp_per_dollar": -1033.1
+        },
+        "0.50-0.70": {
+          "n": 640,
+          "qty": 12211.35,
+          "cost_usd": 5998.05,
+          "pnl": -2042.37,
+          "pnl_per_share": -0.167252,
+          "bp_per_dollar": -3405.1
+        },
+        "0.70-0.90": {
+          "n": 2724,
+          "qty": 47639.5,
+          "cost_usd": 10458.55,
+          "pnl": -4927.6,
+          "pnl_per_share": -0.103435,
+          "bp_per_dollar": -4711.6
+        },
+        ">0.90": {
+          "n": 6565,
+          "qty": 160894.19,
+          "cost_usd": 19244.97,
+          "pnl": -4721.61,
+          "pnl_per_share": -0.029346,
+          "bp_per_dollar": -2453.4
+        },
+        "0.30-0.50": {
+          "n": 597,
+          "qty": 12067.76,
+          "cost_usd": 5863.76,
+          "pnl": -2548.64,
+          "pnl_per_share": -0.211194,
+          "bp_per_dollar": -4346.4
+        }
+      }
+    },
+    "tte_s": {
+      "train": {
+        "420-700s": {
+          "n": 3375,
+          "qty": 52715.76,
+          "cost_usd": 20143.59,
+          "pnl": -1050.7,
+          "pnl_per_share": -0.019931,
+          "bp_per_dollar": -521.6
+        },
+        ">700s": {
+          "n": 307,
+          "qty": 3821.17,
+          "cost_usd": 2096.48,
+          "pnl": 253.16,
+          "pnl_per_share": 0.066252,
+          "bp_per_dollar": 1207.6
+        },
+        "180-420s": {
+          "n": 12344,
+          "qty": 215017.05,
+          "cost_usd": 69632.03,
+          "pnl": -6909.85,
+          "pnl_per_share": -0.032136,
+          "bp_per_dollar": -992.3
+        },
+        "60-180s": {
+          "n": 13987,
+          "qty": 241543.82,
+          "cost_usd": 77681.54,
+          "pnl": -7351.48,
+          "pnl_per_share": -0.030435,
+          "bp_per_dollar": -946.4
+        },
+        "<=60s": {
+          "n": 12466,
+          "qty": 201186.11,
+          "cost_usd": 73813.76,
+          "pnl": -4445.11,
+          "pnl_per_share": -0.022095,
+          "bp_per_dollar": -602.2
+        }
+      },
+      "oos": {
+        "180-420s": {
+          "n": 5992,
+          "qty": 132952.56,
+          "cost_usd": 21517.27,
+          "pnl": -6588.45,
+          "pnl_per_share": -0.049555,
+          "bp_per_dollar": -3061.9
+        },
+        "60-180s": {
+          "n": 6247,
+          "qty": 151039.85,
+          "cost_usd": 28925.18,
+          "pnl": -8253.28,
+          "pnl_per_share": -0.054643,
+          "bp_per_dollar": -2853.3
+        },
+        "420-700s": {
+          "n": 1308,
+          "qty": 25166.91,
+          "cost_usd": 5375.86,
+          "pnl": -2124.17,
+          "pnl_per_share": -0.084403,
+          "bp_per_dollar": -3951.3
+        },
+        "<=60s": {
+          "n": 4498,
+          "qty": 86218.66,
+          "cost_usd": 15358.12,
+          "pnl": -2898.38,
+          "pnl_per_share": -0.033617,
+          "bp_per_dollar": -1887.2
+        }
+      }
+    },
+    "run_position": {
+      "train": {
+        "4-5": {
+          "n": 6989,
+          "qty": 111072.5,
+          "cost_usd": 39964.44,
+          "pnl": -2817.47,
+          "pnl_per_share": -0.025366,
+          "bp_per_dollar": -705.0
+        },
+        "2-3": {
+          "n": 11489,
+          "qty": 203291.38,
+          "cost_usd": 80722.97,
+          "pnl": -4383.96,
+          "pnl_per_share": -0.021565,
+          "bp_per_dollar": -543.1
+        },
+        "6-8": {
+          "n": 6229,
+          "qty": 98909.12,
+          "cost_usd": 29461.94,
+          "pnl": -3278.09,
+          "pnl_per_share": -0.033142,
+          "bp_per_dollar": -1112.7
+        },
+        "1": {
+          "n": 8635,
+          "qty": 163658.03,
+          "cost_usd": 63871.39,
+          "pnl": -3002.27,
+          "pnl_per_share": -0.018345,
+          "bp_per_dollar": -470.0
+        },
+        "9-12": {
+          "n": 4139,
+          "qty": 63605.13,
+          "cost_usd": 16412.53,
+          "pnl": -2457.26,
+          "pnl_per_share": -0.038633,
+          "bp_per_dollar": -1497.2
+        },
+        "13+": {
+          "n": 4998,
+          "qty": 73747.74,
+          "cost_usd": 12934.12,
+          "pnl": -3564.92,
+          "pnl_per_share": -0.048339,
+          "bp_per_dollar": -2756.2
+        }
+      },
+      "oos": {
+        "1": {
+          "n": 3328,
+          "qty": 87460.11,
+          "cost_usd": 17821.67,
+          "pnl": -3863.54,
+          "pnl_per_share": -0.044175,
+          "bp_per_dollar": -2167.9
+        },
+        "2-3": {
+          "n": 4274,
+          "qty": 102367.52,
+          "cost_usd": 22816.17,
+          "pnl": -4654.89,
+          "pnl_per_share": -0.045472,
+          "bp_per_dollar": -2040.2
+        },
+        "4-5": {
+          "n": 2717,
+          "qty": 57648.67,
+          "cost_usd": 11282.78,
+          "pnl": -2734.72,
+          "pnl_per_share": -0.047438,
+          "bp_per_dollar": -2423.8
+        },
+        "6-8": {
+          "n": 2626,
+          "qty": 52468.85,
+          "cost_usd": 8617.1,
+          "pnl": -2600.4,
+          "pnl_per_share": -0.049561,
+          "bp_per_dollar": -3017.7
+        },
+        "9-12": {
+          "n": 2050,
+          "qty": 40883.42,
+          "cost_usd": 5695.21,
+          "pnl": -1962.68,
+          "pnl_per_share": -0.048007,
+          "bp_per_dollar": -3446.2
+        },
+        "13+": {
+          "n": 3211,
+          "qty": 58163.37,
+          "cost_usd": 6725.55,
+          "pnl": -3956.72,
+          "pnl_per_share": -0.068028,
+          "bp_per_dollar": -5883.1
+        }
+      }
+    },
+    "residual_before": {
+      "train": {
+        "2-10": {
+          "n": 750,
+          "qty": 11847.36,
+          "cost_usd": 5404.65,
+          "pnl": -123.82,
+          "pnl_per_share": -0.010451,
+          "bp_per_dollar": -229.1
+        },
+        "10-30": {
+          "n": 1775,
+          "qty": 29669.97,
+          "cost_usd": 12364.98,
+          "pnl": -260.69,
+          "pnl_per_share": -0.008786,
+          "bp_per_dollar": -210.8
+        },
+        ">30": {
+          "n": 39717,
+          "qty": 669223.61,
+          "cost_usd": 223879.99,
+          "pnl": -19049.81,
+          "pnl_per_share": -0.028466,
+          "bp_per_dollar": -850.9
+        }
+      },
+      "oos": {
+        ">30": {
+          "n": 17802,
+          "qty": 388856.39,
+          "cost_usd": 69189.46,
+          "pnl": -19412.34,
+          "pnl_per_share": -0.049922,
+          "bp_per_dollar": -2805.7
+        }
+      }
+    },
+    "inventory_direction": {
+      "train": {
+        "long_up": {
+          "n": 19879,
+          "qty": 336603.93,
+          "cost_usd": 115248.44,
+          "pnl": -9255.17,
+          "pnl_per_share": -0.027496,
+          "bp_per_dollar": -803.1
+        },
+        "long_down": {
+          "n": 22585,
+          "qty": 377526.43,
+          "cost_usd": 128013.95,
+          "pnl": -10272.16,
+          "pnl_per_share": -0.027209,
+          "bp_per_dollar": -802.4
+        }
+      },
+      "oos": {
+        "long_down": {
+          "n": 10113,
+          "qty": 224116.88,
+          "cost_usd": 39513.37,
+          "pnl": -11771.04,
+          "pnl_per_share": -0.052522,
+          "bp_per_dollar": -2979.0
+        },
+        "long_up": {
+          "n": 8092,
+          "qty": 174835.16,
+          "cost_usd": 33417.38,
+          "pnl": -8014.07,
+          "pnl_per_share": -0.045838,
+          "bp_per_dollar": -2398.2
+        }
+      }
+    },
+    "acquiring_the_long_side": {
+      "train": {
+        "False": {
+          "n": 854,
+          "qty": 12971.53,
+          "cost_usd": 5299.18,
+          "pnl": -177.18,
+          "pnl_per_share": -0.013659,
+          "bp_per_dollar": -334.4
+        },
+        "True": {
+          "n": 41625,
+          "qty": 701312.38,
+          "cost_usd": 238068.21,
+          "pnl": -19326.79,
+          "pnl_per_share": -0.027558,
+          "bp_per_dollar": -811.8
+        }
+      },
+      "oos": {
+        "True": {
+          "n": 18011,
+          "qty": 393982.04,
+          "cost_usd": 71494.75,
+          "pnl": -19620.66,
+          "pnl_per_share": -0.049801,
+          "bp_per_dollar": -2744.3
+        }
+      }
+    },
+    "fee_bearing": {
+      "train": {
+        "False": {
+          "n": 33304,
+          "qty": 531623.89,
+          "cost_usd": 161602.48,
+          "pnl": -16567.59,
+          "pnl_per_share": -0.031164,
+          "bp_per_dollar": -1025.2
+        },
+        "True": {
+          "n": 9175,
+          "qty": 182660.01,
+          "cost_usd": 81764.91,
+          "pnl": -2936.39,
+          "pnl_per_share": -0.016076,
+          "bp_per_dollar": -359.1
+        }
+      },
+      "oos": {
+        "False": {
+          "n": 16579,
+          "qty": 340559.78,
+          "cost_usd": 58803.0,
+          "pnl": -18750.4,
+          "pnl_per_share": -0.055058,
+          "bp_per_dollar": -3188.7
+        },
+        "True": {
+          "n": 1627,
+          "qty": 58432.16,
+          "cost_usd": 14155.48,
+          "pnl": -1022.54,
+          "pnl_per_share": -0.0175,
+          "bp_per_dollar": -722.4
+        }
+      }
+    }
+  },
+  "labels": "A lineage is not a causal claim: that a share paired with a later one does not mean it was bought in order to. Why a share was bought is UNOBSERVABLE here."
+}

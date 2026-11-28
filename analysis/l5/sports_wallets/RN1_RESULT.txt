@@ -1,0 +1,85 @@
+days 2.85  trades 25243  usdc 4339269  per day: 8867 trades, $1524333  median trade $20.0  mean $171.9
+sides Counter({'BUY': 25243})
+price bucket | trades | usdc | share of usdc
+  <0.05        1629         8947   0.2%
+  0.05-0.2     3518       134658   3.1%
+  0.2-0.4      4690       464467  10.7%
+  0.4-0.6      8126      1402088  32.3%
+  0.6-0.8      4272      1248946  28.8%
+  0.8-0.95     2030       687137  15.8%
+  0.95-0.99     781       301380   6.9%
+  >=0.99        197        91645   2.1%
+conditions traded 4084; both outcomes bought in 1657 (41%), holding 86% of usdc
+matched shares across both-sided conditions 2296038 at average pair cost 0.9730 (locked gross $62002)
+SAMPLE settled in file: 2339 conditions, cost $3848357, redeemed $4151015, net $302658 (7.86% of cost), 1620 won
+  note: losing positions produce no REDEEM row, so this sample OVERSTATES profit; see below
+  all buys in file $4339269 vs all redeems in file $4206902
+  atp    n   51 cost     939502 redeemed    1038956
+  nba    n  864 cost     539938 redeemed     563592
+  epl    n  113 cost     360708 redeemed     361492
+  cfb    n  139 cost     339258 redeemed     355710
+  jap    n   82 cost     243366 redeemed     316416
+  bun    n   88 cost     208075 redeemed     220160
+  wta    n    9 cost     188121 redeemed     168455
+  bra    n  121 cost     116226 redeemed     149996
+  uwcl   n   61 cost      90028 redeemed     102738
+  lal    n   51 cost      89896 redeemed      97920
+  cs2    n   12 cost      87583 redeemed      80072
+  nfl    n   15 cost      83397 redeemed      93279
+trades per tx hash: 1.02
+market kind by usdc {'spread': 526022, 'total': 907260, 'btts': 9907, 'other/moneyline': 2896081}
+
+both-sided conditions 1657  matched 2296038  locked gross 62002
+unmatched shares as share of all shares in these conditions: 39.8%
+gap between first buy of each side, seconds: p10 120 p25 448 p50 1336 p75 2996 p90 4850
+  usdc bought within     2s of a buy on the other side: 1.4%
+  usdc bought within    10s of a buy on the other side: 4.6%
+  usdc bought within    60s of a buy on the other side: 16.6%
+  usdc bought within   600s of a buy on the other side: 61.8%
+  usdc bought within  3600s of a buy on the other side: 94.4%
+pair cost distribution (weighted by matched shares):
+  0.000-0.900  n  480  matched   629142 (27.4%)  gross   138680
+  0.900-0.950  n  178  matched   235082 (10.2%)  gross    18291
+  0.950-0.980  n  134  matched   135012 ( 5.9%)  gross     4985
+  0.980-0.995  n   91  matched    58714 ( 2.6%)  gross      677
+  0.995-1.005  n   61  matched   130176 ( 5.7%)  gross       13
+  1.005-1.020  n  104  matched   236205 (10.3%)  gross    -3717
+  1.020-9.000  n  609  matched   871708 (38.0%)  gross   -96927
+median trades per condition 6, median side switches 2, median span 4176s
+league | conditions | matched | locked gross | avg pair cost
+  atp      44    572402    17235  0.9699
+  epl      75    191274    16730  0.9125
+  lal      34     71731    15214  0.7879
+  bun      57    125549    10003  0.9203
+  cfb     179    295856     8694  0.9706
+  jap      44     35128     7978  0.7729
+  uwcl     43     48704     2122  0.9564
+  bel1      6      7116     1808  0.7460
+  tur2      9      4792     1804  0.6236
+  spl      11     19599     1726  0.9119
+  elc      23     15037     1151  0.9234
+  es2       6      3404     1098  0.6773
+  top: epl-new-ars-2026-11-21-ars matched 20222 pc 0.6812 trades 128 switches 13 span 6279s
+  top: atp-wessels-trotter-2026-11-19 matched 26348 pc 0.7724 trades 79 switches 1 span 3441s
+  top: bun-bay-koe-2026-11-20-bay matched 31085 pc 0.8109 trades 123 switches 25 span 6699s
+  top: atp-zverev-fils-2026-11-17 matched 46260 pc 0.8750 trades 89 switches 12 span 6562s
+  top: atp-sekulic-aguiard-2026-11-18 matched 22576 pc 0.7595 trades 48 switches 1 span 4953s
+  top: lal-sev-bet-2026-11-21-bet matched 13103 pc 0.6793 trades 36 switches 4 span 10842s
+
+tokens 400 cover 69% of usdc
+price paid minus last public price ~30s earlier: -0.0133 a share
+all
+  before  2min +0.0142 (n 7810)   5min +0.0141 (n 7807)  15min +0.0165 (n 7816)  30min +0.0147 (n 7828)
+  after   2min +0.0076 (n 7701)   5min +0.0091 (n 7578)  15min +0.0215 (n 7076)  30min +0.0267 (n 5915)
+px<0.2
+  before  2min +0.0614 (n 774)   5min +0.1030 (n 772)  15min +0.1740 (n 769)  30min +0.2233 (n 771)
+  after   2min +0.0124 (n 733)   5min +0.0080 (n 717)  15min +0.0263 (n 629)  30min +0.0368 (n 497)
+0.2-0.8
+  before  2min +0.0155 (n 5847)   5min +0.0162 (n 5849)  15min +0.0188 (n 5860)  30min +0.0150 (n 5874)
+  after   2min +0.0074 (n 5817)   5min +0.0086 (n 5741)  15min +0.0225 (n 5454)  30min +0.0268 (n 4607)
+0.8-0.95
+  before  2min -0.0186 (n 732)   5min -0.0511 (n 731)  15min -0.0891 (n 731)  30min -0.1100 (n 725)
+  after   2min +0.0076 (n 712)   5min +0.0131 (n 696)  15min +0.0155 (n 604)  30min +0.0280 (n 472)
+>=0.95
+  before  2min -0.0179 (n 457)   5min -0.0348 (n 455)  15min -0.0704 (n 456)  30min -0.0988 (n 458)
+  after   2min +0.0013 (n 439)   5min +0.0096 (n 424)  15min +0.0091 (n 389)  30min +0.0077 (n 339)

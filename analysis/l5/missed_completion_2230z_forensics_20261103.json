@@ -1,0 +1,420 @@
+{
+ "artifact": "analysis/l5/missed_completion_2230z_forensics_20261103.json",
+ "generated_utc": "2026-11-03T13:31:05.752682+00:00",
+ "question": "Timestamp-level forensics on the 2026-11-02 2230z 'missed completion', t+130 through t+148 only. Items 1-7, correlated by market, order id, event timestamp and decision record -- NOT by window-level aggregate counters.",
+ "headline": "CONCLUSION C. The favourable book was not realistically executable, because it did not exist. Every opposite-side price the executor actually observed during the 16-second window put the pair at 1.05-1.10 own, above the $1.00 redemption value, and the sequence moved monotonically AGAINST us. The 0.9351 pair that prompted this investigation was an artifact of my own REST book tape, which is dark for 92.6% of the window and whose last observation before the fill was contradicted by the authenticated websocket book 229ms later. I do NOT claim a missed profitable pair.",
+ "sources": {
+  "authoritative": "Railway deploy logs, service l5-pmus-live, deployment 134fba3a-04f2-4151-a210-bd79428f19d8, 2026-11-02T22:32:05Z-22:32:32Z, 114 rows, nothing truncated. These are the executor's own per-decision emissions on its authenticated websocket book.",
+  "market": "cpc-btc-updown-15m-2026-11-02-2230z",
+  "window_start_utc": "2026-11-02T22:30:00Z",
+  "venue_order_id": "DFWWGBW012WP",
+  "coid": "l5f-9b2fb36aa6b3c263e37a8ef8",
+  "retention_note": "Railway still serves this deployment's 22:32 logs. My earlier statement that 22:32 might be beyond retention was wrong; the gap was in my local extract, not in Railway.",
+  "local_extract_gap": "scratchpad/campaign_orders.jsonl holds 95 L5_LIVE_DECISION rows ending at 22:28:12.440 and NONE for the 2230z market, while carrying that market's lifecycle and fill rows through 23:16. The 2230z market was submitted into at 22:30:18, so a decision necessarily existed. The extract was incomplete; the runner was not silent."
+ },
+ "item1_fill_timestamps": {
+  "venue_fill_record_utc": "2026-11-02T22:32:10.618852Z",
+  "t_plus_s": 130.6,
+  "side": "UP",
+  "own_px": "0.4700",
+  "qty": "2.04",
+  "cumulative_qty": "2.04",
+  "remaining": "0",
+  "fee_usd": "0.0000",
+  "executor_learned": {
+   "fill_row_utc": "2026-11-02T22:32:10.794Z",
+   "lag_s": 0.175,
+   "fees_actual_utc": "2026-11-02T22:32:10.789Z",
+   "terminal_utc": "2026-11-02T22:32:10.791Z",
+   "source": "venue_order_progress.commission"
+  },
+  "verdict": "The executor learned of the fill within 175ms and booked fees and terminal state in the same tick. No discovery delay."
+ },
+ "item2_inventory_available": {
+  "lifecycle_released_utc": "2026-11-02T22:32:11.859Z",
+  "released": true,
+  "state": "ORDER_STATE_FILLED",
+  "cum": "2.04",
+  "lag_from_fill_s": 1.241,
+  "verdict": "Inventory was booked and released to the completion engine 1.24s after the venue fill. 'Inventory not yet booked' is RULED OUT."
+ },
+ "item3_every_completion_evaluation": {
+  "basis": "individual per-decision rows, each carrying market, held inventory, the priced pair and the refusal; no aggregate counter is used to infer any one refusal",
+  "priced_evaluations": [
+   {
+    "t_plus_s": 131.85,
+    "utc": "22:32:11.853",
+    "record": "L5_FILL_BOOK_EVIDENCE.book_at_processing",
+    "up_bid": "0.4100",
+    "up_ask": "0.4200",
+    "down_maker_join_own": "0.5800",
+    "down_maker_displayed": "910.0100",
+    "down_taker_cross_own": "0.5900",
+    "down_taker_displayed": "910.0000",
+    "pair_if_maker": "1.0500",
+    "pair_if_maker_behind_touch": "1.0300",
+    "pair_if_taker_walk": "1.0600",
+    "clears_pair_ceiling": false,
+    "margin_to_ceiling": "-0.0900"
+   },
+   {
+    "t_plus_s": 132.19,
+    "utc": "22:32:12.190",
+    "record": "L5_TS_COMPLETION",
+    "side": "DOWN",
+    "action": "BUY",
+    "qty": "2.04",
+    "price_own": "0.6000",
+    "mode": "TAKER",
+    "post_only": false,
+    "displayed_depth": "108.1400",
+    "pair_own": "1.0700",
+    "taker_fee_usd": "0.04",
+    "cash_cost_usd": "1.264000",
+    "worst_before": "-0.998800",
+    "worst_after": "-0.222800",
+    "worst_improvement_usd": "0.776000",
+    "both_positive_after": false,
+    "still_fillable_orders": 0,
+    "evaluated_early_no_quote_resting": true,
+    "armed": true,
+    "authorized_to_cross": true,
+    "withheld_by": "TAKER_POLICY:WORST_OUTCOME_NOT_POSITIVE"
+   },
+   {
+    "t_plus_s": 137.82,
+    "utc": "22:32:17.820",
+    "record": "L5_RESIDUAL_BOOK_SAMPLE+L5_MISSED_PAIR",
+    "up_bid": "0.3700",
+    "up_ask": "0.3900",
+    "down_maker_join_own": "0.6100",
+    "down_maker_displayed": "50.0300",
+    "down_taker_cross_own": "0.6300",
+    "down_taker_displayed": "1061.0900",
+    "pair_own": "1.0800",
+    "reason": "PAIR_ABOVE_REDEMPTION",
+    "missed_profitable_pair": "NO",
+    "need": "2.04"
+   },
+   {
+    "t_plus_s": 142.91,
+    "utc": "22:32:22.913",
+    "record": "L5_TS_COMPLETION",
+    "side": "DOWN",
+    "action": "BUY",
+    "qty": "2.04",
+    "price_own": "0.6200",
+    "mode": "TAKER",
+    "displayed_depth": "1067.5800",
+    "pair_own": "1.0900",
+    "worst_before": "-0.998800",
+    "worst_after": "-0.263600",
+    "still_fillable_orders": 0,
+    "evaluated_early_no_quote_resting": true,
+    "withheld_by": "TAKER_POLICY:WORST_OUTCOME_NOT_POSITIVE"
+   },
+   {
+    "t_plus_s": 148.71,
+    "utc": "22:32:28.705",
+    "record": "L5_RESIDUAL_BOOK_SAMPLE+L5_MISSED_PAIR",
+    "up_bid": "0.3600",
+    "up_ask": "0.3700",
+    "down_maker_join_own": "0.6300",
+    "down_maker_displayed": "85.0300",
+    "down_taker_cross_own": "0.6400",
+    "down_taker_displayed": "137.2100",
+    "pair_own": "1.1000",
+    "reason": "PAIR_ABOVE_REDEMPTION",
+    "missed_profitable_pair": "NO",
+    "need": "2.04",
+    "locked_pnl_usd_if_taken": "-0.204000"
+   }
+  ],
+  "count_priced": 5,
+  "cheapest_pair_anywhere_in_window": "1.0300",
+  "cheapest_is": "two ticks behind the touch at t+131.85, i.e. the cheapest price the engine could have RESTED at, not one it could have taken",
+  "verdict": "The completion engine was NOT starved. It priced the complement five times in 17 seconds, first at t+132.19 -- 1.57s after the venue fill -- and refused on economics every time.",
+  "runtime_own_verdict": {
+   "decision_stage_rows": 14,
+   "any_missed_profitable_pair_YES": false,
+   "distinct_reasons": [
+    "DECIDE_COOLDOWN",
+    "PAIR_ABOVE_REDEMPTION"
+   ],
+   "meaning": "The engine's own missed-pair instrumentation labelled NO completion in this window as a missed profitable pair. That is corroboration from the runtime, independent of my reconstruction, and I had it before I started."
+  }
+ },
+ "item4_the_exact_gate": {
+  "gate": "TAKER_POLICY:WORST_OUTCOME_NOT_POSITIVE",
+  "policy": "BOUNDED_TAKER_COMPLETION",
+  "default": "OFF",
+  "co_reported_as": "L5_MISSED_PAIR stage=DECISION reason=PAIR_ABOVE_REDEMPTION",
+  "arithmetic": "held 2.04 UP at 0.4700 basis. Completing at 0.6000 own costs $1.2640 cash plus $0.04 taker fee for a pair of 1.0700 against $1.00 redemption. It improves the worst case from -$0.9988 to -$0.2228, so it is a HEDGE that bounds a tail -- it does not create a profitable pair, and both_positive_after is false.",
+  "is_the_gate_incorrect": false,
+  "why": "The gate refused to pay more than redemption for the complement. That is correct and is the standing economic rule; overriding it would have locked a $0.2228 loss to avoid a $0.9988 one, which is a defensive-exit decision under its own arm window, not a completion.",
+  "decide_cooldown_rows": {
+   "count_in_window": 10,
+   "reason": "DECIDE_COOLDOWN",
+   "blocker_class": "REQUOTE_CHURN",
+   "did_it_prevent_the_completion": false,
+   "why": "These interleave BETWEEN the priced evaluations and throttle the open/requote cadence. They never displaced a priced completion: the residual sampler drove a priced evaluation every ~5s throughout. Reading these aggregate rows as the blocker would have been exactly the inference the instruction forbids.",
+   "counted_from": "the 28 L5_MISSED_PAIR rows in the slice: 14 OPENING/PAIR_COST_ABOVE_CEILING, 10 DECISION/DECIDE_COOLDOWN, 4 DECISION/PAIR_ABOVE_REDEMPTION"
+  }
+ },
+ "item5_observed_book_with_timestamps": {
+  "note": "own-price convention: wire is YES/UP; DOWN own at wire p is 1-p",
+  "sequence_from_fill": [
+   {
+    "t_plus_s": 131.85,
+    "up_bid": "0.4100",
+    "up_ask": "0.4200",
+    "down_maker_own": "0.5800",
+    "pair": "1.0500",
+    "stream_age_s": null
+   },
+   {
+    "t_plus_s": 132.18,
+    "up_bid": "0.4000",
+    "up_ask": "0.4100",
+    "down_maker_own": "0.5900",
+    "pair": "1.0600",
+    "stream_age_s": 0.017
+   },
+   {
+    "t_plus_s": 133.38,
+    "up_bid": "0.3800",
+    "up_ask": "0.3900",
+    "down_maker_own": "0.6100",
+    "pair": "1.0800",
+    "stream_age_s": 0.005
+   },
+   {
+    "t_plus_s": 135.5,
+    "up_bid": "0.3700",
+    "up_ask": "0.3800",
+    "down_maker_own": "0.6200",
+    "pair": "1.0900",
+    "stream_age_s": 0.004
+   },
+   {
+    "t_plus_s": 137.82,
+    "up_bid": "0.3700",
+    "up_ask": "0.3900",
+    "down_maker_own": "0.6100",
+    "pair": "1.0800",
+    "stream_age_s": 0.004
+   },
+   {
+    "t_plus_s": 142.91,
+    "up_bid": "0.3800",
+    "up_ask": "0.3900",
+    "down_maker_own": "0.6100",
+    "pair": "1.0800",
+    "stream_age_s": 0.045
+   },
+   {
+    "t_plus_s": 144.9,
+    "up_bid": "0.3600",
+    "up_ask": "0.3700",
+    "down_maker_own": "0.6300",
+    "pair": "1.1000",
+    "stream_age_s": 0.004
+   },
+   {
+    "t_plus_s": 148.71,
+    "up_bid": "0.3600",
+    "up_ask": "0.3700",
+    "down_maker_own": "0.6300",
+    "pair": "1.1000",
+    "stream_age_s": 0.007
+   },
+   {
+    "t_plus_s": 150.06,
+    "up_bid": "0.3500",
+    "up_ask": "0.3600",
+    "down_maker_own": "0.6400",
+    "pair": "1.1100",
+    "stream_age_s": 0.003
+   }
+  ],
+  "book_freshness": "every decision read a book whose stream age was 0.003-0.125s. No decision in this window was made on a stale book.",
+  "verdict": "Monotone against us: the complement cost 0.58 own at t+131.85 and 0.64 by t+150. The pair never went below 1.03 and never approached the 0.96 ceiling.",
+  "through_window_end": {
+   "basis": "window-level question, which the tape MAY answer: 51 priceable observations from 22:32:28 to window end",
+   "cheapest_maker_pair_after_the_move": "1.0900",
+   "ever_below_one_dollar": false,
+   "last_observation_pair": "1.4600",
+   "note": "one observation at 22:45:31 carries null bid and ask and is excluded rather than interpolated"
+  }
+ },
+ "item6_order_cooldown_reconciliation_scheduling": {
+  "existing_order_blocked_it": false,
+  "evidence": "both L5_TS_COMPLETION rows carry still_fillable_orders: 0 and evaluated_early_no_quote_resting: true",
+  "cooldown_blocked_it": false,
+  "evidence_cooldown": "DECIDE_COOLDOWN rows throttle the open/requote cadence only; priced completion evaluations continued throughout",
+  "reconciliation_state_blocked_it": false,
+  "evidence_reconciliation": "no ORDERS_UNCERTAIN, CANCEL_UNRESOLVED, GAP_SUSPECTED or BOOK_STALE refusal appears anywhere in the window",
+  "scheduling_delay": {
+   "fill_to_first_priced_evaluation_s": 1.571,
+   "earliest_frame_available_s": 1.234,
+   "avoidable_delay_s": 0.337
+  },
+  "cash_headroom_usd": "11.041200",
+  "worst_case_ceiling": "1.50",
+  "verdict": "None of these prevented submission. The only thing that did was the price."
+ },
+ "item7_maker_vs_taker_realism": {
+  "would_a_post_only_maker_complement_have_filled": "NO, AND IT WAS NOT PROFITABLE EITHER",
+  "maker_join_own_prices": [
+   "0.5800",
+   "0.5900",
+   "0.6100",
+   "0.6100",
+   "0.6300"
+  ],
+  "maker_pairs": [
+   "1.0500",
+   "1.0600",
+   "1.0800",
+   "1.0800",
+   "1.1000"
+  ],
+  "every_maker_pair_above_redemption": true,
+  "queue_ahead_displayed": [
+   "910.0100",
+   "820.0000",
+   "50.0300",
+   "9.2500",
+   "85.0300"
+  ],
+  "queue_ahead_multiple_of_need": [
+   "446.08",
+   null,
+   null,
+   null,
+   "41.68"
+  ],
+  "behind_touch_best": "1.0300",
+  "verdict": "A post-only maker complement was dominated on BOTH axes: every price it could have joined implied a pair above $1.00 redemption, and joining the touch meant queuing behind up to 910 displayed shares against a need of 2.04. There was no profitable maker completion to be slow about."
+ },
+ "fill_triggered_completion_counterfactual": {
+  "question": "would fill-event-triggered completion have changed the decision, without bypassing any economic or safety gate?",
+  "answer": "NO",
+  "earliest_possible_evaluation_s": 1.234,
+  "actual_first_evaluation_s": 1.571,
+  "recoverable_latency_s": 0.337,
+  "pair_at_earliest_frame": "1.0500",
+  "pair_behind_touch_at_earliest_frame": "1.0300",
+  "why": "The engine's first priced evaluation was 337ms behind the earliest book frame it could possibly have used, and that frame already priced the pair at 1.05 at the touch and 1.03 behind it. Both exceed redemption, so an instantaneous fill-event trigger reaches the same refusal. A fill-triggered path is therefore NOT justified by this window.",
+  "the_pre_fill_instant_is_not_measured": {
+   "record": "L5_FILL_BOOK_EVIDENCE.book_at_event -> error NO_BOOK_ROW",
+   "cause": "the venue's order-progress row carries no event timestamp (venue_event_t: null), so BookRing.as_of has nothing to locate",
+   "inference_withheld": "our 0.47 UP maker bid filling implies UP's ask was near 0.48 and the pair near 0.99 AT the fill instant. That is INFERENCE from the fill price, not an observation, and it is not claimed as an opportunity.",
+   "and_it_would_not_have_paid": "even a 0.99 pair is fee-negative as a taker: at theta 0.0695, C 2.04, p 0.52 the taker fee is 0.0695*2.04*0.52*0.48 = $0.0354, i.e. $0.01735/contract against a $0.01/contract gross gain -- a net loss of about 0.7c a contract. The $0.99 cap remains disabled and nothing here argues for it."
+  }
+ },
+ "the_premise_was_my_own_tape_defect": {
+  "what_i_claimed_before": "at t+130 and t+132 DOWN's own touch was 0.4700 with deep bid support and the net pair was 0.9351, inside both the 0.96 and 0.99 ceilings",
+  "what_the_tape_actually_says": {
+   "22:32:10.345": {
+    "bid": "0.5200",
+    "ask": "0.5300",
+    "bid_shares": "100000",
+    "ask_shares": "97000",
+    "shares_traded": "7262.2800",
+    "delta_lower_bound": 361.92
+   },
+   "22:32:12.419": {
+    "bid": "0.5200",
+    "ask": "0.5300",
+    "bid_shares": "100000",
+    "ask_shares": "97000",
+    "shares_traded": "7262.2800",
+    "delta_lower_bound": 0.0
+   },
+   "22:32:28.992": {
+    "bid": "0.3700",
+    "ask": "0.3800",
+    "bid_shares": "87000",
+    "ask_shares": "100000",
+    "shares_traded": "10861.4800",
+    "delta_lower_bound": 3599.2
+   },
+   "between_12.419_and_28.992": "NO OBSERVATIONS AT ALL -- a 16.573s hole"
+  },
+  "the_arithmetic_was_right_the_input_was_not": "1 - 0.53 = 0.47 and 0.47 + 0.47 = 0.94. The derivation was correct; the observation it derived from was contradicted 229ms later by the authenticated book.",
+  "three_independent_refutations": [
+   "the executor's authenticated websocket book read UP 0.4000/0.4100 at 22:32:12.184 with stream_age 0.017s, against the tape's 0.5200/0.5300 at 22:32:12.419 -- same second, 12 cents apart",
+   "the tape's 22:32:12.419 row repeats 22:32:10.345 byte for byte with shares_traded_delta_lower_bound 0.0, claiming nothing traded, while 3,599.2 shares traded before its next observation",
+   "our own resting order was a maker UP bid at 0.4700. A 0.47 bid does not fill while the bid is 0.52, so the fill at 22:32:10.618 places the touch at or below 0.47 -- the tape's 0.52 is impossible"
+  ],
+  "tape_coverage_2230z": {
+   "observations": 60,
+   "span_s": 902.213,
+   "median_gap_s": 16.573,
+   "max_gap_s": 39.088,
+   "dark_s": 835.41,
+   "dark_fraction": 0.926,
+   "usable_for_second_level": false
+  },
+  "tape_frozen_runs_2230z": {
+   "runs": 29,
+   "rows_in_runs": 58,
+   "longest_run": 2,
+   "fraction_in_runs": 0.9667
+  },
+  "this_is_systematic_not_one_window": {
+   "windows_measured": 20,
+   "median_observations_per_15min_window": 50,
+   "median_inter_sample_gap_s": 14.9,
+   "median_max_gap_s": 34.7,
+   "median_dark_fraction": 0.93,
+   "pattern": "two reads about 2s apart, then about 29s of silence -- a 30-second sampler, not a book"
+  },
+  "scope_of_the_retraction": "Any figure I derived from scratchpad/tape at second-level resolution is unreliable, including the opposite-side price sequences in the completion reprice work. Window-level statistics over the same tape remain usable. The L5 action history (l5_actions.pkl, 63,686 rows from the public activity feed) is a DIFFERENT source and is not implicated. Venue-confirmed order and fill records are not implicated."
+ },
+ "observability_improvement_added": {
+  "precise_missing_record": "the book at the fill instant. L5_FILL_BOOK_EVIDENCE.book_at_event is empty on EVERY real PMUS fill because the venue's order-progress row carries no event timestamp, so the earliest book the engine can attach is its own processing frame 1.23s later -- after the move.",
+  "change_1": {
+   "file": "src/l5_book_evidence.py",
+   "what": "BookRing.preceding(slug, t) plus a fill_instant_bracket block on fill_evidence: when book_at_event has no row, report the OBSERVED frames either side of the processing frame and the two pair figures they imply, so the fill instant is bracketed by measurements instead of read as an absence.",
+   "additive": true,
+   "consulted_by_any_gate": false
+  },
+  "change_2": {
+   "file": "src/l5_book_tape_coverage.py",
+   "what": "the guard that would have prevented this entire investigation. coverage() states a tape's observations, median and max gap and dark fraction; frozen_runs() detects the cached-endpoint signature; price_completion_from_tape() REFUSES with TAPE_NOT_SECOND_LEVEL when asked what was tradable at a named second from a tape that is dark for most of its window, and with BOOK_OBSERVATION_STALE when the nearest observation is too old. Against the 2230z tape it now refuses at every point in t+130..t+148.",
+   "why_age_alone_was_not_enough": "at the fill instant the nearest observation was 0.27s old and still wrong by 12 cents, because the REST endpoint serves a lagged book. Observation age cannot detect that; sampling resolution can.",
+   "money_path": false
+  }
+ },
+ "safety": {
+  "pair_cap": "0.96 unchanged",
+  "cancel_margin_s": 300.0,
+  "halt": "active",
+  "armed": false,
+  "live_orders_placed_this_turn": 0,
+  "new_services": 0,
+  "completion_099_cap": "disabled",
+  "continuous_inventory_flags": "both OFF",
+  "runtime_decision_change": "NONE -- both changes are read-only reporting",
+  "deployment": "NOT deployed. The approved deployment remains the cancellation-verification fix (b8faa380 on 51542dad, disarmed). These changes are committed and parity-checked only."
+ },
+ "deliverable": {
+  "conclusion": "C",
+  "statement": "The favourable book was not realistically executable -- it did not exist at any price the executor could reach. I do not claim a missed profitable pair at 2230z. The gate that refused was correct, the decision was not late in any way that mattered (337ms of recoverable latency against a pair already at 1.05), and a maker complement was dominated on both price and queue.",
+  "not_a_or_b": "A is refused because TAKER_POLICY:WORST_OUTCOME_NOT_POSITIVE correctly declined to pay above redemption. B is refused because the earliest attachable book frame already priced the pair at 1.05/1.03, so a fill-triggered path reaches the same answer.",
+  "what_this_removes_from_the_backlog": "the '2230z missed completion' and the premise that a favourable complement window is being lost to decision latency. Neither is supported.",
+  "what_remains_open": [
+   "the 512 FEED_FAILED L5 ingestion failures",
+   "the 2300z gross/net divergence (our book UP 3.36 vs venue 1.68, fill_count 1)",
+   "why the initial complement was not submitted in three of four campaign windows (requote_refused:NOTHING_TO_COMPLETE, 163 of 184)"
+  ]
+ },
+ "next_lead_not_acted_on": {
+  "observation": "14 OPENING-stage L5_MISSED_PAIR rows in these 20 seconds, every one with missed_profitable_pair YES, pair_own_cost 0.9400-0.9500, inside_entry_ceiling YES, gain_per_contract_usd 0.0500-0.0600, and reason PAIR_COST_ABOVE_CEILING -- a pair INSIDE the 0.96 ceiling, refused for being above a ceiling.",
+  "mechanism": "not a contradiction, a conflation. The flag prices a FRESH two-sided pair as if we were flat (inventory.held_side is null on every one of these rows), while the refusal comes from pair_cost_refusal at src/l5_live_execution.py:6386, which computes eff = cost_after / matched_after over CONFIRMED inventory. Holding 2.04 UP at 0.47 against 0 DOWN makes eff large whatever a fresh pair would have cost.",
+  "consequence": "'missed_profitable_pair: YES' on an OPENING row does NOT mean a profitable pair was available to us in that state. The label's own caveat is 'UNKNOWN is not NO'; this is the converse trap, YES is not necessarily YES, and it bears directly on how the earlier 683 opening pair-cost refusals were read.",
+  "status": "NOT investigated and NOTHING changed. Out of the t+130..t+148 scope of this instruction, and recorded here so the next cycle starts from evidence rather than from the label."
+ }
+}

@@ -1,0 +1,305 @@
+{
+ "mode": "INSPECT",
+ "manifest_id": "venue-superset-20261120",
+ "manifest_sha256": "2d7a87d9968931e87ff353887f8b8bd3fe2e3b4aaf8ce20107ef7f28aa61c368",
+ "listed": 40,
+ "would_apply": 40,
+ "refused": 0,
+ "delta_usd": "97.31650000",
+ "realized_attributed_before": "-136.78450000",
+ "realized_attributed_after": "-39.46800000",
+ "ledger_written": false,
+ "walk": {
+  "sufficient": true,
+  "by": "END_OF_FEED",
+  "pages": 234,
+  "ended": "eof",
+  "started_at": "2026-11-20T02:13:15.958862+00:00",
+  "floor": null,
+  "monotonic": false,
+  "oldest_dated_row": "2026-08-14T03:26:06.879843+00:00"
+ },
+ "results": [
+  {
+   "market": "aec-atp-edwwin-enzagu-2026-11-17",
+   "attested": true,
+   "old_pnl": "-5.00000000",
+   "new_pnl": "-1.20760000",
+   "delta": "3.79240000"
+  },
+  {
+   "market": "aec-atp-hynbar-alegal-2026-11-16",
+   "attested": true,
+   "old_pnl": "0E-8",
+   "new_pnl": "0.25000000",
+   "delta": "0.25000000"
+  },
+  {
+   "market": "aec-atp-maxgur-oribat-2026-11-17",
+   "attested": true,
+   "old_pnl": "-5.00000000",
+   "new_pnl": "-0.70000000",
+   "delta": "4.30000000"
+  },
+  {
+   "market": "aec-atp-zacvii-geobla-2026-11-17",
+   "attested": true,
+   "old_pnl": "-3.61000000",
+   "new_pnl": "0.25000000",
+   "delta": "3.86000000"
+  },
+  {
+   "market": "aec-cs2-bca-big-2026-11-18",
+   "attested": true,
+   "old_pnl": "-5.00000000",
+   "new_pnl": "-0.74080000",
+   "delta": "4.25920000"
+  },
+  {
+   "market": "aec-cs2-envy-mzp-2026-11-17",
+   "attested": true,
+   "old_pnl": "-5.00000000",
+   "new_pnl": "-0.56000000",
+   "delta": "4.44000000"
+  },
+  {
+   "market": "aec-cs2-ep-ytigeres-2026-11-16",
+   "attested": true,
+   "old_pnl": "0E-8",
+   "new_pnl": "0.02000000",
+   "delta": "0.02000000"
+  },
+  {
+   "market": "aec-cs2-hero-prv-2026-11-16",
+   "attested": true,
+   "old_pnl": "0E-8",
+   "new_pnl": "-0.01000000",
+   "delta": "-0.01000000"
+  },
+  {
+   "market": "aec-cs2-unity-gl-2026-11-18",
+   "attested": true,
+   "old_pnl": "-0.51000000",
+   "new_pnl": "-0.04080000",
+   "delta": "0.46920000"
+  },
+  {
+   "market": "aec-cs2-vp-priv-2026-11-16",
+   "attested": true,
+   "old_pnl": "0E-8",
+   "new_pnl": "0.05000000",
+   "delta": "0.05000000"
+  },
+  {
+   "market": "aec-cs2-ytigeres-jumbo-2026-11-16",
+   "attested": true,
+   "old_pnl": "0E-8",
+   "new_pnl": "-0.12000000",
+   "delta": "-0.12000000"
+  },
+  {
+   "market": "aec-dota2-aur-pari-2026-11-18",
+   "attested": true,
+   "old_pnl": "0E-8",
+   "new_pnl": "-0.15000000",
+   "delta": "-0.15000000"
+  },
+  {
+   "market": "aec-dota2-gl-lgd-2026-11-16",
+   "attested": true,
+   "old_pnl": "-1.00000000",
+   "new_pnl": "0.04000000",
+   "delta": "1.04000000"
+  },
+  {
+   "market": "aec-dota2-xe-ch-2026-11-17",
+   "attested": true,
+   "old_pnl": "-5.00000000",
+   "new_pnl": "-0.65000000",
+   "delta": "4.35000000"
+  },
+  {
+   "market": "aec-itfme-johmon-matrey-2026-11-18",
+   "attested": true,
+   "old_pnl": "-5.00000000",
+   "new_pnl": "-0.20190000",
+   "delta": "4.79810000"
+  },
+  {
+   "market": "aec-itfme-santav-livdam-2026-11-17",
+   "attested": true,
+   "old_pnl": "-5.00000000",
+   "new_pnl": "-0.45000000",
+   "delta": "4.55000000"
+  },
+  {
+   "market": "aec-itfme-wisabd-gabdeb-2026-11-18",
+   "attested": true,
+   "old_pnl": "0E-8",
+   "new_pnl": "-0.05000000",
+   "delta": "-0.05000000"
+  },
+  {
+   "market": "aec-itfwo-anasob-renjam-2026-11-18",
+   "attested": true,
+   "old_pnl": "-0.12000000",
+   "new_pnl": "-0.00600000",
+   "delta": "0.11400000"
+  },
+  {
+   "market": "aec-itfwo-avasch-jiaibr-2026-11-18",
+   "attested": true,
+   "old_pnl": "-5.00000000",
+   "new_pnl": "-0.35000000",
+   "delta": "4.65000000"
+  },
+  {
+   "market": "aec-itfwo-carpla-merezz-2026-11-18",
+   "attested": true,
+   "old_pnl": "-5.00000000",
+   "new_pnl": "-0.55000000",
+   "delta": "4.45000000"
+  },
+  {
+   "market": "aec-itfwo-fedurg-krinov-2026-11-18",
+   "attested": true,
+   "old_pnl": "-5.00000000",
+   "new_pnl": "-0.50000000",
+   "delta": "4.50000000"
+  },
+  {
+   "market": "aec-itfwo-julmya-madhag-2026-11-18",
+   "attested": true,
+   "old_pnl": "-5.00000000",
+   "new_pnl": "-0.10000000",
+   "delta": "4.90000000"
+  },
+  {
+   "market": "aec-itfwo-pialov-julstr-2026-11-18",
+   "attested": true,
+   "old_pnl": "-5.00000000",
+   "new_pnl": "-0.05000000",
+   "delta": "4.95000000"
+  },
+  {
+   "market": "aec-nba-atl-mil-2026-11-15",
+   "attested": true,
+   "old_pnl": "-1.00000000",
+   "new_pnl": "-0.03000000",
+   "delta": "0.97000000"
+  },
+  {
+   "market": "aec-nba-det-sa-2026-11-17",
+   "attested": true,
+   "old_pnl": "-5.00000000",
+   "new_pnl": "0.60000000",
+   "delta": "5.60000000"
+  },
+  {
+   "market": "aec-nba-hou-mia-2026-11-16",
+   "attested": true,
+   "old_pnl": "-2.00000000",
+   "new_pnl": "-0.18000000",
+   "delta": "1.82000000"
+  },
+  {
+   "market": "aec-nba-mem-was-2026-11-16",
+   "attested": true,
+   "old_pnl": "0E-8",
+   "new_pnl": "0E-8",
+   "delta": "0E-8"
+  },
+  {
+   "market": "aec-nba-ny-tor-2026-11-17",
+   "attested": true,
+   "old_pnl": "0E-8",
+   "new_pnl": "0.85000000",
+   "delta": "0.85000000"
+  },
+  {
+   "market": "aec-nba-por-min-2026-11-17",
+   "attested": true,
+   "old_pnl": "-2.00000000",
+   "new_pnl": "0.35000000",
+   "delta": "2.35000000"
+  },
+  {
+   "market": "aec-nhl-mon-nyr-2026-11-16",
+   "attested": true,
+   "old_pnl": "0E-8",
+   "new_pnl": "0.08000000",
+   "delta": "0.08000000"
+  },
+  {
+   "market": "aec-setkamecz-lopvla-hajmir-2026-11-18",
+   "attested": true,
+   "old_pnl": "-5.00000000",
+   "new_pnl": "0.30000000",
+   "delta": "5.30000000"
+  },
+  {
+   "market": "aec-setkameua-hreiur-chaboh-2026-11-18",
+   "attested": true,
+   "old_pnl": "-0.16000000",
+   "new_pnl": "-0.16640000",
+   "delta": "-0.00640000"
+  },
+  {
+   "market": "aec-setkameua-khevse-helval-2026-11-18",
+   "attested": true,
+   "old_pnl": "-4.80000000",
+   "new_pnl": "0.10000000",
+   "delta": "4.90000000"
+  },
+  {
+   "market": "aec-setkameua-kobvit-hrykos-2026-11-17",
+   "attested": true,
+   "old_pnl": "-5.00000000",
+   "new_pnl": "-0.40000000",
+   "delta": "4.60000000"
+  },
+  {
+   "market": "aec-setkameua-kotand-lipole-2026-11-18",
+   "attested": true,
+   "old_pnl": "0E-8",
+   "new_pnl": "0.15000000",
+   "delta": "0.15000000"
+  },
+  {
+   "market": "aec-setkameua-pytiva-fasiva-2026-11-17",
+   "attested": true,
+   "old_pnl": "-5.00000000",
+   "new_pnl": "0.15000000",
+   "delta": "5.15000000"
+  },
+  {
+   "market": "aec-valorant-xjg-ur-2026-11-18",
+   "attested": true,
+   "old_pnl": "-5.00000000",
+   "new_pnl": "-5.45000000",
+   "delta": "-0.45000000"
+  },
+  {
+   "market": "aec-wta-guimar-sofcos-2026-11-18",
+   "attested": true,
+   "old_pnl": "-5.00000000",
+   "new_pnl": "-0.20000000",
+   "delta": "4.80000000"
+  },
+  {
+   "market": "aec-wtt-elezah-chalut-2026-11-18",
+   "attested": true,
+   "old_pnl": "0E-8",
+   "new_pnl": "-0.55000000",
+   "delta": "-0.55000000"
+  },
+  {
+   "market": "cpc-btc-updown-5m-2026-11-16-0335z",
+   "attested": true,
+   "old_pnl": "-2.00000000",
+   "new_pnl": "0.34000000",
+   "delta": "2.34000000"
+  }
+ ],
+ "labels": "INSPECT ran the real correction against a copy that cannot be saved; the ledger is unchanged. APPLY wrote only the markets shown attested. No limit was changed by either."
+}

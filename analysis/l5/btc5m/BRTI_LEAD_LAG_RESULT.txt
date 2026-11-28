@@ -1,0 +1,92 @@
+BRTI -> PMUS BTC5m LEAD-LAG AND TAKER ACQUISITION -- result
+Quotes: BTC5M_QUOTE from l5-btc5m-public-recorder, 308 scoreable windows,
+  28,164 scored poll instants, runs 2026-11-11T21:00Z..11-12T13:30Z and
+  2026-11-19T00:40Z..11:15Z.
+Index: venue /v1/asset-prices/history, ASSET_PRICE_BUCKET_1S, 93,844 buckets.
+Regenerate: python3 analysis/l5/btc5m/brti_lead_lag.py <quotes.json> <brti.json>
+
+==============================================================================
+DATA COVERAGE
+==============================================================================
+  scoreable windows 308 | scored poll instants 28164
+  excluded no_settlement_bucket       1
+  spread at poll: 0.01:21898  0.02:5228  0.03:743  0.04:126  0.05:50
+  PMUS quotes are OUR 2s polls of a public gateway, receipt-stamped.
+  BRTI buckets are the venue's own 60s-average index, 1s grid.
+
+==============================================================================
+LEAD-LAG: does recent BRTI change predict the NEXT quote change?
+==============================================================================
+ mom k  horizon       corr    n polls    windows reverse corr
+     5        5    +0.0167      27943        308 -0.0004
+     5       15    +0.0107      27376        308 +0.0033
+     5       30    +0.0062      25697        308 +0.0077
+     5       60    -0.0088      21799        308 +0.0099
+    15        5    +0.0073      27943        308 -0.0004
+    15       15    +0.0016      27376        308 +0.0033
+    15       30    +0.0016      25697        308 +0.0077
+    15       60    -0.0144      21799        308 +0.0099
+    30        5    +0.0029      27943        308 -0.0004
+    30       15    -0.0001      27376        308 +0.0033
+    30       30    +0.0009      25697        308 +0.0077
+    30       60    -0.0168      21799        308 +0.0099
+
+==============================================================================
+TAKER ACQUISITION, momentum-conditioned (fill at the OFFER, h=15s)
+==============================================================================
+|BRTI 15s change| quantiles: p50 4.21  p75 7.91  p90 12.31  p95 15.52 USD
+
+ min |m15|       n    wins     markout  settle P&L 95% CI settle              mean px
+      4.21   13652    73.0%     -0.0236     -0.0244 [-0.0309, -0.0178]      0.7406
+      7.91    6802    75.9%     -0.0235     -0.0345 [-0.0434, -0.0256]      0.7810
+     12.31    2681    79.3%     -0.0276     -0.0319 [-0.0447, -0.0191]      0.8144
+     15.52    1337    79.7%     -0.0330     -0.0350 [-0.0522, -0.0181]      0.8214
+
+NOTE: these are POLL-level numbers and overstate precision --
+window-clustered intervals follow.
+
+==============================================================================
+WINDOW-CLUSTERED settlement economics (|m15| >= 12.31 USD, h=15s)
+==============================================================================
+  qualifying windows 148 | mean per share -0.0377 | 95% CI [-0.0848, +0.0055] INCLUDES ZERO
+  sd 0.2847 | se 0.0234
+
+==============================================================================
+CONDITIONAL TAKER SETTLEMENT P&L (h=5s), window-clustered
+==============================================================================
+  all qualifying                      246 windows  -0.0233  [-0.0560, +0.0081] 
+  -- by DIRECTION of the BRTI move --
+  index UP   -> buy UP                168 windows  -0.1195  [-0.1825, -0.0584] 
+  index DOWN -> buy DOWN              164 windows  -0.0142  [-0.0701, +0.0391] 
+  -- by TIME REMAINING --
+  t_left 210-270s                     172 windows  -0.0346  [-0.0947, +0.0249] 
+  t_left 150-210s                     175 windows  -0.0364  [-0.0929, +0.0178] 
+  t_left 90-150s                      147 windows  -0.0510  [-0.1025, -0.0013] 
+  t_left 60-90s                        69 windows  -0.0125  [-0.0962, +0.0684] 
+  -- by SPREAD --
+  spread 0.01                         244 windows  -0.0266  [-0.0603, +0.0064] 
+  spread 0.02                         205 windows  -0.0393  [-0.0820, +0.0016] 
+  spread >= 0.03                       73 windows  -0.0312  [-0.1229, +0.0585] 
+  -- by SIZE of the BRTI move --
+  |m15| >= p95 (15.5 USD)              97 windows  -0.0528  [-0.1144, +0.0040] 
+  -- by ENTRY PRICE (is this just buying favourites?) --
+  entry <= 0.40 (longshot side)        59 windows  +0.0107  [-0.0975, +0.1233] 
+  entry > 0.60 (favourite side)       242 windows  -0.0291  [-0.0672, +0.0073] 
+
+==============================================================================
+ORDER LATENCY: pay the offer at t+D, not at t (h=15s after entry)
+==============================================================================
+  signal |m15| >= 12.31 USD; D=0 is unachievable, shown for comparison
+ latency windows        n     markout  settle P&L 95% CI settle         
+       0s     148     2681     -0.0337     -0.0377 [-0.0851, +0.0064] 
+       1s     147     2638     -0.0330     -0.0358 [-0.0828, +0.0085] 
+       2s     147     2638     -0.0330     -0.0358 [-0.0832, +0.0092] 
+       5s     145     2564     -0.0316     -0.0330 [-0.0808, +0.0121] 
+
+  EXECUTABLE DEPTH IS NOT MEASURABLE on this feed: BTC5M_QUOTE
+  carries bid and ask prices and no size field, so the quantity
+  available at the offer is unknown. Every number above therefore
+  assumes the displayed offer absorbs our whole clip, which is the
+  most favourable possible assumption about liquidity.
+
+Hypothetical executions against recorded public data. NOT fills, NOT realized P&L.

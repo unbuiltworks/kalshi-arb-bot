@@ -1,0 +1,217 @@
+{
+ "artifact": "analysis/l5/missed_pair_evidence_audit_20261103.json",
+ "generated_utc": "2026-11-03T13:52:54.537455+00:00",
+ "instruction": "Repair the evidence used to identify profitable matching opportunities: audit L5_MISSED_PAIR and the earlier 683 refusals, separate theoretical from executable, correct the misleading label, quantify real opportunities, and name the loss driver.",
+ "headline": "Of 184 authenticated, inventory-adjusted completion evaluations across the four campaign windows that held inventory, ZERO were below the $1.00 redemption value and zero were at or below the 0.96 ceiling. The cheapest in 110 minutes was exactly 1.0000. The engine did not miss profitable pairs; the metric was counting a constant. The loss driver is FIRST-LEG ADVERSE SELECTION, measured in 4 of 4 windows with no survivorship.",
+ "item1_parity": {
+  "head": "2eda65a9",
+  "ids": 80,
+  "digest": "eb672d14b4baf439",
+  "identical_to_baseline": true,
+  "summary": "54 failed, 15636 passed, 27 skipped, 1 xfailed, 26 errors in 448.18s",
+  "tree_modified_during_run": false,
+  "note": "the earlier run on this tree was stopped deliberately at 42% and discarded rather than reported, because I had to correct a count in an artifact a test reads and would not report a parity run whose inputs changed under it"
+ },
+ "item2_four_way_separation": {
+  "A_fresh_pair_theoretical": {
+   "what": "every OPENING-stage L5_MISSED_PAIR row. The pair is derived from the book as if we were FLAT, and both legs quote d ticks behind their own touch, so pair = 1 - spread - 2*d*t",
+   "level_invariance": "0.9500 on EVERY one-tick book at EVERY price level, verified across 7 books from 0.36 to 0.90; it falls only as the spread widens (0.9400 at 2 ticks, 0.9200 at 4)",
+   "measured_volume": {
+    "rows_in_a_144s_slice": 501,
+    "distinct_states": 21,
+    "tick_amplification": "23.9x",
+    "rate_per_second": 3.5,
+    "meaning": "a refusal COUNT measures loop ticks, not chances. At this amplification the famous 683 refusals are about 29 distinct states, not 683 lost opportunities"
+   },
+   "verdict": "NOT OPPORTUNITIES. Informationless by construction."
+  },
+  "B_inventory_adjusted_economically_valid": {
+   "basis": "the quantity the gate actually compares: eff = cost_after / matched_after, the effective pair over the basis already paid",
+   "authenticated_taker_evaluations": 184,
+   "windows": [
+    "2026-11-02-2215z",
+    "2026-11-02-2230z",
+    "2026-11-02-2245z",
+    "2026-11-02-2300z"
+   ],
+   "pair_min": "1.0000",
+   "pair_median": "1.3300",
+   "pair_max": "1.9400",
+   "below_redemption_1_00": 0,
+   "at_or_below_ceiling_0_96": 0,
+   "exactly_1_00": 1,
+   "crossed": 0,
+   "cheapest_per_window": {
+    "2026-11-02-2215z": "1.1700",
+    "2026-11-02-2230z": "1.0700",
+    "2026-11-02-2245z": "1.0000",
+    "2026-11-02-2300z": "1.4450"
+   },
+   "one_boundary_maker_case": {
+    "window": "2026-11-02-2245z",
+    "utc": "22:45:36.396",
+    "held": "DOWN 2 at basis 0.4500",
+    "complement": "UP",
+    "book": "bid 0.5300 (400.01 shares) / ask 0.5500 (845.00)",
+    "maker_at_touch_own": "0.5300",
+    "pair_at_touch": "0.9800",
+    "maker_behind_touch_own": "0.5100",
+    "pair_behind_touch": "0.9600",
+    "taker_cross_own": "0.5500",
+    "pair_taker": "1.0000",
+    "admissible_under_0_96": "ONLY the behind-touch price, at the boundary",
+    "queue_ahead_multiple_of_need": "200.00",
+    "order_resting_next_sample": true,
+    "verdict": "the ONE inventory-adjusted opportunity in 110 minutes, exactly AT the ceiling, conditional on a maker fill queued behind 200x our size. It did not fill."
+   },
+   "verdict": "ONE boundary case in 110 minutes. Not zero, and not a stream of missed pairs."
+  },
+  "C_supported_by_authenticated_executable_book": {
+   "records": [
+    "L5_TS_COMPLETION (184 priced)",
+    "L5_RESIDUAL_BOOK_SAMPLE (full ladder, 8 rungs)",
+    "L5_FILL_BOOK_EVIDENCE",
+    "L5_CONTROLLER_OPEN_TRIGGER"
+   ],
+   "stream_age_range_s": [
+    0.003,
+    0.125
+   ],
+   "source": "authenticated_ws",
+   "verdict": "this is the primary evidence and it is abundant"
+  },
+  "D_supported_only_by_sparse_or_lagged_REST": {
+   "records": [
+    "scratchpad/tape/*.jsonl (the REST BBO poll)"
+   ],
+   "coverage": "median 50 observations per 15-minute window, 14.9s median gap, 34.7s median max gap, DARK 93.0% of each window, measured over 20 windows",
+   "known_disagreement": "at 2026-11-02 22:32:12 it read UP 0.5200/0.5300 while the authenticated book read 0.4000/0.4100 -- twelve cents, same second",
+   "verdict": "RETRACTED as a source for any second-level executable claim. Window-level statistics over it remain usable. Guarded in code by src/l5_book_tape_coverage.py, which refuses TAPE_NOT_SECOND_LEVEL."
+  }
+ },
+ "item2b_the_683_refusals": {
+  "can_they_be_reclassified_individually": false,
+  "why_not": "they were never recorded individually. `controller_open:PAIR_COST_ABOVE_CEILING` was an AGGREGATE COUNTER; the per-refusal record (`_note_open_missed`) was written in RESPONSE to them, at 03ff6eb8 on 2026-11-02T18:31Z, after that campaign ran. No artifact holds the 683 as rows, and I checked every analysis/l5 JSON for them.",
+  "but_their_class_is_determinable_structurally": {
+   "sole_producer": "`PAIR_COST_ABOVE_CEILING` is emitted from exactly one place: pair_cost_refusal at src/l5_live_execution.py:6386",
+   "and_it_cannot_fire_on_a_flat_first_leg": "that function returns None when `matched_after <= matched_before`. A flat account buying one leg leaves min(up,dn) at zero, so the gate is never reached.",
+   "therefore": "all 683 fired on orders that WOULD have created new matched quantity -- i.e. COMPLETING legs against inventory already held. They were never fresh-pair opportunities at all."
+  },
+  "the_prior_reconstruction_is_retracted": {
+   "where": "commit 03ff6eb8, 'Name the refused OPENING, and report what the 683 actually were'",
+   "it_claimed": "the achievable pair was 0.97 in all 501 sampled books, every one of the 683 was a profitable pair refused by the ceiling alone, and `pair <= 0.96 needs spread <= 0.00`, so the ceiling is arithmetically unreachable at depth 2 -- 'a structural mismatch between the ceiling and the depth'",
+   "error_1_wrong_sign": "it used (ask - d*t) + (1 - bid - d*t) = 1 + spread - 2*d*t, quoting THROUGH each touch. A maker rests BEHIND it: (bid - d*t) + (1 - ask - d*t) = 1 - spread - 2*d*t. The spread HELPS the pair. 0.97 should have been 0.95. Corrected in the code at 917d1ffe, which fixed the identity but did not withdraw this conclusion.",
+   "error_2_wrong_quantity": "even corrected, the fresh two-leg pair was never the quantity the gate compared. The gate compares eff over the basis already paid. No sign of the fresh pair appears in it.",
+   "consequence": "'the ceiling is arithmetically unreachable at depth 2' is FALSE. At the corrected identity the fresh pair is 0.9500, which CLEARS the 0.96 ceiling. The 683 are explained by held inventory, not by a ceiling/depth mismatch.",
+   "status": "RETRACTED here; the commit stays in history unaltered"
+  }
+ },
+ "item3_label_correction": {
+  "approach": "ADD an inventory-aware field; FREEZE the old one. Records carrying v1 are already on the tape and in committed artifacts, so its meaning is not redefined under them.",
+  "v1": {
+   "field": "missed_profitable_pair",
+   "definition": "pair_below_redemption_regardless_of_inventory",
+   "changed": false
+  },
+  "v2": {
+   "field": "missed_profitable_pair_in_state",
+   "definition": "pair_available_in_the_inventory_state_we_were_actually_in",
+   "downgrades": [
+    {
+     "when": "an OPENING refusal while unmatched inventory was held",
+     "to": "N/A",
+     "reason": "UNMATCHED_INVENTORY_HELD"
+    },
+    {
+     "when": "the caller knows eff and eff >= 1.00",
+     "to": "NO",
+     "reason": "EFFECTIVE_PAIR_ABOVE_REDEMPTION"
+    }
+   ],
+   "invariant": "v2 is NEVER more optimistic than v1 -- verified exhaustively over stage x pair x held_qty x eff"
+  },
+  "evidence_field": {
+   "field": "evidence",
+   "values": [
+    "AUTHENTICATED_WS",
+    "REST_SPARSE_OR_LAGGED",
+    "EVIDENCE_BASIS_UNKNOWN"
+   ],
+   "rule": "authenticated AND stream age <= 2.0s, else lagged. A stale authenticated frame is not executable evidence.",
+   "carries": "executable_evidence (bool)"
+  },
+  "the_2230z_row_now_reads": {
+   "v1": "YES",
+   "v2": "N/A",
+   "downgraded_because": "UNMATCHED_INVENTORY_HELD",
+   "evidence": "AUTHENTICATED_WS, executable"
+  },
+  "call_sites_repaired": [
+   {
+    "file": "src/l5_pmus_live_runner.py",
+    "what": "_note_open_missed now passes held_side/held_qty/deficient_qty read from the SAME store the gate reads, plus book_source. It previously passed none, which is why every OPENING row published inventory: null while we held 2.04."
+   },
+   {
+    "file": "src/l5_pmus_live_runner.py",
+    "what": "sample_residual_book now passes first_leg_own_px from the venue-confirmed leg_cost/position, so the AUTHENTICATED residual sampler can price its own pair. Every live row previously read `no_first_leg_price` while the SHADOW sampler beside it priced the pair correctly -- which is why the 2230z pairs had to be reconstructed by hand, and how the misreading happened."
+   }
+  ]
+ },
+ "item5_how_many_opportunities": {
+  "genuinely_profitable_inventory_adjusted_authenticated": 1,
+  "that_one": "2245z 22:45:36, behind-touch maker pair exactly 0.9600, at the ceiling boundary, queued behind 200x our size",
+  "acted_on": 0,
+  "why_that_one_was_not_captured": "an order WAS resting at the next sample. It did not fill. The venue publishes no per-order queue position, so whether it was queue position or the market simply never returning cannot be settled from these records -- and I am not going to assert a fill that did not happen.",
+  "taker_evaluations_below_redemption": 0,
+  "of": 184,
+  "missed_profitable_pairs_under_v2": 0,
+  "every_refusal_was_correct": true,
+  "what_the_old_metric_reported_instead": "thousands of OPENING ticks at 0.76-0.95 labelled missed_profitable_pair YES, at 3.5 rows a second"
+ },
+ "item6_the_loss_driver": {
+  "answer": "FIRST-LEG ADVERSE SELECTION",
+  "candidate_1_insufficient_complement_liquidity": {
+   "verdict": "REFUTED",
+   "evidence": "at 2230z the complement showed 910.01 displayed shares against a need of 2.04 (446x cover); at 2245z 400-845 shares against 2 (200x+). `insufficient_displayed_depth` was false on every sample. Depth was never the constraint -- price was."
+  },
+  "candidate_2_a_correctable_execution_defect": {
+   "verdict": "REFUTED as the DRIVER",
+   "evidence": "184 completion evaluations priced correctly on books 0.003-0.125s old; no ORDERS_UNCERTAIN, CANCEL_UNRESOLVED, GAP_SUSPECTED or BOOK_STALE refusal in the 2230z window; still_fillable_orders 0 and evaluated_early_no_quote_resting true. Real defects existed and were fixed (cancel-verification at e1758566) but none of them changes an economic refusal."
+  },
+  "candidate_3_first_leg_adverse_selection": {
+   "verdict": "CONFIRMED, 4 of 4 windows, no survivorship",
+   "complement_price_path_after_our_fill": {
+    "2215z": "0.78 -> 0.99 own (held DOWN)",
+    "2230z": "0.60 -> 0.92 own (held UP)",
+    "2245z": "0.55 -> 0.96 own (held DOWN)",
+    "2300z": "0.77 -> 0.94 own (held UP)"
+   },
+   "reading": "in every window the complement got MONOTONICALLY dearer after we filled. That is the market moving against the leg we acquired, four times out of four.",
+   "mechanism": "the entry condition carries NO information about completability, because the fresh pair it keys on is a constant. A resting maker buy then fills precisely when the market is moving through its price. At 2230z we bought UP at 0.4700 and the authenticated book was 0.4000/0.4100 within 1.23s and 0.3600/0.3700 within 18s. The mechanism is symmetric in side, so choosing a side cannot fix it.",
+   "corroboration": "independently stated at 917d1ffe from the 2215z leg, and consistent with the matched:residual ratio -- ours 1.786 against a breakeven of 2.012, L5's 5.30"
+  }
+ },
+ "item7_highest_impact_change": {
+  "finding": "THE CEILING ADMITS ONLY THE LESS FILLABLE PRICE. For a held basis b, complement own price at the touch c, tick t and depth d, the two prices the engine can quote are pair_at_touch = b + c and pair_behind = b + c - d*t, and pair_behind is ALWAYS cheaper by exactly d*t. So whenever pair_at_touch > ceiling >= pair_behind, the only admissible completion price is the one that requires the market to move FURTHER against the leg we already hold. The 2245z boundary case is exactly this: at-touch 0.9800 refused, behind-touch 0.9600 admitted, and behind-touch is the price least likely to trade.",
+  "this_is_arithmetic_not_a_sample": true,
+  "consequence": "maker-only completion under a 0.96 ceiling at depth 2 on a one-tick book is self-defeating: the engine can only complete by waiting for the adverse move that makes completion worse.",
+  "the_change_itself": "make the completion ceiling and the completion quote depth mutually consistent. The two coherent options are to quote the completion leg AT the touch and raise the completion ceiling to admit it, or to keep 0.96 and accept that maker completion is structurally unreachable and stop opening legs that depend on it.",
+  "why_I_am_not_implementing_either": "both move a ceiling or a quote depth, which is live trading policy. The standing instruction is 'do not change live trading policy, enable the $0.99 cap, or loosen risk limits', and raising a completion ceiling is exactly that. This is an owner decision, and it is the decision that matters most.",
+  "what_I_shipped_instead": "the evidence repair, so the next decision is made on executable numbers rather than on a constant: the v2 inventory-aware verdict, the evidence-basis field, the authenticated sampler's own basis, and the REST-tape guard.",
+  "entry_filters_are_already_refused": "917d1ffe tested time-left, volatility, spread, extremity and imbalance over 15 windows chronologically 60/40. No filter is promotable: the >=300s and >=360s holdouts are IDENTICAL at -0.219, the >=420s holdout rests on one trade, and the combined filter is the worst per dollar despite the best strand rate. I am not re-running that.",
+  "the_one_measurement_that_would_settle_it": "at-touch versus behind-touch fill rate for the COMPLETION leg specifically, measured on resting orders with their queue-ahead recorded at placement. The venue publishes no per-order queue position, so this requires resting real completion orders at both depths and recording outcomes -- which needs live authorization that is not granted here."
+ },
+ "safety": {
+  "live_trading_policy_changed": false,
+  "pair_cap": "0.96 unchanged",
+  "cancel_margin_s": 300.0,
+  "completion_099_cap": "disabled",
+  "risk_limits": "unchanged",
+  "halt": "active",
+  "armed": false,
+  "new_infrastructure": 0,
+  "orders_placed": 0,
+  "all_changes": "observability only; no gate, ceiling, depth, price or size moves",
+  "deployed": false
+ }
+}

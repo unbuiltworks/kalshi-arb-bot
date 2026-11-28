@@ -1,0 +1,131 @@
+From 209ca554228f496081b74255d665f5b5ee75501d Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 20 Nov 2026 17:25:18 +0000
+Subject: [PATCH] l5-pmus-live: publish a cash-only floor, not a blank, while
+ order state is uncertain
+
+Adopting another strategy's venue position marks this ledger uncertain for
+the 15 s between two reconciles, and the published portfolio value went to
+None for that time, stopping the other strategy. Buying power alone is a
+lower bound on the worst-case value and is published instead. This
+service's own gates are unchanged.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01HTk927uH8zwpj6gLES92PF
+---
+ src/l5_pmus_live_runner.py          | 21 +++++++++-
+ tests/test_l5_equity_publication.py | 60 ++++++++++++++++++++++++++++-
+ 2 files changed, 78 insertions(+), 3 deletions(-)
+
+diff --git a/src/l5_pmus_live_runner.py b/src/l5_pmus_live_runner.py
+index 5e335d46d..39a55938f 100644
+--- a/src/l5_pmus_live_runner.py
++++ b/src/l5_pmus_live_runner.py
+@@ -2956,7 +2956,26 @@ class Runner:
+             else:
+                 unc = self.store.orders_uncertain()
+                 if unc:
+-                    why = "ORDER_STATE_UNCERTAIN"
++                    #: A FLOOR, NOT A BLANK. Publishing None here stopped
++                    #: the OTHER strategy for the 15 s between two
++                    #: reconciles every time its own position changed:
++                    #: adopting a venue position this ledger never booked
++                    #: sets `orders_uncertain`, and that was read as "the
++                    #: account's value is unknown". Observed 2026-11-20
++                    #: 14:22:27-37Z and 17:08:40-56Z.
++                    #:
++                    #: Buying power alone IS known and IS a lower bound on
++                    #: the worst-case value: it already excludes every
++                    #: fill and every resting order's hold, uncertain or
++                    #: not, and counting every position as worth nothing
++                    #: can only understate. So the limits are judged on
++                    #: the harshest figure available and can trip early,
++                    #: never late.
++                    #:
++                    #: This service's OWN gate does not read this and
++                    #: still refuses on uncertainty, as before.
++                    why = "ORDER_STATE_UNCERTAIN_CASH_ONLY_FLOOR"
++                    val = PDD.worst_case_value(self.available_cash_usd, {})
+                 else:
+                     val = PDD.worst_case_value(
+                         self.available_cash_usd,
+diff --git a/tests/test_l5_equity_publication.py b/tests/test_l5_equity_publication.py
+index bbe625263..51360ebe4 100644
+--- a/tests/test_l5_equity_publication.py
++++ b/tests/test_l5_equity_publication.py
+@@ -141,14 +141,70 @@ def test_a_balance_just_inside_the_age_limit_is_used(store, env):
+     assert r.equity_risk_lines(NOW)["equity_value"]["usd"] == "321.4782"
+ 
+ 
+-def test_uncertain_order_state_blocks_both(store, env):
++def test_uncertain_order_state_publishes_the_cash_only_floor(store, env):
++    """Uncertainty in THIS ledger's order state does not make the account's
++    cash unknown. The other strategy was being stopped for the 15 s between
++    two reconciles every time its own position changed."""
++    store.state["positions"] = {M + "|UP": "3", M + "|DOWN": "2"}
++    certain = watched(store).equity_risk_lines(NOW)
++    assert certain["equity_value"]["usd"] == "323.4782"
+     store.mark_uncertain("cancel outcome unknown")
+     out = watched(store).equity_risk_lines(NOW)
+-    assert out["equity_value"]["unavailable_why"] == "ORDER_STATE_UNCERTAIN"
++    assert out["equity_value"]["unavailable_why"] \
++        == "ORDER_STATE_UNCERTAIN_CASH_ONLY_FLOOR"
++    #: cash alone: the matched pair's redemption is NOT counted
++    assert out["equity_value"]["usd"] == "321.4782"
++    assert out["portfolio_drawdown"]["worst_case_value_usd"] == "321.4782"
++    #: the baseline (allowance 5 from 321.4782) is inside its limit...
++    assert out["equity_baseline"]["refusal"] is None
++    #: ...and the older limit (15 from 336.68) is judged on the floor too:
++    #: without the pair's 2.00 the drawdown is 15.2018, and it says so. The
++    #: floor can refuse early. It cannot permit late.
++    assert out["portfolio_drawdown"]["refusal"] \
++        == "PORTFOLIO_DRAWDOWN_LIMIT:15.2018>=15"
++
++
++def test_the_floor_is_never_above_the_certain_value(store, env):
++    for pos in ({}, {M + "|UP": "50"}, {M + "|UP": "3", M + "|DOWN": "2"}):
++        store.state["positions"] = dict(pos)
++        store.state.pop("orders_uncertain", None)
++        sure = D(watched(store).equity_risk_lines(NOW)["equity_value"]["usd"])
++        store.mark_uncertain("x")
++        floor = D(watched(store).equity_risk_lines(NOW)
++                  ["equity_value"]["usd"])
++        assert floor <= sure, pos
++
++
++def test_the_floor_still_trips_the_limits(store, env):
++    """It is judged against the same limits and can refuse on its own."""
++    store.mark_uncertain("x")
++    r = watched(store)
++    r.available_cash_usd = D("300.00")           # 36.68 under the anchor
++    out = r.equity_risk_lines(NOW)
++    assert out["portfolio_drawdown"]["refusal"] is not None
++    assert out["equity_baseline"]["refusal"] is not None
++
++
++def test_uncertainty_does_not_excuse_a_stale_or_missing_balance(store, env):
++    store.mark_uncertain("x")
++    r = watched(store)
++    r.available_cash_t = NOW - 181.0
++    out = r.equity_risk_lines(NOW)
++    assert out["equity_value"]["usd"] is None
+     assert refusals(out) == ("PORTFOLIO_VALUE_UNAVAILABLE",
+                              "EQUITY_UNAVAILABLE")
+ 
+ 
++def test_this_services_own_gates_never_read_the_floor():
++    src = open("src/l5_live_execution.py", encoding="utf-8").read()
++    assert "CASH_ONLY_FLOOR" not in src
++    run = open("src/l5_pmus_live_runner.py", encoding="utf-8").read()
++    assert run.count("ORDER_STATE_UNCERTAIN_CASH_ONLY_FLOOR") == 1
++    i = run.index("ORDER_STATE_UNCERTAIN_CASH_ONLY_FLOOR")
++    j = run.rindex("\n    def ", 0, i)
++    assert run[j:j + 40].lstrip().startswith("def equity_risk_lines(")
++
++
+ def test_unreadable_positions_block_both(store, env):
+     store.state["positions"] = {M + "|UP": "not a number"}
+     out = watched(store).equity_risk_lines(NOW)
+-- 
+2.43.0
+

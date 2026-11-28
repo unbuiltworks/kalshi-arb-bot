@@ -1,0 +1,152 @@
+{
+ "title": "Live-sports discovery coverage: why the UI shows ~54 and our collector saw 13",
+ "as_of_utc": "2026-09-20T11:08:26Z",
+ "labels": "READ-ONLY public-data discovery. No orders, no arming, no execution capability added, and no attempt to evade any geographic or platform restriction.",
+ "ANSWER": "TWO DIFFERENT VENUES. The UI showing ~54 live events is Polymarket INTERNATIONAL (polymarket.com / gamma-api.polymarket.com), which serves 58 live events. Our collector reads Polymarket US (gateway.polymarket.us), a separate venue with a separate slate, which serves 16. This is not one slate seen twice.",
+ "evidence_they_are_different_slates": {
+  "intl_live_by_sport": [
+   [
+    "kor",
+    12
+   ],
+   [
+    "ptc",
+    12
+   ],
+   [
+    "sea",
+    9
+   ],
+   [
+    "ere",
+    6
+   ],
+   [
+    "ukr1",
+    6
+   ],
+   [
+    "mlbb",
+    2
+   ],
+   [
+    "lol",
+    2
+   ],
+   [
+    "atp",
+    2
+   ],
+   [
+    "cs2",
+    2
+   ],
+   [
+    "val",
+    2
+   ],
+   [
+    "dota2",
+    2
+   ],
+   [
+    "wta",
+    1
+   ]
+  ],
+  "pmus_live_by_league": [
+   [
+    "atpcq",
+    7
+   ],
+   [
+    "cs2",
+    3
+   ],
+   [
+    "lol",
+    2
+   ],
+   [
+    "valorant",
+    2
+   ],
+   [
+    "flc",
+    1
+   ],
+   [
+    "sea",
+    1
+   ]
+  ],
+  "intl_only_sports": "Korean baseball (kor), Portuguese (ptc), Eredivisie (ere), Ukrainian (ukr1), Romanian (rou1), Czech (cze1), Scottish (scop), English Championship (elc), Dota2, MLBB, WTA -- none of which PMUS carries live",
+  "league_catalogue": "International serves 469 sports leagues; the PMUS gateway serves 50.",
+  "overlap": "thin -- cs2, lol, valorant and sea appear on both"
+ },
+ "SECONDARY_BUG_FOUND_AND_FIXED": {
+  "what": "/v2/leagues/{slug}/events silently returns only TEN events per league when no ?limit is passed. Our discovery never passed one.",
+  "impact_on_universe": {
+   "before": 118,
+   "after": 372
+  },
+  "worst_truncations": {
+   "cs2": "10 -> 74",
+   "mlb": "10 -> 49",
+   "atpcq": "10 -> 49",
+   "nfl": "10 -> 46",
+   "nhl": "10 -> 44",
+   "lol": "10 -> 29",
+   "ufc": "10 -> 24",
+   "wnba": "10 -> 14"
+  },
+  "impact_on_LIVE_count": "NONE. 16 before and 16 after -- the endpoint sorts live-first, so live events were already inside the first ten of each league. This was a real coverage defect for the PREGAME universe (which is the NFL PRE->LIVE control) and is NOT the explanation for 58 vs 16.",
+  "status": "FIXED; collector restarted; DISCOVERY_FIX marker written to the stream"
+ },
+ "liveness_definition_audit": {
+  "pmus": "eventState.live true AND eventState.ended false -- the gateway's own scoreboard field.",
+  "international": "event.live true AND closed false, via /events?live=true -- the venue's own scoreboard flag, the same authority the live UI uses.",
+  "rejected_definition": "startDate <= now. On International startDate is MARKET-CREATION time, not kickoff; using it returned 601 'live' events including season-long futures (Ballon d'Or, World Series champion). Rejected rather than reported."
+ },
+ "FUNNEL": {
+  "POLYMARKET_INTERNATIONAL": {
+   "live_events": 58,
+   "markets_on_live_events_open_and_accepting": 817,
+   "two_sided": 304,
+   "collector_selected": 129,
+   "selection_rule": "<=2 per sportsMarketType family, <=4 per event, cap 150, explicit moneyline-first family priority; never looks at reach",
+   "exclusion_reasons": "closed or not acceptingOrders; not two-sided (0<bid<ask<1); no clobTokenIds; then the per-family/per-event/total caps",
+   "EXECUTABLE": false,
+   "why_measured": "this is L5's OWN venue. It is the SOURCE HABITAT reference, measured read-only. We do not and will not execute there."
+  },
+  "POLYMARKET_US": {
+   "live_events": 16,
+   "markets_on_live_events": 68,
+   "two_sided": 43,
+   "collector_selected": 22,
+   "selection_rule": "<=2 per family, <=6 per live event, LIVE_CAP 200, same explicit family priority; live taken before any pregame",
+   "exclusion_reasons": "no slug; not two-sided; then the per-family/per-event caps",
+   "EXECUTABLE": true
+  }
+ },
+ "venue_tick_size": {
+  "international": 0.001,
+  "pmus": 0.005,
+  "note": "International prices five times finer than PMUS."
+ },
+ "first_look_international_live_sports": {
+  "sweeps": 12,
+  "rows": 1512,
+  "two_sided_rows": 1280,
+  "spread_median": 0.05,
+  "pc_le_1c": 27.1,
+  "pc_le_2c": 37.4,
+  "touch_depth_median": 100.0,
+  "CAVEAT": "12 sweeps. No reach figure is computable yet -- reach@120s needs 120s of series per state. Recorded to show the instrument works, not as a result. Note this is live SPORTS on International; the 1c/96% reference figure is International BTC15m CRYPTO, a different product on the same venue."
+ },
+ "what_is_now_running": {
+  "pmus": "nfl_sunday.py -- 22 live markets across 15 live events at 8s, plus the NFL pregame control (338 market-observations on games <12h out)",
+  "international": "intl_live.py -- 129 markets across 54 live events at 8s, sweep 2.8s",
+  "gemini": "A+B corrected control untouched, mutations_sent 0"
+ }
+}

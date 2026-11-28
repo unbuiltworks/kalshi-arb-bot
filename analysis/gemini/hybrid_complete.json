@@ -1,0 +1,207 @@
+{
+  "study": "MAKER_OPEN -> HYBRID_COMPLETE",
+  "asked": "Before concluding Gemini cannot recycle: could an immediate, executable complement have closed the position below par after real fees?",
+  "corpus": {
+    "contracts": 59,
+    "venue": "Gemini",
+    "series": "BTC5m + BTC15m",
+    "queue_accounting": "CORRECTED symmetric (tape_replay.size_ahead)",
+    "model_a": "FROZEN, not consulted; only HOW the complement is acquired changes"
+  },
+  "arms": {
+    "NATIVE  maker/maker": {
+      "windows": 59,
+      "fills": 8,
+      "first_fills": 6,
+      "maker_complete_fills": 0,
+      "taker_completions": 0,
+      "matched_qty": "0",
+      "terminal_residual_qty": "0.08",
+      "net_locked_usd_if_settled": null,
+      "residual_episodes": 6,
+      "episodes_closed_by": {
+        "WINDOW_ENDED_STILL_RESIDUAL": 6
+      }
+    },
+    "A+B     maker/maker": {
+      "windows": 59,
+      "fills": 40,
+      "first_fills": 28,
+      "maker_complete_fills": 0,
+      "taker_completions": 0,
+      "matched_qty": "0.06",
+      "terminal_residual_qty": "0.28",
+      "net_locked_usd_if_settled": null,
+      "residual_episodes": 29,
+      "episodes_closed_by": {
+        "WINDOW_ENDED_STILL_RESIDUAL": 24,
+        "MAKER_COMPLETE_FILLED": 5
+      }
+    },
+    "A+B open/HYBRID<=1.00": {
+      "windows": 59,
+      "fills": 40,
+      "first_fills": 28,
+      "maker_complete_fills": 0,
+      "taker_completions": 14,
+      "matched_qty": "0.19",
+      "terminal_residual_qty": "0.17",
+      "net_locked_usd_if_settled": "0.014122228750",
+      "residual_episodes": 30,
+      "episodes_closed_by": {
+        "TAKER_COMPLETE": 14,
+        "WINDOW_ENDED_STILL_RESIDUAL": 13,
+        "MAKER_COMPLETE_FILLED": 3
+      }
+    },
+    "A+B open/HYBRID<=0.99": {
+      "windows": 59,
+      "fills": 40,
+      "first_fills": 28,
+      "maker_complete_fills": 0,
+      "taker_completions": 14,
+      "matched_qty": "0.19",
+      "terminal_residual_qty": "0.17",
+      "net_locked_usd_if_settled": "0.017043438750",
+      "residual_episodes": 30,
+      "episodes_closed_by": {
+        "TAKER_COMPLETE": 14,
+        "WINDOW_ENDED_STILL_RESIDUAL": 13,
+        "MAKER_COMPLETE_FILLED": 3
+      }
+    },
+    "A+B open/HYBRID<=0.98": {
+      "windows": 59,
+      "fills": 40,
+      "first_fills": 28,
+      "maker_complete_fills": 0,
+      "taker_completions": 13,
+      "matched_qty": "0.18",
+      "terminal_residual_qty": "0.18",
+      "net_locked_usd_if_settled": "0.017227398750",
+      "residual_episodes": 30,
+      "episodes_closed_by": {
+        "TAKER_COMPLETE": 13,
+        "WINDOW_ENDED_STILL_RESIDUAL": 14,
+        "MAKER_COMPLETE_FILLED": 3
+      }
+    },
+    "A+B open/HYBRID<=0.96": {
+      "windows": 59,
+      "fills": 40,
+      "first_fills": 28,
+      "maker_complete_fills": 0,
+      "taker_completions": 13,
+      "matched_qty": "0.18",
+      "terminal_residual_qty": "0.18",
+      "net_locked_usd_if_settled": "0.017436638750",
+      "residual_episodes": 30,
+      "episodes_closed_by": {
+        "TAKER_COMPLETE": 13,
+        "WINDOW_ENDED_STILL_RESIDUAL": 14,
+        "MAKER_COMPLETE_FILLED": 3
+      }
+    }
+  },
+  "structural_result": {
+    "claim": "A maker OPEN completed immediately by a taker cannot produce a sub-par pair. It is arithmetic, not an observation.",
+    "yes_leg": "rested a YES bid at p, hit by an aggressor SELL -> surviving best bid b <= p, NO costs (1-b), gross pair = p+1-b >= 1",
+    "no_leg": "rested a NO bid at n (a YES ask at 1-n), lifted by an aggressor BUY -> surviving ask a >= 1-n, gross pair = n+a >= 1",
+    "consequence": "Every cent of sub-par basis must come from the book MOVING after the fill, in favour of the leg already held.",
+    "guarded_by": "tests/test_gemini_hybrid_complete.py::test_A_MAKER_FILL_AT_THE_TOUCH_CANNOT_BE_COMPLETED_BELOW_PAR_AT_ONCE"
+  },
+  "opportunity": {
+    "episodes": 29,
+    "reached_par_or_better": 14,
+    "never_reached_par": 15,
+    "median_seconds_to_first_opportunity": 39.6,
+    "median_seconds_opportunity_persisted": 28.6,
+    "executable_qty": "always covered the whole rung (0.01-0.02)",
+    "passive_completion_occurred": 5,
+    "time_resolution_caveat": "seconds_after_open is measured from the first CYCLE at which the residual was visible, not from the fill print; the cycle interval is ~8s, so t=0 rows are up to one cycle after the fill."
+  },
+  "decomposition_of_locked_edge": {
+    "identity": "locked = complement_decline - spread_paid_at_open - fees",
+    "mean_complement_decline": "+0.1857",
+    "mean_spread_paid_at_open": "+0.0811",
+    "mean_fees": "+0.0177",
+    "mean_locked": "+0.0869",
+    "reading": "The edge is the residual's DIRECTIONAL gain being crystallized. Execution contributes -0.0988 (spread + fees), never a positive."
+  },
+  "selection_effect": {
+    "note": "matched-pair economics and directional-residual P&L are reported SEPARATELY and are never summed. A mark is not realized P&L.",
+    "A+B maker/maker": {
+      "residual_qty": "0.28",
+      "terminal_mark_usd": "-0.03080",
+      "median_mark_per_unit": "-0.0100"
+    },
+    "A+B hybrid<=1.00": {
+      "matched_pairs": "0.15",
+      "locked_usd": "+0.01412",
+      "residual_qty": "0.17",
+      "terminal_mark_usd": "-0.05200",
+      "median_mark_per_unit": "-0.2800"
+    },
+    "A+B hybrid<=0.96": {
+      "matched_pairs": "0.14",
+      "locked_usd": "+0.01744",
+      "residual_qty": "0.18",
+      "terminal_mark_usd": "-0.05470",
+      "median_mark_per_unit": "-0.2700"
+    },
+    "reading": "A 'complete when <= $1' rule is a take-profit with no stop: it banks the 14 episodes that moved our way and retains the 15 that did not. The retained residual is 27x worse per unit."
+  },
+  "l5_comparison": {
+    "source": "analysis/l5/l5_fidelity_pass.json aggressiveness_policy",
+    "question": "does L5's taker use rise with residual, or with time?",
+    "p_taker_by_tte": {
+      "tte>10m": 0.0275,
+      "tte5-10m": 0.0369,
+      "tte2-5m": 0.2253,
+      "tte30-120s": 0.3999,
+      "tte<30s": 0.585
+    },
+    "p_taker_complete_by_tte": {
+      "tte>10m": 0.0254,
+      "tte5-10m": 0.0372,
+      "tte2-5m": 0.2071,
+      "tte30-120s": 0.4129,
+      "tte<30s": 0.6495
+    },
+    "p_taker_extend_by_tte": {
+      "tte>10m": 0.0298,
+      "tte5-10m": 0.0364,
+      "tte2-5m": 0.2327,
+      "tte30-120s": 0.3812,
+      "tte<30s": 0.5337
+    },
+    "verdict_time": "YES, monotonically: 2.8% -> 58.5%, a 21x rise into expiry. L5 is maker-dominant early and majority-TAKER inside 30s.",
+    "verdict_residual": "NO. complete and extend (both carry inventory) have near-identical taker rates in every TTE bucket, so inventory state does not drive it. TIME does.",
+    "correction": "An earlier figure of p_taker mean 0.0289 was quoted here as L5's taker rate. That is the mean pooled over states dominated by long TTE; conditioned on TTE the rate reaches 0.585. The pooled number understated late-window taker use by an order of magnitude.",
+    "cross_venue_economics": {
+      "l5_polymarket_spread_at_his_fills": {
+        "n": 1072,
+        "p10": 0.01,
+        "median": 0.01,
+        "p90": 0.01,
+        "max": 0.02
+      },
+      "gemini_spread_at_our_states": {
+        "n": 1096,
+        "p10": 0.11,
+        "median": 0.28,
+        "p90": 0.35,
+        "max": 0.98
+      },
+      "ratio": "28x",
+      "reading": "L5's taker completion is behaviourally faithful AND cheap: he pays ~1c of spread. The same action on Gemini pays a median 28c. The BEHAVIOUR transfers; the ECONOMICS do not."
+    }
+  },
+  "verdict": {
+    "can_gemini_recycle": "YES. Hybrid completion recycles 14 of 29 residual episodes where maker/maker recycled 5. 'Gemini cannot recycle' is false.",
+    "is_it_profitable": "NOT from execution. The pair edge is the residual's directional gain minus a certain 9.9c round-trip cost, and the rule retains adversely-selected losers.",
+    "recommendation": "Do NOT promote. Keep offline. Hybrid completion is a risk/turnover tool priced at ~9.9c per pair on this venue, not a source of pair edge, and residual direction is not assumed to have skill."
+  },
+  "labels": "OFFLINE STUDY. No order was sent and taker execution is not enabled anywhere. Prices are the recorded book, size the recorded ladder, fees the published schedule. Nothing here is submitted, filled, settled, realized or a cost basis.",
+  "authorization": "OFFLINE ONLY. Taker execution is not enabled anywhere; no order was sent; the live lane imports no taker path (guarded by test)."
+}

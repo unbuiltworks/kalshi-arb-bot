@@ -1,0 +1,39 @@
+usable samples 56349 over 32 games, 110 min
+1. crossed: US ask below intl bid in 2.97% of samples (mean gap 0.0190); US bid above intl ask in 2.42% (mean gap 0.0189)
+   intl mid minus US mid: mean -0.0016, mean abs 0.0059, share with |diff| >= 1c: 28.6%
+2. lead/lag: corr( intl change over 9 s ending at t , US change over 9 s ending at t+lag )
+   lag  -60s  corr -0.019  (n 18405)   [positive lag = US moves AFTER intl]
+   lag  -30s  corr +0.005  (n 18519)   [positive lag = US moves AFTER intl]
+   lag  -15s  corr +0.008  (n 18611)   [positive lag = US moves AFTER intl]
+   lag   -9s  corr +0.008  (n 18644)   [positive lag = US moves AFTER intl]
+   lag   -6s  corr +0.020  (n 18666)   [positive lag = US moves AFTER intl]
+   lag   -3s  corr +0.044  (n 18680)   [positive lag = US moves AFTER intl]
+   lag   +0s  corr +0.160  (n 18709)   [positive lag = US moves AFTER intl]
+   lag   +3s  corr +0.213  (n 18704)   [positive lag = US moves AFTER intl]
+   lag   +6s  corr +0.245  (n 18706)   [positive lag = US moves AFTER intl]
+   lag   +9s  corr +0.199  (n 18709)   [positive lag = US moves AFTER intl]
+   lag  +15s  corr +0.309  (n 18709)   [positive lag = US moves AFTER intl]
+   lag  +30s  corr +0.309  (n 18630)   [positive lag = US moves AFTER intl]
+   lag  +60s  corr -0.067  (n 18472)   [positive lag = US moves AFTER intl]
+3. US mid drops >=1c: 259 events; international mid was already >=0.5c below the US mid one sample earlier in 91%
+   (mirror) intl mid drops >=1c: 598 events; US mid already >=0.5c below in 34%
+4. take US ask when it is at or below the intl bid minus x; value at US mid later, net of taker fee
+   (one signal per game per 30 s; mean / median / share positive / equal-weight-by-game mean / games)
+   gap>=0.000 +  60s: mean +0.0021  median -0.0076  positive 33%  by-game +0.0062  (signals 771, games 16)
+   gap>=0.000 + 300s: mean +0.0054  median -0.0096  positive 35%  by-game +0.0078  (signals 718, games 15)
+   gap>=0.000 + 900s: mean +0.0092  median -0.0102  positive 40%  by-game +0.0273  (signals 604, games 12)
+   gap>=0.005 +  60s: mean +0.0206  median +0.0167  positive 71%  by-game +0.0195  (signals 273, games 12)
+   gap>=0.005 + 300s: mean +0.0249  median +0.0227  positive 65%  by-game +0.0194  (signals 249, games 11)
+   gap>=0.005 + 900s: mean +0.0332  median +0.0217  positive 62%  by-game +0.0437  (signals 213, games 10)
+   gap>=0.010 +  60s: mean +0.0333  median +0.0273  positive 85%  by-game +0.0340  (signals 178, games 11)
+   gap>=0.010 + 300s: mean +0.0374  median +0.0344  positive 74%  by-game +0.0359  (signals 164, games 10)
+   gap>=0.010 + 900s: mean +0.0443  median +0.0323  positive 70%  by-game +0.0519  (signals 139, games 10)
+5. resting US bid vs intl mid: next move of the US mid, by where the US best bid sits relative to the intl mid
+   + 60s  bid >= intl mid+0.5c   later US mid minus that bid: +0.0018  (n 3472)
+   + 60s  bid ~ intl mid         later US mid minus that bid: +0.0024  (n 2084)
+   + 60s  bid 0.5-1c below       later US mid minus that bid: +0.0040  (n 4608)
+   + 60s  bid >1c below          later US mid minus that bid: +0.0143  (n 949)
+   +300s  bid >= intl mid+0.5c   later US mid minus that bid: +0.0030  (n 3336)
+   +300s  bid ~ intl mid         later US mid minus that bid: +0.0049  (n 1969)
+   +300s  bid 0.5-1c below       later US mid minus that bid: +0.0044  (n 4436)
+   +300s  bid >1c below          later US mid minus that bid: +0.0169  (n 885)

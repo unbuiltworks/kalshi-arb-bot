@@ -1,0 +1,129 @@
+======================================================================
+FIFTH FOUR-LANE ROLLOVER RUN
+======================================================================
+start events       : 20
+close events       : 20
+completed windows  : 16
+session reports    : 16
+tracebacks         : 0
+child exits        : 0
+NameError          : 0
+venue submissions  : 0
+transport_armed    : False
+
+--- ENTRIES (every window a lane entered) ---
+ 1. BTC  1605z  entered 16:07:55  window_start 16:05:00  armed=False  preflight=FAILED
+ 2. BTC  1610z  entered 16:11:09  window_start 16:10:00  armed=False  preflight=FAILED
+ 3. BTC  1615z  entered 16:16:09  window_start 16:15:00  armed=False  preflight=FAILED
+ 4. BTC  1620z  entered 16:21:09  window_start 16:20:00  armed=False  preflight=FAILED
+ 5. BTC  1625z  entered 16:26:09  window_start 16:25:00  armed=False  preflight=FAILED
+ 6. ETH  1605z  entered 16:07:55  window_start 16:05:00  armed=False  preflight=FAILED
+ 7. ETH  1610z  entered 16:11:09  window_start 16:10:00  armed=False  preflight=FAILED
+ 8. ETH  1615z  entered 16:16:09  window_start 16:15:00  armed=False  preflight=FAILED
+ 9. ETH  1620z  entered 16:21:09  window_start 16:20:00  armed=False  preflight=FAILED
+10. ETH  1625z  entered 16:26:09  window_start 16:25:00  armed=False  preflight=FAILED
+11. SOL  1605z  entered 16:07:55  window_start 16:05:00  armed=False  preflight=FAILED
+12. SOL  1610z  entered 16:11:09  window_start 16:10:00  armed=False  preflight=FAILED
+13. SOL  1615z  entered 16:16:09  window_start 16:15:00  armed=False  preflight=FAILED
+14. SOL  1620z  entered 16:21:09  window_start 16:20:00  armed=False  preflight=FAILED
+15. SOL  1625z  entered 16:26:09  window_start 16:25:00  armed=False  preflight=FAILED
+16. XRP  1605z  entered 16:07:55  window_start 16:05:00  armed=False  preflight=FAILED
+17. XRP  1610z  entered 16:11:09  window_start 16:10:00  armed=False  preflight=FAILED
+18. XRP  1615z  entered 16:16:09  window_start 16:15:00  armed=False  preflight=FAILED
+19. XRP  1620z  entered 16:21:09  window_start 16:20:00  armed=False  preflight=FAILED
+20. XRP  1625z  entered 16:26:09  window_start 16:25:00  armed=False  preflight=FAILED
+entries listed: 20  (lanes: BTC=5, ETH=5, SOL=5, XRP=5)
+
+--- ROLLOVER LATENCY ---
+  The START event is emitted AFTER the preflight ladder, so its
+  timestamp is not the entry latency. PREFLIGHT_BACKOFF_S
+  (3,6,12,24,24) under PREFLIGHT_UNTIL_S=90 puts attempts at
+  0/3/9/21/45/69s, so a lane with no credentials always reports
+  START at t=69s. Latency is the gap to the FIRST attempt.
+
+  BTC  1605z  first_preflight t+175.5s   ladder=[175.5]
+  BTC  1610z  first_preflight t+0.01s   ladder=[0.01, 3.01, 9.01, 21.01, 45.01, 69.01]
+  BTC  1615z  first_preflight t+0.01s   ladder=[0.01, 3.01, 9.01, 21.01, 45.01, 69.01]
+  BTC  1620z  first_preflight t+0.01s   ladder=[0.01, 3.01, 9.01, 21.01, 45.01, 69.01]
+  BTC  1625z  first_preflight t+0.01s   ladder=[0.01, 3.01, 9.01, 21.01, 45.01, 69.01]
+  ETH  1605z  first_preflight t+175.44s   ladder=[175.44]
+  ETH  1610z  first_preflight t+0.01s   ladder=[0.01, 3.01, 9.01, 21.01, 45.01, 69.01]
+  ETH  1615z  first_preflight t+0.01s   ladder=[0.01, 3.01, 9.01, 21.01, 45.01, 69.01]
+  ETH  1620z  first_preflight t+0.01s   ladder=[0.01, 3.01, 9.01, 21.01, 45.01, 69.01]
+  ETH  1625z  first_preflight t+0.01s   ladder=[0.01, 3.01, 9.01, 21.01, 45.01, 69.01]
+  SOL  1605z  first_preflight t+175.47s   ladder=[175.47]
+  SOL  1610z  first_preflight t+0.01s   ladder=[0.01, 3.01, 9.01, 21.01, 45.01, 69.01]
+  SOL  1615z  first_preflight t+0.0s   ladder=[0.0, 3.01, 9.01, 21.01, 45.01, 69.01]
+  SOL  1620z  first_preflight t+0.01s   ladder=[0.01, 3.01, 9.01, 21.01, 45.01, 69.01]
+  SOL  1625z  first_preflight t+0.01s   ladder=[0.01, 3.01, 9.01, 21.01, 45.01, 69.01]
+  XRP  1605z  first_preflight t+175.51s   ladder=[175.51]
+  XRP  1610z  first_preflight t+0.01s   ladder=[0.01, 3.01, 9.01, 21.01, 45.01, 69.01]
+  XRP  1615z  first_preflight t+0.01s   ladder=[0.01, 3.01, 9.01, 21.01, 45.01, 69.01]
+  XRP  1620z  first_preflight t+0.01s   ladder=[0.01, 3.01, 9.01, 21.01, 45.01, 69.01]
+  XRP  1625z  first_preflight t+0.0s   ladder=[0.0, 3.01, 9.01, 21.01, 45.01, 69.01]
+  entry latency after window boundary: n=20 median=0.010s max=175.510s
+  entries later than 1s after the boundary: 4 ([175.5, 175.44, 175.47, 175.51])
+
+--- RISK CARRY-FORWARD (per completed window) ---
+  XRP  1605z  pending=0  reserved=$0      settle[cons=0 settled=0 pend=0 defer=0 unread=0] resv_ok=True released=0 budget_refused=n/a
+  ETH  1605z  pending=0  reserved=$0      settle[cons=0 settled=0 pend=0 defer=0 unread=0] resv_ok=True released=0 budget_refused=n/a
+  SOL  1605z  pending=0  reserved=$0      settle[cons=0 settled=0 pend=0 defer=0 unread=0] resv_ok=True released=0 budget_refused=n/a
+  BTC  1605z  pending=0  reserved=$0      settle[cons=0 settled=0 pend=0 defer=0 unread=0] resv_ok=True released=0 budget_refused=n/a
+  SOL  1610z  pending=0  reserved=$0      settle[cons=0 settled=0 pend=0 defer=0 unread=0] resv_ok=True released=0 budget_refused=n/a
+  ETH  1610z  pending=0  reserved=$0      settle[cons=0 settled=0 pend=0 defer=0 unread=0] resv_ok=True released=0 budget_refused=n/a
+  BTC  1610z  pending=0  reserved=$0      settle[cons=0 settled=0 pend=0 defer=0 unread=0] resv_ok=True released=0 budget_refused=n/a
+  XRP  1610z  pending=0  reserved=$0      settle[cons=0 settled=0 pend=0 defer=0 unread=0] resv_ok=True released=0 budget_refused=n/a
+  ETH  1615z  pending=0  reserved=$0      settle[cons=0 settled=0 pend=0 defer=0 unread=0] resv_ok=True released=0 budget_refused=n/a
+  XRP  1615z  pending=0  reserved=$0      settle[cons=0 settled=0 pend=0 defer=0 unread=0] resv_ok=True released=0 budget_refused=n/a
+  BTC  1615z  pending=0  reserved=$0      settle[cons=0 settled=0 pend=0 defer=0 unread=0] resv_ok=True released=0 budget_refused=n/a
+  SOL  1615z  pending=0  reserved=$0      settle[cons=0 settled=0 pend=0 defer=0 unread=0] resv_ok=True released=0 budget_refused=n/a
+  XRP  1620z  pending=0  reserved=$0      settle[cons=0 settled=0 pend=0 defer=0 unread=0] resv_ok=True released=0 budget_refused=n/a
+  BTC  1620z  pending=0  reserved=$0      settle[cons=0 settled=0 pend=0 defer=0 unread=0] resv_ok=True released=0 budget_refused=n/a
+  ETH  1620z  pending=0  reserved=$0      settle[cons=0 settled=0 pend=0 defer=0 unread=0] resv_ok=True released=0 budget_refused=n/a
+  SOL  1620z  pending=0  reserved=$0      settle[cons=0 settled=0 pend=0 defer=0 unread=0] resv_ok=True released=0 budget_refused=n/a
+
+--- CLOSE: ORDERS OUTSTANDING AT EACH WINDOW END ---
+  SOL  1605z  cancelled=0 still_open=0 filled_while_cancelling=0
+  BTC  1605z  cancelled=0 still_open=0 filled_while_cancelling=0
+  ETH  1605z  cancelled=0 still_open=0 filled_while_cancelling=0
+  XRP  1605z  cancelled=0 still_open=0 filled_while_cancelling=0
+  ETH  1610z  cancelled=0 still_open=0 filled_while_cancelling=0
+  SOL  1610z  cancelled=0 still_open=0 filled_while_cancelling=0
+  XRP  1610z  cancelled=0 still_open=0 filled_while_cancelling=0
+  BTC  1610z  cancelled=0 still_open=0 filled_while_cancelling=0
+  ETH  1615z  cancelled=0 still_open=0 filled_while_cancelling=0
+  SOL  1615z  cancelled=0 still_open=0 filled_while_cancelling=0
+  BTC  1615z  cancelled=0 still_open=0 filled_while_cancelling=0
+  XRP  1615z  cancelled=0 still_open=0 filled_while_cancelling=0
+  SOL  1620z  cancelled=0 still_open=0 filled_while_cancelling=0
+  XRP  1620z  cancelled=0 still_open=0 filled_while_cancelling=0
+  ETH  1620z  cancelled=0 still_open=0 filled_while_cancelling=0
+  BTC  1620z  cancelled=0 still_open=0 filled_while_cancelling=0
+  XRP  1625z  cancelled=0 still_open=0 filled_while_cancelling=0
+  BTC  1625z  cancelled=0 still_open=0 filled_while_cancelling=0
+  SOL  1625z  cancelled=0 still_open=0 filled_while_cancelling=0
+  ETH  1625z  cancelled=0 still_open=0 filled_while_cancelling=0
+
+--- BLOCKED / REFUSAL REASONS (counted across the log) ---
+    926  ENTRY_EV_P_PAIR_NATURAL_NOT_SET
+    716  HOLD_OR_SKIP
+    716  NOT_ARMED
+    716  NO_SNAPSHOT
+    253  BOOK_UNUSABLE
+    120  FAILED
+    108  REPLACE
+     36  COMPLETE
+     20  STRIKE_NOT_FETCHED_YET
+     16  REALIZED
+     16  VENUE_SETTLEMENT_NOT_SEEN
+      4  L5_BTC5M_SETTLEMENT_RECOVERY
+      4  L5_BTC5M_AUTH_BOOK
+      4  L5_BTC5M_PLAN
+      4  OPEN_BUDGET_NOT_CONFIGURED
+      4  OWNER_APPROVAL_WINDOW_STARTS
+      4  NO_APPROVAL_DOCUMENT
+      4  L5_BTC5M_PERSISTENT_START
+      1  L5_5M_FLEET_START
+      1  ETHUSD_RTI
+      1  SOLUSD_RTI
+      1  XRPUSD_RTI

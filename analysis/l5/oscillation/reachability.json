@@ -1,0 +1,381 @@
+{
+ "P1_univariate": {
+  "distance_to_par": {
+   "n_never": 0,
+   "n_reachable": 6,
+   "never": {
+    "n": 0
+   },
+   "reachable": {
+    "max": 0.01,
+    "mean": -0.0717,
+    "min": -0.185,
+    "n": 6,
+    "p10": -0.185,
+    "p25": -0.18,
+    "p50": 0.0,
+    "p75": 0.0,
+    "p90": 0.01
+   }
+  },
+  "first_fill_price": {
+   "n_never": 0,
+   "n_reachable": 7,
+   "never": {
+    "n": 0
+   },
+   "reachable": {
+    "max": 0.475,
+    "mean": 0.4257,
+    "min": 0.365,
+    "n": 7,
+    "p10": 0.365,
+    "p25": 0.37,
+    "p50": 0.45,
+    "p75": 0.47,
+    "p90": 0.475
+   }
+  },
+  "first_fill_qty": {
+   "n_never": 0,
+   "n_reachable": 7,
+   "never": {
+    "n": 0
+   },
+   "reachable": {
+    "max": 2.45,
+    "mean": 1.9557,
+    "min": 1.58,
+    "n": 7,
+    "p10": 1.58,
+    "p25": 1.66,
+    "p50": 1.92,
+    "p75": 2.22,
+    "p90": 2.45
+   }
+  },
+  "min_observed_complement_ask": {
+   "n_never": 0,
+   "n_reachable": 7,
+   "never": {
+    "n": 0
+   },
+   "reachable": {
+    "max": 0.44,
+    "mean": 0.1879,
+    "min": 0.005,
+    "n": 7,
+    "p10": 0.005,
+    "p25": 0.01,
+    "p50": 0.19,
+    "p75": 0.28,
+    "p90": 0.44
+   }
+  },
+  "opposite_ask_at_fill": {
+   "n_never": 0,
+   "n_reachable": 6,
+   "never": {
+    "n": 0
+   },
+   "reachable": {
+    "max": 0.55,
+    "mean": 0.4933,
+    "min": 0.43,
+    "n": 6,
+    "p10": 0.43,
+    "p25": 0.45,
+    "p50": 0.525,
+    "p75": 0.54,
+    "p90": 0.55
+   }
+  },
+  "pair_at_opposite_ask": {
+   "n_never": 0,
+   "n_reachable": 6,
+   "never": {
+    "n": 0
+   },
+   "reachable": {
+    "max": 1.01,
+    "mean": 0.9283,
+    "min": 0.815,
+    "n": 6,
+    "p10": 0.815,
+    "p25": 0.82,
+    "p50": 1.0,
+    "p75": 1.0,
+    "p90": 1.01
+   }
+  },
+  "spread_at_fill": {
+   "n_never": 0,
+   "n_reachable": 6,
+   "never": {
+    "n": 0
+   },
+   "reachable": {
+    "max": 0.04,
+    "mean": 0.0125,
+    "min": 0.005,
+    "n": 6,
+    "p10": 0.005,
+    "p25": 0.005,
+    "p50": 0.01,
+    "p75": 0.01,
+    "p90": 0.04
+   }
+  }
+ },
+ "corpus": {
+  "classes": {
+   "R1_complement_immediately_reachable": 5,
+   "R2_complement_became_reachable_later": 2,
+   "R4_insufficient_evidence": 1
+  },
+  "markets_with_a_first_fill": 8
+ },
+ "labels": "read-only reconstruction from the engine's own recorded book observations; the ask series is SPARSE (it exists only where an order was resting), so every minimum is a floor over what we SAW",
+ "rows": [
+  {
+   "any_opposite_side_fill": false,
+   "book_observations_after_first_fill": 76,
+   "class": "R1_complement_immediately_reachable",
+   "confirmed_realized_usd": "UNSETTLED",
+   "distance_to_par": 0.0,
+   "first_fill_price": "0.44999999999999996",
+   "first_fill_qty": 2.22,
+   "first_fill_t_utc": "2026-09-13T13:00:33.896404+00:00",
+   "held_side": "up",
+   "market": "aec-atp-jayfri-maxbas-2026-09-13",
+   "matched_fraction_at_settlement": 0.0,
+   "min_observed_complement_ask": 0.19,
+   "min_observed_pair_cost": 0.64,
+   "opposite_ask_at_fill": 0.55,
+   "our_maker_complete_price_ever_reached": true,
+   "pair_at_opposite_ask": 1.0,
+   "seconds_until_pair_at_or_below": {
+    "0.97": 32.2,
+    "0.98": 32.2,
+    "0.99": 0.0,
+    "1.00": 0.0
+   },
+   "spread_at_fill": 0.010000000000000009,
+   "state_at_first_fill": "p45-55c|tte>10m|imb10-50",
+   "terminal_residual": 8.58,
+   "tte_bucket": "tte>10m",
+   "yes_ask_at_fill": 0.46,
+   "yes_bid_at_fill": 0.45
+  },
+  {
+   "any_opposite_side_fill": true,
+   "book_observations_after_first_fill": 338,
+   "class": "R1_complement_immediately_reachable",
+   "confirmed_realized_usd": "6.0034",
+   "distance_to_par": 0.0,
+   "first_fill_price": "0.47500000000000003",
+   "first_fill_qty": 1.92,
+   "first_fill_t_utc": "2026-09-13T18:23:44.215402+00:00",
+   "held_side": "dn",
+   "market": "aec-mlb-lad-mia-2026-09-13",
+   "matched_fraction_at_settlement": 0.7502,
+   "min_observed_complement_ask": 0.005,
+   "min_observed_pair_cost": 0.48,
+   "opposite_ask_at_fill": 0.525,
+   "our_maker_complete_price_ever_reached": true,
+   "pair_at_opposite_ask": 1.0,
+   "seconds_until_pair_at_or_below": {
+    "0.97": 121.6,
+    "0.98": 121.6,
+    "0.99": 121.6,
+    "1.00": 0.0
+   },
+   "spread_at_fill": 0.0050000000000000044,
+   "state_at_first_fill": "p45-55c|tte>10m|imb10-50",
+   "terminal_residual": 4.05,
+   "tte_bucket": "tte>10m",
+   "yes_ask_at_fill": 0.525,
+   "yes_bid_at_fill": 0.52
+  },
+  {
+   "any_opposite_side_fill": true,
+   "book_observations_after_first_fill": 36,
+   "class": "R1_complement_immediately_reachable",
+   "confirmed_realized_usd": "UNSETTLED",
+   "distance_to_par": -0.075,
+   "first_fill_price": "0.45999999999999996",
+   "first_fill_qty": 1.86,
+   "first_fill_t_utc": "2026-09-13T21:02:53.209615+00:00",
+   "held_side": "dn",
+   "market": "aec-mlb-sea-ath-2026-09-13",
+   "matched_fraction_at_settlement": 1.0,
+   "min_observed_complement_ask": 0.44,
+   "min_observed_pair_cost": 0.9,
+   "opposite_ask_at_fill": 0.465,
+   "our_maker_complete_price_ever_reached": true,
+   "pair_at_opposite_ask": 0.925,
+   "seconds_until_pair_at_or_below": {
+    "0.97": 0.0,
+    "0.98": 0.0,
+    "0.99": 0.0,
+    "1.00": 0.0
+   },
+   "spread_at_fill": 0.0050000000000000044,
+   "state_at_first_fill": "p45-55c|tte>10m|imb10-50",
+   "terminal_residual": 0.0,
+   "tte_bucket": "tte>10m",
+   "yes_ask_at_fill": 0.525,
+   "yes_bid_at_fill": 0.52
+  },
+  {
+   "any_opposite_side_fill": false,
+   "book_observations_after_first_fill": 142,
+   "class": "R1_complement_immediately_reachable",
+   "confirmed_realized_usd": "-2.5896",
+   "distance_to_par": -0.185,
+   "first_fill_price": "0.365",
+   "first_fill_qty": 1.58,
+   "first_fill_t_utc": "2026-09-13T19:37:25.508444+00:00",
+   "held_side": "dn",
+   "market": "aec-nfl-buf-hou-2026-09-13",
+   "matched_fraction_at_settlement": 0.0,
+   "min_observed_complement_ask": 0.15,
+   "min_observed_pair_cost": 0.515,
+   "opposite_ask_at_fill": 0.45,
+   "our_maker_complete_price_ever_reached": true,
+   "pair_at_opposite_ask": 0.815,
+   "seconds_until_pair_at_or_below": {
+    "0.97": 0.0,
+    "0.98": 0.0,
+    "0.99": 0.0,
+    "1.00": 0.0
+   },
+   "spread_at_fill": 0.0050000000000000044,
+   "state_at_first_fill": "p25-45c|tte>10m|imb10-50",
+   "terminal_residual": 6.61,
+   "tte_bucket": "tte>10m",
+   "yes_ask_at_fill": 0.555,
+   "yes_bid_at_fill": 0.55
+  },
+  {
+   "any_opposite_side_fill": false,
+   "book_observations_after_first_fill": 2,
+   "class": "R4_insufficient_evidence",
+   "confirmed_realized_usd": "UNSETTLED",
+   "distance_to_par": -0.08,
+   "first_fill_price": "0.45",
+   "first_fill_qty": 1.88,
+   "first_fill_t_utc": "2026-09-13T14:42:07.928835+00:00",
+   "held_side": "dn",
+   "market": "aec-setkamecz-snimic-kruluk-2026-09-13",
+   "matched_fraction_at_settlement": 0.0,
+   "min_observed_complement_ask": 0.46,
+   "min_observed_pair_cost": 0.91,
+   "opposite_ask_at_fill": 0.47,
+   "our_maker_complete_price_ever_reached": false,
+   "pair_at_opposite_ask": 0.92,
+   "seconds_until_pair_at_or_below": {
+    "0.97": 0.0,
+    "0.98": 0.0,
+    "0.99": 0.0,
+    "1.00": 0.0
+   },
+   "spread_at_fill": 0.010000000000000009,
+   "state_at_first_fill": "p45-55c|tte>10m|imb10-50",
+   "terminal_residual": 1.88,
+   "tte_bucket": "tte>10m",
+   "yes_ask_at_fill": 0.55,
+   "yes_bid_at_fill": 0.54
+  },
+  {
+   "any_opposite_side_fill": true,
+   "book_observations_after_first_fill": 38,
+   "class": "R2_complement_became_reachable_later",
+   "confirmed_realized_usd": "-1.0779",
+   "distance_to_par": null,
+   "first_fill_price": "0.37",
+   "first_fill_qty": 1.66,
+   "first_fill_t_utc": "2026-09-13T18:43:47.770522+00:00",
+   "held_side": "dn",
+   "market": "aec-setkameua-sapole-salvas-2026-09-13",
+   "matched_fraction_at_settlement": 0.6152,
+   "min_observed_complement_ask": 0.24,
+   "min_observed_pair_cost": 0.61,
+   "opposite_ask_at_fill": null,
+   "our_maker_complete_price_ever_reached": true,
+   "pair_at_opposite_ask": null,
+   "seconds_until_pair_at_or_below": {
+    "0.97": 2.6,
+    "0.98": 2.6,
+    "0.99": 2.6,
+    "1.00": 2.6
+   },
+   "spread_at_fill": null,
+   "state_at_first_fill": "p25-45c|tte>10m|imb10-50",
+   "terminal_residual": 3.49,
+   "tte_bucket": "tte>10m",
+   "yes_ask_at_fill": null,
+   "yes_bid_at_fill": null
+  },
+  {
+   "any_opposite_side_fill": true,
+   "book_observations_after_first_fill": 79,
+   "class": "R1_complement_immediately_reachable",
+   "confirmed_realized_usd": "UNSETTLED",
+   "distance_to_par": -0.18,
+   "first_fill_price": "0.38999999999999996",
+   "first_fill_qty": 2.45,
+   "first_fill_t_utc": "2026-09-13T14:26:06.824008+00:00",
+   "held_side": "up",
+   "market": "asc-lal-lev-fcb-2026-09-13-pos-2pt5",
+   "matched_fraction_at_settlement": 0.9806,
+   "min_observed_complement_ask": 0.28,
+   "min_observed_pair_cost": 0.67,
+   "opposite_ask_at_fill": 0.43,
+   "our_maker_complete_price_ever_reached": true,
+   "pair_at_opposite_ask": 0.82,
+   "seconds_until_pair_at_or_below": {
+    "0.97": 0.0,
+    "0.98": 0.0,
+    "0.99": 0.0,
+    "1.00": 0.0
+   },
+   "spread_at_fill": 0.03999999999999998,
+   "state_at_first_fill": "p25-45c|tte>10m|imb10-50",
+   "terminal_residual": 0.28,
+   "tte_bucket": "tte>10m",
+   "yes_ask_at_fill": 0.43,
+   "yes_bid_at_fill": 0.39
+  },
+  {
+   "any_opposite_side_fill": true,
+   "book_observations_after_first_fill": 174,
+   "class": "R2_complement_became_reachable_later",
+   "confirmed_realized_usd": "UNSETTLED",
+   "distance_to_par": 0.01,
+   "first_fill_price": "0.47",
+   "first_fill_qty": 2.0,
+   "first_fill_t_utc": "2026-09-13T13:31:07.273264+00:00",
+   "held_side": "up",
+   "market": "atc-epl-cov-bha-2026-09-13-bha",
+   "matched_fraction_at_settlement": 0.9033,
+   "min_observed_complement_ask": 0.01,
+   "min_observed_pair_cost": 0.48,
+   "opposite_ask_at_fill": 0.54,
+   "our_maker_complete_price_ever_reached": true,
+   "pair_at_opposite_ask": 1.01,
+   "seconds_until_pair_at_or_below": {
+    "0.97": 56.2,
+    "0.98": 56.2,
+    "0.99": 0.0,
+    "1.00": 0.0
+   },
+   "spread_at_fill": 0.010000000000000009,
+   "state_at_first_fill": "p45-55c|tte>10m|imb10-50",
+   "terminal_residual": 1.0,
+   "tte_bucket": "tte>10m",
+   "yes_ask_at_fill": 0.48,
+   "yes_bid_at_fill": 0.47
+  }
+ ]
+}

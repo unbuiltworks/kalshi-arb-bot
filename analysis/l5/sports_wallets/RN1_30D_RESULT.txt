@@ -1,0 +1,311 @@
+=== 0. DATA ===
+activity file: 2026-10-22T00:00 .. 2026-11-21T21:19 UTC (30.89 days)  TRADE rows 274695  usdc 64110547  byte-identical duplicate TRADE rows 39 (kept)
+sides {'BUY': 274695}  REDEEM usdc 64245612 on 24719 conditions  other rows usdc: {'MAKER_REBATE': 148113, 'REWARD': 50514, 'TAKER_REBATE': 71293}
+
+=== 1. COVERAGE (share of the file's buy dollars) ===
+  INCLUDED                                                               n  35325  usdc    61198852   95.5%
+  resolved, game starts < window start + 36h (cost may be incomplete)    n   1000  usdc     2553830    4.0%
+  not closed / no final price at fetch                                   n    411  usdc      342105    0.5%
+  closed after last activity row                                         n     17  usdc       15761    0.0%
+lead-time of buys, games starting >=10 days into the window (justifies the 36h rule):
+  in-game/after start  93.88% of usdc
+  <1h before            4.07% of usdc
+  1-12h before          2.00% of usdc
+  12-36h before         0.05% of usdc
+  >36h before           0.01% of usdc
+redeem cross-check, INCLUDED conditions with a REDEEM row: 23957; redeemed usdc 61630781 vs gamma-computed payout 61630781; equal within 0.1%: 23957; redeemed MORE than bought in file: 0 (excess $0); less: 0
+INCLUDED conditions with NO redeem row: 11368, cost $2001437, computed payout $20 (payout>0 means won but not yet redeemed in file)
+a redeemed-only tally would have said: cost $59197415 redeemed $61630781 net $2433366  vs all INCLUDED net $431949
+
+=== 2. SETTLED P&L, INCLUDED CONDITIONS (net of taker fees, before rebates/rewards) ===
+conditions 35325  games 7739  cost $61198852  payout $61630801  P&L $431949  = 0.706% of cost;  conditions won-money 16491 (47%)
+concentration: best 10 conditions $294420, worst 10 $-320418; best 10 games $393508, worst 10 games $-361595
+
+=== 3. RECONCILIATION with platform series (realized_market_pnl) ===
+day(UTC)   | platform d(realized_market_pnl) | mine by close day (all resolved) | mine INCLUDED only | diff | platform d(fees_paid) | my taker fees
+2026-10-22 |     -32946 |     -44105 |          0 |    -11159 |    -4303 |     4307
+2026-10-23 |      79351 |      80869 |      25961 |      1518 |    -3742 |     3714
+2026-10-24 |      78912 |      72503 |      72503 |     -6409 |    -9516 |     9524
+2026-10-25 |     123306 |     120768 |     120768 |     -2537 |   -13208 |    13208
+2026-10-26 |      44713 |      53478 |      53478 |      8765 |    -5515 |     5509
+2026-10-27 |       3367 |       2355 |       2355 |     -1013 |    -6636 |     6644
+2026-10-28 |      37549 |      32373 |      32373 |     -5176 |    -6910 |     6899
+2026-10-29 |     -23179 |     -13592 |     -13592 |      9588 |    -5061 |     5065
+2026-10-30 |      44172 |      40336 |      40336 |     -3836 |    -4221 |     4223
+2026-10-31 |     -32970 |     -29380 |     -29380 |      3590 |    -5700 |     5698
+2026-11-01 |    -120307 |    -124301 |    -124301 |     -3994 |    -5400 |     5395
+2026-11-02 |     112189 |     119335 |     119335 |      7146 |    -3021 |     3021
+2026-11-03 |      -7404 |     -14775 |     -14775 |     -7372 |    -3450 |     3450
+2026-11-04 |     -98095 |     -97528 |     -97528 |       567 |    -1881 |     1881
+2026-11-05 |      34939 |      21386 |      21386 |    -13554 |    -2665 |     2665
+2026-11-06 |       7182 |      20643 |      20643 |     13461 |    -2487 |     2487
+2026-11-07 |       8730 |       8765 |       8765 |        35 |    -5431 |     5431
+2026-11-08 |     126268 |     125648 |     125648 |      -620 |    -7650 |     7759
+2026-11-09 |     -18445 |     -18555 |     -18555 |      -110 |    -6633 |     6525
+2026-11-10 |     -67868 |     -65285 |     -65285 |      2583 |    -6127 |     6127
+2026-11-11 |     -27624 |     -30228 |     -30228 |     -2604 |    -3991 |     3991
+2026-11-12 |      91301 |      90185 |      90185 |     -1116 |    -8043 |     8048
+2026-11-13 |       -950 |        139 |        139 |      1089 |    -3594 |     3588
+2026-11-14 |     -70832 |     -70847 |     -70847 |       -15 |    -3380 |     3380
+2026-11-15 |      52278 |      52860 |      52860 |       582 |    -1830 |     1830
+2026-11-16 |     -33535 |     -34153 |     -34153 |      -618 |    -1481 |     1481
+2026-11-17 |      52324 |      52312 |      52312 |       -12 |    -2491 |     2494
+2026-11-18 |      10637 |      10616 |      10616 |       -21 |    -1202 |     1202
+2026-11-19 |       -256 |       -389 |       -389 |      -132 |    -2663 |     2664
+2026-11-20 |      60270 |      52055 |      52055 |     -8215 |    -1015 |     1031
+SUM 2026-10-22..2026-11-20 (30 days): platform d(realized_market_pnl) $433076 | mine all-resolved by close day $413485 (gap -19591) | mine INCLUDED-only $402682 | daily correlation 0.996
+     fees: platform d(fees_paid) $-139245 | my taker fees (usdc_size - size*price on taker rows) $139240 | if platform P&L were BEFORE fees the gap would be +119649
+SUM 2026-10-24..2026-11-20 (28 days): platform d(realized_market_pnl) $386670 | mine all-resolved by close day $376721 (gap -9949) | mine INCLUDED-only $376721 | daily correlation 0.996
+     fees: platform d(fees_paid) $-131200 | my taker fees (usdc_size - size*price on taker rows) $131219 | if platform P&L were BEFORE fees the gap would be +121269
+positive days (mine, by close day): 18 of 30; mean $13783/day, sd $62582
+cash check whole file: buys $64110547, redeems $64245612, net cash $135065 (ignores inventory open at both ends)
+income rows in file: {'MAKER_REBATE': 148113, 'REWARD': 50514, 'TAKER_REBATE': 71293} ; platform deltas 10-22 00:00 -> last point: maker_rebate 148113 taker_rebate 71293 reward 50514 fees_paid -141576
+
+=== 4. BREAKDOWNS (INCLUDED conditions; P&L net of taker fees; se = game-clustered standard error of P&L $; |P&L| < 2*se is not distinguishable from zero) ===
+
+(a) league (slug prefix), top 25 by cost
+  cell                             cost $       P&L $     P&L/$   conds  games      se $ 
+  atp                             9748814     -151038   -0.0155    1119   1119    159738 
+  wta                             6878537        1015   +0.0001     384    384    110980 
+  cfb                             5377546        6836   +0.0013    2873    349    126263 
+  cs2                             5120339      166269   +0.0325     384     86    132385 
+  nfl                             4566134       77685   +0.0170    1271     57     87851 
+  nba                             3676023       34450   +0.0094    6338    219     41041 
+  epl                             2961589     -111841   -0.0378     986    105     78061 
+  sea                             2925543      140094   +0.0479    1003    128     86181 
+  lal                             2037247       14592   +0.0072     767     93     46623 
+  unl                             1954201      -12820   -0.0066    1057    124     59245 
+  ucl                             1346671      -45869   -0.0341     422     49     31956 
+  bun                             1186343       28064   +0.0237     599     87     39238 
+  fl1                              985805       27412   +0.0278     474     76     42967 
+  uel                              877261       -5292   -0.0060     362     49     39729 
+  bra                              699305       -2652   -0.0038     759    110     40254 
+  por                              575962       26103   +0.0453     357     62     36652 
+  jap                              488984       68318   +0.1397     410     83     50300 
+  uwcl                             486038       33116   +0.0681     386     59     23878 
+  arg                              454165      -61896   -0.1363     550     98     36911 
+  efl                              414032      -34773   -0.0840     155     21     17632 
+  acle                             409279       37269   +0.0911     400     57     20885 
+  es2                              398799       10664   +0.0267     449     75     20372 
+  itf                              390618        8334   +0.0213     797    797     13158 
+  tur                              361419      -14095   -0.0390     351     57     22451 
+  fif                              360025      -12867   -0.0357     357     55     16371 
+  (all other 76)                  6518170      204871   +0.0314   12315
+
+(b) market type
+  cell                             cost $       P&L $     P&L/$   conds  games      se $ 
+  moneyline                      37992070      121182   +0.0032    8223   5503    266135 
+  total                          10269478       18496   +0.0018   11236   2846    143665 
+  other                           6816893      176253   +0.0259    8288   3287    111596 
+  spread                          6120410      116017   +0.0190    7578   1855    128503 
+
+(b2) gamma sportsMarketType inside 'other', top 12
+  cell                             cost $       P&L $     P&L/$   conds  games      se $ 
+  child_moneyline                 2799334      111712   +0.0399     169     85     84478 
+  soccer_exact_score              1838435       34237   +0.0186    3687   1111     18973 
+  first_half_totals               1237413        4702   +0.0038    2414   1318     40317 
+  both_teams_to_score              319022      -15211   -0.0477     593    593     26504 
+  soccer_halftime_result           318057       24434   +0.0768     959    658     17375 
+  map_handicap                     190682       22504   +0.1180      58     56     37294 
+  soccer_team_totals                78986       -7771   -0.0984     127     76      8090 
+  kill_over_under_game              15677       -3388   -0.2161      11      5      2109 SMALL-N
+  first_half_spreads                12950        1737   +0.1341     164     66      1710 
+  team_totals                        2671         508   +0.1901      74     35       341 
+  round_handicap_game_2              2324        1686   +0.7255       9      9      1815 SMALL-N
+  round_handicap_game_1               499         175   +0.3501       3      3       348 SMALL-N
+  (all other 4)                       843         929   +1.1017      20
+
+(c) pre-game vs in-game (per buy, vs gamma gameStartTime)
+  cell                             cost $       P&L $     P&L/$   conds  games      se $ 
+  PRE-GAME                        3977346      129597   +0.0326    2594   1237    155477 
+  IN-GAME                        57221506      302351   +0.0053   34074   7537    336345 
+
+(c2) finer timing
+  cell                             cost $       P&L $     P&L/$   conds  games      se $ 
+  pre >12h                          57344       -1668   -0.0291      13     13      6227 SMALL-N
+  pre 1-12h                       1246997      -36269   -0.0291    1281    467     71603 
+  pre <1h                         2673005      167535   +0.0627    1712   1022    132026 
+  in-game 0-30m                  13036021      263507   +0.0202   16024   4843    204412 
+  in-game 30-90m                 23509372     -139449   -0.0059   22042   5776    230504 
+  in-game 90-180m                18964017      217916   +0.0115   15903   4707    214083 
+  in-game >180m                   1712096      -39622   -0.0231    1138    591     54710 
+
+(d) entry price band (per buy)
+  cell                             cost $       P&L $     P&L/$   conds  games      se $ 
+  <0.05                            137776      -40709   -0.2955    6701   3409     21607 
+  0.05-0.20                       1917443      -46122   -0.0241   11548   4309    134264 
+  0.20-0.40                       7167074       -8116   -0.0011   12177   4317    231538 
+  0.40-0.60                      19659041       10499   +0.0005   14443   4376    265181 
+  0.60-0.80                      16260016      261353   +0.0161   12262   4246    224242 
+  0.80-0.95                      11101927      235084   +0.0212    9539   4098    116242 
+  >=0.95                          4955574       19959   +0.0040    4158   2331     27724 
+
+(d2) entry price band x timing
+  cell                             cost $       P&L $     P&L/$   conds  games      se $ 
+  PRE <0.05                          1065          18   +0.0166      61     58       961 
+  PRE 0.05-0.20                     35143      -24779   -0.7051     218    168      8575 
+  PRE 0.20-0.40                    563050         787   +0.0014     561    465     80475 
+  PRE 0.40-0.60                   2288413      159050   +0.0695    1448    670    113447 
+  PRE 0.60-0.80                    768176      -39586   -0.0515     384    293     55210 
+  PRE 0.80-0.95                    291948       33491   +0.1147     136    106     12975 
+  PRE >=0.95                        29552         616   +0.0209      34     31       320 
+  IN  <0.05                        136711      -40727   -0.2979    6655   3379     21582 
+  IN  0.05-0.20                   1882301      -21343   -0.0113   11389   4237    133740 
+  IN  0.20-0.40                   6604024       -8903   -0.0013   11865   4150    212954 
+  IN  0.40-0.60                  17370629     -148551   -0.0086   13520   4193    242791 
+  IN  0.60-0.80                  15491840      300939   +0.0194   12022   4144    215570 
+  IN  0.80-0.95                  10809979      201594   +0.0186    9436   4056    115230 
+  IN  >=0.95                      4926022       19343   +0.0039    4132   2315     27718 
+
+(e) one-sided vs both-sided conditions
+  cell                             cost $       P&L $     P&L/$   conds  games      se $ 
+  one-sided                       6444212      -49291   -0.0076   19799   5765    101234 
+  both-sided                     54754640      481240   +0.0088   15526   4661    335603 
+
+(e2) both-sided: matched-pair P&L = matched shares x (1 - pair cost)  vs  residual P&L (rest)
+  cell                             cost $       P&L $     P&L/$   conds  games      se $ 
+  matched pairs                  36198441      868753   +0.0240   15526   4661    133742 
+  residual (unmatched)           18556199     -387513   -0.0209   15526   4661    290738 
+  matched shares 37067194 at average pair cost 0.9766; unmatched shares are 34.6% of all shares in both-sided conditions
+
+(e3) both-sided by pair cost: matched part
+  cell                             cost $       P&L $     P&L/$   conds  games      se $ 
+  pc <0.90                        7251081     1993437   +0.2749    4290   2196    102522 
+  pc 0.90-0.96                    5437745      394497   +0.0725    2015   1282     27484 
+  pc 0.96-1.00                    5241956       99537   +0.0190    2472   1535      8028 
+  pc 1.00-1.04                    5685434      -98041   -0.0172    2054   1262      7359 
+  pc >=1.04                      12582225    -1520676   -0.1209    4695   2310     75191 
+
+(e4) both-sided by pair cost: residual part
+  cell                             cost $       P&L $     P&L/$   conds  games      se $ 
+  pc <0.90                        4755269     1151515   +0.2422    4290   2196    159389 
+  pc 0.90-0.96                    2569866      196222   +0.0764    2015   1282     97106 
+  pc 0.96-1.00                    2506873      -79967   -0.0319    2472   1535     88392 
+  pc 1.00-1.04                    2375943     -138474   -0.0583    2054   1262     88276 
+  pc >=1.04                       6348249    -1516809   -0.2389    4695   2310    171472 
+  residual side won in 7540 of 15200 both-sided conditions with residual cost > $1 (49.6%); dollar-weighted average residual entry price 0.474
+  negRisk note (3-way events; a 'one-sided' condition can be hedged by another condition of the same event - NOT modelled): {"('both-sided', False)": (11901, 41749001), "('one-sided', False)": (14062, 4389113), "('both-sided', True)": (3625, 13005639), "('one-sided', True)": (5737, 2055098)}
+
+=== 5. INVENTORY BEHAVIOUR (INCLUDED conditions) ===
+dollars per condition: p10 3 p25 21 p50 198 p75 991 p90 3530 p99 28524 mean 1732 max 165086
+dollars per game (all its conditions): p50 899 p90 22775 mean 7908 max 346678 ; conditions per game p50 2 p90 11
+buys per condition: p50 3 p90 16 p99 73 ; dollars per buy row: p10 1.2 p50 29.9 p90 593 p99 2993 mean 232
+exposure build: cumulative share of final dollars bought by time relative to game start
+  dollar-weighted: T-24h 0.0%  T-12h 0.1%  T-1h 2.1%  start 6.5%  T+30m 27.8%  T+60m 47.3%  T+90m 66.2%  T+120m 85.9%  T+180m 97.2%
+  median condition: T-24h 0%  T-12h 0%  T-1h 0%  start 0%  T+30m 0%  T+60m 61%  T+90m 100%  T+120m 100%  T+180m 100%
+   {'first buy pre-game': 2594, 'first buy in-game': 32731} ; conditions with ALL dollars pre-game 1251, ALL in-game 32731, mixed 1343
+second side: added in 15526 of 35325 conditions (44.0%), holding 89.5% of dollars
+  time from first buy to first buy of the other side: p10 126s p25 501s p50 1451s (24 min) p75 3312s p90 5226s; within 60s: 6.4%; within 10 min: 28.2%; over 1h: 22.4%
+  same-side buys before the other side appears: p50 2 p75 3 p90 6 ; dollars on first side before then: p50 $137 p90 $2065 ; side switches per both-sided condition p50 2 p90 7
+   {'second side first bought in-game': 14968, 'second side first bought pre-game': 558}
+  (first side's average price so far) + (price of first opposite buy): p10 0.781 p25 0.911 p50 0.990 p75 1.048 p90 1.155; below 0.96 in 35.2%, above 1.00 in 42.0%
+
+  first-buy timing of the condition
+  cell                             cost $       P&L $     P&L/$   conds  games      se $ 
+  first buy in-game / both-sided     41357936      265037   +0.0064   13963   4154    283423 
+  first buy pre-game / both-sided     13396704      216203   +0.0161    1563    952    177565 
+  first buy in-game / one-sided      5803901      -15942   -0.0027   18768   5539     93083 
+  first buy pre-game / one-sided       640311      -33349   -0.0521    1031    475     40124 
+
+=== 6. MAKER vs TAKER ===
+whole file: taker fills 27279 of 274695 (9.9%), taker usdc 7710241 of 64110547 (12.0%)
+fee embedded in usdc_size (usdc_size - size*price): taker rows $141649, maker rows $0.00 ; gamma feeSchedule rate*shares*p*(1-p) on taker rows $141649 ; platform d(fees_paid) over the window $141576
+taker fee as % of taker notional: 1.84%; of all notional: 0.221%
+
+maker vs taker (per buy, INCLUDED conditions; taker P&L is after its fee)
+  cell                             cost $       P&L $     P&L/$   conds  games      se $ 
+  MAKER                          53789855      429163   +0.0080   33526   7600    328016 
+  TAKER                           7408997        2785   +0.0004    7726   2571    155079 
+
+maker/taker x timing
+  cell                             cost $       P&L $     P&L/$   conds  games      se $ 
+  MAKER pre-game                  3359618       89848   +0.0267    2403   1116    141805 
+  MAKER in-game                  50430237      339315   +0.0067   32317   7404    313454 
+  TAKER pre-game                   617728       39750   +0.0643     351    288     49704 
+  TAKER in-game                   6791269      -36964   -0.0054    7487   2487    144949 
+
+maker/taker x price band
+  cell                             cost $       P&L $     P&L/$   conds  games      se $ 
+  MAKER <0.05                      124833      -30738   -0.2462    6204   3286     21263 
+  MAKER 0.05-0.20                 1641158      -51304   -0.0313   10236   4127    111775 
+  MAKER 0.20-0.40                 6249933      102025   +0.0163   11027   4170    215023 
+  MAKER 0.40-0.60                17282174       67975   +0.0039   13709   4263    240682 
+  MAKER 0.60-0.80                14209958      196669   +0.0138   10948   4039    207055 
+  MAKER 0.80-0.95                 9578371      129186   +0.0135    8198   3796    110837 
+  MAKER >=0.95                    4703428       15349   +0.0033    3681   2140     26663 
+  TAKER <0.05                       12943       -9971   -0.7704     702    428      1726 
+  TAKER 0.05-0.20                  276286        5182   +0.0188    2281    997     50336 
+  TAKER 0.20-0.40                  917142     -110141   -0.1201    2378    985     68489 
+  TAKER 0.40-0.60                 2376867      -57477   -0.0242    2718   1054    105249 
+  TAKER 0.60-0.80                 2050058       64684   +0.0316    2588   1080     72026 
+  TAKER 0.80-0.95                 1523556      105899   +0.0695    2085    959     25368 
+  TAKER >=0.95                     252146        4610   +0.0183     592    373      2219 
+  both-sided conditions, how each side was opened: {'first buy maker / first opposite buy maker': 12163, 'first buy taker / first opposite buy maker': 1196, 'first buy taker / first opposite buy taker': 1226, 'first buy maker / first opposite buy taker': 941}
+
+=== 7. SIZE DEPENDENCE (per buy row = one fill; a large order filled in pieces appears as several rows) ===
+
+fill size band
+  cell                             cost $       P&L $     P&L/$   conds  games      se $ 
+  <$20                             659993        1947   +0.0029   26889   6813      9870 
+  $20-100                         2965632       -3792   -0.0013   17988   5165     41457 
+  $100-500                       13205987      -25548   -0.0019   16542   4870    144942 
+  >$500                          44367240      459342   +0.0104    8976   3620    315063 
+
+fill size band x maker/taker
+  cell                             cost $       P&L $     P&L/$   conds  games      se $ 
+  MAKER <$20                       602254        -530   -0.0009   25534   6668      8926 
+  MAKER $20-100                   2563070        8925   +0.0035   16454   4967     36982 
+  MAKER $100-500                 11453696       12084   +0.0011   14945   4720    135890 
+  MAKER >$500                    39170834      408684   +0.0104    8229   3438    290922 
+  TAKER <$20                        57739        2477   +0.0429    3995   1581      2876 
+  TAKER $20-100                    402562      -12718   -0.0316    3637   1306     12392 
+  TAKER $100-500                  1752291      -37631   -0.0215    3604   1207     36708 
+  TAKER >$500                     5196405       50657   +0.0097    1565    933    144311 
+
+fill size band x timing
+  cell                             cost $       P&L $     P&L/$   conds  games      se $ 
+  PRE <$20                          19040        1661   +0.0872    1159    555      1760 
+  PRE $20-100                       96236        1116   +0.0116     947    454      4161 
+  PRE $100-500                     457042      -15830   -0.0346    1254    529     14506 
+  PRE >$500                       3405028      142651   +0.0419     800    677    152371 
+  IN  <$20                         640953         285   +0.0004   26173   6627      9699 
+  IN  $20-100                     2869396       -4908   -0.0017   17361   5002     41223 
+  IN  $100-500                   12748945       -9717   -0.0008   15685   4694    143961 
+  IN  >$500                      40962212      316691   +0.0077    8630   3504    287894 
+
+total dollars in the condition
+  cell                             cost $       P&L $     P&L/$   conds  games      se $ 
+  cond <$100                       354356      -38133   -0.1076   14411   5147      8116 
+  cond $100-1k                    4906241      -40341   -0.0082   12149   4082     48592 
+  cond $1k-10k                   22297715      409492   +0.0184    7369   2854    185558 
+  cond >$10k                     33640540      100930   +0.0030    1396   1057    289077 
+  equal-weight view (each condition counts once): mean P&L/$ of conditions <$100: -0.1501 ; $100-1k: -0.0127 ; $1k-10k: +0.0152 ; >$10k: +0.0118
+
+conditions under $100 in total, by entry price band (per buy)
+  cell                             cost $       P&L $     P&L/$   conds  games      se $ 
+  <0.05                             30544       -9910   -0.3244    3711   2376      4845 
+  0.05-0.20                         70523      -21124   -0.2995    4066   2407      5330 
+  0.20-0.40                         57981      -13833   -0.2386    2781   1924      2477 
+  0.40-0.60                         68092       -1480   -0.0217    2874   1914      1851 
+  0.60-0.80                         49735        4927   +0.0991    2214   1594       988 
+  0.80-0.95                         51275        2915   +0.0569    1796   1414       466 
+  >=0.95                            26207         373   +0.0142     733    633       150 
+
+fills under $20, by entry price band
+  cell                             cost $       P&L $     P&L/$   conds  games      se $ 
+  <0.05                             38555      -11938   -0.3096    6199   3233      4446 
+  0.05-0.20                        102510         196   +0.0019    8840   3695      5936 
+  0.20-0.40                        124010        1573   +0.0127    8314   3503      3545 
+  0.40-0.60                        191204        5865   +0.0307    9667   3474      2815 
+  0.60-0.80                        118209        4831   +0.0409    6972   2995      1462 
+  0.80-0.95                         72222        1365   +0.0189    4029   2300       869 
+  >=0.95                            13283          53   +0.0040    1138    883        99 
+
+fills under $20 at price 0.20-0.95, maker/taker
+  cell                             cost $       P&L $     P&L/$   conds  games      se $ 
+  MAKER                            466475       11757   +0.0252   17734   5251      5102 
+  TAKER                             39170        1878   +0.0479    2569   1050       834 
+
+=== 8. WINDOW ECONOMICS SUMMARY ===
+INCLUDED settled trading P&L (net of taker fees): $431949 on $61198852 bought = 0.706% ; game-clustered se $354673 (ESTIMATE) -> P&L/se = 1.22
+credited in the same file (whole window, not per condition): maker rebate $148113 (0.263% of maker usdc), taker rebate $71293 (50.3% of taker fees paid), rewards $50514 ; together 0.421% of all usdc bought

@@ -1,0 +1,3849 @@
+{
+ "t": 1795388592.7431052,
+ "pair_cap": 0.97,
+ "pull_buffer_s": 300,
+ "rows": [
+  {
+   "slug": "aec-atp-aughol-akisan-2026-11-22",
+   "league": "atp",
+   "period": "day_of",
+   "pool_usd": 40.0,
+   "pool_usd_per_hour": 6.667,
+   "target": 19000.0,
+   "df": 0.3,
+   "max_spread": null,
+   "start": "2026-11-23 02:00:00+00",
+   "hours_left": 2.86,
+   "bid": 0.71,
+   "ask": 0.72,
+   "tick": 0.01,
+   "bid_touch": 497.07,
+   "ask_touch": 3164.34,
+   "bid_top3": 5799.53,
+   "ask_top3": 12006.54,
+   "traded_total": 1439.94,
+   "open_interest": 700.06,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 0.0013,
+      "period_usd": 0.0037,
+      "pair_cost": 0.99,
+      "capital_usd": 1.98,
+      "cents_per_contract_hour": 0.0652,
+      "breakeven_move_cents_one_full_fill": 0.187,
+      "breakeven_contracts_per_hour_at_one_tick": 0.13
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0013,
+      "period_usd": 0.0037,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 0.0652,
+      "breakeven_move_cents_one_full_fill": 0.187,
+      "breakeven_contracts_per_hour_at_one_tick": 0.13,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 0.00651,
+      "period_usd": 0.0186,
+      "pair_cost": 0.99,
+      "capital_usd": 9.9,
+      "cents_per_contract_hour": 0.0651,
+      "breakeven_move_cents_one_full_fill": 0.186,
+      "breakeven_contracts_per_hour_at_one_tick": 0.65
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.00651,
+      "period_usd": 0.0186,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 0.0651,
+      "breakeven_move_cents_one_full_fill": 0.186,
+      "breakeven_contracts_per_hour_at_one_tick": 0.65,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 0.01622,
+      "period_usd": 0.0465,
+      "pair_cost": 0.99,
+      "capital_usd": 24.75,
+      "cents_per_contract_hour": 0.0649,
+      "breakeven_move_cents_one_full_fill": 0.186,
+      "breakeven_contracts_per_hour_at_one_tick": 1.62
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.01622,
+      "period_usd": 0.0465,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 0.0649,
+      "breakeven_move_cents_one_full_fill": 0.186,
+      "breakeven_contracts_per_hour_at_one_tick": 1.62,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 0.03229,
+      "period_usd": 0.0925,
+      "pair_cost": 0.99,
+      "capital_usd": 49.5,
+      "cents_per_contract_hour": 0.0646,
+      "breakeven_move_cents_one_full_fill": 0.185,
+      "breakeven_contracts_per_hour_at_one_tick": 3.23
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.03229,
+      "period_usd": 0.0925,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 0.0646,
+      "breakeven_move_cents_one_full_fill": 0.185,
+      "breakeven_contracts_per_hour_at_one_tick": 3.23,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": 541,
+   "min_size_for_1usd_alone_full_6h": 258
+  },
+  {
+   "slug": "aec-atp-dhasur-moebou-2026-11-22",
+   "league": "atp",
+   "period": "day_of",
+   "pool_usd": 40.0,
+   "pool_usd_per_hour": 6.667,
+   "target": 19000.0,
+   "df": 0.3,
+   "max_spread": null,
+   "start": "2026-11-23 03:10:00+00",
+   "hours_left": 4.03,
+   "bid": 0.69,
+   "ask": 0.7,
+   "tick": 0.01,
+   "bid_touch": 1654.02,
+   "ask_touch": 867.87,
+   "bid_top3": 6169.05,
+   "ask_top3": 2243.87,
+   "traded_total": 7391.99,
+   "open_interest": 1759.09,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 1.98,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 9.9,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 24.75,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 49.5,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": null,
+   "min_size_for_1usd_alone_full_6h": null
+  },
+  {
+   "slug": "aec-atp-enzagu-blaell-2026-11-22",
+   "league": "atp",
+   "period": "day_of",
+   "pool_usd": 40.0,
+   "pool_usd_per_hour": 6.667,
+   "target": 19000.0,
+   "df": 0.3,
+   "max_spread": null,
+   "start": "2026-11-23 03:10:00+00",
+   "hours_left": 4.03,
+   "bid": 0.47,
+   "ask": 0.48,
+   "tick": 0.01,
+   "bid_touch": 1831.33,
+   "ask_touch": 1208.31,
+   "bid_top3": 8473.36,
+   "ask_top3": 5719.37,
+   "traded_total": 3518.31,
+   "open_interest": 1109.31,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 1.98,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 9.9,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 24.75,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 49.5,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": null,
+   "min_size_for_1usd_alone_full_6h": null
+  },
+  {
+   "slug": "aec-atp-flobro-antshe-2026-11-22",
+   "league": "atp",
+   "period": "day_of",
+   "pool_usd": 40.0,
+   "pool_usd_per_hour": 6.667,
+   "target": 19000.0,
+   "df": 0.3,
+   "max_spread": null,
+   "start": "2026-11-23 02:00:00+00",
+   "hours_left": 2.86,
+   "bid": 0.56,
+   "ask": 0.57,
+   "tick": 0.01,
+   "bid_touch": 2498.69,
+   "ask_touch": 582.69,
+   "bid_top3": 7419.6900000000005,
+   "ask_top3": 8930.49,
+   "traded_total": 1966.87,
+   "open_interest": 964.0,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 0.00176,
+      "period_usd": 0.005,
+      "pair_cost": 0.99,
+      "capital_usd": 1.98,
+      "cents_per_contract_hour": 0.088,
+      "breakeven_move_cents_one_full_fill": 0.252,
+      "breakeven_contracts_per_hour_at_one_tick": 0.18
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.00176,
+      "period_usd": 0.005,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 0.088,
+      "breakeven_move_cents_one_full_fill": 0.252,
+      "breakeven_contracts_per_hour_at_one_tick": 0.18,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 0.00878,
+      "period_usd": 0.0251,
+      "pair_cost": 0.99,
+      "capital_usd": 9.9,
+      "cents_per_contract_hour": 0.0878,
+      "breakeven_move_cents_one_full_fill": 0.251,
+      "breakeven_contracts_per_hour_at_one_tick": 0.88
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.00878,
+      "period_usd": 0.0251,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 0.0878,
+      "breakeven_move_cents_one_full_fill": 0.251,
+      "breakeven_contracts_per_hour_at_one_tick": 0.88,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 0.02185,
+      "period_usd": 0.0626,
+      "pair_cost": 0.99,
+      "capital_usd": 24.75,
+      "cents_per_contract_hour": 0.0874,
+      "breakeven_move_cents_one_full_fill": 0.25,
+      "breakeven_contracts_per_hour_at_one_tick": 2.19
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.02185,
+      "period_usd": 0.0626,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 0.0874,
+      "breakeven_move_cents_one_full_fill": 0.25,
+      "breakeven_contracts_per_hour_at_one_tick": 2.19,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 0.04342,
+      "period_usd": 0.1243,
+      "pair_cost": 0.99,
+      "capital_usd": 49.5,
+      "cents_per_contract_hour": 0.0868,
+      "breakeven_move_cents_one_full_fill": 0.249,
+      "breakeven_contracts_per_hour_at_one_tick": 4.34
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.04342,
+      "period_usd": 0.1243,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 0.0868,
+      "breakeven_move_cents_one_full_fill": 0.249,
+      "breakeven_contracts_per_hour_at_one_tick": 4.34,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": 402,
+   "min_size_for_1usd_alone_full_6h": 192
+  },
+  {
+   "slug": "aec-atp-hirmor-danjov-2026-11-22",
+   "league": "atp",
+   "period": "day_of",
+   "pool_usd": 40.0,
+   "pool_usd_per_hour": 6.667,
+   "target": 19000.0,
+   "df": 0.3,
+   "max_spread": null,
+   "start": "2026-11-23 02:00:00+00",
+   "hours_left": 2.86,
+   "bid": 0.88,
+   "ask": 0.89,
+   "tick": 0.01,
+   "bid_touch": 284.01,
+   "ask_touch": 8324.42,
+   "bid_top3": 6039.93,
+   "ask_top3": 17327.0,
+   "traded_total": 241.0,
+   "open_interest": 121.0,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 0.0007,
+      "period_usd": 0.002,
+      "pair_cost": 0.99,
+      "capital_usd": 1.98,
+      "cents_per_contract_hour": 0.0348,
+      "breakeven_move_cents_one_full_fill": 0.1,
+      "breakeven_contracts_per_hour_at_one_tick": 0.07
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0007,
+      "period_usd": 0.002,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 0.0348,
+      "breakeven_move_cents_one_full_fill": 0.1,
+      "breakeven_contracts_per_hour_at_one_tick": 0.07,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 0.00347,
+      "period_usd": 0.0099,
+      "pair_cost": 0.99,
+      "capital_usd": 9.9,
+      "cents_per_contract_hour": 0.0347,
+      "breakeven_move_cents_one_full_fill": 0.099,
+      "breakeven_contracts_per_hour_at_one_tick": 0.35
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.00347,
+      "period_usd": 0.0099,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 0.0347,
+      "breakeven_move_cents_one_full_fill": 0.099,
+      "breakeven_contracts_per_hour_at_one_tick": 0.35,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 0.00868,
+      "period_usd": 0.0248,
+      "pair_cost": 0.99,
+      "capital_usd": 24.75,
+      "cents_per_contract_hour": 0.0347,
+      "breakeven_move_cents_one_full_fill": 0.099,
+      "breakeven_contracts_per_hour_at_one_tick": 0.87
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.00868,
+      "period_usd": 0.0248,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 0.0347,
+      "breakeven_move_cents_one_full_fill": 0.099,
+      "breakeven_contracts_per_hour_at_one_tick": 0.87,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 0.01731,
+      "period_usd": 0.0495,
+      "pair_cost": 0.99,
+      "capital_usd": 49.5,
+      "cents_per_contract_hour": 0.0346,
+      "breakeven_move_cents_one_full_fill": 0.099,
+      "breakeven_contracts_per_hour_at_one_tick": 1.73
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.01731,
+      "period_usd": 0.0495,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 0.0346,
+      "breakeven_move_cents_one_full_fill": 0.099,
+      "breakeven_contracts_per_hour_at_one_tick": 1.73,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": 1009,
+   "min_size_for_1usd_alone_full_6h": 481
+  },
+  {
+   "slug": "aec-atp-kassam-dimsak-2026-11-22",
+   "league": "atp",
+   "period": "day_of",
+   "pool_usd": 40.0,
+   "pool_usd_per_hour": 6.667,
+   "target": 19000.0,
+   "df": 0.3,
+   "max_spread": null,
+   "start": "2026-11-23 03:40:00+00",
+   "hours_left": 4.53,
+   "bid": 0.73,
+   "ask": 0.74,
+   "tick": 0.01,
+   "bid_touch": 110.71,
+   "ask_touch": 740.55,
+   "bid_top3": 5618.7699999999995,
+   "ask_top3": 6691.55,
+   "traded_total": 477.06,
+   "open_interest": 189.69,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 1.98,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 9.9,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 24.75,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 49.5,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": null,
+   "min_size_for_1usd_alone_full_6h": null
+  },
+  {
+   "slug": "aec-atp-maxsch-masima-2026-11-22",
+   "league": "atp",
+   "period": "day_of",
+   "pool_usd": 40.0,
+   "pool_usd_per_hour": 6.667,
+   "target": 19000.0,
+   "df": 0.3,
+   "max_spread": null,
+   "start": "2026-11-23 03:40:00+00",
+   "hours_left": 4.53,
+   "bid": 0.66,
+   "ask": 0.67,
+   "tick": 0.01,
+   "bid_touch": 652.11,
+   "ask_touch": 300.0,
+   "bid_top3": 5193.3,
+   "ask_top3": 6051.15,
+   "traded_total": 395.99,
+   "open_interest": 332.99,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 1.98,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 9.9,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 24.75,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 49.5,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": null,
+   "min_size_for_1usd_alone_full_6h": null
+  },
+  {
+   "slug": "aec-atp-mitleo-gaiand-2026-11-22",
+   "league": "atp",
+   "period": "day_of",
+   "pool_usd": 40.0,
+   "pool_usd_per_hour": 6.667,
+   "target": 19000.0,
+   "df": 0.3,
+   "max_spread": null,
+   "start": "2026-11-23 03:40:00+00",
+   "hours_left": 4.53,
+   "bid": 0.95,
+   "ask": 0.96,
+   "tick": 0.01,
+   "bid_touch": 25.01,
+   "ask_touch": 7154.75,
+   "bid_top3": 7434.3099999999995,
+   "ask_top3": 19141.75,
+   "traded_total": 203.06,
+   "open_interest": 143.06,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 0.00063,
+      "period_usd": 0.0029,
+      "pair_cost": 0.99,
+      "capital_usd": 1.98,
+      "cents_per_contract_hour": 0.0315,
+      "breakeven_move_cents_one_full_fill": 0.143,
+      "breakeven_contracts_per_hour_at_one_tick": 0.06
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.00063,
+      "period_usd": 0.0029,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 0.0315,
+      "breakeven_move_cents_one_full_fill": 0.143,
+      "breakeven_contracts_per_hour_at_one_tick": 0.06,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 0.00315,
+      "period_usd": 0.0143,
+      "pair_cost": 0.99,
+      "capital_usd": 9.9,
+      "cents_per_contract_hour": 0.0315,
+      "breakeven_move_cents_one_full_fill": 0.143,
+      "breakeven_contracts_per_hour_at_one_tick": 0.31
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.00315,
+      "period_usd": 0.0143,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 0.0315,
+      "breakeven_move_cents_one_full_fill": 0.143,
+      "breakeven_contracts_per_hour_at_one_tick": 0.31,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 0.00786,
+      "period_usd": 0.0356,
+      "pair_cost": 0.99,
+      "capital_usd": 24.75,
+      "cents_per_contract_hour": 0.0314,
+      "breakeven_move_cents_one_full_fill": 0.142,
+      "breakeven_contracts_per_hour_at_one_tick": 0.79
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.00786,
+      "period_usd": 0.0356,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 0.0314,
+      "breakeven_move_cents_one_full_fill": 0.142,
+      "breakeven_contracts_per_hour_at_one_tick": 0.79,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 0.01569,
+      "period_usd": 0.0711,
+      "pair_cost": 0.99,
+      "capital_usd": 49.5,
+      "cents_per_contract_hour": 0.0314,
+      "breakeven_move_cents_one_full_fill": 0.142,
+      "breakeven_contracts_per_hour_at_one_tick": 1.57
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.01569,
+      "period_usd": 0.0711,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 0.0314,
+      "breakeven_move_cents_one_full_fill": 0.142,
+      "breakeven_contracts_per_hour_at_one_tick": 1.57,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": 704,
+   "min_size_for_1usd_alone_full_6h": 531
+  },
+  {
+   "slug": "aec-atp-ognmil-keesmi-2026-11-22",
+   "league": "atp",
+   "period": "day_of",
+   "pool_usd": 40.0,
+   "pool_usd_per_hour": 6.667,
+   "target": 19000.0,
+   "df": 0.3,
+   "max_spread": null,
+   "start": "2026-11-23 04:50:00+00",
+   "hours_left": 5.7,
+   "bid": 0.37,
+   "ask": 0.38,
+   "tick": 0.01,
+   "bid_touch": 444.21,
+   "ask_touch": 607.21,
+   "bid_top3": 5552.2,
+   "ask_top3": 4845.76,
+   "traded_total": 2.0,
+   "open_interest": 1.0,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 0.00436,
+      "period_usd": 0.0248,
+      "pair_cost": 0.99,
+      "capital_usd": 1.98,
+      "cents_per_contract_hour": 0.2179,
+      "breakeven_move_cents_one_full_fill": 1.241,
+      "breakeven_contracts_per_hour_at_one_tick": 0.44
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.00436,
+      "period_usd": 0.0248,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 0.2179,
+      "breakeven_move_cents_one_full_fill": 1.241,
+      "breakeven_contracts_per_hour_at_one_tick": 0.44,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 0.02168,
+      "period_usd": 0.1235,
+      "pair_cost": 0.99,
+      "capital_usd": 9.9,
+      "cents_per_contract_hour": 0.2168,
+      "breakeven_move_cents_one_full_fill": 1.235,
+      "breakeven_contracts_per_hour_at_one_tick": 2.17
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.02168,
+      "period_usd": 0.1235,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 0.2168,
+      "breakeven_move_cents_one_full_fill": 1.235,
+      "breakeven_contracts_per_hour_at_one_tick": 2.17,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 0.05367,
+      "period_usd": 0.3057,
+      "pair_cost": 0.99,
+      "capital_usd": 24.75,
+      "cents_per_contract_hour": 0.2147,
+      "breakeven_move_cents_one_full_fill": 1.223,
+      "breakeven_contracts_per_hour_at_one_tick": 5.37
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.05367,
+      "period_usd": 0.3057,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 0.2147,
+      "breakeven_move_cents_one_full_fill": 1.223,
+      "breakeven_contracts_per_hour_at_one_tick": 5.37,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 0.10563,
+      "period_usd": 0.6017,
+      "pair_cost": 0.99,
+      "capital_usd": 49.5,
+      "cents_per_contract_hour": 0.2113,
+      "breakeven_move_cents_one_full_fill": 1.203,
+      "breakeven_contracts_per_hour_at_one_tick": 10.56
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.10563,
+      "period_usd": 0.6017,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 0.2113,
+      "breakeven_move_cents_one_full_fill": 1.203,
+      "breakeven_contracts_per_hour_at_one_tick": 10.56,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": 83,
+   "min_size_for_1usd_alone_full_6h": 79
+  },
+  {
+   "slug": "aec-atp-rinono-lenjon-2026-11-22",
+   "league": "atp",
+   "period": "day_of",
+   "pool_usd": 40.0,
+   "pool_usd_per_hour": 6.667,
+   "target": 19000.0,
+   "df": 0.3,
+   "max_spread": null,
+   "start": "2026-11-23 04:50:00+00",
+   "hours_left": 5.7,
+   "bid": 0.06,
+   "ask": 0.07,
+   "tick": 0.01,
+   "bid_touch": 146.16,
+   "ask_touch": 112.2,
+   "bid_top3": 204.18,
+   "ask_top3": 1208.03,
+   "traded_total": 4122.24,
+   "open_interest": 1225.91,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 1.98,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 9.9,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 24.75,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 49.5,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": null,
+   "min_size_for_1usd_alone_full_6h": null
+  },
+  {
+   "slug": "aec-nhl-chi-van-2026-11-22",
+   "league": "nhl",
+   "period": "day_of",
+   "pool_usd": 33.0,
+   "pool_usd_per_hour": 5.5,
+   "target": 12000.0,
+   "df": 0.25,
+   "max_spread": null,
+   "start": "2026-11-23 01:00:00+00",
+   "hours_left": 1.86,
+   "bid": 0.51,
+   "ask": 0.52,
+   "tick": 0.01,
+   "bid_touch": 65830.59,
+   "ask_touch": 51811.85,
+   "bid_top3": 162899.41999999998,
+   "ask_top3": 216696.03,
+   "traded_total": 24442.47,
+   "open_interest": 11573.03,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 0.00019,
+      "period_usd": 0.0004,
+      "pair_cost": 0.99,
+      "capital_usd": 1.98,
+      "cents_per_contract_hour": 0.0095,
+      "breakeven_move_cents_one_full_fill": 0.018,
+      "breakeven_contracts_per_hour_at_one_tick": 0.02
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.00011,
+      "period_usd": 0.0002,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 0.0053,
+      "breakeven_move_cents_one_full_fill": 0.01,
+      "breakeven_contracts_per_hour_at_one_tick": 0.01,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 0.00095,
+      "period_usd": 0.0018,
+      "pair_cost": 0.99,
+      "capital_usd": 9.9,
+      "cents_per_contract_hour": 0.0095,
+      "breakeven_move_cents_one_full_fill": 0.018,
+      "breakeven_contracts_per_hour_at_one_tick": 0.09
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.00053,
+      "period_usd": 0.001,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 0.0053,
+      "breakeven_move_cents_one_full_fill": 0.01,
+      "breakeven_contracts_per_hour_at_one_tick": 0.05,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 0.00237,
+      "period_usd": 0.0044,
+      "pair_cost": 0.99,
+      "capital_usd": 24.75,
+      "cents_per_contract_hour": 0.0095,
+      "breakeven_move_cents_one_full_fill": 0.018,
+      "breakeven_contracts_per_hour_at_one_tick": 0.24
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.00133,
+      "period_usd": 0.0025,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 0.0053,
+      "breakeven_move_cents_one_full_fill": 0.01,
+      "breakeven_contracts_per_hour_at_one_tick": 0.13,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 0.00474,
+      "period_usd": 0.0088,
+      "pair_cost": 0.99,
+      "capital_usd": 49.5,
+      "cents_per_contract_hour": 0.0095,
+      "breakeven_move_cents_one_full_fill": 0.018,
+      "breakeven_contracts_per_hour_at_one_tick": 0.47
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.00265,
+      "period_usd": 0.0049,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 0.0053,
+      "breakeven_move_cents_one_full_fill": 0.01,
+      "breakeven_contracts_per_hour_at_one_tick": 0.27,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": 10127,
+   "min_size_for_1usd_alone_full_6h": 3145
+  },
+  {
+   "slug": "aec-nhl-edm-stl-2026-11-22",
+   "league": "nhl",
+   "period": "day_of",
+   "pool_usd": 33.0,
+   "pool_usd_per_hour": 5.5,
+   "target": 12000.0,
+   "df": 0.25,
+   "max_spread": null,
+   "start": "2026-11-23 00:00:00+00",
+   "hours_left": 0.86,
+   "bid": 0.47,
+   "ask": 0.48,
+   "tick": 0.01,
+   "bid_touch": 40474.03,
+   "ask_touch": 70818.85,
+   "bid_top3": 196452.25,
+   "ask_top3": 232147.85,
+   "traded_total": 144405.65,
+   "open_interest": 58752.0,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 0.00021,
+      "period_usd": 0.0002,
+      "pair_cost": 0.99,
+      "capital_usd": 1.98,
+      "cents_per_contract_hour": 0.0107,
+      "breakeven_move_cents_one_full_fill": 0.009,
+      "breakeven_contracts_per_hour_at_one_tick": 0.02
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.00014,
+      "period_usd": 0.0001,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 0.0068,
+      "breakeven_move_cents_one_full_fill": 0.006,
+      "breakeven_contracts_per_hour_at_one_tick": 0.01,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 0.00107,
+      "period_usd": 0.0009,
+      "pair_cost": 0.99,
+      "capital_usd": 9.9,
+      "cents_per_contract_hour": 0.0107,
+      "breakeven_move_cents_one_full_fill": 0.009,
+      "breakeven_contracts_per_hour_at_one_tick": 0.11
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.00068,
+      "period_usd": 0.0006,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 0.0068,
+      "breakeven_move_cents_one_full_fill": 0.006,
+      "breakeven_contracts_per_hour_at_one_tick": 0.07,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 0.00267,
+      "period_usd": 0.0023,
+      "pair_cost": 0.99,
+      "capital_usd": 24.75,
+      "cents_per_contract_hour": 0.0107,
+      "breakeven_move_cents_one_full_fill": 0.009,
+      "breakeven_contracts_per_hour_at_one_tick": 0.27
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0017,
+      "period_usd": 0.0015,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 0.0068,
+      "breakeven_move_cents_one_full_fill": 0.006,
+      "breakeven_contracts_per_hour_at_one_tick": 0.17,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 0.00533,
+      "period_usd": 0.0046,
+      "pair_cost": 0.99,
+      "capital_usd": 49.5,
+      "cents_per_contract_hour": 0.0107,
+      "breakeven_move_cents_one_full_fill": 0.009,
+      "breakeven_contracts_per_hour_at_one_tick": 0.53
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.00339,
+      "period_usd": 0.0029,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 0.0068,
+      "breakeven_move_cents_one_full_fill": 0.006,
+      "breakeven_contracts_per_hour_at_one_tick": 0.34,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": 17088,
+   "min_size_for_1usd_alone_full_6h": 2458
+  },
+  {
+   "slug": "aec-nhl-pit-dal-2026-11-22",
+   "league": "nhl",
+   "period": "day_of",
+   "pool_usd": 33.0,
+   "pool_usd_per_hour": 5.5,
+   "target": 12000.0,
+   "df": 0.25,
+   "max_spread": null,
+   "start": "2026-11-23 00:00:00+00",
+   "hours_left": 0.86,
+   "bid": 0.32,
+   "ask": 0.33,
+   "tick": 0.01,
+   "bid_touch": 105618.56,
+   "ask_touch": 170224.37,
+   "bid_top3": 294946.7,
+   "ask_top3": 321156.29,
+   "traded_total": 56795.39,
+   "open_interest": 30653.54,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 8e-05,
+      "period_usd": 0.0001,
+      "pair_cost": 0.99,
+      "capital_usd": 1.98,
+      "cents_per_contract_hour": 0.0042,
+      "breakeven_move_cents_one_full_fill": 0.004,
+      "breakeven_contracts_per_hour_at_one_tick": 0.01
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 5e-05,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 0.0026,
+      "breakeven_move_cents_one_full_fill": 0.002,
+      "breakeven_contracts_per_hour_at_one_tick": 0.01,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 0.00042,
+      "period_usd": 0.0004,
+      "pair_cost": 0.99,
+      "capital_usd": 9.9,
+      "cents_per_contract_hour": 0.0042,
+      "breakeven_move_cents_one_full_fill": 0.004,
+      "breakeven_contracts_per_hour_at_one_tick": 0.04
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.00026,
+      "period_usd": 0.0002,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 0.0026,
+      "breakeven_move_cents_one_full_fill": 0.002,
+      "breakeven_contracts_per_hour_at_one_tick": 0.03,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 0.00105,
+      "period_usd": 0.0009,
+      "pair_cost": 0.99,
+      "capital_usd": 24.75,
+      "cents_per_contract_hour": 0.0042,
+      "breakeven_move_cents_one_full_fill": 0.004,
+      "breakeven_contracts_per_hour_at_one_tick": 0.11
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.00065,
+      "period_usd": 0.0006,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 0.0026,
+      "breakeven_move_cents_one_full_fill": 0.002,
+      "breakeven_contracts_per_hour_at_one_tick": 0.07,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 0.00211,
+      "period_usd": 0.0018,
+      "pair_cost": 0.99,
+      "capital_usd": 49.5,
+      "cents_per_contract_hour": 0.0042,
+      "breakeven_move_cents_one_full_fill": 0.004,
+      "breakeven_contracts_per_hour_at_one_tick": 0.21
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0013,
+      "period_usd": 0.0011,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 0.0026,
+      "breakeven_move_cents_one_full_fill": 0.002,
+      "breakeven_contracts_per_hour_at_one_tick": 0.13,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": 44561,
+   "min_size_for_1usd_alone_full_6h": 6410
+  },
+  {
+   "slug": "aec-setkamemd-ghifio-urevad-2026-11-22",
+   "league": "setkamemd",
+   "period": "day_of",
+   "pool_usd": 5.0,
+   "pool_usd_per_hour": 0.833,
+   "target": 3200.0,
+   "df": 0.5,
+   "max_spread": null,
+   "start": "2026-11-22 23:30:00+00",
+   "hours_left": 0.36,
+   "bid": 0.38,
+   "ask": 0.39,
+   "tick": 0.01,
+   "bid_touch": 21.5,
+   "ask_touch": 2.5,
+   "bid_top3": 104.30000000000001,
+   "ask_top3": 87.42,
+   "traded_total": 0.0,
+   "open_interest": 0.0,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 0.03134,
+      "period_usd": 0.0114,
+      "pair_cost": 0.99,
+      "capital_usd": 1.98,
+      "cents_per_contract_hour": 1.5671,
+      "breakeven_move_cents_one_full_fill": 0.569,
+      "breakeven_contracts_per_hour_at_one_tick": 3.13
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0215,
+      "period_usd": 0.0078,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 1.075,
+      "breakeven_move_cents_one_full_fill": 0.39,
+      "breakeven_contracts_per_hour_at_one_tick": 2.15,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 0.13584,
+      "period_usd": 0.0493,
+      "pair_cost": 0.99,
+      "capital_usd": 9.9,
+      "cents_per_contract_hour": 1.3584,
+      "breakeven_move_cents_one_full_fill": 0.493,
+      "breakeven_contracts_per_hour_at_one_tick": 13.58
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.09355,
+      "period_usd": 0.034,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 0.9355,
+      "breakeven_move_cents_one_full_fill": 0.34,
+      "breakeven_contracts_per_hour_at_one_tick": 9.36,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 0.27209,
+      "period_usd": 0.0988,
+      "pair_cost": 0.99,
+      "capital_usd": 24.75,
+      "cents_per_contract_hour": 1.0884,
+      "breakeven_move_cents_one_full_fill": 0.395,
+      "breakeven_contracts_per_hour_at_one_tick": 27.21
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.18967,
+      "period_usd": 0.0689,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 0.7587,
+      "breakeven_move_cents_one_full_fill": 0.276,
+      "breakeven_contracts_per_hour_at_one_tick": 18.97,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 0.40932,
+      "period_usd": 0.1486,
+      "pair_cost": 0.99,
+      "capital_usd": 49.5,
+      "cents_per_contract_hour": 0.8186,
+      "breakeven_move_cents_one_full_fill": 0.297,
+      "breakeven_contracts_per_hour_at_one_tick": 40.93
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.29248,
+      "period_usd": 0.1062,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 0.585,
+      "breakeven_move_cents_one_full_fill": 0.212,
+      "breakeven_contracts_per_hour_at_one_tick": 29.25,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": 471,
+   "min_size_for_1usd_alone_full_6h": 28
+  },
+  {
+   "slug": "aec-setkameua-kohboh-molant-2026-11-22",
+   "league": "setkameua",
+   "period": "day_of",
+   "pool_usd": 5.0,
+   "pool_usd_per_hour": 0.833,
+   "target": 3200.0,
+   "df": 0.5,
+   "max_spread": null,
+   "start": "2026-11-22 23:30:00+00",
+   "hours_left": 0.36,
+   "bid": 0.42,
+   "ask": 0.43,
+   "tick": 0.01,
+   "bid_touch": 10.45,
+   "ask_touch": 0.65,
+   "bid_top3": 136.34,
+   "ask_top3": 148.5,
+   "traded_total": 46.67,
+   "open_interest": 23.0,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 0.033,
+      "period_usd": 0.012,
+      "pair_cost": 0.99,
+      "capital_usd": 1.98,
+      "cents_per_contract_hour": 1.6502,
+      "breakeven_move_cents_one_full_fill": 0.599,
+      "breakeven_contracts_per_hour_at_one_tick": 3.3
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.02185,
+      "period_usd": 0.0079,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 1.0924,
+      "breakeven_move_cents_one_full_fill": 0.397,
+      "breakeven_contracts_per_hour_at_one_tick": 2.18,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 0.14232,
+      "period_usd": 0.0517,
+      "pair_cost": 0.99,
+      "capital_usd": 9.9,
+      "cents_per_contract_hour": 1.4232,
+      "breakeven_move_cents_one_full_fill": 0.517,
+      "breakeven_contracts_per_hour_at_one_tick": 14.23
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.09531,
+      "period_usd": 0.0346,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 0.9531,
+      "breakeven_move_cents_one_full_fill": 0.346,
+      "breakeven_contracts_per_hour_at_one_tick": 9.53,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 0.28296,
+      "period_usd": 0.1028,
+      "pair_cost": 0.99,
+      "capital_usd": 24.75,
+      "cents_per_contract_hour": 1.1319,
+      "breakeven_move_cents_one_full_fill": 0.411,
+      "breakeven_contracts_per_hour_at_one_tick": 28.3
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.19385,
+      "period_usd": 0.0704,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 0.7754,
+      "breakeven_move_cents_one_full_fill": 0.282,
+      "breakeven_contracts_per_hour_at_one_tick": 19.39,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 0.42217,
+      "period_usd": 0.1533,
+      "pair_cost": 0.99,
+      "capital_usd": 49.5,
+      "cents_per_contract_hour": 0.8443,
+      "breakeven_move_cents_one_full_fill": 0.307,
+      "breakeven_contracts_per_hour_at_one_tick": 42.22
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.29979,
+      "period_usd": 0.1089,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 0.5996,
+      "breakeven_move_cents_one_full_fill": 0.218,
+      "breakeven_contracts_per_hour_at_one_tick": 29.98,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": 459,
+   "min_size_for_1usd_alone_full_6h": 28
+  },
+  {
+   "slug": "aec-setkameua-naiole-hnorom-2026-11-22",
+   "league": "setkameua",
+   "period": "day_of",
+   "pool_usd": 5.0,
+   "pool_usd_per_hour": 0.833,
+   "target": 3200.0,
+   "df": 0.5,
+   "max_spread": null,
+   "start": "2026-11-22 23:25:00+00",
+   "hours_left": 0.28,
+   "bid": 0.52,
+   "ask": 0.53,
+   "tick": 0.01,
+   "bid_touch": 95.64,
+   "ask_touch": 0.65,
+   "bid_top3": 99.91,
+   "ask_top3": 88.95,
+   "traded_total": 31.99,
+   "open_interest": 15.0,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 0.04169,
+      "period_usd": 0.0117,
+      "pair_cost": 0.99,
+      "capital_usd": 1.98,
+      "cents_per_contract_hour": 2.0847,
+      "breakeven_move_cents_one_full_fill": 0.583,
+      "breakeven_contracts_per_hour_at_one_tick": 4.17
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.03537,
+      "period_usd": 0.0099,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 1.7683,
+      "breakeven_move_cents_one_full_fill": 0.495,
+      "breakeven_contracts_per_hour_at_one_tick": 3.54,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 0.16513,
+      "period_usd": 0.0462,
+      "pair_cost": 0.99,
+      "capital_usd": 9.9,
+      "cents_per_contract_hour": 1.6513,
+      "breakeven_move_cents_one_full_fill": 0.462,
+      "breakeven_contracts_per_hour_at_one_tick": 16.51
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.13646,
+      "period_usd": 0.0382,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 1.3646,
+      "breakeven_move_cents_one_full_fill": 0.382,
+      "breakeven_contracts_per_hour_at_one_tick": 13.65,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 0.30252,
+      "period_usd": 0.0846,
+      "pair_cost": 0.99,
+      "capital_usd": 24.75,
+      "cents_per_contract_hour": 1.2101,
+      "breakeven_move_cents_one_full_fill": 0.339,
+      "breakeven_contracts_per_hour_at_one_tick": 30.25
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.24201,
+      "period_usd": 0.0677,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 0.968,
+      "breakeven_move_cents_one_full_fill": 0.271,
+      "breakeven_contracts_per_hour_at_one_tick": 24.2,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 0.42749,
+      "period_usd": 0.1196,
+      "pair_cost": 0.99,
+      "capital_usd": 49.5,
+      "cents_per_contract_hour": 0.855,
+      "breakeven_move_cents_one_full_fill": 0.239,
+      "breakeven_contracts_per_hour_at_one_tick": 42.75
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.33293,
+      "period_usd": 0.0932,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 0.6659,
+      "breakeven_move_cents_one_full_fill": 0.186,
+      "breakeven_contracts_per_hour_at_one_tick": 33.29,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": 537,
+   "min_size_for_1usd_alone_full_6h": 25
+  },
+  {
+   "slug": "aec-setkameua-shcden-rakser-2026-11-22",
+   "league": "setkameua",
+   "period": "day_of",
+   "pool_usd": 5.0,
+   "pool_usd_per_hour": 0.833,
+   "target": 3200.0,
+   "df": 0.5,
+   "max_spread": null,
+   "start": "2026-11-22 23:15:00+00",
+   "hours_left": 0.11,
+   "bid": 0.56,
+   "ask": 0.57,
+   "tick": 0.01,
+   "bid_touch": 66.39,
+   "ask_touch": 0.45,
+   "bid_top3": 68.39,
+   "ask_top3": 429.47999999999996,
+   "traded_total": 55.69,
+   "open_interest": 15.59,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 0.01904,
+      "period_usd": 0.0022,
+      "pair_cost": 0.99,
+      "capital_usd": 1.98,
+      "cents_per_contract_hour": 0.9522,
+      "breakeven_move_cents_one_full_fill": 0.108,
+      "breakeven_contracts_per_hour_at_one_tick": 1.9
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.01387,
+      "period_usd": 0.0016,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 0.6935,
+      "breakeven_move_cents_one_full_fill": 0.078,
+      "breakeven_contracts_per_hour_at_one_tick": 1.39,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 0.08675,
+      "period_usd": 0.0098,
+      "pair_cost": 0.99,
+      "capital_usd": 9.9,
+      "cents_per_contract_hour": 0.8675,
+      "breakeven_move_cents_one_full_fill": 0.098,
+      "breakeven_contracts_per_hour_at_one_tick": 8.68
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0629,
+      "period_usd": 0.0071,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 0.629,
+      "breakeven_move_cents_one_full_fill": 0.071,
+      "breakeven_contracts_per_hour_at_one_tick": 6.29,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 0.1862,
+      "period_usd": 0.0211,
+      "pair_cost": 0.99,
+      "capital_usd": 24.75,
+      "cents_per_contract_hour": 0.7448,
+      "breakeven_move_cents_one_full_fill": 0.084,
+      "breakeven_contracts_per_hour_at_one_tick": 18.62
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.13442,
+      "period_usd": 0.0152,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 0.5377,
+      "breakeven_move_cents_one_full_fill": 0.061,
+      "breakeven_contracts_per_hour_at_one_tick": 13.44,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 0.3022,
+      "period_usd": 0.0342,
+      "pair_cost": 0.99,
+      "capital_usd": 49.5,
+      "cents_per_contract_hour": 0.6044,
+      "breakeven_move_cents_one_full_fill": 0.068,
+      "breakeven_contracts_per_hour_at_one_tick": 30.22
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.21823,
+      "period_usd": 0.0247,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 0.4365,
+      "breakeven_move_cents_one_full_fill": 0.049,
+      "breakeven_contracts_per_hour_at_one_tick": 21.82,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": 2025,
+   "min_size_for_1usd_alone_full_6h": 38
+  },
+  {
+   "slug": "aec-setkameua-sokyev-perand-2026-11-22",
+   "league": "setkameua",
+   "period": "day_of",
+   "pool_usd": 5.0,
+   "pool_usd_per_hour": 0.833,
+   "target": 3200.0,
+   "df": 0.5,
+   "max_spread": null,
+   "start": "2026-11-22 23:35:00+00",
+   "hours_left": 0.45,
+   "bid": 0.58,
+   "ask": 0.6,
+   "tick": 0.01,
+   "bid_touch": 0.45,
+   "ask_touch": 0.75,
+   "bid_top3": 47.17,
+   "ask_top3": 174.25,
+   "traded_total": 28.42,
+   "open_interest": 26.0,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 0.30018,
+      "period_usd": 0.134,
+      "pair_cost": 0.98,
+      "capital_usd": 1.96,
+      "cents_per_contract_hour": 15.0091,
+      "breakeven_move_cents_one_full_fill": 6.701,
+      "breakeven_contracts_per_hour_at_one_tick": 30.02
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.26923,
+      "period_usd": 0.1202,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 13.4614,
+      "breakeven_move_cents_one_full_fill": 6.01,
+      "breakeven_contracts_per_hour_at_one_tick": 26.92,
+      "yes_ticks_back": 1,
+      "no_ticks_back": 0
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 0.56516,
+      "period_usd": 0.2523,
+      "pair_cost": 0.98,
+      "capital_usd": 9.8,
+      "cents_per_contract_hour": 5.6516,
+      "breakeven_move_cents_one_full_fill": 2.523,
+      "breakeven_contracts_per_hour_at_one_tick": 56.52
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.52182,
+      "period_usd": 0.233,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 5.2182,
+      "breakeven_move_cents_one_full_fill": 2.33,
+      "breakeven_contracts_per_hour_at_one_tick": 52.18,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 1
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 0.68715,
+      "period_usd": 0.3068,
+      "pair_cost": 0.98,
+      "capital_usd": 24.5,
+      "cents_per_contract_hour": 2.7486,
+      "breakeven_move_cents_one_full_fill": 1.227,
+      "breakeven_contracts_per_hour_at_one_tick": 68.72
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.66507,
+      "period_usd": 0.2969,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 2.6603,
+      "breakeven_move_cents_one_full_fill": 1.188,
+      "breakeven_contracts_per_hour_at_one_tick": 66.51,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 1
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 0.74953,
+      "period_usd": 0.3346,
+      "pair_cost": 0.98,
+      "capital_usd": 49.0,
+      "cents_per_contract_hour": 1.4991,
+      "breakeven_move_cents_one_full_fill": 0.669,
+      "breakeven_contracts_per_hour_at_one_tick": 74.95
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.73747,
+      "period_usd": 0.3292,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 1.4749,
+      "breakeven_move_cents_one_full_fill": 0.658,
+      "breakeven_contracts_per_hour_at_one_tick": 73.75,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 1
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": 152,
+   "min_size_for_1usd_alone_full_6h": 11
+  },
+  {
+   "slug": "aec-utr-brucjac-stearc-2026-11-22",
+   "league": "utr",
+   "period": "day_of",
+   "pool_usd": 10.0,
+   "pool_usd_per_hour": 1.667,
+   "target": 250.0,
+   "df": 0.35,
+   "max_spread": 0.07,
+   "start": "2026-11-23 00:10:00+00",
+   "hours_left": 1.03,
+   "bid": 0.54,
+   "ask": 0.55,
+   "tick": 0.01,
+   "bid_touch": 77.5,
+   "ask_touch": 16.36,
+   "bid_top3": 585.5,
+   "ask_top3": 747.36,
+   "traded_total": 12.96,
+   "open_interest": 7.86,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 0.03525,
+      "period_usd": 0.0363,
+      "pair_cost": 0.99,
+      "capital_usd": 1.98,
+      "cents_per_contract_hour": 1.7624,
+      "breakeven_move_cents_one_full_fill": 1.815,
+      "breakeven_contracts_per_hour_at_one_tick": 3.52
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.02069,
+      "period_usd": 0.0213,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 1.0344,
+      "breakeven_move_cents_one_full_fill": 1.065,
+      "breakeven_contracts_per_hour_at_one_tick": 2.07,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 0.16245,
+      "period_usd": 0.1673,
+      "pair_cost": 0.99,
+      "capital_usd": 9.9,
+      "cents_per_contract_hour": 1.6245,
+      "breakeven_move_cents_one_full_fill": 1.673,
+      "breakeven_contracts_per_hour_at_one_tick": 16.25
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.09571,
+      "period_usd": 0.0986,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 0.9571,
+      "breakeven_move_cents_one_full_fill": 0.986,
+      "breakeven_contracts_per_hour_at_one_tick": 9.57,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 0.35422,
+      "period_usd": 0.3648,
+      "pair_cost": 0.99,
+      "capital_usd": 24.75,
+      "cents_per_contract_hour": 1.4169,
+      "breakeven_move_cents_one_full_fill": 1.459,
+      "breakeven_contracts_per_hour_at_one_tick": 35.42
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.21033,
+      "period_usd": 0.2166,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 0.8413,
+      "breakeven_move_cents_one_full_fill": 0.866,
+      "breakeven_contracts_per_hour_at_one_tick": 21.03,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 0.58409,
+      "period_usd": 0.6015,
+      "pair_cost": 0.99,
+      "capital_usd": 49.5,
+      "cents_per_contract_hour": 1.1682,
+      "breakeven_move_cents_one_full_fill": 1.203,
+      "breakeven_contracts_per_hour_at_one_tick": 58.41
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.35188,
+      "period_usd": 0.3624,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 0.7038,
+      "breakeven_move_cents_one_full_fill": 0.725,
+      "breakeven_contracts_per_hour_at_one_tick": 35.19,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": 138,
+   "min_size_for_1usd_alone_full_6h": 24
+  },
+  {
+   "slug": "aec-utr-ishhar-meharj-2026-11-22",
+   "league": "utr",
+   "period": "day_of",
+   "pool_usd": 10.0,
+   "pool_usd_per_hour": 1.667,
+   "target": 250.0,
+   "df": 0.35,
+   "max_spread": 0.07,
+   "start": "2026-11-23 01:30:00+00",
+   "hours_left": 2.36,
+   "bid": 0.19,
+   "ask": 0.2,
+   "tick": 0.01,
+   "bid_touch": 118.2,
+   "ask_touch": 64.52,
+   "bid_top3": 2686.2,
+   "ask_top3": 405.64,
+   "traded_total": 2.02,
+   "open_interest": 1.02,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 0.02089,
+      "period_usd": 0.0494,
+      "pair_cost": 0.99,
+      "capital_usd": 1.98,
+      "cents_per_contract_hour": 1.0443,
+      "breakeven_move_cents_one_full_fill": 2.468,
+      "breakeven_contracts_per_hour_at_one_tick": 2.09
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.01148,
+      "period_usd": 0.0271,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 0.5739,
+      "breakeven_move_cents_one_full_fill": 1.356,
+      "breakeven_contracts_per_hour_at_one_tick": 1.15,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 0.0994,
+      "period_usd": 0.2349,
+      "pair_cost": 0.99,
+      "capital_usd": 9.9,
+      "cents_per_contract_hour": 0.994,
+      "breakeven_move_cents_one_full_fill": 2.349,
+      "breakeven_contracts_per_hour_at_one_tick": 9.94
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.05439,
+      "period_usd": 0.1285,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 0.5439,
+      "breakeven_move_cents_one_full_fill": 1.285,
+      "breakeven_contracts_per_hour_at_one_tick": 5.44,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 0.22794,
+      "period_usd": 0.5387,
+      "pair_cost": 0.99,
+      "capital_usd": 24.75,
+      "cents_per_contract_hour": 0.9118,
+      "breakeven_move_cents_one_full_fill": 2.155,
+      "breakeven_contracts_per_hour_at_one_tick": 22.79
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.12386,
+      "period_usd": 0.2927,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 0.4954,
+      "breakeven_move_cents_one_full_fill": 1.171,
+      "breakeven_contracts_per_hour_at_one_tick": 12.39,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 0.40072,
+      "period_usd": 0.9469,
+      "pair_cost": 0.99,
+      "capital_usd": 49.5,
+      "cents_per_contract_hour": 0.8014,
+      "breakeven_move_cents_one_full_fill": 1.894,
+      "breakeven_contracts_per_hour_at_one_tick": 40.07
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.21923,
+      "period_usd": 0.5181,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 0.4385,
+      "breakeven_move_cents_one_full_fill": 1.036,
+      "breakeven_contracts_per_hour_at_one_tick": 21.92,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": 97,
+   "min_size_for_1usd_alone_full_6h": 38
+  },
+  {
+   "slug": "aec-utr-jonsco-gaacor-2026-11-22",
+   "league": "utr",
+   "period": "day_of",
+   "pool_usd": 10.0,
+   "pool_usd_per_hour": 1.667,
+   "target": 250.0,
+   "df": 0.35,
+   "max_spread": 0.07,
+   "start": "2026-11-23 00:10:00+00",
+   "hours_left": 1.03,
+   "bid": 0.75,
+   "ask": 0.76,
+   "tick": 0.01,
+   "bid_touch": 85.22,
+   "ask_touch": 39.7,
+   "bid_top3": 727.22,
+   "ask_top3": 1254.7,
+   "traded_total": 0.0,
+   "open_interest": 0.0,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 0.03088,
+      "period_usd": 0.0318,
+      "pair_cost": 0.99,
+      "capital_usd": 1.98,
+      "cents_per_contract_hour": 1.5442,
+      "breakeven_move_cents_one_full_fill": 1.59,
+      "breakeven_contracts_per_hour_at_one_tick": 3.09
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.01958,
+      "period_usd": 0.0202,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 0.9789,
+      "breakeven_move_cents_one_full_fill": 1.008,
+      "breakeven_contracts_per_hour_at_one_tick": 1.96,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 0.14351,
+      "period_usd": 0.1478,
+      "pair_cost": 0.99,
+      "capital_usd": 9.9,
+      "cents_per_contract_hour": 1.4351,
+      "breakeven_move_cents_one_full_fill": 1.478,
+      "breakeven_contracts_per_hour_at_one_tick": 14.35
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.09069,
+      "period_usd": 0.0934,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 0.9069,
+      "breakeven_move_cents_one_full_fill": 0.934,
+      "breakeven_contracts_per_hour_at_one_tick": 9.07,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 0.31699,
+      "period_usd": 0.3264,
+      "pair_cost": 0.99,
+      "capital_usd": 24.75,
+      "cents_per_contract_hour": 1.268,
+      "breakeven_move_cents_one_full_fill": 1.306,
+      "breakeven_contracts_per_hour_at_one_tick": 31.7
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.19964,
+      "period_usd": 0.2056,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 0.7985,
+      "breakeven_move_cents_one_full_fill": 0.822,
+      "breakeven_contracts_per_hour_at_one_tick": 19.96,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 0.53135,
+      "period_usd": 0.5472,
+      "pair_cost": 0.99,
+      "capital_usd": 49.5,
+      "cents_per_contract_hour": 1.0627,
+      "breakeven_move_cents_one_full_fill": 1.094,
+      "breakeven_contracts_per_hour_at_one_tick": 53.13
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.3344,
+      "period_usd": 0.3444,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 0.6688,
+      "breakeven_move_cents_one_full_fill": 0.689,
+      "breakeven_contracts_per_hour_at_one_tick": 33.44,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": 145,
+   "min_size_for_1usd_alone_full_6h": 25
+  },
+  {
+   "slug": "aec-utr-stajer-valemm-2026-11-22",
+   "league": "utr",
+   "period": "day_of",
+   "pool_usd": 10.0,
+   "pool_usd_per_hour": 1.667,
+   "target": 250.0,
+   "df": 0.35,
+   "max_spread": 0.07,
+   "start": "2026-11-23 01:30:00+00",
+   "hours_left": 2.36,
+   "bid": 0.74,
+   "ask": 0.75,
+   "tick": 0.01,
+   "bid_touch": 1.11,
+   "ask_touch": 126.76,
+   "bid_top3": 566.11,
+   "ask_top3": 1053.76,
+   "traded_total": 368.96,
+   "open_interest": 184.56,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 1.98,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 9.9,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 24.75,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 49.5,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 0.0,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": null,
+   "min_size_for_1usd_alone_full_6h": null
+  },
+  {
+   "slug": "atc-lal-lev-elc-2026-11-23-draw",
+   "league": "lal",
+   "period": "early",
+   "pool_usd": 20.0,
+   "pool_usd_per_hour": 0.023,
+   "target": 8000.0,
+   "df": 0.4,
+   "max_spread": null,
+   "start": "2026-11-23 20:00:00+00",
+   "hours_left": 20.86,
+   "bid": 0.27,
+   "ask": 0.28,
+   "tick": 0.01,
+   "bid_touch": 6.48,
+   "ask_touch": 29972.81,
+   "bid_top3": 24696.13,
+   "ask_top3": 52599.81,
+   "traded_total": 781.54,
+   "open_interest": 151.34,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 1e-05,
+      "period_usd": 0.0001,
+      "pair_cost": 0.99,
+      "capital_usd": 1.98,
+      "cents_per_contract_hour": 0.0003,
+      "breakeven_move_cents_one_full_fill": 0.005,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0001,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 0.0002,
+      "breakeven_move_cents_one_full_fill": 0.004,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 3e-05,
+      "period_usd": 0.0005,
+      "pair_cost": 0.99,
+      "capital_usd": 9.9,
+      "cents_per_contract_hour": 0.0003,
+      "breakeven_move_cents_one_full_fill": 0.005,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 2e-05,
+      "period_usd": 0.0005,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 0.0002,
+      "breakeven_move_cents_one_full_fill": 0.005,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 6e-05,
+      "period_usd": 0.0013,
+      "pair_cost": 0.99,
+      "capital_usd": 24.75,
+      "cents_per_contract_hour": 0.0003,
+      "breakeven_move_cents_one_full_fill": 0.005,
+      "breakeven_contracts_per_hour_at_one_tick": 0.01
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 5e-05,
+      "period_usd": 0.0011,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 0.0002,
+      "breakeven_move_cents_one_full_fill": 0.005,
+      "breakeven_contracts_per_hour_at_one_tick": 0.01,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 0.00013,
+      "period_usd": 0.0027,
+      "pair_cost": 0.99,
+      "capital_usd": 49.5,
+      "cents_per_contract_hour": 0.0003,
+      "breakeven_move_cents_one_full_fill": 0.005,
+      "breakeven_contracts_per_hour_at_one_tick": 0.01
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.00011,
+      "period_usd": 0.0023,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 0.0002,
+      "breakeven_move_cents_one_full_fill": 0.005,
+      "breakeven_contracts_per_hour_at_one_tick": 0.01,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": 21787,
+   "min_size_for_1usd_alone_full_6h": 75758
+  },
+  {
+   "slug": "atc-lal-lev-elc-2026-11-23-elc",
+   "league": "lal",
+   "period": "early",
+   "pool_usd": 40.0,
+   "pool_usd_per_hour": 0.047,
+   "target": 8000.0,
+   "df": 0.4,
+   "max_spread": null,
+   "start": "2026-11-23 20:00:00+00",
+   "hours_left": 20.86,
+   "bid": 0.28,
+   "ask": 0.29,
+   "tick": 0.01,
+   "bid_touch": 6120.58,
+   "ask_touch": 27725.63,
+   "bid_top3": 53532.0,
+   "ask_top3": 53409.81,
+   "traded_total": 1549.52,
+   "open_interest": 411.29,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0001,
+      "pair_cost": 0.99,
+      "capital_usd": 1.98,
+      "cents_per_contract_hour": 0.0002,
+      "breakeven_move_cents_one_full_fill": 0.004,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0001,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 0.0002,
+      "breakeven_move_cents_one_full_fill": 0.003,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 2e-05,
+      "period_usd": 0.0004,
+      "pair_cost": 0.99,
+      "capital_usd": 9.9,
+      "cents_per_contract_hour": 0.0002,
+      "breakeven_move_cents_one_full_fill": 0.004,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 1e-05,
+      "period_usd": 0.0003,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 0.0001,
+      "breakeven_move_cents_one_full_fill": 0.003,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 5e-05,
+      "period_usd": 0.0011,
+      "pair_cost": 0.99,
+      "capital_usd": 24.75,
+      "cents_per_contract_hour": 0.0002,
+      "breakeven_move_cents_one_full_fill": 0.004,
+      "breakeven_contracts_per_hour_at_one_tick": 0.01
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 3e-05,
+      "period_usd": 0.0007,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 0.0001,
+      "breakeven_move_cents_one_full_fill": 0.003,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 0.00011,
+      "period_usd": 0.0022,
+      "pair_cost": 0.99,
+      "capital_usd": 49.5,
+      "cents_per_contract_hour": 0.0002,
+      "breakeven_move_cents_one_full_fill": 0.004,
+      "breakeven_contracts_per_hour_at_one_tick": 0.01
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 6e-05,
+      "period_usd": 0.0014,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 0.0001,
+      "breakeven_move_cents_one_full_fill": 0.003,
+      "breakeven_contracts_per_hour_at_one_tick": 0.01,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": 39943,
+   "min_size_for_1usd_alone_full_6h": 138889
+  },
+  {
+   "slug": "atc-lal-lev-elc-2026-11-23-lev",
+   "league": "lal",
+   "period": "early",
+   "pool_usd": 40.0,
+   "pool_usd_per_hour": 0.047,
+   "target": 8000.0,
+   "df": 0.4,
+   "max_spread": null,
+   "start": "2026-11-23 20:00:00+00",
+   "hours_left": 20.86,
+   "bid": 0.45,
+   "ask": 0.46,
+   "tick": 0.01,
+   "bid_touch": 6.25,
+   "ask_touch": 24359.71,
+   "bid_top3": 28322.44,
+   "ask_top3": 48229.94,
+   "traded_total": 560.01,
+   "open_interest": 231.53,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 1e-05,
+      "period_usd": 0.0003,
+      "pair_cost": 0.99,
+      "capital_usd": 1.98,
+      "cents_per_contract_hour": 0.0006,
+      "breakeven_move_cents_one_full_fill": 0.013,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 1e-05,
+      "period_usd": 0.0002,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 0.0005,
+      "breakeven_move_cents_one_full_fill": 0.01,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 6e-05,
+      "period_usd": 0.0012,
+      "pair_cost": 0.99,
+      "capital_usd": 9.9,
+      "cents_per_contract_hour": 0.0006,
+      "breakeven_move_cents_one_full_fill": 0.012,
+      "breakeven_contracts_per_hour_at_one_tick": 0.01
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 5e-05,
+      "period_usd": 0.001,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 0.0005,
+      "breakeven_move_cents_one_full_fill": 0.01,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 0.00015,
+      "period_usd": 0.0031,
+      "pair_cost": 0.99,
+      "capital_usd": 24.75,
+      "cents_per_contract_hour": 0.0006,
+      "breakeven_move_cents_one_full_fill": 0.012,
+      "breakeven_contracts_per_hour_at_one_tick": 0.01
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.00012,
+      "period_usd": 0.0026,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 0.0005,
+      "breakeven_move_cents_one_full_fill": 0.01,
+      "breakeven_contracts_per_hour_at_one_tick": 0.01,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 0.00029,
+      "period_usd": 0.0061,
+      "pair_cost": 0.99,
+      "capital_usd": 49.5,
+      "cents_per_contract_hour": 0.0006,
+      "breakeven_move_cents_one_full_fill": 0.012,
+      "breakeven_contracts_per_hour_at_one_tick": 0.03
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.00024,
+      "period_usd": 0.0051,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 0.0005,
+      "breakeven_move_cents_one_full_fill": 0.01,
+      "breakeven_contracts_per_hour_at_one_tick": 0.02,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": 9986,
+   "min_size_for_1usd_alone_full_6h": 34722
+  },
+  {
+   "slug": "atc-lmx-gua-caz-2026-11-22-caz",
+   "league": "lmx",
+   "period": "day_of",
+   "pool_usd": 180.0,
+   "pool_usd_per_hour": 30.0,
+   "target": 10000.0,
+   "df": 0.35,
+   "max_spread": null,
+   "start": "2026-11-22 23:07:00+00",
+   "hours_left": 0.0,
+   "bid": 0.31,
+   "ask": 0.32,
+   "tick": 0.01,
+   "bid_touch": 18852.46,
+   "ask_touch": 9047.33,
+   "bid_top3": 44995.58,
+   "ask_top3": 38781.31,
+   "traded_total": 119313.25,
+   "open_interest": 53691.1,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 0.00364,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 1.98,
+      "cents_per_contract_hour": 0.1822,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.36
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.00205,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 0.1026,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.21,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 0.01821,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 9.9,
+      "cents_per_contract_hour": 0.1821,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 1.82
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.01026,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 0.1026,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 1.03,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 0.04548,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 24.75,
+      "cents_per_contract_hour": 0.1819,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 4.55
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.02561,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 0.1025,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 2.56,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 0.09082,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 49.5,
+      "cents_per_contract_hour": 0.1816,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 9.08
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.05114,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 0.1023,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 5.11,
+      "yes_ticks_back": 2,
+      "no_ticks_back": 0
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": null,
+   "min_size_for_1usd_alone_full_6h": 163
+  },
+  {
+   "slug": "atc-lmx-gua-caz-2026-11-22-draw",
+   "league": "lmx",
+   "period": "day_of",
+   "pool_usd": 180.0,
+   "pool_usd_per_hour": 30.0,
+   "target": 10000.0,
+   "df": 0.35,
+   "max_spread": null,
+   "start": "2026-11-22 23:07:00+00",
+   "hours_left": 0.0,
+   "bid": 0.25,
+   "ask": 0.26,
+   "tick": 0.01,
+   "bid_touch": 1572.53,
+   "ask_touch": 20276.5,
+   "bid_top3": 40761.13,
+   "ask_top3": 55168.0,
+   "traded_total": 25543.62,
+   "open_interest": 14116.07,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 0.00775,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 1.98,
+      "cents_per_contract_hour": 0.3874,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.77
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.00627,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 0.3135,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.63,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 0.03868,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 9.9,
+      "cents_per_contract_hour": 0.3868,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 3.87
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.03129,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 0.3129,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 3.13,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 0.09645,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 24.75,
+      "cents_per_contract_hour": 0.3858,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 9.65
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.07798,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 0.3119,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 7.8,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 0.19206,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 49.5,
+      "cents_per_contract_hour": 0.3841,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 19.21
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.15516,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 0.3103,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 15.52,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": null,
+   "min_size_for_1usd_alone_full_6h": 54
+  },
+  {
+   "slug": "atc-lmx-gua-caz-2026-11-22-gua",
+   "league": "lmx",
+   "period": "day_of",
+   "pool_usd": 180.0,
+   "pool_usd_per_hour": 30.0,
+   "target": 10000.0,
+   "df": 0.35,
+   "max_spread": null,
+   "start": "2026-11-22 23:07:00+00",
+   "hours_left": 0.0,
+   "bid": 0.44,
+   "ask": 0.45,
+   "tick": 0.01,
+   "bid_touch": 3553.76,
+   "ask_touch": 18302.94,
+   "bid_top3": 15553.55,
+   "ask_top3": 61498.240000000005,
+   "traded_total": 56213.17,
+   "open_interest": 20182.58,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 0.00628,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 1.98,
+      "cents_per_contract_hour": 0.3141,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.63
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.00464,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 0.2322,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 0.46,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 0.03138,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 9.9,
+      "cents_per_contract_hour": 0.3138,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 3.14
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.02319,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 0.2319,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 2.32,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 0.0783,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 24.75,
+      "cents_per_contract_hour": 0.3132,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 7.83
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.05784,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 0.2313,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 5.78,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 0.1561,
+      "period_usd": 0.0,
+      "pair_cost": 0.99,
+      "capital_usd": 49.5,
+      "cents_per_contract_hour": 0.3122,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 15.61
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.11523,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 0.2305,
+      "breakeven_move_cents_one_full_fill": 0.0,
+      "breakeven_contracts_per_hour_at_one_tick": 11.52,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": null,
+   "min_size_for_1usd_alone_full_6h": 72
+  },
+  {
+   "slug": "atc-lmx-que-nec-2026-11-22-draw",
+   "league": "lmx",
+   "period": "day_of",
+   "pool_usd": 180.0,
+   "pool_usd_per_hour": 30.0,
+   "target": 10000.0,
+   "df": 0.35,
+   "max_spread": null,
+   "start": "2026-11-23 01:10:00+00",
+   "hours_left": 2.03,
+   "bid": 0.25,
+   "ask": 0.26,
+   "tick": 0.01,
+   "bid_touch": 2481.28,
+   "ask_touch": 16136.51,
+   "bid_top3": 22259.28,
+   "ask_top3": 36979.520000000004,
+   "traded_total": 576.21,
+   "open_interest": 284.83,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 0.00723,
+      "period_usd": 0.0147,
+      "pair_cost": 0.99,
+      "capital_usd": 1.98,
+      "cents_per_contract_hour": 0.3614,
+      "breakeven_move_cents_one_full_fill": 0.733,
+      "breakeven_contracts_per_hour_at_one_tick": 0.72
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.00537,
+      "period_usd": 0.0109,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 0.2684,
+      "breakeven_move_cents_one_full_fill": 0.545,
+      "breakeven_contracts_per_hour_at_one_tick": 0.54,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 0.03609,
+      "period_usd": 0.0733,
+      "pair_cost": 0.99,
+      "capital_usd": 9.9,
+      "cents_per_contract_hour": 0.3609,
+      "breakeven_move_cents_one_full_fill": 0.733,
+      "breakeven_contracts_per_hour_at_one_tick": 3.61
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0268,
+      "period_usd": 0.0544,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 0.268,
+      "breakeven_move_cents_one_full_fill": 0.544,
+      "breakeven_contracts_per_hour_at_one_tick": 2.68,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 0.09004,
+      "period_usd": 0.1828,
+      "pair_cost": 0.99,
+      "capital_usd": 24.75,
+      "cents_per_contract_hour": 0.3601,
+      "breakeven_move_cents_one_full_fill": 0.731,
+      "breakeven_contracts_per_hour_at_one_tick": 9.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.06683,
+      "period_usd": 0.1357,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 0.2673,
+      "breakeven_move_cents_one_full_fill": 0.543,
+      "breakeven_contracts_per_hour_at_one_tick": 6.68,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 0.17941,
+      "period_usd": 0.3642,
+      "pair_cost": 0.99,
+      "capital_usd": 49.5,
+      "cents_per_contract_hour": 0.3588,
+      "breakeven_move_cents_one_full_fill": 0.728,
+      "breakeven_contracts_per_hour_at_one_tick": 17.94
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.13307,
+      "period_usd": 0.2701,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 0.2661,
+      "breakeven_move_cents_one_full_fill": 0.54,
+      "breakeven_contracts_per_hour_at_one_tick": 13.31,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": 185,
+   "min_size_for_1usd_alone_full_6h": 63
+  },
+  {
+   "slug": "atc-lmx-que-nec-2026-11-22-nec",
+   "league": "lmx",
+   "period": "day_of",
+   "pool_usd": 180.0,
+   "pool_usd_per_hour": 30.0,
+   "target": 10000.0,
+   "df": 0.35,
+   "max_spread": null,
+   "start": "2026-11-23 01:10:00+00",
+   "hours_left": 2.03,
+   "bid": 0.31,
+   "ask": 0.32,
+   "tick": 0.01,
+   "bid_touch": 14432.17,
+   "ask_touch": 9692.26,
+   "bid_top3": 37071.29,
+   "ask_top3": 41562.14,
+   "traded_total": 7250.98,
+   "open_interest": 2291.88,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 0.00412,
+      "period_usd": 0.0084,
+      "pair_cost": 0.99,
+      "capital_usd": 1.98,
+      "cents_per_contract_hour": 0.2061,
+      "breakeven_move_cents_one_full_fill": 0.418,
+      "breakeven_contracts_per_hour_at_one_tick": 0.41
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.00208,
+      "period_usd": 0.0042,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 0.1039,
+      "breakeven_move_cents_one_full_fill": 0.211,
+      "breakeven_contracts_per_hour_at_one_tick": 0.21,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 0.0206,
+      "period_usd": 0.0418,
+      "pair_cost": 0.99,
+      "capital_usd": 9.9,
+      "cents_per_contract_hour": 0.206,
+      "breakeven_move_cents_one_full_fill": 0.418,
+      "breakeven_contracts_per_hour_at_one_tick": 2.06
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.01039,
+      "period_usd": 0.0211,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 0.1039,
+      "breakeven_move_cents_one_full_fill": 0.211,
+      "breakeven_contracts_per_hour_at_one_tick": 1.04,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 0.05145,
+      "period_usd": 0.1044,
+      "pair_cost": 0.99,
+      "capital_usd": 24.75,
+      "cents_per_contract_hour": 0.2058,
+      "breakeven_move_cents_one_full_fill": 0.418,
+      "breakeven_contracts_per_hour_at_one_tick": 5.14
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.02594,
+      "period_usd": 0.0527,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 0.1038,
+      "breakeven_move_cents_one_full_fill": 0.211,
+      "breakeven_contracts_per_hour_at_one_tick": 2.59,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 0.10272,
+      "period_usd": 0.2085,
+      "pair_cost": 0.99,
+      "capital_usd": 49.5,
+      "cents_per_contract_hour": 0.2054,
+      "breakeven_move_cents_one_full_fill": 0.417,
+      "breakeven_contracts_per_hour_at_one_tick": 10.27
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.05179,
+      "period_usd": 0.1051,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 0.1036,
+      "breakeven_move_cents_one_full_fill": 0.21,
+      "breakeven_contracts_per_hour_at_one_tick": 5.18,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": 476,
+   "min_size_for_1usd_alone_full_6h": 161
+  },
+  {
+   "slug": "atc-lmx-que-nec-2026-11-22-que",
+   "league": "lmx",
+   "period": "day_of",
+   "pool_usd": 180.0,
+   "pool_usd_per_hour": 30.0,
+   "target": 10000.0,
+   "df": 0.35,
+   "max_spread": null,
+   "start": "2026-11-23 01:10:00+00",
+   "hours_left": 2.03,
+   "bid": 0.43,
+   "ask": 0.44,
+   "tick": 0.01,
+   "bid_touch": 8717.99,
+   "ask_touch": 13504.96,
+   "bid_top3": 30725.27,
+   "ask_top3": 52376.740000000005,
+   "traded_total": 9828.77,
+   "open_interest": 4567.38,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 0.00461,
+      "period_usd": 0.0094,
+      "pair_cost": 0.99,
+      "capital_usd": 1.98,
+      "cents_per_contract_hour": 0.2306,
+      "breakeven_move_cents_one_full_fill": 0.468,
+      "breakeven_contracts_per_hour_at_one_tick": 0.46
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.00239,
+      "period_usd": 0.0049,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 0.1195,
+      "breakeven_move_cents_one_full_fill": 0.243,
+      "breakeven_contracts_per_hour_at_one_tick": 0.24,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 0.02305,
+      "period_usd": 0.0468,
+      "pair_cost": 0.99,
+      "capital_usd": 9.9,
+      "cents_per_contract_hour": 0.2305,
+      "breakeven_move_cents_one_full_fill": 0.468,
+      "breakeven_contracts_per_hour_at_one_tick": 2.3
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.01195,
+      "period_usd": 0.0243,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 0.1195,
+      "breakeven_move_cents_one_full_fill": 0.243,
+      "breakeven_contracts_per_hour_at_one_tick": 1.2,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 0.05755,
+      "period_usd": 0.1168,
+      "pair_cost": 0.99,
+      "capital_usd": 24.75,
+      "cents_per_contract_hour": 0.2302,
+      "breakeven_move_cents_one_full_fill": 0.467,
+      "breakeven_contracts_per_hour_at_one_tick": 5.76
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.02984,
+      "period_usd": 0.0606,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 0.1194,
+      "breakeven_move_cents_one_full_fill": 0.242,
+      "breakeven_contracts_per_hour_at_one_tick": 2.98,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 0.11489,
+      "period_usd": 0.2332,
+      "pair_cost": 0.99,
+      "capital_usd": 49.5,
+      "cents_per_contract_hour": 0.2298,
+      "breakeven_move_cents_one_full_fill": 0.466,
+      "breakeven_contracts_per_hour_at_one_tick": 11.49
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.05956,
+      "period_usd": 0.1209,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 0.1191,
+      "breakeven_move_cents_one_full_fill": 0.242,
+      "breakeven_contracts_per_hour_at_one_tick": 5.96,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": 414,
+   "min_size_for_1usd_alone_full_6h": 140
+  },
+  {
+   "slug": "atc-sea-mon-fio-2026-11-23-draw",
+   "league": "sea",
+   "period": "early",
+   "pool_usd": 20.0,
+   "pool_usd_per_hour": 0.023,
+   "target": 8000.0,
+   "df": 0.4,
+   "max_spread": null,
+   "start": "2026-11-23 19:45:00+00",
+   "hours_left": 20.61,
+   "bid": 0.25,
+   "ask": 0.26,
+   "tick": 0.01,
+   "bid_touch": 11131.14,
+   "ask_touch": 20917.02,
+   "bid_top3": 27544.17,
+   "ask_top3": 33586.4,
+   "traded_total": 24.66,
+   "open_interest": 12.66,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0001,
+      "pair_cost": 0.99,
+      "capital_usd": 1.98,
+      "cents_per_contract_hour": 0.0002,
+      "breakeven_move_cents_one_full_fill": 0.003,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 0.0001,
+      "breakeven_move_cents_one_full_fill": 0.002,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 2e-05,
+      "period_usd": 0.0003,
+      "pair_cost": 0.99,
+      "capital_usd": 9.9,
+      "cents_per_contract_hour": 0.0002,
+      "breakeven_move_cents_one_full_fill": 0.003,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 1e-05,
+      "period_usd": 0.0002,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 0.0001,
+      "breakeven_move_cents_one_full_fill": 0.002,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 4e-05,
+      "period_usd": 0.0008,
+      "pair_cost": 0.99,
+      "capital_usd": 24.75,
+      "cents_per_contract_hour": 0.0002,
+      "breakeven_move_cents_one_full_fill": 0.003,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 3e-05,
+      "period_usd": 0.0005,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 0.0001,
+      "breakeven_move_cents_one_full_fill": 0.002,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 8e-05,
+      "period_usd": 0.0016,
+      "pair_cost": 0.99,
+      "capital_usd": 49.5,
+      "cents_per_contract_hour": 0.0002,
+      "breakeven_move_cents_one_full_fill": 0.003,
+      "breakeven_contracts_per_hour_at_one_tick": 0.01
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 5e-05,
+      "period_usd": 0.0011,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 0.0001,
+      "breakeven_move_cents_one_full_fill": 0.002,
+      "breakeven_contracts_per_hour_at_one_tick": 0.01,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": 48513,
+   "min_size_for_1usd_alone_full_6h": 166667
+  },
+  {
+   "slug": "atc-sea-mon-fio-2026-11-23-fio",
+   "league": "sea",
+   "period": "early",
+   "pool_usd": 40.0,
+   "pool_usd_per_hour": 0.047,
+   "target": 8000.0,
+   "df": 0.4,
+   "max_spread": null,
+   "start": "2026-11-23 19:45:00+00",
+   "hours_left": 20.61,
+   "bid": 0.49,
+   "ask": 0.5,
+   "tick": 0.01,
+   "bid_touch": 6902.13,
+   "ask_touch": 21146.62,
+   "bid_top3": 20684.71,
+   "ask_top3": 36306.25,
+   "traded_total": 1428.72,
+   "open_interest": 561.64,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 1e-05,
+      "period_usd": 0.0001,
+      "pair_cost": 0.99,
+      "capital_usd": 1.98,
+      "cents_per_contract_hour": 0.0003,
+      "breakeven_move_cents_one_full_fill": 0.006,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0001,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 0.0002,
+      "breakeven_move_cents_one_full_fill": 0.004,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 3e-05,
+      "period_usd": 0.0006,
+      "pair_cost": 0.99,
+      "capital_usd": 9.9,
+      "cents_per_contract_hour": 0.0003,
+      "breakeven_move_cents_one_full_fill": 0.006,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 2e-05,
+      "period_usd": 0.0004,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 0.0002,
+      "breakeven_move_cents_one_full_fill": 0.004,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 8e-05,
+      "period_usd": 0.0016,
+      "pair_cost": 0.99,
+      "capital_usd": 24.75,
+      "cents_per_contract_hour": 0.0003,
+      "breakeven_move_cents_one_full_fill": 0.007,
+      "breakeven_contracts_per_hour_at_one_tick": 0.01
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 5e-05,
+      "period_usd": 0.0011,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 0.0002,
+      "breakeven_move_cents_one_full_fill": 0.004,
+      "breakeven_contracts_per_hour_at_one_tick": 0.01,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 0.00016,
+      "period_usd": 0.0032,
+      "pair_cost": 0.99,
+      "capital_usd": 49.5,
+      "cents_per_contract_hour": 0.0003,
+      "breakeven_move_cents_one_full_fill": 0.006,
+      "breakeven_contracts_per_hour_at_one_tick": 0.02
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0001,
+      "period_usd": 0.0021,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 0.0002,
+      "breakeven_move_cents_one_full_fill": 0.004,
+      "breakeven_contracts_per_hour_at_one_tick": 0.01,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": 24256,
+   "min_size_for_1usd_alone_full_6h": 83333
+  },
+  {
+   "slug": "atc-sea-mon-fio-2026-11-23-mon",
+   "league": "sea",
+   "period": "early",
+   "pool_usd": 40.0,
+   "pool_usd_per_hour": 0.047,
+   "target": 8000.0,
+   "df": 0.4,
+   "max_spread": null,
+   "start": "2026-11-23 19:45:00+00",
+   "hours_left": 20.61,
+   "bid": 0.25,
+   "ask": 0.26,
+   "tick": 0.01,
+   "bid_touch": 12517.22,
+   "ask_touch": 21018.34,
+   "bid_top3": 26222.53,
+   "ask_top3": 36613.8,
+   "traded_total": 102.46,
+   "open_interest": 51.28,
+   "sizes": {
+    "2": {
+     "at_touch": {
+      "usd_per_hour": 1e-05,
+      "period_usd": 0.0001,
+      "pair_cost": 0.99,
+      "capital_usd": 1.98,
+      "cents_per_contract_hour": 0.0003,
+      "breakeven_move_cents_one_full_fill": 0.006,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 0.0,
+      "period_usd": 0.0001,
+      "pair_cost": 0.97,
+      "capital_usd": 1.94,
+      "cents_per_contract_hour": 0.0002,
+      "breakeven_move_cents_one_full_fill": 0.004,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "10": {
+     "at_touch": {
+      "usd_per_hour": 3e-05,
+      "period_usd": 0.0006,
+      "pair_cost": 0.99,
+      "capital_usd": 9.9,
+      "cents_per_contract_hour": 0.0003,
+      "breakeven_move_cents_one_full_fill": 0.006,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 2e-05,
+      "period_usd": 0.0004,
+      "pair_cost": 0.97,
+      "capital_usd": 9.7,
+      "cents_per_contract_hour": 0.0002,
+      "breakeven_move_cents_one_full_fill": 0.004,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "25": {
+     "at_touch": {
+      "usd_per_hour": 7e-05,
+      "period_usd": 0.0015,
+      "pair_cost": 0.99,
+      "capital_usd": 24.75,
+      "cents_per_contract_hour": 0.0003,
+      "breakeven_move_cents_one_full_fill": 0.006,
+      "breakeven_contracts_per_hour_at_one_tick": 0.01
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 5e-05,
+      "period_usd": 0.0009,
+      "pair_cost": 0.97,
+      "capital_usd": 24.25,
+      "cents_per_contract_hour": 0.0002,
+      "breakeven_move_cents_one_full_fill": 0.004,
+      "breakeven_contracts_per_hour_at_one_tick": 0.0,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    },
+    "50": {
+     "at_touch": {
+      "usd_per_hour": 0.00015,
+      "period_usd": 0.0031,
+      "pair_cost": 0.99,
+      "capital_usd": 49.5,
+      "cents_per_contract_hour": 0.0003,
+      "breakeven_move_cents_one_full_fill": 0.006,
+      "breakeven_contracts_per_hour_at_one_tick": 0.01
+     },
+     "within_pair_cap": {
+      "usd_per_hour": 9e-05,
+      "period_usd": 0.0019,
+      "pair_cost": 0.97,
+      "capital_usd": 48.5,
+      "cents_per_contract_hour": 0.0002,
+      "breakeven_move_cents_one_full_fill": 0.004,
+      "breakeven_contracts_per_hour_at_one_tick": 0.01,
+      "yes_ticks_back": 0,
+      "no_ticks_back": 2
+     }
+    }
+   },
+   "min_size_for_1usd_alone_remaining": 26952,
+   "min_size_for_1usd_alone_full_6h": 92593
+  }
+ ]
+}

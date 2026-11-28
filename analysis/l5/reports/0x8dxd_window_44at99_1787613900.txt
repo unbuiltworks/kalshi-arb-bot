@@ -1,0 +1,24 @@
+CAPTURE /home/user/kalshi-arb-bot/data/l5/competitor_0x8dxd
+  earliest captured BTC5m fill : 2026-03-23 00:41:09Z
+  activity tape begins         : 2026-03-23 00:41:09Z  (windows before this are NOT reported)
+  BTC5m windows with fills     : 1282
+  FULLY SETTLED (venue winner + complete tape) : 1281
+    excluded tape_truncated_at_capture_start            1
+
+===  1. btc-updown-5m-1787613900   opens 2026-08-24 23:25:00Z   VENUE WINNER = Down ===
+      t+s side  outc     price       size        cost  inventory after
+      286 BUY   Down    0.9900      44.00     43.5905  {'Down': 44.0}
+      288 BUY   Down    0.9900      22.53     22.3047  {'Down': 66.53}
+      289 BUY   Down    0.9900     100.00     99.0000  {'Down': 166.53}
+      292 BUY   Down    0.9900      15.12     14.9688  {'Down': 181.65}
+      292 BUY   Down    0.9900     113.63    112.4937  {'Down': 295.28}
+      294 BUY   Down    0.9900     100.00     99.0000  {'Down': 395.28}
+      300 BUY   Down    0.9900      51.31     50.7969  {'Down': 446.59}
+      300 BUY   Down    0.9900       5.95      5.8905  {'Down': 452.53999999999996}
+      306 BUY   Down    0.9900     249.00    246.5100  {'Down': 701.54}
+   fills=9  total cost=$694.5551  sell proceeds=$0.0000  terminal inv={'Down': 701.54}
+   redemption: 701.54 winning contracts -> $701.5400 entitlement [DERIVED]
+               observed REDEEM cashflow $701.5400 (1 row(s)) -- agrees
+   REALISED NET = $6.9849   [derived; fees not present in source]
+   maker/taker: UNOBSERVABLE (no role field on the v2 row)
+

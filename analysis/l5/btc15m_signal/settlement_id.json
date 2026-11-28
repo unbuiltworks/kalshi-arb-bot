@@ -1,0 +1,83 @@
+{
+ "by_source": {
+  "btc-usd": {
+   "best": "terminal_close_vs_window_open",
+   "scored": {
+    "terminal_close_vs_prior_minute_close": {
+     "agree": 384,
+     "n": 400,
+     "rate": 0.96
+    },
+    "terminal_close_vs_window_open": {
+     "agree": 385,
+     "n": 400,
+     "rate": 0.9625
+    },
+    "terminal_mean_vs_window_open": {
+     "agree": 365,
+     "n": 400,
+     "rate": 0.9125
+    },
+    "trailing60s_mean_both_endpoints": {
+     "agree": 352,
+     "n": 400,
+     "rate": 0.88
+    },
+    "window_wide_mean_vs_open": {
+     "agree": 293,
+     "n": 400,
+     "rate": 0.7325
+    }
+   },
+   "span": [
+    "2026-05-21T19:15:00+00:00",
+    "2026-08-04T22:15:00+00:00"
+   ],
+   "windows_covered": 400,
+   "windows_resolved": 717
+  },
+  "btc-usd-twap-60s-streams": {
+   "best": "trailing60s_mean_both_endpoints",
+   "scored": {
+    "terminal_close_vs_prior_minute_close": {
+     "agree": 386,
+     "n": 421,
+     "rate": 0.9168646080760094
+    },
+    "terminal_close_vs_window_open": {
+     "agree": 386,
+     "n": 421,
+     "rate": 0.9168646080760094
+    },
+    "terminal_mean_vs_window_open": {
+     "agree": 382,
+     "n": 421,
+     "rate": 0.9073634204275535
+    },
+    "trailing60s_mean_both_endpoints": {
+     "agree": 402,
+     "n": 421,
+     "rate": 0.9548693586698337
+    },
+    "window_wide_mean_vs_open": {
+     "agree": 348,
+     "n": 421,
+     "rate": 0.8266033254156769
+    }
+   },
+   "span": [
+    "2026-08-11T06:45:00+00:00",
+    "2026-08-31T23:00:00+00:00"
+   ],
+   "windows_covered": 421,
+   "windows_resolved": 421
+  }
+ },
+ "captures": [
+  "data/l5/raw/markets.jsonl",
+  "data/traders/0xf705fa04/raw/markets.jsonl",
+  "data/traders/bonereaper/raw/markets.jsonl",
+  "data/traders/justdance/raw/markets.jsonl"
+ ],
+ "resolved_windows": 1138
+}

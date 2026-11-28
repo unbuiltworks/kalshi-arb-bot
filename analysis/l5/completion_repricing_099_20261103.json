@@ -1,0 +1,160 @@
+{
+ "schema": "completion_repricing_and_099/1",
+ "generated_utc": "2026-11-03T15:00:00Z",
+ "verdict": "NO money-path strategy change. One telemetry correction shipped. The 0.99 cap is NOT promotable on OOS evidence; aggressive repricing already EXISTS and is DISABLED.",
+ "repos_inspected": {
+  "canonical": "unbuiltworks/kalshi-arb-bot",
+  "reference": "unbuiltworks/kalshi-longshot-fader @ c004adcaf0d9ea62b064ee563d6e42e6ca750682 (shallow clone)"
+ },
+ "item1_aggressive_repricing": {
+  "finding": "ALREADY IMPLEMENTED IN THE CANONICAL ENGINE, AND STRICTLY SAFER THAN THE FADER.",
+  "existing_code_to_reuse": {
+   "l5_two_sided_probe.completion_requote": "the whole of item 1. Takes resting_own_px, resting_qty, resting_filled_qty (partial-fill aware), bid/ask/tick, held_qty/held_cost_usd, residual_budget_usd, book_age_s, gap_suspected, orders_uncertain, queue_ahead/queue_ahead_fn/require_queue_evidence, cancel_unresolved, min_ticks_behind. Moves a non-filling completion TOWARD THE TOUCH.",
+   "l5_two_sided_probe.max_completion_price": "the ceiling calculator. Already takes pair_cap and theta as PARAMETERS, and held_cost_usd is documented as the cash actually paid, FEES INCLUDED -- exactly the per-lot actual cost basis item 2 requires.",
+   "l5_two_sided_probe.completion_ceiling": "min of COMPLETION_CEILINGS_IN_FORCE = (improves, within_budget); falls back to the stricter opening cap when unreadable",
+   "l5_two_sided_probe.recover_stale_leg": "STALE_RECOVER_MAX_PER_MARKET = 1, configurable SMALLER only",
+   "l5_pmus_live_runner.maybe_completion_requote": "the tick-loop call site, present in L5_LIVE_TICK_STAGES every tick"
+  },
+  "why_it_is_safer_than_the_fader": [
+   "completion_requote REFUSES on cancel_unresolved: a cancel we could not prove landed is a live order until the venue says otherwise. Backed by a real incident -- the 0145z/0200z campaign produced ten requotes and not one clean cancel: seven returned verify_error HTTPError and three returned still_open with ORDER_STATE_NEW and full leaves_qty.",
+   "it REFUSES on orders_uncertain: we cannot cancel what we cannot name, and replacing would risk two live orders on one slot",
+   "it REFUSES on gap_suspected and on book_age_s > MAX_BOOK_AGE_S",
+   "every refusal leaves the existing order resting under existing controls, which is always safe",
+   "by contrast _lip_quoter.cancel() swallows every non-404 error to stderr and PROCEEDS; adopting that behaviour would be a REGRESSION"
+  ],
+  "what_the_fader_has_that_we_do_not": [
+   "_lip_quoter.sync_market cancel-fast/place-throttled asymmetry: cancels never throttled, placements gated by MIN_REPLACE_S=60s per (market,side) plus a per-day budget, and a throttled reprice CANCELS then SKIPS the replacement, deliberately leaving nothing resting",
+   "_lip_quoter.reconcile_presence: polls resting orders, detects externally vanished ones with a 30s indexing grace, drops them so the throttled path re-arms, and force_halts after 3 vanishings",
+   "_lip_quoter.boot_cancel_stale/refuse_boot: CANCEL FIRST DIE SECOND -- a refused boot sweeps every prefix-scoped resting order before exiting",
+   "the alone_at_top retreat: if the level is only us, cancel"
+  ],
+  "the_actual_blocker": "completion_requote_enabled() reads L5_COMPLETION_REQUOTE and DEFAULTS TO OFF. The live deployment shows maybe_completion_requote in L5_LIVE_TICK_STAGES at 0.000s on every tick -- the loop looks healthy while the path does nothing. L5_TS_REQUOTE seen in the campaign is a DIFFERENT mechanism, the OPENING-leg requote. So the complement never repriced because the switch is unset, not because of a defect.",
+  "shipped": "completion_requote_enabled added to L5_EFFECTIVE_RUNTIME_CONFIG as an observed-not-graded row, beside book_completion_enabled. Telemetry only: identical PASS, failed set and checked count with the switch on or off. This is the same failure mode that hid L5_BOOK_COMPLETION for two months -- a switch whose state could only be inferred from missing counters."
+ },
+ "item2_conditional_099": {
+  "feasibility": "FEASIBLE at the tick size. The 1c grid and fee rounding admit a 0.99 net ceiling; on the four venue-confirmed fills the maker rebate rounds to /bin/bash.00 at 2300z (raw 0.00372 < 0.005 floor) and to -0.0049/unit at 2230z, so fees do not consume the 3c of headroom.",
+  "real_fill_evidence": [
+   {
+    "window": "2215z",
+    "held": "1.92 DOWN @0.39",
+    "best_complement": 0.77,
+    "net_pair": 1.16,
+    "le_096": false,
+    "le_099": false
+   },
+   {
+    "window": "2230z",
+    "held": "2.04 UP @0.47",
+    "best_complement": 0.47,
+    "net_pair": 0.9351,
+    "le_096": true,
+    "le_099": true
+   },
+   {
+    "window": "2245z",
+    "held": "2.00 DOWN @0.45",
+    "best_complement": 0.85,
+    "net_pair": 1.3,
+    "le_096": false,
+    "le_099": false
+   },
+   {
+    "window": "2300z",
+    "held": "1.68 UP @0.21",
+    "best_complement": 0.77,
+    "net_pair": 0.98,
+    "le_096": false,
+    "le_099": true
+   }
+  ],
+  "windows_converted": 1,
+  "of": 4,
+  "conversion_value_usd": "+0.3864",
+  "basis": "2300z: +0.0336 matched instead of -0.3528 stranded (true venue basis)",
+  "oos_verdict": "NOT PROMOTABLE. On the 19-window replay the 0.99 stranded-only cap improves TRAIN (-0.63 -> +0.45) and WORSENS HOLDOUT (-2.53 -> -2.83). It buys 3 completions priced between 0.96 and 0.99, and those dearer pairs do not pay for themselves out of sample.",
+  "gap_found_not_fixed": "max_completion_price takes an AGGREGATE held_cost_usd, so multiple lots at different acquisition prices are averaged. The owner forbids averaging profitable and unprofitable lots in a way that disguises losses. Implementing a per-lot ceiling is a real change and is NOT made here, because the cap it would serve does not survive OOS."
+ },
+ "item3_abcd": {
+  "basis": "REPLAY, 19 windows, chronological 11 train / 8 holdout. OPENING POLICY IDENTICAL IN ALL ARMS so only completion differs. Completion is MAKER-ONLY in all four arms (the taker path is removed to isolate repricing), so absolute levels are NOT comparable to earlier runs that included taker completion.",
+  "arms": [
+   {
+    "arm": "A 0.96 + existing requote",
+    "pairs": 5,
+    "stranded": 11,
+    "pairs_per_window": 0.53,
+    "matched": 1.57,
+    "residual": -4.73,
+    "net": -3.16,
+    "train": -0.63,
+    "holdout": -2.53,
+    "reprices": 7,
+    "fills_between_096_and_099": 0,
+    "max_exposure": 0.94
+   },
+   {
+    "arm": "B 0.96 + aggressive ORACLE",
+    "pairs": 7,
+    "stranded": 9,
+    "pairs_per_window": 0.74,
+    "matched": 1.82,
+    "residual": -3.66,
+    "net": -1.84,
+    "train": -0.17,
+    "holdout": -1.67,
+    "reprices": 12,
+    "fills_between_096_and_099": 0,
+    "max_exposure": 0.94
+   },
+   {
+    "arm": "C 0.99 stranded + existing",
+    "pairs": 7,
+    "stranded": 9,
+    "pairs_per_window": 0.74,
+    "matched": 1.34,
+    "residual": -3.72,
+    "net": -2.38,
+    "train": 0.45,
+    "holdout": -2.83,
+    "reprices": 8,
+    "fills_between_096_and_099": 3,
+    "max_exposure": 0.94
+   },
+   {
+    "arm": "D 0.99 stranded + aggr ORACLE",
+    "pairs": 8,
+    "stranded": 8,
+    "pairs_per_window": 0.84,
+    "matched": 1.35,
+    "residual": -3.05,
+    "net": -1.7,
+    "train": 0.41,
+    "holdout": -2.11,
+    "reprices": 11,
+    "fills_between_096_and_099": 4,
+    "max_exposure": 0.94
+   }
+  ],
+  "reading": "B is the ONLY arm improving BOTH halves (+0.46 train, +0.86 holdout). The benefit is in the REPRICING, not in the 0.99 cap. D beats A and C but is worse than B alone, so the cap subtracts from the repricing gain.",
+  "B_and_D_are_ORACLES": "instant repricing, always successful, no queue, no cancel latency, no cancel failure. An UPPER BOUND, not an achievable result."
+ },
+ "simulation_fidelity": {
+  "verdict": "THE AVAILABLE TAPES CANNOT RELIABLY SIMULATE CANCELLATION AND REPLACEMENT.",
+  "reasons": [
+   "tick cadence: median 4.4s, p90 28.9s, max 38.8s. The measured cancel round-trip is 1.021-1.072s and the ack 0.09-0.42s, so an entire cancel-and-replace cycle completes INSIDE one median tape interval and is unobservable.",
+   "depth is TOUCH-ONLY (bid_shares/ask_shares). There is no per-level ladder, and our own quote rests 2 ticks BEHIND the touch where the tape carries no depth at all, so queue position at our price is not derivable.",
+   "shares_traded is cumulative with a delta on only 29 of 61 ticks, and the delta cannot be attributed to a price level, so it cannot clear a modelled queue.",
+   "no order-level events: no acks, no partial-fill prints, no cancel confirmations. Partial-fill and cancellation races have no observable counterpart."
+  ],
+  "minimum_additional_evidence_required": [
+   "order-level event capture from the executor: submit, ack, partial fill, cancel request, cancel ack, terminal state, each with a venue timestamp. This exists in L5_FILL_CALIB_PRESUBMIT-class rows for OUR orders and needs to be retained for a campaign rather than lost with the container.",
+   "per-level book depth at and around our own quote price, not just the touch, at <=1s cadence.",
+   "our own queue position within the level. Our pre-submit rows currently carry our_position_within_level: UNKNOWN against 52,000-100,000 shares of touch depth for a 2-contract clip.",
+   "a bounded live campaign with L5_COMPLETION_REQUOTE enabled and nothing else changed, which is the only way to measure real cancel/replace outcomes."
+  ]
+ },
+ "safety": {
+  "cancel_margin": "300s PRESERVED. The earlier 300->180 change stays reverted and the code floor remains raise-only.",
+  "preserved": "exact-order cancellation, reconciliation, watchdog, HALT, capital caps, daily-loss controls all untouched",
+  "executor": "disarmed; no live orders; no flag enabled by this work"
+ }
+}

@@ -1,0 +1,375 @@
+"""Ingest cross-shadow rows from Railway log dumps into a durable cohort store.
+
+READ-ONLY. Reads log JSON the MCP tool already saved to disk and appends
+de-duplicated per-COMPLETE observations to cohort.jsonl. Nothing here touches
+production, submits anything, or reinterprets a shadow row -- it only carries
+the fields the probe already emitted.
+"""
+from __future__ import annotations
+import glob, json, os, sys
+
+SCR = os.path.dirname(os.path.abspath(__file__))
+STORE = os.path.join(SCR, "cohort.jsonl")
+
+OBS_FIELDS = ("slug", "bid", "ask", "bid_qty", "ask_qty", "both_sides_served",
+              "book_source", "status_utc", "probe_receipt_utc",
+              "authenticated_age_s", "probe_transport_delta_s",
+              "age_at_probe_receipt_s", "order_buys", "executable_depth_field",
+              "executable_price_field", "executable_depth",
+              "executable_depth_status", "executable_complement_price")
+LIVE_FIELDS = ("verdict", "first_stop", "quote_age_s", "intended_qty",
+               "prospective_pair_cost_max", "would_submit", "shadow_only",
+               "live_pair_ceiling_unchanged")
+ECON_FIELDS = ("pair_cost", "gross_locked_pair_pnl", "confirmed_taker_fee",
+               "maker_rebate_forgone", "net_locked_pair_pnl",
+               "net_positive_after_confirmed_costs", "taker_price",
+               "held_avg_cost", "maker_price_forgone", "contracts")
+
+def load_store():
+    rows = {}
+    if os.path.exists(STORE):
+        for line in open(STORE):
+            line = line.strip()
+            if line:
+                r = json.loads(line)
+                rows[r["order_id"]] = r
+    return rows
+
+def ingest(paths):
+    rows = load_store()
+    before = len(rows)
+    for path in paths:
+        try:
+            doc = json.load(open(path))
+        except Exception:
+            continue
+        for entry in doc.get("deploy") or []:
+            ts, msg = entry.get("timestamp"), entry.get("message", "")
+            if "cross_shadow_live" not in msg:
+                continue
+            try:
+                j = json.loads(msg.split(" ", 1)[1])
+            except Exception:
+                continue
+            if j.get("kind") != "session_end":
+                continue
+            inv = j.get("inventory") or {}
+            for o in (j.get("orders") or []):
+                cs = o.get("cross_shadow_live")
+                if not cs:
+                    continue
+                obs = (o.get("recorder_book") or {}).get(
+                    "cross_shadow_observation") or {}
+                econ = cs.get("economics") or {}
+                row = {
+                    "session_end_ts": ts,
+                    "commit": j.get("commit"),
+                    "slug": j.get("slug"),
+                    "session_status": j.get("status"),
+                    "order_id": o.get("order_id"),
+                    "stage": o.get("stage"),
+                    "side": o.get("side"),
+                    "maker_px": o.get("px"),
+                    "qty": o.get("qty"),
+                    "filled_qty": o.get("filled_qty"),
+                    "end_reason": o.get("end_reason"),
+                    "outcome": o.get("outcome"),
+                    "session_inv_residual": inv.get("residual"),
+                    "session_inv_up": inv.get("up"),
+                    "session_inv_dn": inv.get("dn"),
+                }
+                for f in OBS_FIELDS:
+                    row["obs_" + f] = obs.get(f)
+                for f in LIVE_FIELDS:
+                    row[f] = cs.get(f)
+                for f in ECON_FIELDS:
+                    row["econ_" + f] = econ.get(f)
+                if row["order_id"]:
+                    rows[row["order_id"]] = row
+    with open(STORE, "w") as fh:
+        for oid in sorted(rows, key=lambda k: (rows[k].get("session_end_ts") or "", k)):
+            fh.write(json.dumps(rows[oid], separators=(",", ":")) + "\n")
+    return before, len(rows)
+
+# TWO DIFFERENT PROBES WRITE THE SAME LOG VOCABULARY, and until now the ledger
+# could not tell them apart. The dump glob below is service-agnostic, and both
+# the legacy PMUS probe and the isolated R1 measurement probe emit
+# `PMUS_L5_CAMPAIGN {...}` with kinds session_end / incentive_audit /
+# settlement. So R1 canary rows landed in the same store as the legacy cohort
+# with nothing on them to say so. The settlement net was not wrong yet -- R1
+# has not settled -- but the moment it does, its settlement row would be
+# absorbed into the legacy -$44.4898 without a trace. The owner's standing rule
+# is that these cohorts must not blur, so every row now carries the service it
+# came from and the net is scoped by it.
+LEGACY_PMUS_SERVICE = "d84d9a68-2e5b-4f74-9694-5f422417c74f"
+R1_PROBE_SERVICE = "6111a5d4-a2d9-4762-a057-31f02d07586f"
+COHORT_BY_SERVICE = {
+    LEGACY_PMUS_SERVICE: "pmus-legacy",
+    R1_PROBE_SERVICE: "r1-probe",
+}
+# An unrecognised service is NOT quietly filed under the legacy cohort. A row
+# we cannot attribute is marked as such, so it can be excluded from a net
+# rather than silently joining one.
+UNATTRIBUTED = "unattributed"
+
+
+def _provenance(doc):
+    sid = str(doc.get("serviceId") or "")
+    return {"_cohort": COHORT_BY_SERVICE.get(sid, UNATTRIBUTED),
+            "_service": sid or None,
+            "_deployment": doc.get("deploymentId")}
+
+
+def _assign(rows, row, collisions):
+    """Store a row, refusing to let one cohort overwrite another's key.
+
+    `_key` is deliberately NOT re-keyed on cohort: 1,163 existing rows are
+    addressed by the current scheme and re-keying them would duplicate every
+    one. But the nested-settlement key is the venue's own settlement_key, which
+    is stable per market, so if two cohorts ever touched the same market the
+    later ingest would silently replace the earlier row. Suffixing only on an
+    actual cross-cohort clash keeps existing keys untouched and makes that loss
+    impossible.
+    """
+    k = row["_key"]
+    prev = rows.get(k)
+    if prev is not None:
+        pc, nc = prev.get("_cohort"), row.get("_cohort")
+        if pc is not None and nc is not None and pc != nc:
+            collisions.append((k, pc, nc))
+            k = f"{k}|{nc}"
+            row = {**row, "_key": k}
+    rows[k] = row
+
+
+LEDGER = os.path.join(SCR, "ledger.jsonl")
+LEDGER_KINDS = ("settlement", "settled", "realized", "session_end",
+                "incentive", "incentives", "reward", "rewards",
+                "settlement_audit", "risk_set_alarm")
+
+# Railway splits a log message at a hard 80 KiB boundary, so a large
+# settlement row arrives as a head entry plus continuation entries. The old
+# `except Exception: continue` dropped every one of them WITHOUT A TRACE --
+# aec-atpcq-ozabar-evazhu settled at 19:28:43Z and stayed recorded as
+# PENDING_SETTLEMENT because its row was 81,920 bytes. A settlement we cannot
+# read must never look like a settlement that did not happen.
+SPLIT_BOUNDARY = 81920
+MAX_FRAGMENTS = 8
+
+
+def _parse_entry(entries, idx):
+    """Parse entry `idx`, rejoining continuation fragments if it was split.
+
+    Returns the decoded object, or None when it is not a payload line or
+    cannot be reassembled. Continuations are appended ONLY while the head
+    looks truncated, so an ordinary unparseable line is not silently glued
+    to its neighbour.
+    """
+    msg = entries[idx].get("message", "") or ""
+    if " " not in msg:
+        return None
+    body = msg.split(" ", 1)[1]
+    try:
+        return json.loads(body)
+    except ValueError:
+        pass
+    if len(msg) < SPLIT_BOUNDARY:
+        return None            # short line: genuinely malformed, not split
+    for j in range(idx + 1, min(idx + 1 + MAX_FRAGMENTS, len(entries))):
+        body += entries[j].get("message", "") or ""
+        try:
+            return json.loads(body)
+        except ValueError:
+            continue
+    return None
+
+
+def _nested_settlement_row(sn, parent, entry, prov=None):
+    """One settled_now[] entry -> a ledger row, keyed so it cannot duplicate.
+
+    KEYED ON THE VENUE'S OWN settlement_key, not on the log timestamp. The same
+    settlement is reported once per cycle it lands in, and overlapping log pulls
+    re-read the same cycles, so a timestamp key would append the same settlement
+    again on every poll.
+
+    The five streams stay SEPARATE and nothing is summed. `realized_confirmed`
+    is carried through untouched: everything observed so far is
+    SETTLED_REALIZED_UNCONFIRMED and must stay OUT of any net, exactly as
+    honwon-yanhou is held out.
+    """
+    b = sn.get("breakdown") or {}
+    inc = b.get("incentives") or {}
+    key = b.get("settlement_key") or entry.get("timestamp")
+    r = {
+        "kind": "settlement",
+        "_kind": "settlement_nested",
+        "_ts": entry.get("timestamp"),
+        "_key": f"{key}|settlement|{sn.get('slug')}",
+        "_source": "nested in %s" % (parent.get("kind") or "?"),
+        "commit": parent.get("commit"),
+        "slug": sn.get("slug"),
+        "status": b.get("settlement_status"),
+        "settled": True,
+        "realized_confirmed": bool(sn.get("realized_confirmed")),
+        "realized_usd": sn.get("realized_usd"),
+        "realized_source": sn.get("realized_source"),
+        "settled_by": b.get("settled_by"),
+        # 1. matched-pair economics
+        "matched_pairs": b.get("matched_pairs"),
+        "matched_pair_cost": b.get("matched_pair_cost"),
+        "matched_contribution_usd": b.get("matched_contribution_usd"),
+        # 2. residual / directional, kept apart from (1)
+        "directional_residual": b.get("directional_residual"),
+        "residual_contribution_usd": b.get("residual_contribution_usd"),
+        # 3. fees
+        "fees_usd": b.get("fees_usd"),
+        # 4. credited incentives only -- a PENDING reward is not income
+        "incentives_credited_usd": inc.get("credited_to_us_usd"),
+        "incentives_charged_usd": inc.get("charged_to_us_usd"),
+        "incentives_net_usd": inc.get("net_to_us_usd"),
+        "fills_with_a_credit": inc.get("our_fills_with_a_credit"),
+        # 5. the venue's own realized, which is what "realized" may mean
+        "realized_usd_venue": b.get("realized_usd_venue"),
+        "maker_fills": b.get("maker_fills"),
+        "taker_fills": b.get("taker_fills"),
+        "cost_basis_usd": b.get("cost_basis_usd"),
+        "labels": ("nested settlement; the five streams are kept separate and "
+                   "never summed. Counts toward the net ONLY when "
+                   "realized_confirmed is true."),
+    }
+    r.update(prov or {})
+    return r
+
+
+def ingest_ledger(paths):
+    """Venue-side facts, kept in a SEPARATE store from the shadow cohort.
+
+    Settlement / realized / incentive rows are ACTUAL outcomes. They are never
+    merged with cross-shadow economics; the report prints them as their own
+    ledgers precisely so a theoretical number can never be added to a real one.
+    """
+    rows = {}
+    unparsed = []
+    collisions = []
+    if os.path.exists(LEDGER):
+        for line in open(LEDGER):
+            if line.strip():
+                r = json.loads(line)
+                rows[r["_key"]] = r
+    before = len(rows)
+    for path in paths:
+        try:
+            doc = json.load(open(path))
+        except Exception:
+            continue
+        prov = _provenance(doc)
+        entries = doc.get("deploy") or []
+        for idx, entry in enumerate(entries):
+            ts, msg = entry.get("timestamp"), entry.get("message", "")
+            j = _parse_entry(entries, idx)
+            if j is None:
+                # A SETTLEMENT WE CANNOT READ IS NOT A SETTLEMENT THAT DID NOT
+                # HAPPEN. Counted and reported; never silently skipped.
+                if "PMUS_L5_CAMPAIGN" in msg:
+                    unparsed.append(ts)
+                continue
+            kind = str(j.get("kind") or "")
+            if not any(k in kind for k in LEDGER_KINDS):
+                continue
+            r = {k: v for k, v in j.items()
+                 if k != "orders" and not isinstance(v, (list, dict))}
+            if kind == "session_end":
+                r["inventory"] = j.get("inventory")
+                r["fill_reconciliation_agrees"] = (
+                    (j.get("fill_reconciliation") or {}).get("venue_vs_ledger")
+                    or {}).get("agrees")
+            # An incentive_audit row is ALL nested dicts, so the scalar-only
+            # projection above discarded every number it carries and Ledger C
+            # stayed empty while $12.88 sat credited in the account. Project
+            # the venue-CREDITED figures explicitly and keep the accrued ones
+            # beside them, never summed into one number: a PENDING reward is
+            # not income and a per-fill maker rebate is not a reward.
+            if kind == "incentive_audit":
+                earn = j.get("earnings") or {}
+                fills = j.get("credited_on_fills") or {}
+                r["maker_rebate_credited_usd"] = fills.get("credited_to_us_usd")
+                r["maker_rebate_charged_usd"] = fills.get("charged_to_us_usd")
+                r["maker_rebate_net_usd"] = fills.get("net_to_us_usd")
+                r["fills_with_a_credit"] = fills.get("our_fills_with_a_credit")
+                r["rewards_paid_usd"] = earn.get("credited_usd")
+                r["rewards_accrued_not_credited_usd"] = earn.get(
+                    "accrued_not_credited_usd")
+                r["rewards_total_all_statuses_usd"] = earn.get("total_usd")
+                r["rewards_by_status"] = earn.get("by_status")
+                r["counterparty_side_usd_not_ours"] = fills.get(
+                    "counterparty_side_usd_not_ours")
+                r["estimated_not_a_credit"] = (
+                    j.get("estimated_rebate_on_our_fills") or {}).get(
+                        "rebate_after_per_fill_rounding_usd")
+            # Settlement economics, split the way the owner reads them rather
+            # than as one realized number.
+            if kind == "settlement":
+                r["position_net"] = j.get("position_net")
+                r["resolution"] = j.get("resolution")
+                tr = j.get("trades") or {}
+                r["trades_n"] = tr.get("n")
+                r["trades_busted"] = tr.get("busted")
+                r["trades_uncleared"] = tr.get("uncleared")
+                r["realized_pnl_rows"] = tr.get("realized_pnl_rows")
+                r["realized_pnl_sum"] = tr.get("realized_pnl_sum")
+                r["public_resolved"] = (j.get("public") or {}).get(
+                    "public_resolved")
+                r["settlement_px"] = (j.get("public") or {}).get(
+                    "settlement_px")
+            r["_ts"] = ts
+            r["_kind"] = kind
+            r["_key"] = f"{ts}|{kind}|{j.get('slug')}"
+            r.update(prov)
+            _assign(rows, r, collisions)
+        # A SETTLEMENT NESTED INSIDE ANOTHER ROW IS STILL A SETTLEMENT.
+        # In shutdown mode the probe stops emitting standalone kind=settlement
+        # lines and reports each one inside shutdown_idle.settlement
+        # .settled_now[] instead. The kind test above sees "shutdown_idle",
+        # matches nothing, and `continue`s -- so eight markets settled between
+        # 16:30Z and 16:53Z on 2026-09-15 and NONE of them reached the ledger,
+        # with unparsed staying 0 so nothing was reported either. That is the
+        # same class of silent loss as the 80 KiB split-fragment bug, arriving
+        # by a different route.
+        for idx in range(len(entries)):
+            j = _parse_entry(entries, idx)
+            if not isinstance(j, dict):
+                continue
+            for sn in ((j.get("settlement") or {}).get("settled_now") or []):
+                if not isinstance(sn, dict) or not sn.get("slug"):
+                    continue
+                _assign(rows, _nested_settlement_row(sn, j, entries[idx], prov),
+                        collisions)
+    with open(LEDGER, "w") as fh:
+        for k in sorted(rows):
+            fh.write(json.dumps(rows[k], separators=(",", ":")) + "\n")
+    return before, len(rows), unparsed, collisions
+
+
+if __name__ == "__main__":
+    paths = sys.argv[1:] or sorted(glob.glob(
+        "/root/.claude/projects/-home-user-kalshi-arb-bot/*/tool-results/"
+        "mcp-Railway-get-logs-*.txt"))
+    b, a = ingest(paths)
+    lb, la, unparsed, collisions = ingest_ledger(paths)
+    print(f"cohort: {b} -> {a} observations (+{a-b}) from {len(paths)} dump(s)")
+    print(f"ledger: {lb} -> {la} venue/outcome rows (+{la-lb})")
+    by_cohort = {}
+    for line in open(LEDGER):
+        if line.strip():
+            r = json.loads(line)
+            by_cohort[r.get("_cohort")] = by_cohort.get(r.get("_cohort"), 0) + 1
+    print("  cohorts: " + ", ".join(f"{c}={n}" for c, n in
+                                    sorted(by_cohort.items(), key=lambda x: str(x[0]))))
+    if collisions:
+        print(f"  WARNING {len(collisions)} cross-cohort key collision(s); kept "
+              f"both. First: {collisions[0]}")
+    if unparsed:
+        # loud on purpose: an unreadable settlement must never be mistaken for
+        # a settlement that did not occur
+        print(f"  WARNING {len(unparsed)} PMUS payload line(s) unparseable even "
+              f"after rejoining split fragments; first at {unparsed[0]}")

@@ -1,0 +1,39 @@
+== ALL: 187 windows, per window in USD ==
+  control OFF fills  3084  legs refused    0  cost $90.66
+     matched   mean -0.00845 [-0.01293,-0.00356]  total -1.5797
+     residual  mean -0.01610 [-0.02654,-0.00462]  total -3.0116
+     net       mean -0.02455 [-0.03756,-0.01062]  total -4.5913
+     fees 0.0000  credited incentives 0.0000
+  control ON  fills  2878  legs refused  899  cost $86.98
+     matched   mean -0.01079 [-0.01515,-0.00596]  total -2.0169
+     residual  mean -0.01340 [-0.02182,-0.00387]  total -2.5061
+     net       mean -0.02419 [-0.03503,-0.01244]  total -4.5230
+     fees 0.0000  credited incentives 0.0000
+  PAIRED ON-OFF net: mean +0.00037 [-0.00570,+0.00615]  total +0.0683  windows changed 145
+  PAIRED ON-OFF residual: mean +0.00270 [-0.00261,+0.00779]
+== FIRST HALF: 93 windows, per window in USD ==
+  control OFF fills  1541  legs refused    0  cost $45.85
+     matched   mean -0.00745 [-0.01452,+0.00013]  total -0.6932
+     residual  mean -0.01221 [-0.02825,+0.00501]  total -1.1353
+     net       mean -0.01966 [-0.03944,+0.00185]  total -1.8285
+     fees 0.0000  credited incentives 0.0000
+  control ON  fills  1425  legs refused  481  cost $43.60
+     matched   mean -0.00987 [-0.01694,-0.00247]  total -0.9180
+     residual  mean -0.01022 [-0.02188,+0.00332]  total -0.9502
+     net       mean -0.02009 [-0.03575,-0.00284]  total -1.8682
+     fees 0.0000  credited incentives 0.0000
+  PAIRED ON-OFF net: mean -0.00043 [-0.01026,+0.00857]  total -0.0397  windows changed 76
+  PAIRED ON-OFF residual: mean +0.00199 [-0.00663,+0.01010]
+== SECOND HALF: 94 windows, per window in USD ==
+  control OFF fills  1543  legs refused    0  cost $44.81
+     matched   mean -0.00943 [-0.01536,-0.00314]  total -0.8865
+     residual  mean -0.01996 [-0.03395,-0.00517]  total -1.8763
+     net       mean -0.02939 [-0.04693,-0.01066]  total -2.7628
+     fees 0.0000  credited incentives 0.0000
+  control ON  fills  1453  legs refused  418  cost $43.38
+     matched   mean -0.01169 [-0.01741,-0.00569]  total -1.0989
+     residual  mean -0.01655 [-0.02876,-0.00333]  total -1.5559
+     net       mean -0.02824 [-0.04390,-0.01105]  total -2.6548
+     fees 0.0000  credited incentives 0.0000
+  PAIRED ON-OFF net: mean +0.00115 [-0.00629,+0.00826]  total +0.1080  windows changed 69
+  PAIRED ON-OFF residual: mean +0.00341 [-0.00351,+0.01003]

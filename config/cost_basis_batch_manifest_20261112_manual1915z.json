@@ -1,0 +1,22 @@
+{
+ "approved": "owner, 2026-11-12: restate the manual 19:15Z trade from $5.00 to the venue-verified $2.10",
+ "evidence": "L5_COST_BASIS_AUDIT + L5_COST_BASIS_APPLY (INSPECT) on l5-pmus-live deployment e9e9df5b (8a17b720c), 2026-11-12T00:50:48Z: complete walk, 138 pages; one fill DNKM4580F3YF (venue order DNKM2BVG13YB), 5.0000 DOWN at 0.42, fee 0.0000",
+ "keys": [
+  "cpc-btc-updown-15m-2026-11-11-1915z|DOWN"
+ ],
+ "legs": 1,
+ "per_leg": {
+  "cpc-btc-updown-15m-2026-11-11-1915z|DOWN": {
+   "cost_after_usd": "2.10000000",
+   "cost_before_usd": "5.0000",
+   "trade_ids": [
+    "DNKM4580F3YF"
+   ]
+  }
+ },
+ "realized_delta_usd": "2.90000000",
+ "scope": "KEYS_ONLY",
+ "trade_ids": [
+  "DNKM4580F3YF"
+ ]
+}

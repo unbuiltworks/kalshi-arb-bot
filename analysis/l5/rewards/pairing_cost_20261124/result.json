@@ -1,0 +1,1847 @@
+{
+ "period_i_14_18_nov": {
+  "name": "14-18 Nov",
+  "n_fills": 1016,
+  "n_markets": 173,
+  "pos_mismatch_vs_logged": 0,
+  "q1_class": {
+   "ADDING": {
+    "contracts": 987.77,
+    "dollars": 464.7848000000003,
+    "fill_pieces": 512.0,
+    "hts_pnl_standalone": -33.91480000000001
+   },
+   "fills_ADDING": {
+    "fills": 510.0
+   },
+   "REDUCING": {
+    "contracts": 913.1999999999999,
+    "dollars": 489.1266000000001,
+    "fill_pieces": 506.0,
+    "hts_pnl_standalone": -6.796600000000064
+   },
+   "fills_REDUCING": {
+    "fills": 504.0
+   },
+   "fills_SPLIT": {
+    "fills": 2.0
+   }
+  },
+  "q1_stage_x_class": {
+   "two_sided_complete | REDUCING": {
+    "contracts": 678.4,
+    "dollars": 371.9078500000002,
+    "fill_pieces": 303.0
+   },
+   "two_sided_exit | REDUCING": {
+    "contracts": 212.85,
+    "dollars": 105.98049999999994,
+    "fill_pieces": 184.0
+   },
+   "two_sided_extend | ADDING": {
+    "contracts": 7.0,
+    "dollars": 2.9899999999999998,
+    "fill_pieces": 7.0
+   },
+   "two_sided_open | ADDING": {
+    "contracts": 291.67,
+    "dollars": 145.17919999999998,
+    "fill_pieces": 299.0
+   },
+   "two_sided_open | REDUCING": {
+    "contracts": 11.95,
+    "dollars": 6.49825,
+    "fill_pieces": 13.0
+   },
+   "two_sided_open_rewarded | ADDING": {
+    "contracts": 597.4100000000001,
+    "dollars": 281.7653000000001,
+    "fill_pieces": 185.0
+   },
+   "two_sided_open_rewarded | REDUCING": {
+    "contracts": 10.0,
+    "dollars": 4.74,
+    "fill_pieces": 6.0
+   },
+   "two_sided_open_rewarded_cheap_first | ADDING": {
+    "contracts": 91.69000000000001,
+    "dollars": 34.8503,
+    "fill_pieces": 21.0
+   }
+  },
+  "q2_hold_to_settlement": {
+   "contracts": 987.77,
+   "lots": 512,
+   "markets": 173,
+   "cost": 464.7848,
+   "payout": 430.87,
+   "pnl": -33.914800000000014,
+   "avg_px": 0.4705394980612896,
+   "win_rate_contracts": 0.43620478451461375,
+   "win_rate_dollars": 0.4564065993552285,
+   "pnl_per_contract": -0.03433471354667586,
+   "binom_se_winrate": 0.01588133145964617,
+   "z_binom_indep": -2.161954344566069,
+   "se_pnl_if_contracts_independent": 15.307850583932415,
+   "markets_pos": 74,
+   "markets_neg": 99,
+   "mean_pnl_per_market": -0.19603930635838146,
+   "sd_pnl_per_market": 2.224127432187468,
+   "se_total_pnl_market_clustered": 29.25382898677241,
+   "t_market_clustered": -1.1593285793574282
+  },
+  "q3_actual": {
+   "total_all_fills_settled": -40.7114,
+   "fifo": {
+    "pairs": 913.2,
+    "pair_cost_avg": 1.0065785698642136,
+    "pair_pnl": -6.007549999999924,
+    "residual_contracts": 74.57,
+    "residual_lots": 48,
+    "residual_markets": 47,
+    "residual_cost": 34.70385,
+    "residual_payout": 0.0,
+    "residual_pnl": -34.70385,
+    "residual_won_contracts": 0.0,
+    "total": -40.71139999999993
+   },
+   "avg_cost_convention": {
+    "pair_pnl": -4.4629484348730335,
+    "residual_pnl": -36.248451565126985,
+    "residual_cost": 36.248451565126985,
+    "residual_markets": 47,
+    "total": -40.71140000000002
+   },
+   "hold_pnl": -33.914800000000014,
+   "net_effect_of_completions": -6.796599999999984,
+   "decomposition": {
+    "completion_contracts": 913.2,
+    "completion_cost": 489.1266,
+    "avg_completion_px": 0.5356182654402102,
+    "completion_payout_at_settlement": 482.33,
+    "paired_legs_won_contracts": 430.87,
+    "paired_legs_lost_contracts": 482.33,
+    "share_paired_legs_won": 0.4718243539202803,
+    "paired_legs_won_dollars_share": 0.4932347038388936,
+    "avg_open_px_paired": 0.47096030442400344,
+    "upside_given_up_on_winners": -218.45545,
+    "loss_avoided_on_losers": 211.65885,
+    "avg_comp_px_when_leg_won": 0.5070101190614339,
+    "avg_comp_px_when_leg_lost": 0.5611741960898141,
+    "paired_legs_hold_pnl": 0.7890500000000024,
+    "paired_legs_actual_pnl": -6.007549999999924,
+    "unpaired_legs_won_share": 0.0,
+    "breakeven_share_of_paired_legs_losing": 0.5356182654402102,
+    "observed_share_of_paired_legs_losing": 0.5281756460797197,
+    "binom_se_share": 0.01650373732103715
+   }
+  },
+  "uncertainty_market_bootstrap": {
+   "markets": 173,
+   "completion_effect": {
+    "point": -6.796600000000003,
+    "se": 25.1058092403327,
+    "ci95": [
+     -56.676100000000005,
+     41.91589999999999
+    ],
+    "share_boot_positive": 0.3994,
+    "markets_with_completions": 154,
+    "markets_effect_pos": 78,
+    "markets_effect_neg": 75
+   },
+   "hold_pnl": {
+    "point": -33.91479999999999,
+    "se": 29.023330198308322,
+    "ci95": [
+     -90.0334,
+     23.323200000000007
+    ]
+   },
+   "actual_pnl": {
+    "point": -40.7114,
+    "se": 9.880030869991698,
+    "ci95": [
+     -61.0637,
+     -21.903899999999997
+    ]
+   }
+  },
+  "q4_splits": {
+   "by_pair_cost": {
+    "<=0.97": {
+     "pairs": 220.59,
+     "markets": 66,
+     "avg_open_px": 0.4606838478625504,
+     "avg_comp_px": 0.47644906840745277,
+     "avg_pair_cost": 0.9371329162700032,
+     "actual_pair_pnl": 13.867850000000004,
+     "hold_pnl_of_open_legs": 20.337750000000003,
+     "completion_effect": -6.469900000000001,
+     "held_leg_win_share": 0.552880910286051,
+     "breakeven_lose_share": 0.47644906840745277
+    },
+    "0.97-1.00": {
+     "pairs": 233.75,
+     "markets": 77,
+     "avg_open_px": 0.4926216042780749,
+     "avg_comp_px": 0.49599187165775405,
+     "avg_pair_cost": 0.9886134759358289,
+     "actual_pair_pnl": 2.6615999999999995,
+     "hold_pnl_of_open_legs": 21.7697,
+     "completion_effect": -19.1081,
+     "held_leg_win_share": 0.5857540106951871,
+     "breakeven_lose_share": 0.49599187165775405
+    },
+    ">1.00": {
+     "pairs": 458.86,
+     "markets": 106,
+     "avg_open_px": 0.46486597219195397,
+     "avg_comp_px": 0.584249226343547,
+     "avg_pair_cost": 1.049115198535501,
+     "actual_pair_pnl": -22.537000000000003,
+     "hold_pnl_of_open_legs": -41.318400000000004,
+     "completion_effect": 18.781399999999998,
+     "held_leg_win_share": 0.37482020659896265,
+     "breakeven_lose_share": 0.584249226343547
+    }
+   },
+   "by_time_to_complete": {
+    "<1min": {
+     "pairs": 254.72,
+     "markets": 77,
+     "avg_open_px": 0.47058103015075375,
+     "avg_comp_px": 0.5215204930904522,
+     "avg_pair_cost": 0.992101523241206,
+     "actual_pair_pnl": 2.011899999999999,
+     "hold_pnl_of_open_legs": -1.3563999999999992,
+     "completion_effect": 3.3683000000000005,
+     "held_leg_win_share": 0.46525596733668345,
+     "breakeven_lose_share": 0.5215204930904522
+    },
+    "1-10min": {
+     "pairs": 550.06,
+     "markets": 116,
+     "avg_open_px": 0.4769668763407629,
+     "avg_comp_px": 0.5460767916227321,
+     "avg_pair_cost": 1.023043667963495,
+     "actual_pair_pnl": -12.675399999999998,
+     "hold_pnl_of_open_legs": -10.8904,
+     "completion_effect": -1.7850000000000004,
+     "held_leg_win_share": 0.45716830891175514,
+     "breakeven_lose_share": 0.5460767916227321
+    },
+    ">10min": {
+     "pairs": 108.42,
+     "markets": 44,
+     "avg_open_px": 0.44137751337391623,
+     "avg_comp_px": 0.5156788415421509,
+     "avg_pair_cost": 0.9570563549160671,
+     "actual_pair_pnl": 4.655950000000001,
+     "hold_pnl_of_open_legs": 13.035850000000002,
+     "completion_effect": -8.379900000000001,
+     "held_leg_win_share": 0.5616122486626084,
+     "breakeven_lose_share": 0.5156788415421509
+    },
+    "unknown": {
+     "contracts": 0
+    }
+   },
+   "by_completion_stage": {
+    "two_sided_complete": {
+     "pairs": 678.4,
+     "markets": 142,
+     "avg_open_px": 0.46480468750000004,
+     "avg_comp_px": 0.5482132222877358,
+     "avg_pair_cost": 1.0130179097877359,
+     "actual_pair_pnl": -8.83135,
+     "hold_pnl_of_open_legs": -12.0635,
+     "completion_effect": 3.2321499999999994,
+     "held_leg_win_share": 0.4470224056603774,
+     "breakeven_lose_share": 0.5482132222877358
+    },
+    "two_sided_exit": {
+     "pairs": 212.85,
+     "markets": 47,
+     "avg_open_px": 0.4925308902983322,
+     "avg_comp_px": 0.49791167488841914,
+     "avg_pair_cost": 0.9904425651867512,
+     "actual_pair_pnl": 2.0343000000000013,
+     "hold_pnl_of_open_legs": 11.774800000000003,
+     "completion_effect": -9.7405,
+     "held_leg_win_share": 0.5478505990133897,
+     "breakeven_lose_share": 0.49791167488841914
+    },
+    "two_sided_open": {
+     "pairs": 11.95,
+     "markets": 9,
+     "avg_open_px": 0.4236192468619247,
+     "avg_comp_px": 0.5437866108786612,
+     "avg_pair_cost": 0.967405857740586,
+     "actual_pair_pnl": 0.3894999999999997,
+     "hold_pnl_of_open_legs": 1.9377499999999999,
+     "completion_effect": -1.5482500000000001,
+     "held_leg_win_share": 0.5857740585774059,
+     "breakeven_lose_share": 0.5437866108786612
+    },
+    "two_sided_open_rewarded": {
+     "pairs": 10.0,
+     "markets": 4,
+     "avg_open_px": 0.48600000000000004,
+     "avg_comp_px": 0.47400000000000003,
+     "avg_pair_cost": 0.96,
+     "actual_pair_pnl": 0.40000000000000013,
+     "hold_pnl_of_open_legs": -0.8600000000000003,
+     "completion_effect": 1.2600000000000002,
+     "held_leg_win_share": 0.4,
+     "breakeven_lose_share": 0.47400000000000003
+    }
+   },
+   "never_completed_residual": {
+    "contracts": 74.57,
+    "markets": 47,
+    "avg_px": 0.4653862142952931,
+    "pnl": -34.70385,
+    "win_share": 0.0
+   },
+   "by_sport": {
+    "acb": {
+     "markets": 1,
+     "hold": {
+      "contracts": 2.0,
+      "cost": 0.95,
+      "payout": 0.0,
+      "pnl": -0.95,
+      "avg_px": 0.475,
+      "win_rate_contracts": 0.0,
+      "pnl_per_contract": -0.475,
+      "markets": 1
+     },
+     "actual_total": -0.47000000000000003,
+     "completion_effect": 0.4799999999999999,
+     "paired": {
+      "pairs": 1.0,
+      "markets": 1,
+      "avg_open_px": 0.46,
+      "avg_comp_px": 0.52,
+      "avg_pair_cost": 0.98,
+      "actual_pair_pnl": 0.020000000000000018,
+      "hold_pnl_of_open_legs": -0.46,
+      "completion_effect": 0.48,
+      "held_leg_win_share": 0.0,
+      "breakeven_lose_share": 0.52
+     },
+     "residual": {
+      "contracts": 1.0,
+      "markets": 1,
+      "avg_px": 0.49,
+      "pnl": -0.49,
+      "win_share": 0.0
+     }
+    },
+    "atp": {
+     "markets": 16,
+     "hold": {
+      "contracts": 125.0,
+      "cost": 58.17,
+      "payout": 55.0,
+      "pnl": -3.1700000000000017,
+      "avg_px": 0.46536,
+      "win_rate_contracts": 0.44,
+      "pnl_per_contract": -0.025360000000000014,
+      "markets": 16
+     },
+     "actual_total": -2.5876000000000006,
+     "completion_effect": 0.5824000000000011,
+     "paired": {
+      "pairs": 124.0,
+      "markets": 16,
+      "avg_open_px": 0.4660483870967742,
+      "avg_comp_px": 0.5517548387096773,
+      "avg_pair_cost": 1.0178032258064516,
+      "actual_pair_pnl": -2.2076000000000007,
+      "hold_pnl_of_open_legs": -2.79,
+      "completion_effect": 0.5823999999999997,
+      "held_leg_win_share": 0.4435483870967742,
+      "breakeven_lose_share": 0.5517548387096773
+     },
+     "residual": {
+      "contracts": 1.0,
+      "markets": 1,
+      "avg_px": 0.38,
+      "pnl": -0.38,
+      "win_share": 0.0
+     }
+    },
+    "atpdb": {
+     "markets": 3,
+     "hold": {
+      "contracts": 7.0,
+      "cost": 3.3599999999999994,
+      "payout": 5.0,
+      "pnl": 1.6400000000000006,
+      "avg_px": 0.4799999999999999,
+      "win_rate_contracts": 0.7142857142857143,
+      "pnl_per_contract": 0.23428571428571437,
+      "markets": 3
+     },
+     "actual_total": -0.8599999999999997,
+     "completion_effect": -2.5,
+     "paired": {
+      "pairs": 5.0,
+      "markets": 1,
+      "avg_open_px": 0.4699999999999999,
+      "avg_comp_px": 0.5,
+      "avg_pair_cost": 0.97,
+      "actual_pair_pnl": 0.15000000000000013,
+      "hold_pnl_of_open_legs": 2.6500000000000004,
+      "completion_effect": -2.5,
+      "held_leg_win_share": 1.0,
+      "breakeven_lose_share": 0.5
+     },
+     "residual": {
+      "contracts": 2.0,
+      "markets": 2,
+      "avg_px": 0.505,
+      "pnl": -1.01,
+      "win_share": 0.0
+     }
+    },
+    "cbb": {
+     "markets": 1,
+     "hold": {
+      "contracts": 3.0,
+      "cost": 0.8600000000000001,
+      "payout": 0.0,
+      "pnl": -0.8600000000000001,
+      "avg_px": 0.2866666666666667,
+      "win_rate_contracts": 0.0,
+      "pnl_per_contract": -0.2866666666666667,
+      "markets": 1
+     },
+     "actual_total": -0.22000000000000003,
+     "completion_effect": 0.6400000000000001,
+     "paired": {
+      "pairs": 2.0,
+      "markets": 1,
+      "avg_open_px": 0.30000000000000004,
+      "avg_comp_px": 0.6799999999999999,
+      "avg_pair_cost": 0.98,
+      "actual_pair_pnl": 0.040000000000000036,
+      "hold_pnl_of_open_legs": -0.6000000000000001,
+      "completion_effect": 0.64,
+      "held_leg_win_share": 0.0,
+      "breakeven_lose_share": 0.6799999999999999
+     },
+     "residual": {
+      "contracts": 1.0,
+      "markets": 1,
+      "avg_px": 0.26,
+      "pnl": -0.26,
+      "win_share": 0.0
+     }
+    },
+    "cfb": {
+     "markets": 33,
+     "hold": {
+      "contracts": 212.46,
+      "cost": 107.562,
+      "payout": 95.35,
+      "pnl": -12.212000000000003,
+      "avg_px": 0.506269415419373,
+      "win_rate_contracts": 0.4487903605384543,
+      "pnl_per_contract": -0.05747905488091878,
+      "markets": 33
+     },
+     "actual_total": -6.5582,
+     "completion_effect": 5.653800000000003,
+     "paired": {
+      "pairs": 196.31,
+      "markets": 29,
+      "avg_open_px": 0.5093461871529723,
+      "avg_comp_px": 0.48548825836686876,
+      "avg_pair_cost": 0.9948344455198411,
+      "actual_pair_pnl": 1.0140500000000001,
+      "hold_pnl_of_open_legs": -4.63975,
+      "completion_effect": 5.6538,
+      "held_leg_win_share": 0.4857113748662829,
+      "breakeven_lose_share": 0.48548825836686876
+     },
+     "residual": {
+      "contracts": 16.15,
+      "markets": 17,
+      "avg_px": 0.46886996904024775,
+      "pnl": -7.57225,
+      "win_share": 0.0
+     }
+    },
+    "cs2": {
+     "markets": 21,
+     "hold": {
+      "contracts": 163.28,
+      "cost": 77.7858,
+      "payout": 83.85,
+      "pnl": 6.0642,
+      "avg_px": 0.4763951494365507,
+      "win_rate_contracts": 0.5135350318471337,
+      "pnl_per_contract": 0.037139882410583046,
+      "markets": 21
+     },
+     "actual_total": -6.280599999999999,
+     "completion_effect": -12.3448,
+     "paired": {
+      "pairs": 146.28,
+      "markets": 17,
+      "avg_open_px": 0.4693450916051408,
+      "avg_comp_px": 0.5111758271807493,
+      "avg_pair_cost": 0.9805209187858901,
+      "actual_pair_pnl": 2.849400000000002,
+      "hold_pnl_of_open_legs": 15.194200000000002,
+      "completion_effect": -12.344800000000001,
+      "held_leg_win_share": 0.5732157506152583,
+      "breakeven_lose_share": 0.5111758271807493
+     },
+     "residual": {
+      "contracts": 17.0,
+      "markets": 4,
+      "avg_px": 0.5370588235294118,
+      "pnl": -9.13,
+      "win_share": 0.0
+     }
+    },
+    "dota2": {
+     "markets": 8,
+     "hold": {
+      "contracts": 56.6,
+      "cost": 25.387999999999998,
+      "payout": 23.0,
+      "pnl": -2.387999999999998,
+      "avg_px": 0.44855123674911657,
+      "win_rate_contracts": 0.40636042402826855,
+      "pnl_per_contract": -0.04219081272084802,
+      "markets": 8
+     },
+     "actual_total": 0.09600000000000077,
+     "completion_effect": 2.483999999999999,
+     "paired": {
+      "pairs": 56.6,
+      "markets": 8,
+      "avg_open_px": 0.4485512367491166,
+      "avg_comp_px": 0.5497526501766784,
+      "avg_pair_cost": 0.998303886925795,
+      "actual_pair_pnl": 0.09600000000000175,
+      "hold_pnl_of_open_legs": -2.388,
+      "completion_effect": 2.4840000000000004,
+      "held_leg_win_share": 0.40636042402826855,
+      "breakeven_lose_share": 0.5497526501766784
+     },
+     "residual": {
+      "contracts": 0
+     }
+    },
+    "engnl": {
+     "markets": 1,
+     "hold": {
+      "contracts": 2.0,
+      "cost": 1.1400000000000001,
+      "payout": 0.0,
+      "pnl": -1.1400000000000001,
+      "avg_px": 0.5700000000000001,
+      "win_rate_contracts": 0.0,
+      "pnl_per_contract": -0.5700000000000001,
+      "markets": 1
+     },
+     "actual_total": -0.58,
+     "completion_effect": 0.5600000000000002,
+     "paired": {
+      "pairs": 1.0,
+      "markets": 1,
+      "avg_open_px": 0.54,
+      "avg_comp_px": 0.44,
+      "avg_pair_cost": 0.98,
+      "actual_pair_pnl": 0.020000000000000018,
+      "hold_pnl_of_open_legs": -0.54,
+      "completion_effect": 0.56,
+      "held_leg_win_share": 0.0,
+      "breakeven_lose_share": 0.44
+     },
+     "residual": {
+      "contracts": 1.0,
+      "markets": 1,
+      "avg_px": 0.6,
+      "pnl": -0.6,
+      "win_share": 0.0
+     }
+    },
+    "itfme": {
+     "markets": 14,
+     "hold": {
+      "contracts": 78.19,
+      "cost": 34.5826,
+      "payout": 42.0,
+      "pnl": 7.417400000000001,
+      "avg_px": 0.4422892953063052,
+      "win_rate_contracts": 0.5371530886302597,
+      "pnl_per_contract": 0.09486379332395448,
+      "markets": 14
+     },
+     "actual_total": -3.0719000000000007,
+     "completion_effect": -10.489300000000002,
+     "paired": {
+      "pairs": 75.19,
+      "markets": 13,
+      "avg_open_px": 0.44410958904109593,
+      "avg_comp_px": 0.5809190051868599,
+      "avg_pair_cost": 1.0250285942279558,
+      "actual_pair_pnl": -1.8819000000000006,
+      "hold_pnl_of_open_legs": 8.6074,
+      "completion_effect": -10.4893,
+      "held_leg_win_share": 0.5585849182072085,
+      "breakeven_lose_share": 0.5809190051868599
+     },
+     "residual": {
+      "contracts": 3.0,
+      "markets": 3,
+      "avg_px": 0.39666666666666667,
+      "pnl": -1.19,
+      "win_share": 0.0
+     }
+    },
+    "itfwo": {
+     "markets": 24,
+     "hold": {
+      "contracts": 131.12,
+      "cost": 63.4948,
+      "payout": 43.0,
+      "pnl": -20.494799999999998,
+      "avg_px": 0.4842495424039048,
+      "win_rate_contracts": 0.3279438682123246,
+      "pnl_per_contract": -0.1563056741915802,
+      "markets": 24
+     },
+     "actual_total": -9.434399999999998,
+     "completion_effect": 11.0604,
+     "paired": {
+      "pairs": 123.12,
+      "markets": 23,
+      "avg_open_px": 0.4851754385964912,
+      "avg_comp_px": 0.560912930474334,
+      "avg_pair_cost": 1.0460883690708251,
+      "actual_pair_pnl": -5.6744,
+      "hold_pnl_of_open_legs": -16.7348,
+      "completion_effect": 11.060400000000001,
+      "held_leg_win_share": 0.3492527615334633,
+      "breakeven_lose_share": 0.560912930474334
+     },
+     "residual": {
+      "contracts": 8.0,
+      "markets": 4,
+      "avg_px": 0.47,
+      "pnl": -3.76,
+      "win_share": 0.0
+     }
+    },
+    "ligaf": {
+     "markets": 1,
+     "hold": {
+      "contracts": 1.0,
+      "cost": 0.39,
+      "payout": 0.0,
+      "pnl": -0.39,
+      "avg_px": 0.39,
+      "win_rate_contracts": 0.0,
+      "pnl_per_contract": -0.39,
+      "markets": 1
+     },
+     "actual_total": -0.39,
+     "completion_effect": 0.0,
+     "paired": {
+      "contracts": 0
+     },
+     "residual": {
+      "contracts": 1.0,
+      "markets": 1,
+      "avg_px": 0.39,
+      "pnl": -0.39,
+      "win_share": 0.0
+     }
+    },
+    "nba": {
+     "markets": 7,
+     "hold": {
+      "contracts": 26.0,
+      "cost": 11.7,
+      "payout": 6.0,
+      "pnl": -5.699999999999999,
+      "avg_px": 0.44999999999999996,
+      "win_rate_contracts": 0.23076923076923078,
+      "pnl_per_contract": -0.2192307692307692,
+      "markets": 7
+     },
+     "actual_total": -1.43,
+     "completion_effect": 4.27,
+     "paired": {
+      "pairs": 23.0,
+      "markets": 7,
+      "avg_open_px": 0.45913043478260873,
+      "avg_comp_px": 0.5534782608695652,
+      "avg_pair_cost": 1.0126086956521738,
+      "actual_pair_pnl": -0.29000000000000004,
+      "hold_pnl_of_open_legs": -4.56,
+      "completion_effect": 4.27,
+      "held_leg_win_share": 0.2608695652173913,
+      "breakeven_lose_share": 0.5534782608695652
+     },
+     "residual": {
+      "contracts": 3.0,
+      "markets": 2,
+      "avg_px": 0.37999999999999995,
+      "pnl": -1.14,
+      "win_share": 0.0
+     }
+    },
+    "nhl": {
+     "markets": 4,
+     "hold": {
+      "contracts": 7.9,
+      "cost": 3.648,
+      "payout": 6.0,
+      "pnl": 2.352,
+      "avg_px": 0.46177215189873416,
+      "win_rate_contracts": 0.7594936708860759,
+      "pnl_per_contract": 0.2977215189873417,
+      "markets": 4
+     },
+     "actual_total": -0.1519999999999999,
+     "completion_effect": -2.5039999999999996,
+     "paired": {
+      "pairs": 6.9,
+      "markets": 4,
+      "avg_open_px": 0.4750724637681159,
+      "avg_comp_px": 0.49333333333333335,
+      "avg_pair_cost": 0.9684057971014491,
+      "actual_pair_pnl": 0.2180000000000002,
+      "hold_pnl_of_open_legs": 2.7220000000000004,
+      "completion_effect": -2.504,
+      "held_leg_win_share": 0.8695652173913043,
+      "breakeven_lose_share": 0.49333333333333335
+     },
+     "residual": {
+      "contracts": 1.0,
+      "markets": 1,
+      "avg_px": 0.37,
+      "pnl": -0.37,
+      "win_share": 0.0
+     }
+    },
+    "setkamecz": {
+     "markets": 3,
+     "hold": {
+      "contracts": 16.0,
+      "cost": 6.42,
+      "payout": 3.0,
+      "pnl": -3.42,
+      "avg_px": 0.40125,
+      "win_rate_contracts": 0.1875,
+      "pnl_per_contract": -0.21375,
+      "markets": 3
+     },
+     "actual_total": 0.18000000000000016,
+     "completion_effect": 3.6,
+     "paired": {
+      "pairs": 16.0,
+      "markets": 3,
+      "avg_open_px": 0.40125,
+      "avg_comp_px": 0.5875,
+      "avg_pair_cost": 0.98875,
+      "actual_pair_pnl": 0.17999999999999983,
+      "hold_pnl_of_open_legs": -3.42,
+      "completion_effect": 3.6,
+      "held_leg_win_share": 0.1875,
+      "breakeven_lose_share": 0.5875
+     },
+     "residual": {
+      "contracts": 0
+     }
+    },
+    "setkamemd": {
+     "markets": 7,
+     "hold": {
+      "contracts": 32.0,
+      "cost": 17.53,
+      "payout": 29.0,
+      "pnl": 11.469999999999999,
+      "avg_px": 0.5478125,
+      "win_rate_contracts": 0.90625,
+      "pnl_per_contract": 0.35843749999999996,
+      "markets": 7
+     },
+     "actual_total": -0.330000000000001,
+     "completion_effect": -11.8,
+     "paired": {
+      "pairs": 32.0,
+      "markets": 7,
+      "avg_open_px": 0.5478125,
+      "avg_comp_px": 0.4625,
+      "avg_pair_cost": 1.0103125,
+      "actual_pair_pnl": -0.3299999999999995,
+      "hold_pnl_of_open_legs": 11.47,
+      "completion_effect": -11.8,
+      "held_leg_win_share": 0.90625,
+      "breakeven_lose_share": 0.4625
+     },
+     "residual": {
+      "contracts": 0
+     }
+    },
+    "setkameua": {
+     "markets": 20,
+     "hold": {
+      "contracts": 91.37,
+      "cost": 37.515,
+      "payout": 24.0,
+      "pnl": -13.515,
+      "avg_px": 0.41058334245375944,
+      "win_rate_contracts": 0.26266827186166136,
+      "pnl_per_contract": -0.14791507059209807,
+      "markets": 20
+     },
+     "actual_total": -8.0633,
+     "completion_effect": 5.451700000000001,
+     "paired": {
+      "pairs": 74.95,
+      "markets": 16,
+      "avg_open_px": 0.40858438959306204,
+      "avg_comp_px": 0.6070486991327552,
+      "avg_pair_cost": 1.0156330887258171,
+      "actual_pair_pnl": -1.1717000000000009,
+      "hold_pnl_of_open_legs": -6.6234,
+      "completion_effect": 5.4517,
+      "held_leg_win_share": 0.3202134756504336,
+      "breakeven_lose_share": 0.6070486991327552
+     },
+     "residual": {
+      "contracts": 16.419999999999998,
+      "markets": 6,
+      "avg_px": 0.4197076735688186,
+      "pnl": -6.8916,
+      "win_share": 0.0
+     }
+    },
+    "testcr": {
+     "markets": 1,
+     "hold": {
+      "contracts": 1.0,
+      "cost": 0.36,
+      "payout": 0.0,
+      "pnl": -0.36,
+      "avg_px": 0.36,
+      "win_rate_contracts": 0.0,
+      "pnl_per_contract": -0.36,
+      "markets": 1
+     },
+     "actual_total": -0.36,
+     "completion_effect": 0.0,
+     "paired": {
+      "contracts": 0
+     },
+     "residual": {
+      "contracts": 1.0,
+      "markets": 1,
+      "avg_px": 0.36,
+      "pnl": -0.36,
+      "win_share": 0.0
+     }
+    },
+    "utr": {
+     "markets": 3,
+     "hold": {
+      "contracts": 7.0,
+      "cost": 2.43,
+      "payout": 1.0,
+      "pnl": -1.4300000000000002,
+      "avg_px": 0.34714285714285714,
+      "win_rate_contracts": 0.14285714285714285,
+      "pnl_per_contract": -0.20428571428571432,
+      "markets": 3
+     },
+     "actual_total": 1.15,
+     "completion_effect": 2.58,
+     "paired": {
+      "pairs": 6.0,
+      "markets": 2,
+      "avg_open_px": 0.3316666666666667,
+      "avg_comp_px": 0.4033333333333333,
+      "avg_pair_cost": 0.735,
+      "actual_pair_pnl": 1.5900000000000003,
+      "hold_pnl_of_open_legs": -0.9900000000000001,
+      "completion_effect": 2.58,
+      "held_leg_win_share": 0.16666666666666666,
+      "breakeven_lose_share": 0.4033333333333333
+     },
+     "residual": {
+      "contracts": 1.0,
+      "markets": 1,
+      "avg_px": 0.44,
+      "pnl": -0.44,
+      "win_share": 0.0
+     }
+    },
+    "wta": {
+     "markets": 2,
+     "hold": {
+      "contracts": 10.0,
+      "cost": 4.16,
+      "payout": 3.0,
+      "pnl": -1.1600000000000001,
+      "avg_px": 0.41600000000000004,
+      "win_rate_contracts": 0.3,
+      "pnl_per_contract": -0.11600000000000002,
+      "markets": 2
+     },
+     "actual_total": -0.13000000000000028,
+     "completion_effect": 1.0299999999999998,
+     "paired": {
+      "pairs": 10.0,
+      "markets": 2,
+      "avg_open_px": 0.41600000000000004,
+      "avg_comp_px": 0.597,
+      "avg_pair_cost": 1.0130000000000001,
+      "actual_pair_pnl": -0.13000000000000023,
+      "hold_pnl_of_open_legs": -1.1600000000000001,
+      "completion_effect": 1.0299999999999998,
+      "held_leg_win_share": 0.3,
+      "breakeven_lose_share": 0.597
+     },
+     "residual": {
+      "contracts": 0
+     }
+    },
+    "wtadb": {
+     "markets": 1,
+     "hold": {
+      "contracts": 3.31,
+      "cost": 2.1592,
+      "payout": 0.31,
+      "pnl": -1.8491999999999997,
+      "avg_px": 0.6523262839879154,
+      "win_rate_contracts": 0.09365558912386707,
+      "pnl_per_contract": -0.5586706948640483,
+      "markets": 1
+     },
+     "actual_total": -0.6238,
+     "completion_effect": 1.2253999999999996,
+     "paired": {
+      "pairs": 2.31,
+      "markets": 1,
+      "avg_open_px": 0.623030303030303,
+      "avg_comp_px": 0.3353246753246753,
+      "avg_pair_cost": 0.9583549783549783,
+      "actual_pair_pnl": 0.09620000000000009,
+      "hold_pnl_of_open_legs": -1.1292,
+      "completion_effect": 1.2253999999999998,
+      "held_leg_win_share": 0.1341991341991342,
+      "breakeven_lose_share": 0.3353246753246753
+     },
+     "residual": {
+      "contracts": 1.0,
+      "markets": 1,
+      "avg_px": 0.72,
+      "pnl": -0.72,
+      "win_share": 0.0
+     }
+    },
+    "wtt": {
+     "markets": 2,
+     "hold": {
+      "contracts": 11.540000000000001,
+      "cost": 5.179399999999999,
+      "payout": 11.36,
+      "pnl": 6.1806,
+      "avg_px": 0.4488214904679375,
+      "win_rate_contracts": 0.9844020797227035,
+      "pnl_per_contract": 0.535580589254766,
+      "markets": 2
+     },
+     "actual_total": -0.5955999999999992,
+     "completion_effect": -6.776199999999999,
+     "paired": {
+      "pairs": 11.540000000000001,
+      "markets": 2,
+      "avg_open_px": 0.4488214904679375,
+      "avg_comp_px": 0.602790294627383,
+      "avg_pair_cost": 1.0516117850953206,
+      "actual_pair_pnl": -0.5956000000000006,
+      "hold_pnl_of_open_legs": 6.180600000000001,
+      "completion_effect": -6.7762,
+      "held_leg_win_share": 0.9844020797227035,
+      "breakeven_lose_share": 0.602790294627383
+     },
+     "residual": {
+      "contracts": 0
+     }
+    }
+   }
+  },
+  "by_fill_day": {
+   "2026-11-14": {
+    "add_contracts": 256.67,
+    "hold_pnl": 22.2083,
+    "red_contracts": 239.42,
+    "completion_effect": -22.9438
+   },
+   "2026-11-15": {
+    "add_contracts": 271.45,
+    "hold_pnl": -18.516,
+    "red_contracts": 236.55,
+    "completion_effect": 1.0061000000000004
+   },
+   "2026-11-16": {
+    "add_contracts": 15.0,
+    "hold_pnl": 4.609999999999999,
+    "red_contracts": 15.0,
+    "completion_effect": -4.6
+   },
+   "2026-11-17": {
+    "add_contracts": 199.0,
+    "hold_pnl": -15.18,
+    "red_contracts": 187.0,
+    "completion_effect": 5.7623999999999995
+   },
+   "2026-11-18": {
+    "add_contracts": 245.65,
+    "hold_pnl": -27.0371,
+    "red_contracts": 235.23,
+    "completion_effect": 13.9787
+   }
+  },
+  "hold_by_open_price": {
+   "0.00-0.30": {
+    "contracts": 45.09,
+    "avg_px": 0.2754546462630295,
+    "win_rate": 0.19960079840319359,
+    "pnl": -3.4202500000000002
+   },
+   "0.30-0.45": {
+    "contracts": 362.41,
+    "avg_px": 0.3757724676471399,
+    "win_rate": 0.3522805662095417,
+    "pnl": -8.513699999999998
+   },
+   "0.45-0.55": {
+    "contracts": 314.12,
+    "avg_px": 0.49071087482490766,
+    "win_rate": 0.5092003056156882,
+    "pnl": 5.807900000000001
+   },
+   "0.55-0.70": {
+    "contracts": 251.15,
+    "avg_px": 0.6023641250248855,
+    "win_rate": 0.5066693211228349,
+    "pnl": -24.03375
+   },
+   "0.70-1.01": {
+    "contracts": 15.0,
+    "avg_px": 0.717,
+    "win_rate": 0.4666666666666667,
+    "pnl": -3.7549999999999994
+   }
+  }
+ },
+ "period_ii_22_24_nov": {
+  "name": "22-24 Nov bounded campaigns",
+  "n_fills": 33,
+  "n_markets": 11,
+  "pos_mismatch_vs_logged": 0,
+  "q1_class": {
+   "ADDING": {
+    "contracts": 30.0,
+    "dollars": 16.23,
+    "fill_pieces": 18.0,
+    "hts_pnl_standalone": -4.230000000000001
+   },
+   "fills_ADDING": {
+    "fills": 18.0
+   },
+   "REDUCING": {
+    "contracts": 24.0,
+    "dollars": 10.22,
+    "fill_pieces": 15.0,
+    "hts_pnl_standalone": 1.7799999999999998
+   },
+   "fills_REDUCING": {
+    "fills": 15.0
+   }
+  },
+  "q1_stage_x_class": {
+   "given:complete | REDUCING": {
+    "contracts": 2.0,
+    "dollars": 0.78,
+    "fill_pieces": 2.0
+   },
+   "given:open | ADDING": {
+    "contracts": 4.0,
+    "dollars": 2.17,
+    "fill_pieces": 4.0
+   },
+   "log:complete | REDUCING": {
+    "contracts": 7.0,
+    "dollars": 3.68,
+    "fill_pieces": 4.0
+   },
+   "log:extend | ADDING": {
+    "contracts": 6.0,
+    "dollars": 3.12,
+    "fill_pieces": 3.0
+   },
+   "log:open | ADDING": {
+    "contracts": 5.0,
+    "dollars": 2.57,
+    "fill_pieces": 3.0
+   },
+   "rn1_extend | ADDING": {
+    "contracts": 8.0,
+    "dollars": 3.9399999999999995,
+    "fill_pieces": 4.0
+   },
+   "rn1_open | ADDING": {
+    "contracts": 7.0,
+    "dollars": 4.43,
+    "fill_pieces": 4.0
+   },
+   "two_sided_complete | REDUCING": {
+    "contracts": 15.0,
+    "dollars": 5.76,
+    "fill_pieces": 9.0
+   }
+  },
+  "q2_hold_to_settlement": {
+   "contracts": 30.0,
+   "lots": 18,
+   "markets": 11,
+   "cost": 16.23,
+   "payout": 12.0,
+   "pnl": -4.23,
+   "avg_px": 0.541,
+   "win_rate_contracts": 0.4,
+   "win_rate_dollars": 0.3980283425754775,
+   "pnl_per_contract": -0.14100000000000001,
+   "binom_se_winrate": 0.0909796680583085,
+   "z_binom_indep": -1.5497968173464174,
+   "se_pnl_if_contracts_independent": 2.6430474834932496,
+   "markets_pos": 4,
+   "markets_neg": 7,
+   "mean_pnl_per_market": -0.3845454545454546,
+   "sd_pnl_per_market": 1.1580618604924664,
+   "se_total_pnl_market_clustered": 3.8408566752744107,
+   "t_market_clustered": -1.1013168044594601
+  },
+  "q3_actual": {
+   "total_all_fills_settled": -2.45,
+   "fifo": {
+    "pairs": 24.0,
+    "pair_cost_avg": 0.9466666666666667,
+    "pair_pnl": 1.2800000000000011,
+    "residual_contracts": 6.0,
+    "residual_lots": 4,
+    "residual_markets": 3,
+    "residual_cost": 3.73,
+    "residual_payout": 0.0,
+    "residual_pnl": -3.73,
+    "residual_won_contracts": 0.0,
+    "total": -2.449999999999999
+   },
+   "avg_cost_convention": {
+    "pair_pnl": 1.2799999999999994,
+    "residual_pnl": -3.73,
+    "residual_cost": 3.73,
+    "residual_markets": 3,
+    "total": -2.4500000000000006
+   },
+   "hold_pnl": -4.23,
+   "net_effect_of_completions": 1.7800000000000002,
+   "decomposition": {
+    "completion_contracts": 24.0,
+    "completion_cost": 10.22,
+    "avg_completion_px": 0.42583333333333334,
+    "completion_payout_at_settlement": 12.0,
+    "paired_legs_won_contracts": 12.0,
+    "paired_legs_lost_contracts": 12.0,
+    "share_paired_legs_won": 0.5,
+    "paired_legs_won_dollars_share": 0.5168,
+    "avg_open_px_paired": 0.5208333333333334,
+    "upside_given_up_on_winners": -4.75,
+    "loss_avoided_on_losers": 6.53,
+    "avg_comp_px_when_leg_won": 0.3958333333333333,
+    "avg_comp_px_when_leg_lost": 0.4558333333333333,
+    "paired_legs_hold_pnl": -0.49999999999999994,
+    "paired_legs_actual_pnl": 1.2800000000000011,
+    "unpaired_legs_won_share": 0.0,
+    "breakeven_share_of_paired_legs_losing": 0.42583333333333334,
+    "observed_share_of_paired_legs_losing": 0.5,
+    "binom_se_share": 0.10093300285246058
+   }
+  },
+  "uncertainty_market_bootstrap": {
+   "markets": 11,
+   "completion_effect": {
+    "point": 1.7800000000000002,
+    "se": 3.020209593170495,
+    "ci95": [
+     -3.7,
+     8.14
+    ],
+    "share_boot_positive": 0.71045,
+    "markets_with_completions": 8,
+    "markets_effect_pos": 4,
+    "markets_effect_neg": 4
+   },
+   "hold_pnl": {
+    "point": -4.23,
+    "se": 3.6700749595761932,
+    "ci95": [
+     -11.690000000000001,
+     2.61
+    ]
+   },
+   "actual_pnl": {
+    "point": -2.45,
+    "se": 2.757555644329336,
+    "ci95": [
+     -8.58,
+     1.69
+    ]
+   }
+  },
+  "q4_splits": {
+   "by_pair_cost": {
+    "<=0.97": {
+     "pairs": 22.0,
+     "markets": 8,
+     "avg_open_px": 0.5154545454545455,
+     "avg_comp_px": 0.42818181818181816,
+     "avg_pair_cost": 0.9436363636363635,
+     "actual_pair_pnl": 1.2400000000000007,
+     "hold_pnl_of_open_legs": 0.6599999999999999,
+     "completion_effect": 0.5800000000000001,
+     "held_leg_win_share": 0.5454545454545454,
+     "breakeven_lose_share": 0.42818181818181816
+    },
+    "0.97-1.00": {
+     "pairs": 2.0,
+     "markets": 1,
+     "avg_open_px": 0.58,
+     "avg_comp_px": 0.4,
+     "avg_pair_cost": 0.98,
+     "actual_pair_pnl": 0.040000000000000036,
+     "hold_pnl_of_open_legs": -1.16,
+     "completion_effect": 1.2,
+     "held_leg_win_share": 0.0,
+     "breakeven_lose_share": 0.4
+    },
+    ">1.00": {
+     "contracts": 0
+    }
+   },
+   "by_time_to_complete": {
+    "<1min": {
+     "pairs": 2.0,
+     "markets": 2,
+     "avg_open_px": 0.48,
+     "avg_comp_px": 0.485,
+     "avg_pair_cost": 0.965,
+     "actual_pair_pnl": 0.07000000000000006,
+     "hold_pnl_of_open_legs": 0.03999999999999998,
+     "completion_effect": 0.02999999999999997,
+     "held_leg_win_share": 0.5,
+     "breakeven_lose_share": 0.485
+    },
+    "1-10min": {
+     "pairs": 8.0,
+     "markets": 3,
+     "avg_open_px": 0.565,
+     "avg_comp_px": 0.40249999999999997,
+     "avg_pair_cost": 0.9675,
+     "actual_pair_pnl": 0.26000000000000023,
+     "hold_pnl_of_open_legs": -0.52,
+     "completion_effect": 0.7800000000000001,
+     "held_leg_win_share": 0.5,
+     "breakeven_lose_share": 0.40249999999999997
+    },
+    ">10min": {
+     "pairs": 12.0,
+     "markets": 4,
+     "avg_open_px": 0.4916666666666667,
+     "avg_comp_px": 0.4375,
+     "avg_pair_cost": 0.9291666666666666,
+     "actual_pair_pnl": 0.8500000000000005,
+     "hold_pnl_of_open_legs": 0.10000000000000009,
+     "completion_effect": 0.75,
+     "held_leg_win_share": 0.5,
+     "breakeven_lose_share": 0.4375
+    },
+    "unknown": {
+     "pairs": 2.0,
+     "markets": 2,
+     "avg_open_px": 0.56,
+     "avg_comp_px": 0.39,
+     "avg_pair_cost": 0.95,
+     "actual_pair_pnl": 0.09999999999999998,
+     "hold_pnl_of_open_legs": -0.12,
+     "completion_effect": 0.21999999999999997,
+     "held_leg_win_share": 0.5,
+     "breakeven_lose_share": 0.39
+    }
+   },
+   "by_completion_stage": {
+    "given:complete": {
+     "pairs": 2.0,
+     "markets": 2,
+     "avg_open_px": 0.56,
+     "avg_comp_px": 0.39,
+     "avg_pair_cost": 0.95,
+     "actual_pair_pnl": 0.09999999999999998,
+     "hold_pnl_of_open_legs": -0.12,
+     "completion_effect": 0.21999999999999997,
+     "held_leg_win_share": 0.5,
+     "breakeven_lose_share": 0.39
+    },
+    "log:complete": {
+     "pairs": 7.0,
+     "markets": 2,
+     "avg_open_px": 0.43,
+     "avg_comp_px": 0.5257142857142857,
+     "avg_pair_cost": 0.9557142857142856,
+     "actual_pair_pnl": 0.3100000000000003,
+     "hold_pnl_of_open_legs": -1.01,
+     "completion_effect": 1.3199999999999998,
+     "held_leg_win_share": 0.2857142857142857,
+     "breakeven_lose_share": 0.5257142857142857
+    },
+    "two_sided_complete": {
+     "pairs": 15.0,
+     "markets": 4,
+     "avg_open_px": 0.5579999999999999,
+     "avg_comp_px": 0.384,
+     "avg_pair_cost": 0.942,
+     "actual_pair_pnl": 0.8700000000000006,
+     "hold_pnl_of_open_legs": 0.63,
+     "completion_effect": 0.24000000000000016,
+     "held_leg_win_share": 0.6,
+     "breakeven_lose_share": 0.384
+    }
+   },
+   "never_completed_residual": {
+    "contracts": 6.0,
+    "markets": 3,
+    "avg_px": 0.6216666666666667,
+    "pnl": -3.73,
+    "win_share": 0.0
+   },
+   "by_sport": {
+    "atp": {
+     "markets": 8,
+     "hold": {
+      "contracts": 12.0,
+      "cost": 6.99,
+      "payout": 8.0,
+      "pnl": 1.0099999999999998,
+      "avg_px": 0.5825,
+      "win_rate_contracts": 0.6666666666666666,
+      "pnl_per_contract": 0.08416666666666665,
+      "markets": 8
+     },
+     "actual_total": -0.5900000000000001,
+     "completion_effect": -1.5999999999999999,
+     "paired": {
+      "pairs": 10.0,
+      "markets": 6,
+      "avg_open_px": 0.5940000000000001,
+      "avg_comp_px": 0.36,
+      "avg_pair_cost": 0.954,
+      "actual_pair_pnl": 0.4600000000000003,
+      "hold_pnl_of_open_legs": 2.06,
+      "completion_effect": -1.6,
+      "held_leg_win_share": 0.8,
+      "breakeven_lose_share": 0.36
+     },
+     "residual": {
+      "contracts": 2.0,
+      "markets": 2,
+      "avg_px": 0.525,
+      "pnl": -1.05,
+      "win_share": 0.0
+     }
+    },
+    "nba": {
+     "markets": 1,
+     "hold": {
+      "contracts": 8.0,
+      "cost": 3.86,
+      "payout": 2.0,
+      "pnl": -1.8599999999999999,
+      "avg_px": 0.4825,
+      "win_rate_contracts": 0.25,
+      "pnl_per_contract": -0.23249999999999998,
+      "markets": 1
+     },
+     "actual_total": 0.5400000000000003,
+     "completion_effect": 2.4000000000000004,
+     "paired": {
+      "pairs": 8.0,
+      "markets": 1,
+      "avg_open_px": 0.4825,
+      "avg_comp_px": 0.45,
+      "avg_pair_cost": 0.9325,
+      "actual_pair_pnl": 0.5400000000000003,
+      "hold_pnl_of_open_legs": -1.8599999999999999,
+      "completion_effect": 2.4000000000000004,
+      "held_leg_win_share": 0.25,
+      "breakeven_lose_share": 0.45
+     },
+     "residual": {
+      "contracts": 0
+     }
+    },
+    "sea": {
+     "markets": 2,
+     "hold": {
+      "contracts": 10.0,
+      "cost": 5.38,
+      "payout": 2.0,
+      "pnl": -3.38,
+      "avg_px": 0.538,
+      "win_rate_contracts": 0.2,
+      "pnl_per_contract": -0.33799999999999997,
+      "markets": 2
+     },
+     "actual_total": -2.4000000000000004,
+     "completion_effect": 0.9799999999999995,
+     "paired": {
+      "pairs": 6.0,
+      "markets": 1,
+      "avg_open_px": 0.45,
+      "avg_comp_px": 0.5033333333333333,
+      "avg_pair_cost": 0.9533333333333333,
+      "actual_pair_pnl": 0.28000000000000025,
+      "hold_pnl_of_open_legs": -0.7,
+      "completion_effect": 0.98,
+      "held_leg_win_share": 0.3333333333333333,
+      "breakeven_lose_share": 0.5033333333333333
+     },
+     "residual": {
+      "contracts": 4.0,
+      "markets": 1,
+      "avg_px": 0.67,
+      "pnl": -2.68,
+      "win_share": 0.0
+     }
+    }
+   }
+  },
+  "by_fill_day": {
+   "2026-11-22": {
+    "add_contracts": 18.0,
+    "hold_pnl": -5.24,
+    "red_contracts": 14.0,
+    "completion_effect": 3.38
+   },
+   "2026-11-23": {
+    "add_contracts": 7.0,
+    "hold_pnl": 2.4899999999999998,
+    "red_contracts": 7.0,
+    "completion_effect": -2.16
+   },
+   "2026-11-24": {
+    "add_contracts": 5.0,
+    "hold_pnl": -1.48,
+    "red_contracts": 3.0,
+    "completion_effect": 0.5599999999999999
+   }
+  },
+  "hold_by_open_price": {
+   "0.00-0.30": {
+    "contracts": 2.0,
+    "avg_px": 0.23,
+    "win_rate": 1.0,
+    "pnl": 1.54
+   },
+   "0.30-0.45": {
+    "contracts": 4.0,
+    "avg_px": 0.40249999999999997,
+    "win_rate": 0.0,
+    "pnl": -1.6099999999999999
+   },
+   "0.45-0.55": {
+    "contracts": 4.0,
+    "avg_px": 0.45999999999999996,
+    "win_rate": 0.5,
+    "pnl": 0.16000000000000003
+   },
+   "0.55-0.70": {
+    "contracts": 20.0,
+    "avg_px": 0.616,
+    "win_rate": 0.4,
+    "pnl": -4.32
+   }
+  },
+  "fills": [
+   {
+    "slug": "aec-nba-det-atl-2026-11-22",
+    "t": "2026-11-22T21:36:23.502533+00:00",
+    "side": "YES",
+    "px": 0.57,
+    "qty": 2.0,
+    "stage": "rn1_open",
+    "cls": "ADDING",
+    "val": 0.0
+   },
+   {
+    "slug": "aec-nba-det-atl-2026-11-22",
+    "t": "2026-11-22T21:55:24.633899+00:00",
+    "side": "NO",
+    "px": 0.38,
+    "qty": 2.0,
+    "stage": "two_sided_complete",
+    "cls": "REDUCING",
+    "val": 1.0
+   },
+   {
+    "slug": "aec-nba-det-atl-2026-11-22",
+    "t": "2026-11-22T21:57:03.555695+00:00",
+    "side": "YES",
+    "px": 0.55,
+    "qty": 2.0,
+    "stage": "rn1_extend",
+    "cls": "ADDING",
+    "val": 0.0
+   },
+   {
+    "slug": "aec-nba-det-atl-2026-11-22",
+    "t": "2026-11-22T21:59:45.411583+00:00",
+    "side": "NO",
+    "px": 0.41,
+    "qty": 2.0,
+    "stage": "two_sided_complete",
+    "cls": "REDUCING",
+    "val": 1.0
+   },
+   {
+    "slug": "aec-nba-det-atl-2026-11-22",
+    "t": "2026-11-22T22:00:02.389196+00:00",
+    "side": "YES",
+    "px": 0.58,
+    "qty": 2.0,
+    "stage": "rn1_extend",
+    "cls": "ADDING",
+    "val": 0.0
+   },
+   {
+    "slug": "aec-nba-det-atl-2026-11-22",
+    "t": "2026-11-22T22:01:16.034084+00:00",
+    "side": "NO",
+    "px": 0.4,
+    "qty": 2.0,
+    "stage": "two_sided_complete",
+    "cls": "REDUCING",
+    "val": 1.0
+   },
+   {
+    "slug": "aec-nba-det-atl-2026-11-22",
+    "t": "2026-11-22T22:10:23.429455+00:00",
+    "side": "NO",
+    "px": 0.23,
+    "qty": 2.0,
+    "stage": "rn1_extend",
+    "cls": "ADDING",
+    "val": 1.0
+   },
+   {
+    "slug": "aec-nba-det-atl-2026-11-22",
+    "t": "2026-11-22T22:26:39.570845+00:00",
+    "side": "YES",
+    "px": 0.61,
+    "qty": 2.0,
+    "stage": "two_sided_complete",
+    "cls": "REDUCING",
+    "val": 0.0
+   },
+   {
+    "slug": "aec-atp-robstr-tiaper-2026-11-23",
+    "t": "2026-11-23T17:15:26.084211+00:00",
+    "side": "YES",
+    "px": 0.66,
+    "qty": 2.0,
+    "stage": "rn1_open",
+    "cls": "ADDING",
+    "val": 1.0
+   },
+   {
+    "slug": "aec-atp-robstr-tiaper-2026-11-23",
+    "t": "2026-11-23T17:33:25.610345+00:00",
+    "side": "NO",
+    "px": 0.29,
+    "qty": 2.0,
+    "stage": "two_sided_complete",
+    "cls": "REDUCING",
+    "val": 0.0
+   },
+   {
+    "slug": "aec-atp-karpol-benwei-2026-11-23",
+    "t": "2026-11-23T17:33:54.633051+00:00",
+    "side": "YES",
+    "px": 0.65,
+    "qty": 1.0,
+    "stage": "rn1_open",
+    "cls": "ADDING",
+    "val": 1.0
+   },
+   {
+    "slug": "aec-atp-karpol-benwei-2026-11-23",
+    "t": "2026-11-23T17:34:37.408187+00:00",
+    "side": "NO",
+    "px": 0.31,
+    "qty": 1.0,
+    "stage": "two_sided_complete",
+    "cls": "REDUCING",
+    "val": 0.0
+   },
+   {
+    "slug": "aec-atp-gabdeb-sankop-2026-11-23",
+    "t": "2026-11-23T17:54:10.496235+00:00",
+    "side": "YES",
+    "px": 0.66,
+    "qty": 2.0,
+    "stage": "rn1_open",
+    "cls": "ADDING",
+    "val": 1.0
+   },
+   {
+    "slug": "aec-atp-gabdeb-sankop-2026-11-23",
+    "t": "2026-11-23T18:02:38.210270+00:00",
+    "side": "NO",
+    "px": 0.31,
+    "qty": 2.0,
+    "stage": "two_sided_complete",
+    "cls": "REDUCING",
+    "val": 0.0
+   },
+   {
+    "slug": "aec-atp-gabdeb-sankop-2026-11-23",
+    "t": "2026-11-23T18:10:03.617767+00:00",
+    "side": "YES",
+    "px": 0.61,
+    "qty": 2.0,
+    "stage": "rn1_extend",
+    "cls": "ADDING",
+    "val": 1.0
+   },
+   {
+    "slug": "aec-atp-gabdeb-sankop-2026-11-23",
+    "t": "2026-11-23T18:27:32.650044+00:00",
+    "side": "NO",
+    "px": 0.33,
+    "qty": 1.0,
+    "stage": "two_sided_complete",
+    "cls": "REDUCING",
+    "val": 0.0
+   },
+   {
+    "slug": "aec-atp-gabdeb-sankop-2026-11-23",
+    "t": "2026-11-23T18:31:48.613067+00:00",
+    "side": "NO",
+    "px": 0.32,
+    "qty": 1.0,
+    "stage": "two_sided_complete",
+    "cls": "REDUCING",
+    "val": 0.0
+   },
+   {
+    "slug": "atc-sea-bol-udi-2026-11-22-bol",
+    "t": "2026-11-22T14:09:27+00:00",
+    "side": "NO",
+    "px": 0.47,
+    "qty": 2.0,
+    "stage": "log:open",
+    "cls": "ADDING",
+    "val": 1.0
+   },
+   {
+    "slug": "atc-sea-sas-gen-2026-11-22-gen",
+    "t": "2026-11-22T14:12:31+00:00",
+    "side": "NO",
+    "px": 0.66,
+    "qty": 2.0,
+    "stage": "log:open",
+    "cls": "ADDING",
+    "val": 0.0
+   },
+   {
+    "slug": "atc-sea-bol-udi-2026-11-22-bol",
+    "t": "2026-11-22T14:14:33+00:00",
+    "side": "YES",
+    "px": 0.49,
+    "qty": 2.0,
+    "stage": "log:complete",
+    "cls": "REDUCING",
+    "val": 0.0
+   },
+   {
+    "slug": "atc-sea-bol-udi-2026-11-22-bol",
+    "t": "2026-11-22T14:24:26+00:00",
+    "side": "YES",
+    "px": 0.45,
+    "qty": 2.0,
+    "stage": "log:extend",
+    "cls": "ADDING",
+    "val": 0.0
+   },
+   {
+    "slug": "atc-sea-bol-udi-2026-11-22-bol",
+    "t": "2026-11-22T14:28:39+00:00",
+    "side": "YES",
+    "px": 0.43,
+    "qty": 2.0,
+    "stage": "log:extend",
+    "cls": "ADDING",
+    "val": 0.0
+   },
+   {
+    "slug": "atc-sea-sas-gen-2026-11-22-gen",
+    "t": "2026-11-22T14:28:43+00:00",
+    "side": "NO",
+    "px": 0.68,
+    "qty": 2.0,
+    "stage": "log:extend",
+    "cls": "ADDING",
+    "val": 0.0
+   },
+   {
+    "slug": "atc-sea-bol-udi-2026-11-22-bol",
+    "t": "2026-11-22T14:40:52+00:00",
+    "side": "NO",
+    "px": 0.51,
+    "qty": 2.0,
+    "stage": "log:complete",
+    "cls": "REDUCING",
+    "val": 1.0
+   },
+   {
+    "slug": "atc-sea-bol-udi-2026-11-22-bol",
+    "t": "2026-11-22T14:44:08+00:00",
+    "side": "NO",
+    "px": 0.51,
+    "qty": 2.0,
+    "stage": "log:complete",
+    "cls": "REDUCING",
+    "val": 1.0
+   },
+   {
+    "slug": "aec-atp-cescru-joagui-2026-11-23",
+    "t": "2026-11-24T02:14:09+00:00",
+    "side": "YES",
+    "px": 0.31,
+    "qty": 1.0,
+    "stage": "log:open",
+    "cls": "ADDING",
+    "val": 0.0
+   },
+   {
+    "slug": "aec-atp-cescru-joagui-2026-11-23",
+    "t": "2026-11-24T02:14:54+00:00",
+    "side": "NO",
+    "px": 0.66,
+    "qty": 1.0,
+    "stage": "log:complete",
+    "cls": "REDUCING",
+    "val": 1.0
+   },
+   {
+    "slug": "aec-atp-matsca-wisabd-2026-11-24",
+    "t": null,
+    "side": "YES",
+    "px": 0.55,
+    "qty": 1.0,
+    "stage": "given:open",
+    "cls": "ADDING",
+    "val": 1.0
+   },
+   {
+    "slug": "aec-atp-matsca-wisabd-2026-11-24",
+    "t": null,
+    "side": "NO",
+    "px": 0.39,
+    "qty": 1.0,
+    "stage": "given:complete",
+    "cls": "REDUCING",
+    "val": 0.0
+   },
+   {
+    "slug": "aec-atp-juaoso-olibon-2026-11-23",
+    "t": null,
+    "side": "YES",
+    "px": 0.57,
+    "qty": 1.0,
+    "stage": "given:open",
+    "cls": "ADDING",
+    "val": 0.0
+   },
+   {
+    "slug": "aec-atp-juaoso-olibon-2026-11-23",
+    "t": null,
+    "side": "NO",
+    "px": 0.39,
+    "qty": 1.0,
+    "stage": "given:complete",
+    "cls": "REDUCING",
+    "val": 1.0
+   },
+   {
+    "slug": "aec-atp-juagom-bengeo-2026-11-23",
+    "t": null,
+    "side": "NO",
+    "px": 0.44,
+    "qty": 1.0,
+    "stage": "given:open",
+    "cls": "ADDING",
+    "val": 0.0
+   },
+   {
+    "slug": "aec-atp-samher-yanale-2026-11-23",
+    "t": null,
+    "side": "NO",
+    "px": 0.61,
+    "qty": 1.0,
+    "stage": "given:open",
+    "cls": "ADDING",
+    "val": 0.0
+   }
+  ],
+  "yes_settle": {
+   "aec-atp-matsca-wisabd-2026-11-24": 1.0,
+   "aec-atp-cescru-joagui-2026-11-23": 0.0,
+   "atc-sea-bol-udi-2026-11-22-bol": 0.0,
+   "aec-atp-robstr-tiaper-2026-11-23": 1.0,
+   "aec-atp-karpol-benwei-2026-11-23": 1.0,
+   "aec-atp-juaoso-olibon-2026-11-23": 0.0,
+   "aec-atp-juagom-bengeo-2026-11-23": 1.0,
+   "aec-nba-det-atl-2026-11-22": 0.0,
+   "aec-atp-gabdeb-sankop-2026-11-23": 1.0,
+   "atc-sea-sas-gen-2026-11-22-gen": 1.0,
+   "aec-atp-samher-yanale-2026-11-23": 1.0
+  }
+ },
+ "notes": {
+  "units": "USD, contracts; before fees and rewards",
+  "matching": "FIFO lots; avg_cost_convention reproduces reconciliation -4.46/-36.25",
+  "completion_effect": "actual minus hold-to-settlement of adding fills = stand-alone settlement P&L of reducing fills",
+  "breakeven_pairing_ratio": {
+   "period_ii": 0.921,
+   "period_ii_observed": 0.8,
+   "period_i_le097_pairs": 0.881,
+   "period_i_observed": 0.925,
+   "period_i_note": "avg pair cost >1, no ratio breaks even"
+  },
+  "sources": "14-18 Nov fill log; residual_audit/api; pairing_cost/api2 (11 public market records); campaign logs for 22 Nov Serie A and 24 Nov"
+ }
+}

@@ -1,0 +1,50 @@
+== 0620z (settled DOWN) ==
+no gate (actual)  UP 0.49 DOWN 0.61 cost 0.5905 matched 0.49 pair 1.086 | net if UP -0.1005, if DOWN +0.0195 | actual outcome +0.0195 | blocked 0
+cap 1.00          UP 0.18 DOWN 0.35 cost 0.1839 matched 0.18 pair 0.677 | net if UP -0.0039, if DOWN +0.1661 | actual outcome +0.1661 | blocked 9
+cap 0.98          UP 0.18 DOWN 0.35 cost 0.1839 matched 0.18 pair 0.677 | net if UP -0.0039, if DOWN +0.1661 | actual outcome +0.1661 | blocked 9
+      blocked UP 0.07 @ 0.66 (pair 1.060)
+      blocked UP 0.06 @ 0.79 (pair 1.110)
+      blocked UP 0.06 @ 0.81 (pair 1.130)
+      blocked UP 0.06 @ 0.79 (pair 1.110)
+      blocked UP 0.06 @ 0.82 (pair 1.113)
+      blocked DOWN 0.08 @ 0.39 (pair unmatched cap)
+      blocked DOWN 0.06 @ 0.72 (pair unmatched cap)
+      blocked DOWN 0.07 @ 0.67 (pair unmatched cap)
+      blocked DOWN 0.05 @ 0.93 (pair unmatched cap)
+cap 0.96          UP 0.18 DOWN 0.35 cost 0.1839 matched 0.18 pair 0.677 | net if UP -0.0039, if DOWN +0.1661 | actual outcome +0.1661 | blocked 9
+      blocked UP 0.07 @ 0.66 (pair 1.060)
+      blocked UP 0.06 @ 0.79 (pair 1.110)
+      blocked UP 0.06 @ 0.81 (pair 1.130)
+      blocked UP 0.06 @ 0.79 (pair 1.110)
+      blocked UP 0.06 @ 0.82 (pair 1.113)
+      blocked DOWN 0.08 @ 0.39 (pair unmatched cap)
+      blocked DOWN 0.06 @ 0.72 (pair unmatched cap)
+      blocked DOWN 0.07 @ 0.67 (pair unmatched cap)
+      blocked DOWN 0.05 @ 0.93 (pair unmatched cap)
+== 1420z (settled UP) ==
+no gate (actual)  UP 0.37 DOWN 0.39 cost 0.4108 matched 0.37 pair 1.089 | net if UP -0.0408, if DOWN -0.0208 | actual outcome -0.0408 | blocked 0
+cap 1.00          UP 0.08 DOWN 0.24 cost 0.1728 matched 0.08 pair 0.973 | net if UP -0.0928, if DOWN +0.0672 | actual outcome -0.0928 | blocked 8
+cap 0.98          UP 0.08 DOWN 0.24 cost 0.1728 matched 0.08 pair 0.973 | net if UP -0.0928, if DOWN +0.0672 | actual outcome -0.0928 | blocked 8
+      blocked UP 0.09 @ 0.45 (pair 1.043)
+      blocked UP 0.05 @ 0.94 (pair 1.533)
+      blocked UP 0.05 @ 0.93 (pair 1.523)
+      blocked UP 0.05 @ 0.93 (pair 1.523)
+      blocked DOWN 0.05 @ 0.06 (pair unmatched cap)
+      blocked DOWN 0.05 @ 0.06 (pair unmatched cap)
+      blocked UP 0.05 @ 0.97 (pair 1.563)
+      blocked DOWN 0.05 @ 0.06 (pair unmatched cap)
+cap 0.96          UP 0.00 DOWN 0.21 cost 0.0990 matched 0.00 pair n/a | net if UP -0.0990, if DOWN +0.1110 | actual outcome -0.0990 | blocked 9
+      blocked UP 0.08 @ 0.38 (pair 0.980)
+      blocked DOWN 0.08 @ 0.58 (pair unmatched cap)
+      blocked UP 0.09 @ 0.45 (pair 1.050)
+      blocked UP 0.05 @ 0.94 (pair 1.540)
+      blocked UP 0.05 @ 0.93 (pair 1.530)
+      blocked UP 0.05 @ 0.93 (pair 1.530)
+      blocked DOWN 0.05 @ 0.06 (pair unmatched cap)
+      blocked UP 0.05 @ 0.97 (pair 1.441)
+      blocked DOWN 0.05 @ 0.06 (pair unmatched cap)
+== both windows, actual outcomes ==
+no gate (actual)  -0.0213
+cap 1.00          +0.0733
+cap 0.98          +0.0733
+cap 0.96          +0.0671

@@ -1,0 +1,93 @@
+spot ticks 42500; median gap 2.9 s
+markets with tape, his fills and a winner: 1104
+of which spot and volatility are available: 957
+buys scored: his taker 42025, his maker 4570, others 1081089
+dollars: his taker $1850959, his maker $265384, others $16242976
+
+== 1. what each group earned per share on Polymarket, by price paid (dollar-weighted, before fees) ==
+  DISCOVERY
+   0.00-0.30   HIS_TAKER -0.0468 [-0.072,-0.019] w=499       HIS_MAKER -0.2350 [few] w=2                   OTHERS -0.0563 [-0.076,-0.035] w=513     
+   0.30-0.50   HIS_TAKER -0.0681 [-0.097,-0.039] w=476       HIS_MAKER n/a                                 OTHERS -0.0909 [-0.113,-0.067] w=501     
+   0.50-0.70   HIS_TAKER +0.0769 [+0.051,+0.104] w=482       HIS_MAKER -0.1800 [few] w=3                   OTHERS +0.0897 [+0.067,+0.112] w=499     
+   0.70-0.85   HIS_TAKER +0.0588 [+0.031,+0.086] w=482       HIS_MAKER n/a                                 OTHERS +0.0673 [+0.045,+0.091] w=512     
+   0.85-0.95   HIS_TAKER +0.0264 [+0.004,+0.049] w=444       HIS_MAKER +0.0451 [+0.015,+0.060] w=67        OTHERS +0.0360 [+0.019,+0.052] w=511     
+   0.95-1.00   HIS_TAKER +0.0050 [-0.009,+0.018] w=360       HIS_MAKER +0.0132 [+0.001,+0.024] w=276       OTHERS +0.0114 [+0.006,+0.016] w=506     
+   ALL         HIS_TAKER +0.0130 [+0.003,+0.022] w=513       HIS_MAKER +0.0130 [-0.001,+0.024] w=291       OTHERS +0.0167 [+0.009,+0.024] w=513     
+   his taker buys minus other takers, same window and price band: -0.0050 [-0.011,+0.001] w=513
+  VALIDATION
+   0.00-0.30   HIS_TAKER -0.0339 [-0.064,-0.003] w=423       HIS_MAKER n/a                                 OTHERS -0.0523 [-0.075,-0.027] w=442     
+   0.30-0.50   HIS_TAKER -0.0640 [-0.095,-0.032] w=409       HIS_MAKER n/a                                 OTHERS -0.0914 [-0.117,-0.064] w=433     
+   0.50-0.70   HIS_TAKER +0.0889 [+0.060,+0.119] w=408       HIS_MAKER -0.5200 [few] w=1                   OTHERS +0.0858 [+0.060,+0.110] w=432     
+   0.70-0.85   HIS_TAKER +0.0443 [+0.011,+0.076] w=422       HIS_MAKER n/a                                 OTHERS +0.0574 [+0.029,+0.083] w=442     
+   0.85-0.95   HIS_TAKER +0.0019 [-0.026,+0.028] w=394       HIS_MAKER +0.0208 [-0.038,+0.060] w=51        OTHERS +0.0188 [-0.002,+0.038] w=439     
+   0.95-1.00   HIS_TAKER -0.0161 [-0.038,+0.002] w=325       HIS_MAKER -0.0151 [-0.040,+0.007] w=263       OTHERS -0.0016 [-0.012,+0.007] w=436     
+   ALL         HIS_TAKER +0.0079 [-0.007,+0.022] w=439       HIS_MAKER -0.0151 [-0.039,+0.007] w=275       OTHERS +0.0081 [-0.002,+0.018] w=444     
+   his taker buys minus other takers, same window and price band: -0.0057 [-0.014,+0.003] w=439
+
+== 2. what spot said just before each buy (lag 2 s) ==
+   HIS_TAKER spot moved his way in prior 3 s: 18.4%  against:  8.5%  no tick: 73.1%   mean gap (fair - ask) -0.0775   share of dollars with gap > +0.03: 16.6%
+   HIS_MAKER spot moved his way in prior 3 s: 20.9%  against:  4.0%  no tick: 75.1%   mean gap (fair - ask) -0.1415   share of dollars with gap > +0.03:  2.0%
+   OTHERS    spot moved his way in prior 3 s: 15.6%  against: 10.3%  no tick: 74.2%   mean gap (fair - ask) -0.0875   share of dollars with gap > +0.03: 20.4%
+
+== 3. does the gap predict the return? all taker buys, by gap before the buy (before fees) ==
+  DISCOVERY
+   gap -9.00..-0.10   all takers -0.0144 [-0.035,+0.005] w=512        his taker -0.0042 [-0.030,+0.021] w=485
+   gap -0.10..-0.03   all takers +0.0380 [+0.019,+0.056] w=501        his taker +0.0260 [+0.001,+0.051] w=466
+   gap -0.03..+0.03   all takers -0.0087 [-0.025,+0.006] w=479        his taker +0.0057 [-0.018,+0.029] w=438
+   gap +0.03..+0.10   all takers -0.0581 [-0.082,-0.034] w=503        his taker -0.0327 [-0.062,-0.003] w=471
+   gap +0.10..+9.00   all takers -0.0378 [-0.063,-0.013] w=506        his taker -0.0208 [-0.050,+0.009] w=474
+  VALIDATION
+   gap -9.00..-0.10   all takers -0.0167 [-0.039,+0.008] w=444        his taker -0.0257 [-0.057,+0.004] w=430
+   gap -0.10..-0.03   all takers +0.0197 [-0.002,+0.041] w=435        his taker +0.0276 [+0.002,+0.056] w=412
+   gap -0.03..+0.03   all takers -0.0211 [-0.039,-0.003] w=404        his taker -0.0031 [-0.028,+0.022] w=369
+   gap +0.03..+0.10   all takers -0.0560 [-0.082,-0.030] w=439        his taker -0.0444 [-0.076,-0.013] w=400
+   gap +0.10..+9.00   all takers -0.0315 [-0.061,-0.002] w=442        his taker -0.0264 [-0.061,+0.011] w=414
+
+== 4. the gap as a rule: when fair - ask >= threshold, buy that side ==
+   Polymarket: priced at the NEXT taker print on that side within 5 s (a price someone really paid); none = no trade.
+  DISCOVERY
+   gap >= 0.03  n=15604  before fee -0.0083 [-0.029,+0.014] w=513      after fee -0.0197 [-0.040,+0.002] w=513
+   gap >= 0.06  n=12413  before fee -0.0033 [-0.026,+0.020] w=512      after fee -0.0147 [-0.037,+0.008] w=512
+   gap >= 0.10  n= 8721  before fee +0.0064 [-0.019,+0.032] w=495      after fee -0.0046 [-0.030,+0.021] w=495
+   gap >= 0.15  n= 5578  before fee +0.0150 [-0.013,+0.045] w=459      after fee +0.0043 [-0.023,+0.034] w=459
+  VALIDATION
+   gap >= 0.03  n=13323  before fee +0.0061 [-0.019,+0.032] w=444      after fee -0.0054 [-0.030,+0.020] w=444
+   gap >= 0.06  n=10624  before fee +0.0143 [-0.012,+0.042] w=444      after fee +0.0028 [-0.023,+0.030] w=444
+   gap >= 0.10  n= 7494  before fee +0.0159 [-0.014,+0.046] w=434      after fee +0.0045 [-0.025,+0.035] w=434
+   gap >= 0.15  n= 4545  before fee +0.0089 [-0.021,+0.042] w=403      after fee -0.0020 [-0.032,+0.031] w=403
+   OUR VENUE: our recorded ask (~10 s samples), bought at the NEXT sample's ask, settled on our outcome, fee 0.095.
+  DISCOVERY
+   gap >= 0.03  n= 8215  before fee -0.0272 [-0.046,-0.008] w=513      after fee -0.0421 [-0.061,-0.023] w=513
+   gap >= 0.06  n= 6673  before fee -0.0224 [-0.044,+0.000] w=511      after fee -0.0373 [-0.059,-0.015] w=511
+   gap >= 0.10  n= 4825  before fee -0.0191 [-0.042,+0.005] w=500      after fee -0.0337 [-0.057,-0.009] w=500
+   gap >= 0.15  n= 3090  before fee -0.0079 [-0.036,+0.019] w=459      after fee -0.0220 [-0.050,+0.005] w=459
+  VALIDATION
+   gap >= 0.03  n= 6505  before fee -0.0006 [-0.025,+0.025] w=413      after fee -0.0154 [-0.040,+0.010] w=413
+   gap >= 0.06  n= 5337  before fee +0.0072 [-0.020,+0.035] w=411      after fee -0.0077 [-0.035,+0.019] w=411
+   gap >= 0.10  n= 3867  before fee +0.0072 [-0.022,+0.036] w=407      after fee -0.0076 [-0.037,+0.021] w=407
+   gap >= 0.15  n= 2478  before fee +0.0047 [-0.025,+0.038] w=375      after fee -0.0095 [-0.039,+0.024] w=375
+
+== 5. our venue: the favourite by our ask, no signal (contemporaneous alternative) ==
+  DISCOVERY
+   ask 0.50-0.70  n= 4540  before fee +0.0626 [+0.041,+0.083] w=468      after fee +0.0417 [+0.020,+0.063] w=468
+   ask 0.70-0.85  n= 2927  before fee +0.0461 [+0.019,+0.071] w=503      after fee +0.0308 [+0.003,+0.056] w=503
+   ask 0.85-0.95  n= 2111  before fee +0.0177 [-0.005,+0.039] w=478      after fee +0.0099 [-0.013,+0.031] w=478
+   ask 0.95-1.00  n= 1261  before fee +0.0048 [-0.012,+0.020] w=383      after fee +0.0018 [-0.015,+0.017] w=383
+  VALIDATION
+   ask 0.50-0.70  n= 3370  before fee +0.0440 [+0.018,+0.069] w=371      after fee +0.0234 [-0.003,+0.049] w=371
+   ask 0.70-0.85  n= 2400  before fee +0.0343 [+0.005,+0.063] w=410      after fee +0.0192 [-0.010,+0.048] w=410
+   ask 0.85-0.95  n= 1787  before fee -0.0007 [-0.028,+0.026] w=390      after fee -0.0087 [-0.036,+0.018] w=390
+   ask 0.95-1.00  n=  941  before fee -0.0208 [-0.047,+0.002] w=290      after fee -0.0240 [-0.050,-0.001] w=290
+
+== 6. our venue: buy when the OTHER venue's last print (>= 2 s old, <= 8 s old) is above our ask by the threshold ==
+   bought at our NEXT sample's ask (~10 s later).
+  DISCOVERY
+   other venue - our ask >= 0.02  n= 7574  before fee -0.0200 [-0.032,-0.009] w=513      after fee -0.0358 [-0.047,-0.025] w=513
+   other venue - our ask >= 0.04  n= 4984  before fee -0.0316 [-0.046,-0.018] w=511      after fee -0.0481 [-0.062,-0.035] w=511
+   other venue - our ask >= 0.06  n= 3380  before fee -0.0402 [-0.057,-0.024] w=491      after fee -0.0571 [-0.074,-0.041] w=491
+   other venue - our ask >= 0.10  n= 1431  before fee -0.0460 [-0.071,-0.020] w=419      after fee -0.0632 [-0.088,-0.038] w=419
+  VALIDATION
+   other venue - our ask >= 0.02  n= 5985  before fee -0.0025 [-0.016,+0.011] w=413      after fee -0.0180 [-0.031,-0.005] w=413
+   other venue - our ask >= 0.04  n= 4023  before fee -0.0112 [-0.026,+0.005] w=413      after fee -0.0273 [-0.042,-0.012] w=413
+   other venue - our ask >= 0.06  n= 2772  before fee -0.0251 [-0.042,-0.007] w=406      after fee -0.0417 [-0.059,-0.023] w=406
+   other venue - our ask >= 0.10  n= 1240  before fee -0.0156 [-0.044,+0.013] w=340      after fee -0.0324 [-0.061,-0.004] w=340

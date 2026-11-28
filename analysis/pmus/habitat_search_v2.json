@@ -1,0 +1,538 @@
+{
+  "study": "WORKSTREAM B -- PMUS sports habitat search against the International benchmark",
+  "benchmark": {
+    "international_8s": {
+      "spread_med": 0.01,
+      "touch_depth": 65,
+      "touch_move_per_min": 4.88,
+      "reach120": 80.6,
+      "median_reach_s": 16
+    },
+    "gemini_8s": {
+      "spread_med": 0.28,
+      "touch_depth": 217,
+      "touch_move_per_min": 5.18,
+      "reach120": 24.4,
+      "median_reach_s": 72
+    }
+  },
+  "phase1_census": {
+    "scope": "THE WHOLE ACCESSIBLE UNIVERSE, one sweep",
+    "markets": 4551,
+    "two_sided": 4319,
+    "two_sided_pc": 94.9,
+    "errors": 0,
+    "spread": {
+      "p10": 0.01,
+      "p25": 0.01,
+      "median": 0.03,
+      "p75": 0.07,
+      "p90": 0.16
+    },
+    "share_at_or_below": {
+      "0.005": "9.2%",
+      "0.010": "38.8%",
+      "0.020": "48.7%",
+      "0.030": "57.0%",
+      "0.050": "68.4%"
+    },
+    "reading": "tight spreads are NOT scarce on PMUS: 38.8% of the universe is at or inside a cent, against 96.1% on International and 0.2% on Gemini. On spread alone PMUS sits between the two and close to International.",
+    "groups": [
+      {
+        "group": "nfl|totals|PRE",
+        "n": 2154,
+        "spread_med": 0.030000000000000027,
+        "pc_le_1c": 36.0,
+        "depth_bid": 150.0,
+        "depth_ask": 435.0
+      },
+      {
+        "group": "nfl|spreads|PRE",
+        "n": 1227,
+        "spread_med": 0.02999999999999997,
+        "pc_le_1c": 41.1,
+        "depth_bid": 676.0,
+        "depth_ask": 1356.0
+      },
+      {
+        "group": "lal|totals|PRE",
+        "n": 70,
+        "spread_med": 0.019999999999999997,
+        "pc_le_1c": 47.1,
+        "depth_bid": 294.5,
+        "depth_ask": 266.0
+      },
+      {
+        "group": "sea|totals|PRE",
+        "n": 70,
+        "spread_med": 0.020000000000000018,
+        "pc_le_1c": 41.4,
+        "depth_bid": 175.0,
+        "depth_ask": 150.0
+      },
+      {
+        "group": "lal|spreads|PRE",
+        "n": 60,
+        "spread_med": 0.010000000000000009,
+        "pc_le_1c": 58.3,
+        "depth_bid": 112.0,
+        "depth_ask": 112.0
+      },
+      {
+        "group": "sea|spreads|PRE",
+        "n": 58,
+        "spread_med": 0.010000000000000009,
+        "pc_le_1c": 58.6,
+        "depth_bid": 90.5,
+        "depth_ask": 113.025
+      },
+      {
+        "group": "epl|totals|PRE",
+        "n": 56,
+        "spread_med": 0.01999999999999999,
+        "pc_le_1c": 48.2,
+        "depth_bid": 102.0,
+        "depth_ask": 230.5
+      },
+      {
+        "group": "epl|spreads|PRE",
+        "n": 48,
+        "spread_med": 0.02,
+        "pc_le_1c": 50.0,
+        "depth_bid": 141.135,
+        "depth_ask": 103.0
+      },
+      {
+        "group": "bun|totals|PRE",
+        "n": 42,
+        "spread_med": 0.020000000000000018,
+        "pc_le_1c": 45.2,
+        "depth_bid": 164.0,
+        "depth_ask": 99.97
+      },
+      {
+        "group": "wnba|totals|PRE",
+        "n": 36,
+        "spread_med": 0.22000000000000003,
+        "pc_le_1c": 2.8,
+        "depth_bid": 90.0,
+        "depth_ask": 90.0
+      },
+      {
+        "group": "bun|spreads|PRE",
+        "n": 36,
+        "spread_med": 0.03,
+        "pc_le_1c": 38.9,
+        "depth_bid": 55.715,
+        "depth_ask": 37.0
+      },
+      {
+        "group": "wnba|spreads|PRE",
+        "n": 32,
+        "spread_med": 0.15000000000000002,
+        "pc_le_1c": 3.1,
+        "depth_bid": 75.0,
+        "depth_ask": 75.0
+      },
+      {
+        "group": "mls|spreads|LIVE",
+        "n": 32,
+        "spread_med": 0.22,
+        "pc_le_1c": 0.0,
+        "depth_bid": 32.5,
+        "depth_ask": 114.0
+      },
+      {
+        "group": "mlb|spreads|LIVE",
+        "n": 30,
+        "spread_med": 0.010000000000000002,
+        "pc_le_1c": 60.0,
+        "depth_bid": 2088.66,
+        "depth_ask": 1636.72
+      },
+      {
+        "group": "mlb|totals|PRE",
+        "n": 29,
+        "spread_med": 0.010000000000000009,
+        "pc_le_1c": 62.1,
+        "depth_bid": 13.33,
+        "depth_ask": 59.0
+      },
+      {
+        "group": "mlb|spreads|PRE",
+        "n": 24,
+        "spread_med": 0.010000000000000009,
+        "pc_le_1c": 58.3,
+        "depth_bid": 32.5,
+        "depth_ask": 35.165
+      },
+      {
+        "group": "mls|spreads|PRE",
+        "n": 24,
+        "spread_med": 0.1299999999999999,
+        "pc_le_1c": 4.2,
+        "depth_bid": 237.0,
+        "depth_ask": 277.5
+      },
+      {
+        "group": "mls|totals|PRE",
+        "n": 24,
+        "spread_med": 0.03999999999999998,
+        "pc_le_1c": 12.5,
+        "depth_bid": 111.0,
+        "depth_ask": 111.0
+      },
+      {
+        "group": "mlb|totals|LIVE",
+        "n": 21,
+        "spread_med": 0.020000000000000004,
+        "pc_le_1c": 33.3,
+        "depth_bid": 1000.0,
+        "depth_ask": 833.52
+      },
+      {
+        "group": "mls|totals|LIVE",
+        "n": 20,
+        "spread_med": 0.12000000000000001,
+        "pc_le_1c": 5.0,
+        "depth_bid": 26.105,
+        "depth_ask": 124.0
+      },
+      {
+        "group": "mls|drawable_outcome|LIVE",
+        "n": 19,
+        "spread_med": 0.049999999999999996,
+        "pc_le_1c": 26.3,
+        "depth_bid": 198.69,
+        "depth_ask": 105.0
+      },
+      {
+        "group": "cs2|totals|PRE",
+        "n": 18,
+        "spread_med": 0.96,
+        "pc_le_1c": 0.0,
+        "depth_bid": 7.0,
+        "depth_ask": 7.0
+      },
+      {
+        "group": "lal|drawable_outcome|PRE",
+        "n": 15,
+        "spread_med": 0.010000000000000009,
+        "pc_le_1c": 100.0,
+        "depth_bid": 39882.53,
+        "depth_ask": 104667.81
+      },
+      {
+        "group": "sea|drawable_outcome|PRE",
+        "n": 15,
+        "spread_med": 0.010000000000000009,
+        "pc_le_1c": 93.3,
+        "depth_bid": 12771.71,
+        "depth_ask": 103436.21
+      },
+      {
+        "group": "epl|drawable_outcome|PRE",
+        "n": 12,
+        "spread_med": 0.010000000000000009,
+        "pc_le_1c": 100.0,
+        "depth_bid": 14073.01,
+        "depth_ask": 68280.2
+      },
+      {
+        "group": "flc|drawable_outcome|PRE",
+        "n": 12,
+        "spread_med": 0.020000000000000018,
+        "pc_le_1c": 25.0,
+        "depth_bid": 176.5,
+        "depth_ask": 177.0
+      },
+      {
+        "group": "nhl|moneyline|PRE",
+        "n": 10,
+        "spread_med": 0.020000000000000018,
+        "pc_le_1c": 30.0,
+        "depth_bid": 233.685,
+        "depth_ask": 49.5
+      },
+      {
+        "group": "nfl|moneyline|PRE",
+        "n": 10,
+        "spread_med": 0.0050000000000000044,
+        "pc_le_1c": 100.0,
+        "depth_bid": 1784875.66,
+        "depth_ask": 3853484.085
+      },
+      {
+        "group": "ufc|moneyline|PRE",
+        "n": 10,
+        "spread_med": 0.010000000000000009,
+        "pc_le_1c": 70.0,
+        "depth_bid": 1447.07,
+        "depth_ask": 6239.675
+      },
+      {
+        "group": "lol|moneyline|PRE",
+        "n": 10,
+        "spread_med": 0.020000000000000018,
+        "pc_le_1c": 40.0,
+        "depth_bid": 2561.135,
+        "depth_ask": 1115.44
+      },
+      {
+        "group": "atpcq|moneyline|PRE",
+        "n": 10,
+        "spread_med": 0.06,
+        "pc_le_1c": 10.0,
+        "depth_bid": 2181.05,
+        "depth_ask": 1597.0
+      },
+      {
+        "group": "cs2|moneyline|PRE",
+        "n": 10,
+        "spread_med": 0.010000000000000009,
+        "pc_le_1c": 80.0,
+        "depth_bid": 163.83499999999998,
+        "depth_ask": 180.0
+      },
+      {
+        "group": "wnba|totals|LIVE",
+        "n": 9,
+        "spread_med": 0.03,
+        "pc_le_1c": 22.2,
+        "depth_bid": 18.81,
+        "depth_ask": 1092.65
+      },
+      {
+        "group": "wnba|moneyline|PRE",
+        "n": 9,
+        "spread_med": 0.010000000000000009,
+        "pc_le_1c": 77.8,
+        "depth_bid": 259.22,
+        "depth_ask": 348.11
+      },
+      {
+        "group": "mls|drawable_outcome|PRE",
+        "n": 9,
+        "spread_med": 0.010000000000000009,
+        "pc_le_1c": 66.7,
+        "depth_bid": 305.0,
+        "depth_ask": 9411.31
+      },
+      {
+        "group": "bun|drawable_outcome|PRE",
+        "n": 9,
+        "spread_med": 0.010000000000000009,
+        "pc_le_1c": 100.0,
+        "depth_bid": 1001.0,
+        "depth_ask": 48974.51
+      },
+      {
+        "group": "nb1|drawable_outcome|PRE",
+        "n": 9,
+        "spread_med": 0.07,
+        "pc_le_1c": 0.0,
+        "depth_bid": 81.0,
+        "depth_ask": 86.0
+      },
+      {
+        "group": "boxing|moneyline|PRE",
+        "n": 7,
+        "spread_med": 0.45999999999999996,
+        "pc_le_1c": 0.0,
+        "depth_bid": 80.0,
+        "depth_ask": 45.0
+      },
+      {
+        "group": "mlb|moneyline|LIVE",
+        "n": 6,
+        "spread_med": 0.010000000000000009,
+        "pc_le_1c": 100.0,
+        "depth_bid": 31118.595,
+        "depth_ask": 32432.285
+      },
+      {
+        "group": "mlb|moneyline|PRE",
+        "n": 4,
+        "spread_med": 0.0050000000000000044,
+        "pc_le_1c": 100.0,
+        "depth_bid": 8436.97,
+        "depth_ask": 22473.620000000003
+      },
+      {
+        "group": "wnba|spreads|LIVE",
+        "n": 4,
+        "spread_med": 0.12000000000000001,
+        "pc_le_1c": 25.0,
+        "depth_bid": 1086.3449999999998,
+        "depth_ask": 514.0
+      },
+      {
+        "group": "lol|totals|PRE",
+        "n": 4,
+        "spread_med": 0.95,
+        "pc_le_1c": 0.0,
+        "depth_bid": 7.0,
+        "depth_ask": 4603.5
+      },
+      {
+        "group": "cs2|spreads|PRE",
+        "n": 3,
+        "spread_med": 0.96,
+        "pc_le_1c": 0.0,
+        "depth_bid": 13.0,
+        "depth_ask": 13.0
+      },
+      {
+        "group": "valorant|moneyline|PRE",
+        "n": 2,
+        "spread_med": 0.53,
+        "pc_le_1c": 50.0,
+        "depth_bid": 1751.03,
+        "depth_ask": 378.985
+      }
+    ]
+  },
+  "phase2_reach": {
+    "design": "8s cadence, 165 sweeps, 229 markets, 37,571 states, median span 1,559s. Arms chosen from the census: THIN (touch depth <= 500, the International profile) vs DEEP (> 5,000) at matched tight spreads, to test depth as the discriminator.",
+    "arms": [
+      {
+        "label": "THIN",
+        "markets": 169,
+        "states": 27673,
+        "spread_med": 0.0050000000000000044,
+        "depth_med": 178.0,
+        "move_min": 0.0,
+        "r30": 0.4,
+        "r60": 0.8,
+        "r120": 1.3,
+        "sell120": 1.0,
+        "two_sided": 0.2,
+        "median_reach": 49.796260595321655
+      },
+      {
+        "label": "DEEP",
+        "markets": 60,
+        "states": 9898,
+        "spread_med": 0.0050000000000000044,
+        "depth_med": 24151.57,
+        "move_min": 0.0,
+        "r30": 0.6,
+        "r60": 1.3,
+        "r120": 2.3,
+        "sell120": 1.3,
+        "two_sided": 0.4,
+        "median_reach": 53.740129232406616
+      }
+    ],
+    "groups": [
+      {
+        "label": "nfl|spreads|PRE",
+        "markets": 176,
+        "states": 29035,
+        "spread_med": 0.0050000000000000044,
+        "depth_med": 450.41,
+        "move_min": 0.0,
+        "r30": 0.0,
+        "r60": 0.0,
+        "r120": 0.0,
+        "sell120": 0.0,
+        "two_sided": 0.0,
+        "median_reach": null
+      },
+      {
+        "label": "nfl|totals|PRE",
+        "markets": 18,
+        "states": 2970,
+        "spread_med": 0.0050000000000000044,
+        "depth_med": 10010.0,
+        "move_min": 0.0,
+        "r30": 0.0,
+        "r60": 0.0,
+        "r120": 0.0,
+        "sell120": 0.0,
+        "two_sided": 0.0,
+        "median_reach": null
+      },
+      {
+        "label": "mlb|spreads|PRE",
+        "markets": 6,
+        "states": 990,
+        "spread_med": 0.0050000000000000044,
+        "depth_med": 154.0,
+        "move_min": 0.0,
+        "r30": 0.2,
+        "r60": 0.5,
+        "r120": 0.7,
+        "sell120": 0.0,
+        "two_sided": 0.0,
+        "median_reach": 87.04042100906372
+      },
+      {
+        "label": "mlb|spreads|LIVE",
+        "markets": 6,
+        "states": 989,
+        "spread_med": 0.0050000000000000044,
+        "depth_med": 1185.04,
+        "move_min": 0.8850296668975313,
+        "r30": 6.1,
+        "r60": 13.5,
+        "r120": 26.1,
+        "sell120": 15.3,
+        "two_sided": 0.8,
+        "median_reach": 59.77129054069519
+      },
+      {
+        "label": "mlb|moneyline|PRE",
+        "markets": 4,
+        "states": 660,
+        "spread_med": 0.0050000000000000044,
+        "depth_med": 8568.545,
+        "move_min": 0.0,
+        "r30": 0.0,
+        "r60": 0.0,
+        "r120": 0.0,
+        "sell120": 0.0,
+        "two_sided": 0.0,
+        "median_reach": null
+      },
+      {
+        "label": "nfl|moneyline|PRE",
+        "markets": 10,
+        "states": 1649,
+        "spread_med": 0.0050000000000000044,
+        "depth_med": 1647208.65,
+        "move_min": 0.0,
+        "r30": 0.0,
+        "r60": 0.0,
+        "r120": 0.0,
+        "sell120": 0.0,
+        "two_sided": 0.0,
+        "median_reach": null
+      }
+    ],
+    "depth_is_not_the_discriminator": "THIN (median depth 178) reached 1.3% at 120s; DEEP (median depth 24,152) reached 2.3%. Both are near zero and the difference runs the WRONG way. Depth does not explain it.",
+    "what_does": "TOUCH MOVEMENT. move/min is 0.00 for every pregame group measured -- these books do not move at all over 26 minutes. The single live group, mlb|spreads|LIVE, moves 0.89/min and reaches 26.1%."
+  },
+  "CRITICAL_LIMITATION": {
+    "when": "phase 2 ran ~02:40-03:10 UTC, when essentially no US sport was live. 176 of 229 sampled markets were NFL PREGAME for games days away.",
+    "consequence": "THIS SAMPLE CANNOT ANSWER THE REACH QUESTION. A frozen pregame book is not evidence that PMUS lacks reachable habitat; it is evidence that a market with no game running does not trade.",
+    "what_is_valid": "the phase-1 census (spread and depth) is valid at any hour and is the whole universe.",
+    "what_is_not": "every reach figure here, except as a lower bound for the hour sampled."
+  },
+  "provisional_read": {
+    "live_pmus_reach": "across BOTH runs this session the live categories land near 25-30% at 120s: mlb|moneyline|LIVE 29.9% (n=8, earlier run) and mlb|spreads|LIVE 26.1% (n=6, this run). That is comparable to Gemini's 24.4% and far below International's 80.6%.",
+    "confidence": "LOW. Small n, one session, off-peak. Not a verdict."
+  },
+  "no_shadow_started": {
+    "reason": "nothing met the preregistered thresholds, and the reach measurement is not yet valid. Running the frozen engine on a habitat this sample cannot vouch for would repeat the Gemini mistake one venue over.",
+    "gating_step": "repeat phase 2 at peak US sports hours (roughly 23:00-03:00 UTC with MLB/NBA/NFL in play, or 14:00-17:00 UTC for European football) against the same preregistered thresholds. If a live category clears >= 70% reach at 120s with a median <= 30s, it becomes the shadow candidate."
+  },
+  "pmus_venue_facts": {
+    "tick": 0.005,
+    "minimum_trade_qty": 0.01,
+    "taker_fee": "0.06*q*p*(1-p) capped $1.50",
+    "maker_fee": "none; maker is CREDITED 0.0125*q*p*(1-p) capped $0.31, cent-rounded so $0.00 below ~1.62 shares",
+    "book_structure": "ONE ladder per market slug; the two outcomes are two marketSides sharing one identifier -- the two directions of that book"
+  },
+  "labels": "READ-ONLY. Public gateway GETs, no credentials, no order path, no writes. Model A untouched, no sports strategy invented, Gemini corrected A+B still collecting as the negative control."
+}

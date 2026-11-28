@@ -1,0 +1,12 @@
+ALIGNED DATASET  /home/user/kalshi-arb-bot/analysis/l5/btc5m_accumulation/btc5m_aligned_20261112.jsonl.gz
+  size              2.75 MB
+  rows              27425
+  windows           189
+  windows resolved  187
+  windows with p_up 187
+  rows with p_up    27422 (100.0%)
+  model             l5_btc_reference@235c65005c5b;source=VENUE_INDEX_BRTI_60S;averaging_s=60;vol_inflation=1.25;sigma_rel_floor=3.5e-05;max_index_age_s=3.0
+  rows WITHOUT p_up, by reason:
+     NO_STRIKE                          3
+  depth             null on every row -- the venue's PUBLIC market endpoint publishes no size at any 
+  fills             empty on every row -- never filled

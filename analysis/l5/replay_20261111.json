@@ -1,0 +1,1072 @@
+{
+ "actual": {
+  "0400z": {
+   "fills": "3",
+   "pairs": "0",
+   "pnl": "0.6292",
+   "note": "DOWN 1.18 @ 0.467 unmatched, won"
+  },
+  "0415z": {
+   "fills": "1",
+   "pairs": "0",
+   "pnl": "-0.1408",
+   "note": "UP 0.44 @ 0.32 unmatched, lost"
+  }
+ },
+ "variants": [
+  {
+   "label": "as run tonight (120 s, floor 0.30, cutoff 480 s)",
+   "total_pnl": "0.4158000000",
+   "windows": [
+    {
+     "window": "0400z",
+     "orders": 8,
+     "fills": 4,
+     "seconds_unmatched": 580.0,
+     "first_fill_t": 18.3,
+     "locked_pair_pnl": "0",
+     "expected_on_own_record": "-0.294945",
+     "cancelled": 4,
+     "pairs_contracts": "0",
+     "pair_cost": null,
+     "unmatched": "1.59",
+     "unmatched_side": "DOWN",
+     "fees": "0E-10",
+     "max_at_risk": "0.755100",
+     "spent": "0.755100",
+     "pnl": "0.8349000000",
+     "fill_log": [
+      [
+       18.3,
+       "DOWN",
+       "0.4900",
+       "0.39"
+      ],
+      [
+       18.3,
+       "DOWN",
+       "0.4800",
+       "0.40"
+      ],
+      [
+       18.3,
+       "DOWN",
+       "0.4700",
+       "0.40"
+      ],
+      [
+       24.0,
+       "DOWN",
+       "0.4600",
+       "0.40"
+      ]
+     ]
+    },
+    {
+     "window": "0415z",
+     "orders": 6,
+     "fills": 3,
+     "seconds_unmatched": 574.0,
+     "first_fill_t": 21.5,
+     "locked_pair_pnl": "0",
+     "expected_on_own_record": "-0.243005",
+     "cancelled": 3,
+     "pairs_contracts": "0",
+     "pair_cost": null,
+     "unmatched": "1.31",
+     "unmatched_side": "UP",
+     "fees": "0E-10",
+     "max_at_risk": "0.419100",
+     "spent": "0.419100",
+     "pnl": "-0.4191000000",
+     "fill_log": [
+      [
+       21.5,
+       "UP",
+       "0.3300",
+       "0.43"
+      ],
+      [
+       21.5,
+       "UP",
+       "0.3200",
+       "0.44"
+      ],
+      [
+       21.5,
+       "UP",
+       "0.3100",
+       "0.44"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "label": "quote lifetime 15 s",
+   "total_pnl": "-0.0042000000",
+   "windows": [
+    {
+     "window": "0400z",
+     "orders": 15,
+     "fills": 6,
+     "seconds_unmatched": 580.0,
+     "first_fill_t": 18.3,
+     "locked_pair_pnl": "0.000075471698113207547169811360",
+     "expected_on_own_record": "-0.1464695283018867924528301886",
+     "cancelled": 9,
+     "pairs_contracts": "0.80",
+     "pair_cost": "0.9999056603773584905660377358",
+     "unmatched": "0.79",
+     "unmatched_side": "DOWN",
+     "fees": "0E-10",
+     "max_at_risk": "0.755100",
+     "spent": "1.175100",
+     "pnl": "0.4149000000",
+     "fill_log": [
+      [
+       18.3,
+       "DOWN",
+       "0.4900",
+       "0.39"
+      ],
+      [
+       18.3,
+       "DOWN",
+       "0.4800",
+       "0.40"
+      ],
+      [
+       18.3,
+       "DOWN",
+       "0.4700",
+       "0.40"
+      ],
+      [
+       24.0,
+       "DOWN",
+       "0.4600",
+       "0.40"
+      ],
+      [
+       49.5,
+       "UP",
+       "0.5300",
+       "0.40"
+      ],
+      [
+       49.5,
+       "UP",
+       "0.5200",
+       "0.40"
+      ]
+     ]
+    },
+    {
+     "window": "0415z",
+     "orders": 6,
+     "fills": 3,
+     "seconds_unmatched": 574.0,
+     "first_fill_t": 21.5,
+     "locked_pair_pnl": "0",
+     "expected_on_own_record": "-0.243005",
+     "cancelled": 3,
+     "pairs_contracts": "0",
+     "pair_cost": null,
+     "unmatched": "1.31",
+     "unmatched_side": "UP",
+     "fees": "0E-10",
+     "max_at_risk": "0.419100",
+     "spent": "0.419100",
+     "pnl": "-0.4191000000",
+     "fill_log": [
+      [
+       21.5,
+       "UP",
+       "0.3300",
+       "0.43"
+      ],
+      [
+       21.5,
+       "UP",
+       "0.3200",
+       "0.44"
+      ],
+      [
+       21.5,
+       "UP",
+       "0.3100",
+       "0.44"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "label": "first-leg floor 0.05",
+   "total_pnl": "0.4158000000",
+   "windows": [
+    {
+     "window": "0400z",
+     "orders": 8,
+     "fills": 4,
+     "seconds_unmatched": 580.0,
+     "first_fill_t": 18.3,
+     "locked_pair_pnl": "0",
+     "expected_on_own_record": "-0.294945",
+     "cancelled": 4,
+     "pairs_contracts": "0",
+     "pair_cost": null,
+     "unmatched": "1.59",
+     "unmatched_side": "DOWN",
+     "fees": "0E-10",
+     "max_at_risk": "0.755100",
+     "spent": "0.755100",
+     "pnl": "0.8349000000",
+     "fill_log": [
+      [
+       18.3,
+       "DOWN",
+       "0.4900",
+       "0.39"
+      ],
+      [
+       18.3,
+       "DOWN",
+       "0.4800",
+       "0.40"
+      ],
+      [
+       18.3,
+       "DOWN",
+       "0.4700",
+       "0.40"
+      ],
+      [
+       24.0,
+       "DOWN",
+       "0.4600",
+       "0.40"
+      ]
+     ]
+    },
+    {
+     "window": "0415z",
+     "orders": 6,
+     "fills": 3,
+     "seconds_unmatched": 574.0,
+     "first_fill_t": 21.5,
+     "locked_pair_pnl": "0",
+     "expected_on_own_record": "-0.243005",
+     "cancelled": 3,
+     "pairs_contracts": "0",
+     "pair_cost": null,
+     "unmatched": "1.31",
+     "unmatched_side": "UP",
+     "fees": "0E-10",
+     "max_at_risk": "0.419100",
+     "spent": "0.419100",
+     "pnl": "-0.4191000000",
+     "fill_log": [
+      [
+       21.5,
+       "UP",
+       "0.3300",
+       "0.43"
+      ],
+      [
+       21.5,
+       "UP",
+       "0.3200",
+       "0.44"
+      ],
+      [
+       21.5,
+       "UP",
+       "0.3100",
+       "0.44"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "label": "entry until minute 13",
+   "total_pnl": "-0.2280000000",
+   "windows": [
+    {
+     "window": "0400z",
+     "orders": 12,
+     "fills": 8,
+     "seconds_unmatched": 751.0,
+     "first_fill_t": 18.3,
+     "locked_pair_pnl": "0.1911000000000000000000000002",
+     "expected_on_own_record": "0.1911000000000000000000000002",
+     "cancelled": 4,
+     "pairs_contracts": "1.59",
+     "pair_cost": "0.8798113207547169811320754716",
+     "unmatched": "0.00",
+     "unmatched_side": null,
+     "fees": "0E-10",
+     "max_at_risk": "0.755100",
+     "spent": "1.398900",
+     "pnl": "0.1911000000",
+     "fill_log": [
+      [
+       18.3,
+       "DOWN",
+       "0.4900",
+       "0.39"
+      ],
+      [
+       18.3,
+       "DOWN",
+       "0.4800",
+       "0.40"
+      ],
+      [
+       18.3,
+       "DOWN",
+       "0.4700",
+       "0.40"
+      ],
+      [
+       24.0,
+       "DOWN",
+       "0.4600",
+       "0.40"
+      ],
+      [
+       768.9,
+       "UP",
+       "0.4200",
+       "0.39"
+      ],
+      [
+       768.9,
+       "UP",
+       "0.4100",
+       "0.40"
+      ],
+      [
+       768.9,
+       "UP",
+       "0.4000",
+       "0.40"
+      ],
+      [
+       768.9,
+       "UP",
+       "0.3900",
+       "0.40"
+      ]
+     ]
+    },
+    {
+     "window": "0415z",
+     "orders": 9,
+     "fills": 3,
+     "seconds_unmatched": 818.0,
+     "first_fill_t": 21.5,
+     "locked_pair_pnl": "0",
+     "expected_on_own_record": "-0.243005",
+     "cancelled": 6,
+     "pairs_contracts": "0",
+     "pair_cost": null,
+     "unmatched": "1.31",
+     "unmatched_side": "UP",
+     "fees": "0E-10",
+     "max_at_risk": "0.419100",
+     "spent": "0.419100",
+     "pnl": "-0.4191000000",
+     "fill_log": [
+      [
+       21.5,
+       "UP",
+       "0.3300",
+       "0.43"
+      ],
+      [
+       21.5,
+       "UP",
+       "0.3200",
+       "0.44"
+      ],
+      [
+       21.5,
+       "UP",
+       "0.3100",
+       "0.44"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "label": "hedge left resting at the $1.00 ceiling",
+   "total_pnl": "0.4158000000",
+   "windows": [
+    {
+     "window": "0400z",
+     "orders": 24,
+     "fills": 4,
+     "seconds_unmatched": 580.0,
+     "first_fill_t": 18.3,
+     "locked_pair_pnl": "0",
+     "expected_on_own_record": "-0.294945",
+     "cancelled": 20,
+     "pairs_contracts": "0",
+     "pair_cost": null,
+     "unmatched": "1.59",
+     "unmatched_side": "DOWN",
+     "fees": "0E-10",
+     "max_at_risk": "0.755100",
+     "spent": "0.755100",
+     "pnl": "0.8349000000",
+     "fill_log": [
+      [
+       18.3,
+       "DOWN",
+       "0.4900",
+       "0.39"
+      ],
+      [
+       18.3,
+       "DOWN",
+       "0.4800",
+       "0.40"
+      ],
+      [
+       18.3,
+       "DOWN",
+       "0.4700",
+       "0.40"
+      ],
+      [
+       24.0,
+       "DOWN",
+       "0.4600",
+       "0.40"
+      ]
+     ]
+    },
+    {
+     "window": "0415z",
+     "orders": 18,
+     "fills": 3,
+     "seconds_unmatched": 574.0,
+     "first_fill_t": 21.5,
+     "locked_pair_pnl": "0",
+     "expected_on_own_record": "-0.243005",
+     "cancelled": 15,
+     "pairs_contracts": "0",
+     "pair_cost": null,
+     "unmatched": "1.31",
+     "unmatched_side": "UP",
+     "fees": "0E-10",
+     "max_at_risk": "0.419100",
+     "spent": "0.419100",
+     "pnl": "-0.4191000000",
+     "fill_log": [
+      [
+       21.5,
+       "UP",
+       "0.3300",
+       "0.43"
+      ],
+      [
+       21.5,
+       "UP",
+       "0.3200",
+       "0.44"
+      ],
+      [
+       21.5,
+       "UP",
+       "0.3100",
+       "0.44"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "label": "resting hedge, completion open to minute 14",
+   "total_pnl": "0E-10",
+   "windows": [
+    {
+     "window": "0400z",
+     "orders": 28,
+     "fills": 8,
+     "seconds_unmatched": 735.0,
+     "first_fill_t": 18.3,
+     "locked_pair_pnl": "0E-29",
+     "expected_on_own_record": "0E-29",
+     "cancelled": 20,
+     "pairs_contracts": "1.59",
+     "pair_cost": "1.000000000000000000000000000",
+     "unmatched": "0.00",
+     "unmatched_side": null,
+     "fees": "0E-10",
+     "max_at_risk": "0.755100",
+     "spent": "1.590000",
+     "pnl": "0E-10",
+     "fill_log": [
+      [
+       18.3,
+       "DOWN",
+       "0.4900",
+       "0.39"
+      ],
+      [
+       18.3,
+       "DOWN",
+       "0.4800",
+       "0.40"
+      ],
+      [
+       18.3,
+       "DOWN",
+       "0.4700",
+       "0.40"
+      ],
+      [
+       24.0,
+       "DOWN",
+       "0.4600",
+       "0.40"
+      ],
+      [
+       753.1,
+       "UP",
+       "0.5100",
+       "0.39"
+      ],
+      [
+       753.1,
+       "UP",
+       "0.5200",
+       "0.40"
+      ],
+      [
+       753.1,
+       "UP",
+       "0.5300",
+       "0.40"
+      ],
+      [
+       753.1,
+       "UP",
+       "0.5400",
+       "0.40"
+      ]
+     ]
+    },
+    {
+     "window": "0415z",
+     "orders": 24,
+     "fills": 6,
+     "seconds_unmatched": 784.0,
+     "first_fill_t": 21.5,
+     "locked_pair_pnl": "0E-29",
+     "expected_on_own_record": "0E-29",
+     "cancelled": 18,
+     "pairs_contracts": "1.31",
+     "pair_cost": "1.000000000000000000000000000",
+     "unmatched": "0.00",
+     "unmatched_side": null,
+     "fees": "0E-10",
+     "max_at_risk": "0.419100",
+     "spent": "1.310000",
+     "pnl": "0E-10",
+     "fill_log": [
+      [
+       21.5,
+       "UP",
+       "0.3300",
+       "0.43"
+      ],
+      [
+       21.5,
+       "UP",
+       "0.3200",
+       "0.44"
+      ],
+      [
+       21.5,
+       "UP",
+       "0.3100",
+       "0.44"
+      ],
+      [
+       805.3,
+       "DOWN",
+       "0.6700",
+       "0.43"
+      ],
+      [
+       805.3,
+       "DOWN",
+       "0.6800",
+       "0.44"
+      ],
+      [
+       805.3,
+       "DOWN",
+       "0.6900",
+       "0.44"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "label": "resting hedge at a 0.96 pair, open to minute 14",
+   "total_pnl": "0.1160000000",
+   "windows": [
+    {
+     "window": "0400z",
+     "orders": 28,
+     "fills": 8,
+     "seconds_unmatched": 735.0,
+     "first_fill_t": 18.3,
+     "locked_pair_pnl": "0.06360000000000000000000000000",
+     "expected_on_own_record": "0.06360000000000000000000000000",
+     "cancelled": 20,
+     "pairs_contracts": "1.59",
+     "pair_cost": "0.9600000000000000000000000000",
+     "unmatched": "0.00",
+     "unmatched_side": null,
+     "fees": "0E-10",
+     "max_at_risk": "0.755100",
+     "spent": "1.526400",
+     "pnl": "0.0636000000",
+     "fill_log": [
+      [
+       18.3,
+       "DOWN",
+       "0.4900",
+       "0.39"
+      ],
+      [
+       18.3,
+       "DOWN",
+       "0.4800",
+       "0.40"
+      ],
+      [
+       18.3,
+       "DOWN",
+       "0.4700",
+       "0.40"
+      ],
+      [
+       24.0,
+       "DOWN",
+       "0.4600",
+       "0.40"
+      ],
+      [
+       753.1,
+       "UP",
+       "0.4700",
+       "0.39"
+      ],
+      [
+       753.1,
+       "UP",
+       "0.4800",
+       "0.40"
+      ],
+      [
+       753.1,
+       "UP",
+       "0.4900",
+       "0.40"
+      ],
+      [
+       753.1,
+       "UP",
+       "0.5000",
+       "0.40"
+      ]
+     ]
+    },
+    {
+     "window": "0415z",
+     "orders": 24,
+     "fills": 6,
+     "seconds_unmatched": 784.0,
+     "first_fill_t": 21.5,
+     "locked_pair_pnl": "0.05240000000000000000000000000",
+     "expected_on_own_record": "0.05240000000000000000000000000",
+     "cancelled": 18,
+     "pairs_contracts": "1.31",
+     "pair_cost": "0.9600000000000000000000000000",
+     "unmatched": "0.00",
+     "unmatched_side": null,
+     "fees": "0E-10",
+     "max_at_risk": "0.419100",
+     "spent": "1.257600",
+     "pnl": "0.0524000000",
+     "fill_log": [
+      [
+       21.5,
+       "UP",
+       "0.3300",
+       "0.43"
+      ],
+      [
+       21.5,
+       "UP",
+       "0.3200",
+       "0.44"
+      ],
+      [
+       21.5,
+       "UP",
+       "0.3100",
+       "0.44"
+      ],
+      [
+       805.3,
+       "DOWN",
+       "0.6300",
+       "0.43"
+      ],
+      [
+       805.3,
+       "DOWN",
+       "0.6400",
+       "0.44"
+      ],
+      [
+       805.3,
+       "DOWN",
+       "0.6500",
+       "0.44"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "label": "15 s + resting hedge",
+   "total_pnl": "0.0062000000",
+   "windows": [
+    {
+     "window": "0400z",
+     "orders": 50,
+     "fills": 10,
+     "seconds_unmatched": 574.0,
+     "first_fill_t": 18.3,
+     "locked_pair_pnl": "0.01318354430379746835443037977",
+     "expected_on_own_record": "-0.1315064556962025316455696202",
+     "cancelled": 40,
+     "pairs_contracts": "1.59",
+     "pair_cost": "0.9917084627020141708462702014",
+     "unmatched": "0.78",
+     "unmatched_side": "DOWN",
+     "fees": "0E-10",
+     "max_at_risk": "0.755100",
+     "spent": "1.944700",
+     "pnl": "0.4253000000",
+     "fill_log": [
+      [
+       18.3,
+       "DOWN",
+       "0.4900",
+       "0.39"
+      ],
+      [
+       18.3,
+       "DOWN",
+       "0.4800",
+       "0.40"
+      ],
+      [
+       18.3,
+       "DOWN",
+       "0.4700",
+       "0.40"
+      ],
+      [
+       24.0,
+       "DOWN",
+       "0.4600",
+       "0.40"
+      ],
+      [
+       49.5,
+       "UP",
+       "0.5100",
+       "0.39"
+      ],
+      [
+       49.5,
+       "UP",
+       "0.5200",
+       "0.40"
+      ],
+      [
+       49.5,
+       "UP",
+       "0.5300",
+       "0.40"
+      ],
+      [
+       49.5,
+       "UP",
+       "0.5200",
+       "0.40"
+      ],
+      [
+       55.3,
+       "DOWN",
+       "0.4700",
+       "0.39"
+      ],
+      [
+       55.3,
+       "DOWN",
+       "0.4600",
+       "0.39"
+      ]
+     ]
+    },
+    {
+     "window": "0415z",
+     "orders": 51,
+     "fills": 3,
+     "seconds_unmatched": 574.0,
+     "first_fill_t": 21.5,
+     "locked_pair_pnl": "0",
+     "expected_on_own_record": "-0.243005",
+     "cancelled": 48,
+     "pairs_contracts": "0",
+     "pair_cost": null,
+     "unmatched": "1.31",
+     "unmatched_side": "UP",
+     "fees": "0E-10",
+     "max_at_risk": "0.419100",
+     "spent": "0.419100",
+     "pnl": "-0.4191000000",
+     "fill_log": [
+      [
+       21.5,
+       "UP",
+       "0.3300",
+       "0.43"
+      ],
+      [
+       21.5,
+       "UP",
+       "0.3200",
+       "0.44"
+      ],
+      [
+       21.5,
+       "UP",
+       "0.3100",
+       "0.44"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "label": "all four",
+   "total_pnl": "0.0062000000",
+   "windows": [
+    {
+     "window": "0400z",
+     "orders": 50,
+     "fills": 10,
+     "seconds_unmatched": 811.0,
+     "first_fill_t": 18.3,
+     "locked_pair_pnl": "0.01318354430379746835443037977",
+     "expected_on_own_record": "-0.1315064556962025316455696202",
+     "cancelled": 40,
+     "pairs_contracts": "1.59",
+     "pair_cost": "0.9917084627020141708462702014",
+     "unmatched": "0.78",
+     "unmatched_side": "DOWN",
+     "fees": "0E-10",
+     "max_at_risk": "0.755100",
+     "spent": "1.944700",
+     "pnl": "0.4253000000",
+     "fill_log": [
+      [
+       18.3,
+       "DOWN",
+       "0.4900",
+       "0.39"
+      ],
+      [
+       18.3,
+       "DOWN",
+       "0.4800",
+       "0.40"
+      ],
+      [
+       18.3,
+       "DOWN",
+       "0.4700",
+       "0.40"
+      ],
+      [
+       24.0,
+       "DOWN",
+       "0.4600",
+       "0.40"
+      ],
+      [
+       49.5,
+       "UP",
+       "0.5100",
+       "0.39"
+      ],
+      [
+       49.5,
+       "UP",
+       "0.5200",
+       "0.40"
+      ],
+      [
+       49.5,
+       "UP",
+       "0.5300",
+       "0.40"
+      ],
+      [
+       49.5,
+       "UP",
+       "0.5200",
+       "0.40"
+      ],
+      [
+       55.3,
+       "DOWN",
+       "0.4700",
+       "0.39"
+      ],
+      [
+       55.3,
+       "DOWN",
+       "0.4600",
+       "0.39"
+      ]
+     ]
+    },
+    {
+     "window": "0415z",
+     "orders": 51,
+     "fills": 3,
+     "seconds_unmatched": 818.0,
+     "first_fill_t": 21.5,
+     "locked_pair_pnl": "0",
+     "expected_on_own_record": "-0.243005",
+     "cancelled": 48,
+     "pairs_contracts": "0",
+     "pair_cost": null,
+     "unmatched": "1.31",
+     "unmatched_side": "UP",
+     "fees": "0E-10",
+     "max_at_risk": "0.419100",
+     "spent": "0.419100",
+     "pnl": "-0.4191000000",
+     "fill_log": [
+      [
+       21.5,
+       "UP",
+       "0.3300",
+       "0.43"
+      ],
+      [
+       21.5,
+       "UP",
+       "0.3200",
+       "0.44"
+      ],
+      [
+       21.5,
+       "UP",
+       "0.3100",
+       "0.44"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "label": "all four, one round at a time",
+   "total_pnl": "0.0648000000",
+   "windows": [
+    {
+     "window": "0400z",
+     "orders": 20,
+     "fills": 3,
+     "seconds_unmatched": 811.0,
+     "first_fill_t": 18.3,
+     "locked_pair_pnl": "0.003900",
+     "expected_on_own_record": "-0.068445",
+     "cancelled": 17,
+     "pairs_contracts": "0.39",
+     "pair_cost": "0.9900",
+     "unmatched": "0.39",
+     "unmatched_side": "DOWN",
+     "fees": "0E-10",
+     "max_at_risk": "0.191100",
+     "spent": "0.573300",
+     "pnl": "0.2067000000",
+     "fill_log": [
+      [
+       18.3,
+       "DOWN",
+       "0.4900",
+       "0.39"
+      ],
+      [
+       49.5,
+       "UP",
+       "0.5100",
+       "0.39"
+      ],
+      [
+       55.3,
+       "DOWN",
+       "0.4700",
+       "0.39"
+      ]
+     ]
+    },
+    {
+     "window": "0415z",
+     "orders": 17,
+     "fills": 1,
+     "seconds_unmatched": 818.0,
+     "first_fill_t": 21.5,
+     "locked_pair_pnl": "0",
+     "expected_on_own_record": "-0.079765",
+     "cancelled": 16,
+     "pairs_contracts": "0",
+     "pair_cost": null,
+     "unmatched": "0.43",
+     "unmatched_side": "UP",
+     "fees": "0E-10",
+     "max_at_risk": "0.141900",
+     "spent": "0.141900",
+     "pnl": "-0.1419000000",
+     "fill_log": [
+      [
+       21.5,
+       "UP",
+       "0.3300",
+       "0.43"
+      ]
+     ]
+    }
+   ]
+  }
+ ]
+}

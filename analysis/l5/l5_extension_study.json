@@ -1,0 +1,261 @@
+{
+ "generated_utc": "2026-09-02T02:42:05.683022+00:00",
+ "labels": {
+  "part_a": "HISTORICAL (L5 canonical sequence)",
+  "part_b": "MODELED counterfactual (never realized)",
+  "part_c": "HISTORICAL tape, upper-bound estimate"
+ },
+ "sources": [
+  "/home/user/kalshi-arb-bot/analysis/l5/l5_canonical_sequence.csv.gz",
+  "/tmp/claude-0/-home-user-kalshi-arb-bot/8c34d955-4313-5061-8a7e-36a12fdf396d/scratchpad/reflag_tape/data/ref_lag"
+ ],
+ "part_a_extend_episodes": {
+  "overall": {
+   "episodes": 1763,
+   "p_complement_before_end": 0.748,
+   "latency_to_first_complement_s": {
+    "median": 60.0,
+    "p90": 170.0
+   },
+   "same_side_extensions_before_complement": {
+    "median": 2.0,
+    "p90_qty": 137.41
+   },
+   "max_interim_imbalance": {
+    "shares_median": 109.064,
+    "usd_median": 71.61,
+    "usd_p90": 280.75
+   },
+   "final_matched_median": 80.786,
+   "final_residual_median": 77.541,
+   "pair_cost_when_complemented_median": 0.968
+  },
+  "splits": {
+   "BTC-15m": {
+    "episodes": 504,
+    "p_complement_before_end": 0.98,
+    "latency_to_first_complement_s": {
+     "median": 36.0,
+     "p90": 140.0
+    },
+    "same_side_extensions_before_complement": {
+     "median": 2.0,
+     "p90_qty": 150.0
+    },
+    "max_interim_imbalance": {
+     "shares_median": 276.305,
+     "usd_median": 213.564,
+     "usd_p90": 482.373
+    },
+    "final_matched_median": 1054.564,
+    "final_residual_median": 123.959,
+    "pair_cost_when_complemented_median": 0.963
+   },
+   "BTC-5m": {
+    "episodes": 826,
+    "p_complement_before_end": 0.777,
+    "latency_to_first_complement_s": {
+     "median": 72.0,
+     "p90": 170.0
+    },
+    "same_side_extensions_before_complement": {
+     "median": 1.0,
+     "p90_qty": 150.0
+    },
+    "max_interim_imbalance": {
+     "shares_median": 125.47,
+     "usd_median": 80.315,
+     "usd_p90": 177.58
+    },
+    "final_matched_median": 90.241,
+    "final_residual_median": 94.855,
+    "pair_cost_when_complemented_median": 0.975
+   },
+   "ETH-15m": {
+    "episodes": 23,
+    "p_complement_before_end": 0.478,
+    "latency_to_first_complement_s": {
+     "median": 126.0,
+     "p90": 733.0
+    },
+    "same_side_extensions_before_complement": {
+     "median": 1.0,
+     "p90_qty": 33.0
+    },
+    "max_interim_imbalance": {
+     "shares_median": 39.23,
+     "usd_median": 32.8,
+     "usd_p90": 45.601
+    },
+    "final_matched_median": 1.21,
+    "final_residual_median": 35.54,
+    "pair_cost_when_complemented_median": 1.113
+   },
+   "ETH-5m": {
+    "episodes": 410,
+    "p_complement_before_end": 0.417,
+    "latency_to_first_complement_s": {
+     "median": 81.0,
+     "p90": 204.0
+    },
+    "same_side_extensions_before_complement": {
+     "median": 1.0,
+     "p90_qty": 82.51
+    },
+    "max_interim_imbalance": {
+     "shares_median": 53.25,
+     "usd_median": 30.185,
+     "usd_p90": 85.95
+    },
+    "final_matched_median": 3.38,
+    "final_residual_median": 41.0,
+    "pair_cost_when_complemented_median": 1.029
+   }
+  }
+ },
+ "part_b_counterfactual_q1_MODELED": {
+  "note": "per-episode expectations from historical labels and L5's own fills as the opportunity tape; extend1 is OPTIMISTIC (assumes both completions fill at L5's prices); NEVER realized P&L",
+  "hold_ABSTAIN_EXTEND_CAPPED": {
+   "episodes": 1763,
+   "mean_modeled_usd_per_episode": 0.0023,
+   "median": 0.137,
+   "p_loss": 0.442
+  },
+  "one_bounded_extension": {
+   "episodes": 1763,
+   "mean_modeled_usd_per_episode": 0.0342,
+   "median": 0.031,
+   "p_loss": 0.462
+  },
+  "forced_economic_completion": {
+   "episodes": 1763,
+   "mean_modeled_usd_per_episode": 0.015,
+   "median": 0.092,
+   "p_loss": 0.337
+  },
+  "force_completion_rate": 0.392
+ },
+ "part_c_resting_horizon": {
+  "note": "P(>=1 contra taker print within T s) from all-participant tape, sliding starts every 15s across the tape span; UPPER bound on a top-of-book maker's fill probability (queue priority ignored)",
+  "BTC-05M": {
+   "prints": 511,
+   "span_h": 26.9,
+   "maker_bid_fill(taker_sell)": {
+    "30s": 0.044,
+    "45s": 0.061,
+    "60s": 0.075,
+    "90s": 0.099,
+    "120s": 0.121,
+    "180s": 0.158
+   },
+   "maker_ask_fill(taker_buy)": {
+    "30s": 0.041,
+    "45s": 0.057,
+    "60s": 0.071,
+    "90s": 0.095,
+    "120s": 0.116,
+    "180s": 0.153
+   }
+  },
+  "BTC-15M": {
+   "prints": 61,
+   "span_h": 16.4,
+   "maker_bid_fill(taker_sell)": {
+    "30s": 0.013,
+    "45s": 0.019,
+    "60s": 0.025,
+    "90s": 0.035,
+    "120s": 0.044,
+    "180s": 0.059
+   },
+   "maker_ask_fill(taker_buy)": {
+    "30s": 0.012,
+    "45s": 0.017,
+    "60s": 0.022,
+    "90s": 0.033,
+    "120s": 0.044,
+    "180s": 0.063
+   }
+  },
+  "ETH-05M": {
+   "prints": 62,
+   "span_h": 26.5,
+   "maker_bid_fill(taker_sell)": {
+    "30s": 0.007,
+    "45s": 0.011,
+    "60s": 0.014,
+    "90s": 0.022,
+    "120s": 0.029,
+    "180s": 0.042
+   },
+   "maker_ask_fill(taker_buy)": {
+    "30s": 0.007,
+    "45s": 0.01,
+    "60s": 0.013,
+    "90s": 0.02,
+    "120s": 0.027,
+    "180s": 0.04
+   }
+  },
+  "ETH-15M": {
+   "prints": 14,
+   "span_h": 10.5,
+   "maker_bid_fill(taker_sell)": {
+    "30s": 0.008,
+    "45s": 0.011,
+    "60s": 0.013,
+    "90s": 0.016,
+    "120s": 0.02,
+    "180s": 0.026
+   },
+   "maker_ask_fill(taker_buy)": {
+    "30s": 0.0,
+    "45s": 0.001,
+    "60s": 0.001,
+    "90s": 0.002,
+    "120s": 0.003,
+    "180s": 0.004
+   }
+  },
+  "SOL-05M": {
+   "prints": 23,
+   "span_h": 24.2,
+   "maker_bid_fill(taker_sell)": {
+    "30s": 0.002,
+    "45s": 0.004,
+    "60s": 0.005,
+    "90s": 0.007,
+    "120s": 0.01,
+    "180s": 0.014
+   },
+   "maker_ask_fill(taker_buy)": {
+    "30s": 0.004,
+    "45s": 0.007,
+    "60s": 0.009,
+    "90s": 0.013,
+    "120s": 0.017,
+    "180s": 0.024
+   }
+  },
+  "XRP-05M": {
+   "prints": 64,
+   "span_h": 26.9,
+   "maker_bid_fill(taker_sell)": {
+    "30s": 0.005,
+    "45s": 0.007,
+    "60s": 0.01,
+    "90s": 0.015,
+    "120s": 0.019,
+    "180s": 0.029
+   },
+   "maker_ask_fill(taker_buy)": {
+    "30s": 0.011,
+    "45s": 0.016,
+    "60s": 0.022,
+    "90s": 0.03,
+    "120s": 0.039,
+    "180s": 0.055
+   }
+  }
+ }
+}

@@ -1,0 +1,206 @@
+{
+ "artifact": "analysis/l5/runway_and_basis_audit_20261103.json",
+ "generated_utc": "2026-11-03T15:33:59.727771+00:00",
+ "item1_completion_runway": {
+  "correction_to_my_own_earlier_claim": "I said the runway was collapsed to ZERO. It is 60s. The telemetry row compares NOMINAL numbers (entry_cutoff_s 600 vs binding completion deadline 600), but `may_enter` also refuses TOO_LATE_TO_WITHDRAW at cancel_cutoff - MIN_REST_S = 600 - 60 = t+540, so entry already stops 60s before completion must. The collapse is real as a nominal collision and overstated as a zero-runway claim.",
+  "measured_against_the_real_gates": [
+   {
+    "config": "DEPLOYED today",
+    "entry_cutoff_s": 600.0,
+    "complete_cutoff_s": 720.0,
+    "cancel_margin_s": 300.0,
+    "cancel_cutoff": "t+600",
+    "entry_refused_from": "t+540",
+    "completion_allowed_to": "t+599",
+    "dedicated_runway_s": 60
+   },
+   {
+    "config": "PROPOSED 480/600",
+    "entry_cutoff_s": 480.0,
+    "complete_cutoff_s": 600.0,
+    "cancel_margin_s": 300.0,
+    "cancel_cutoff": "t+600",
+    "entry_refused_from": "t+480",
+    "completion_allowed_to": "t+599",
+    "dedicated_runway_s": 120
+   },
+   {
+    "config": "margin 300->120 instead",
+    "cancel_margin_s": 180.0,
+    "cancel_cutoff": "t+720",
+    "entry_refused_from": "t+600",
+    "completion_allowed_to": "t+719",
+    "dedicated_runway_s": 120,
+    "verdict": "REJECTED: reaches the same 120s by weakening the margin to the 180s code floor, which the owner forbade. The 480/600 route reaches it with the 300s margin untouched."
+   }
+  ],
+  "no_code_change_required": true,
+  "how": "both cutoffs are env-driven through `_earlier_only`, which accepts a value ONLY when it is earlier than the default. 480 < 600 and 600 < 720, so both settings are permitted; 700 clamps to 600 and 800 clamps to 720, verified.",
+  "variables_to_set": {
+   "L5_TS_ENTRY_CUTOFF_S": "480",
+   "L5_TS_COMPLETE_CUTOFF_S": "600"
+  },
+  "submission_gates_verified": {
+   "may_enter": [
+    "WINDOW_NOT_OPEN",
+    "BEFORE_PLACE_FLOOR",
+    "PAST_ENTRY_CUTOFF",
+    "TOO_LATE_TO_WITHDRAW at cancel_cutoff - MIN_REST_S(60)"
+   ],
+   "cancellation": "nothing may rest past cancel_cutoff = t_end - cancel_margin_s",
+   "order_ttl_s": "120, measured from SUBMIT not ack, shorter-only",
+   "settlement": "BTC15m settles at window end; cancel_cutoff is 300s before it"
+  },
+  "defensive_preserved": {
+   "defensive_terminal_s": 600.0,
+   "guard_opens_s": 540.0,
+   "last_actionable_s": 585.0,
+   "effect_of_the_change": "unchanged, because the terminal is min(complete_cutoff, cancel_cutoff) = 600 either way. The defensive arm window 540-585 now sits INSIDE a period where no new inventory can be opened, which is strictly better."
+  },
+  "does_it_add_executable_completion_opportunities": {
+   "answer": "NO, on observed evidence -- and I will not claim otherwise",
+   "why": "all 7 actionable admissible completion moments in the campaign were at t+34 to t+222, already inside both configs. All four venue-confirmed first-leg fills were at t+21 to t+130, far inside 480, so the change also costs NOTHING in observed opportunity.",
+   "what_it_does_buy": "a guarantee. Today a leg filled at t+539 would have 60s of completion runway; after the change no leg can be acquired without at least 120s. It bounds the worst case rather than adding opportunities."
+  }
+ },
+ "item2_cost_basis_audit": {
+  "correction_to_my_own_earlier_claim": "I said the audit had NEVER been run. It has: 2026-10-27T23:08:48Z and 23:16:54Z, ok true. What does not exist is a repo artifact of its output -- the evidence was only in Railway logs. This file is that artifact.",
+  "provenance": {
+   "ran_utc": [
+    "2026-10-27T23:08:48.503Z",
+    "2026-10-27T23:16:54.619Z"
+   ],
+   "activity_pages_walked": 115,
+   "activity_rows": 2282,
+   "walk_ended": "eof",
+   "walk_complete": true,
+   "writes": "NONE",
+   "apply_mode": "INSPECT, writes nothing"
+  },
+  "reconciliation": {
+   "unknown_basis_legs": 49,
+   "establishable": 47,
+   "unestablished": 2,
+   "placeholder_cost_total_usd": "294.0900",
+   "established_placeholder_cost_usd": "291.0500",
+   "measured_actual_cost_total_usd": "50.61480000",
+   "overstatement_usd": "240.43520000",
+   "overstatement_basis": "established legs ONLY; the 2 unestablished legs have no measured cost to subtract and keep their placeholder",
+   "worked_example": {
+    "leg": "cpc-btc-updown-15m-2026-10-14-2230z|UP",
+    "qty": "2.90",
+    "placeholder_cost_usd": "2.90",
+    "actual_cost_usd": "0.59",
+    "avg_price": "0.2034",
+    "fills_checked": 5,
+    "fills_absent": 0,
+    "crosscheck_worst_gap_usd": "0E-8",
+    "overstated_by": "2.31 (4.9x)"
+   }
+  },
+  "owner_attribution": {
+   "all_49_legs": "UNKNOWN_OWNER",
+   "legs_with_l5_owned_fills": 0,
+   "legs_with_owner_manual_fills": 0,
+   "legs_with_unknown_owner_fills": 49,
+   "rule": "the module's own: a fill is L5's only when its client order id appears in this executor's persisted fill_provenance. Every fill on these legs carries client_order_id null, so NONE is attributable to L5 activity.",
+   "meaning": "this is a SHARED-ACCOUNT attribution problem, not a measured L5 trading loss"
+  },
+  "series_breakdown_against_the_allowlist": {
+   "allowlist": [
+    "cpc-btc-updown-15m-"
+   ],
+   "rows": [
+    {
+     "series": "cpceth-eth-updown-15m",
+     "legs": 11,
+     "placeholder_usd": "85.9600",
+     "authorized": false
+    },
+    {
+     "series": "cpcsol-sol-updown-15m",
+     "legs": 11,
+     "placeholder_usd": "71.8600",
+     "authorized": false
+    },
+    {
+     "series": "cpcxrp-xrp-updown-15m",
+     "legs": 9,
+     "placeholder_usd": "68.6400",
+     "authorized": false
+    },
+    {
+     "series": "cpc-btc-updown-15m",
+     "legs": 17,
+     "placeholder_usd": "65.5900",
+     "authorized": true
+    },
+    {
+     "series": "cpc-btc-updown-1d",
+     "legs": 1,
+     "placeholder_usd": "2.0400",
+     "authorized": false
+    }
+   ],
+   "not_authorized_total_usd": "228.5000",
+   "not_authorized_share": "77.7%",
+   "authorized_total_usd": "65.5900",
+   "reading": "$228.50 of the $294.09 placeholder cost sits on series the L5 engine is NOT authorized to trade -- ETH, SOL, XRP and a 1-day BTC market -- including three 50.0000-contract legs at $50 each. The engine trades 1-3 contracts on cpc-btc-updown-15m- only."
+  },
+  "relation_to_the_53_27_ledger": {
+   "lifetime_realized_usd": "-53.2674",
+   "usable_basis_slice_usd": "-1.6874",
+   "placeholder_slice_usd": "-51.58",
+   "honest_limit": "the audit's $294.09 placeholder COST and the ledger's $51.58 placeholder-attributed REALIZED slice are different scopes -- acquisition cost across 49 legs of account history versus the placeholder-priced part of the current lifetime realized figure. They overlap and are not the same number, and I am not going to present a single reconciled total I have not computed leg by leg against the realized attribution.",
+   "what_IS_established": "the placeholders overstate measured acquisition cost by $240.44 on the 47 establishable legs, all of which are UNKNOWN_OWNER with zero L5-owned fills, and 77.7% of the placeholder cost is on unauthorized series."
+  },
+  "nothing_applied": {
+   "ledger_rewritten": false,
+   "losses_reset": false,
+   "halt_relaxed": false,
+   "why": "correct_settled_market refuses CORRECTION_WOULD_RELAX_LOSS_HALT for any correction moving realized toward zero. That refusal is correct and I did not attempt to work around it. The evidence is the deliverable; the decision is the owner's."
+  }
+ },
+ "item3_campaign_within_existing_limits": {
+  "respected": true,
+  "code_limits": {
+   "CA.MAX_WINDOWS": 8,
+   "CA.MAX_CAMPAIGN_S": 14400,
+   "CA.MAX_TOTAL_EXPOSURE_USD": "20"
+  },
+  "constants_not_raised": true
+ },
+ "item4_deploy_and_verification": {
+  "deployed_sha": "9c732c6e",
+  "deployment": "8d33d287 SUCCESS",
+  "parity": "80 / eb672d14b4baf439, identical -- unchanged, no src change this turn",
+  "no_new_deploy_needed_for_item1": "the runway fix is env-only; the code already supports it through _earlier_only",
+  "verified_running": {
+   "armed": false,
+   "up_qty": "0",
+   "dn_qty": "0",
+   "open_orders": 0,
+   "maker_pair_ceiling": "0.96",
+   "completion_pair_ceiling": "1.00",
+   "ts_completion_at_touch": "false",
+   "cancel_margin_s": 300.0,
+   "max_live_orders": 1,
+   "book_completion_depth_ticks": 0,
+   "signing_key_absent_from_runtime": true
+  },
+  "variables_NOT_set_by_me": {
+   "L5_TS_ENTRY_CUTOFF_S": "480 -- proposed, held for authorization",
+   "L5_TS_COMPLETE_CUTOFF_S": "600 -- proposed, held for authorization",
+   "why": "both change live trading behaviour. The instruction asked me to EVALUATE them, which is done and measured; applying them is a live config mutation and is the owner's call."
+  }
+ },
+ "safety": {
+  "armed": false,
+  "at_touch": "off",
+  "orders_submitted": 0,
+  "ledger_written": false,
+  "halt_relaxed": false,
+  "new_services": 0,
+  "fader_repo_untouched": true
+ }
+}

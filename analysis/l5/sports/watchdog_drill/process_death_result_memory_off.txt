@@ -1,0 +1,7 @@
+BOT READY ['o1', 'o2'] pid 1284
+{"phase": "1 bot alive", "open": 3, "exempt": ["o1", "o2"], "claimed_ids": 2, "cancelled": [], "not_ours": [["other-desk-1", "NOT_IN_OWNERSHIP_REGISTRY"]], "cancel_skipped": null, "claim_refused": null, "lanes": ["http://127.0.0.1:18495:OK:2"], "halt": "UNMANAGED_RESTING_ORDER"}
+BOT KILLED (SIGKILL), exit -9
+{"phase": "2 first sweep after death", "open": 3, "exempt": null, "claimed_ids": 0, "cancelled": [], "not_ours": [], "cancel_skipped": "the ownership registry named no ids, so NOTHING is cancellab", "claim_refused": "REGISTRY_UNREACHABLE:URLError", "lanes": null, "halt": null}
+{"phase": "3 next sweep", "open": 3, "exempt": null, "claimed_ids": 0, "cancelled": [], "not_ours": [], "cancel_skipped": "the ownership registry named no ids, so NOTHING is cancellab", "claim_refused": "REGISTRY_UNREACHABLE:URLError", "lanes": null, "halt": null}
+VENUE_CANCELS [] | STILL OPEN ['o1', 'o2', 'other-desk-1']
+exit 0

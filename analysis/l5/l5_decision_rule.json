@@ -1,0 +1,145 @@
+{
+ "comparison": {
+  "policies": [
+   {
+    "dollars_per_hour_pnl_plus_rebate": 0.211,
+    "fills_accepted": 25190,
+    "fills_rejected": 17181,
+    "modeled_rebate": 171.48,
+    "peak_concurrent_exposure": 246.58,
+    "pnl_plus_rebate": 12.61,
+    "policy": "mimic_risk_wrapped(behavior clone + caps)",
+    "trading_pnl": -158.87,
+    "turnover_dollars": 23817.24
+   },
+   {
+    "dollars_per_hour_pnl_plus_rebate": 9.467,
+    "fills_accepted": 10639,
+    "fills_rejected": 31732,
+    "modeled_rebate": 115.14,
+    "peak_concurrent_exposure": 253.5,
+    "pnl_plus_rebate": 565.66,
+    "policy": "perfect_window(tape-contra policy D)",
+    "trading_pnl": 450.53,
+    "turnover_dollars": 15991.16
+   },
+   {
+    "dollars_per_hour_pnl_plus_rebate": 0.691,
+    "fills_accepted": 42371,
+    "fills_rejected": 0,
+    "modeled_rebate": 284.95,
+    "peak_concurrent_exposure": 610.24,
+    "pnl_plus_rebate": 41.3,
+    "policy": "accept_all_baseline",
+    "trading_pnl": -243.64,
+    "turnover_dollars": 39576.07
+   }
+  ],
+  "scale": 0.1
+ },
+ "decision_rule": {
+  "by_decile": {
+   "0": {
+    "cum_spend_share_median": 0.057,
+    "imbalance_ratio_median": 0.467,
+    "n": 3582,
+    "size_median": 12.0,
+    "taker_share": 0.0503
+   },
+   "1": {
+    "cum_spend_share_median": 0.159,
+    "imbalance_ratio_median": 0.208,
+    "n": 3477,
+    "size_median": 10.387,
+    "taker_share": 0.0242
+   },
+   "2": {
+    "cum_spend_share_median": 0.24,
+    "imbalance_ratio_median": 0.16,
+    "n": 3882,
+    "size_median": 10.0,
+    "taker_share": 0.0209
+   },
+   "3": {
+    "cum_spend_share_median": 0.336,
+    "imbalance_ratio_median": 0.114,
+    "n": 4683,
+    "size_median": 11.295,
+    "taker_share": 0.0237
+   },
+   "4": {
+    "cum_spend_share_median": 0.444,
+    "imbalance_ratio_median": 0.088,
+    "n": 4342,
+    "size_median": 10.0,
+    "taker_share": 0.0339
+   },
+   "5": {
+    "cum_spend_share_median": 0.543,
+    "imbalance_ratio_median": 0.076,
+    "n": 4663,
+    "size_median": 10.0,
+    "taker_share": 0.0371
+   },
+   "6": {
+    "cum_spend_share_median": 0.639,
+    "imbalance_ratio_median": 0.064,
+    "n": 4924,
+    "size_median": 10.526,
+    "taker_share": 0.0443
+   },
+   "7": {
+    "cum_spend_share_median": 0.716,
+    "imbalance_ratio_median": 0.059,
+    "n": 4596,
+    "size_median": 13.261,
+    "taker_share": 0.0614
+   },
+   "8": {
+    "cum_spend_share_median": 0.816,
+    "imbalance_ratio_median": 0.056,
+    "n": 4904,
+    "size_median": 15.0,
+    "taker_share": 0.0706
+   },
+   "9": {
+    "cum_spend_share_median": 0.934,
+    "imbalance_ratio_median": 0.051,
+    "n": 3453,
+    "size_median": 12.0,
+    "taker_share": 0.0895
+   }
+  },
+  "entry": {
+   "first_fill_seconds_median": 9.0
+  },
+  "exit": {
+   "last_fill_seconds_to_expiry_median": 87.0,
+   "last_fill_seconds_to_expiry_p25": 47.2
+  },
+  "heavy_side_at_end": {
+   "Down": 136,
+   "Up": 104
+  },
+  "light_side_fill_probability_by_imbalance": {
+   "0.0-0.1": 0.381,
+   "0.1-0.2": 0.493,
+   "0.2-0.3": 0.493,
+   "0.3-0.4": 0.492,
+   "0.4-1.0": 0.447
+  },
+  "same_side_after_own_price_move": {
+   "drop/same": 8845,
+   "drop/switch": 4565,
+   "flat/same": 13906,
+   "flat/switch": 2155,
+   "rise/same": 7407,
+   "rise/switch": 5155
+  },
+  "sample": {
+   "fills": 42506,
+   "windows": 240
+  }
+ },
+ "note": "Fills-only inference: resting orders are invisible, so the quoting ladder is inferred from fill patterns. His trading P&L is roughly breakeven by design; the strategy's output is rebate-eligible maker volume with bounded inventory, not per-trade locked profit."
+}

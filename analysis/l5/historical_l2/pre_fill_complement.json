@@ -1,0 +1,285 @@
+{
+ "windows": 12,
+ "by_label": {
+  "PRE_FIRST_FILL_LIQUIDITY_AT_COMPLEMENT_PRICE_OBSERVED": 12
+ },
+ "negative_control": {
+  "prices_tested": 1176,
+  "observed": 1175,
+  "observed_share": 0.9991
+ },
+ "discrimination": {
+  "verdict": "NON_DISCRIMINATING",
+  "real_observed_share": 1.0,
+  "control_observed_share": 0.9991,
+  "why": "liquidity is present at essentially every price on the grid, so OBSERVED at the complement price is a property of the book and not evidence about L5's process. This result must NOT be cited as support for either arm."
+ },
+ "reads": "OBSERVED is consistent with a both-sides-first process; NOT_OBSERVED with a reactive one. Neither is proof, and DATA_INSUFFICIENT is neither.",
+ "never": "no anonymous level in this dataset is attributed to L5 or to any trader",
+ "rows": [
+  {
+   "market_slug": "btc-updown-15m-1787274000",
+   "n_fills": 145,
+   "first_token": "88168024926615299762915745134404456008926950205482700560123893248136441143968",
+   "first_price": "0.560000",
+   "first_role": "maker",
+   "first_t": 1787274010.0,
+   "opposite_token": "96130134142585380589598164875912050078764872810076261184365024885646777572261",
+   "opposite_price": "0.450000",
+   "opposite_role": "maker",
+   "opposite_t": 1787274072.0,
+   "verdict": {
+    "label": "PRE_FIRST_FILL_LIQUIDITY_AT_COMPLEMENT_PRICE_OBSERVED",
+    "snapshots_examined": 17,
+    "earliest_seen_s_before_first_fill": 63.0,
+    "latest_seen_s_before_first_fill": 1.0,
+    "max_bid_size_at_price": "320.0",
+    "max_ask_size_at_price": "0",
+    "why": "SIZE AT A PRICE in an anonymous book. This is NOT asserted to be L5's order, nor his counterparty's."
+   },
+   "first_to_opposite_s": 62.0
+  },
+  {
+   "market_slug": "btc-updown-15m-1787290200",
+   "n_fills": 379,
+   "first_token": "68053599192034332996506097228923479102527860498493114785335945798323495083552",
+   "first_price": "0.350000",
+   "first_role": "taker",
+   "first_t": 1787290206.0,
+   "opposite_token": "77468821864231965147674736663234589747070173571123419346521510279572623008571",
+   "opposite_price": "0.650000",
+   "opposite_role": "taker",
+   "opposite_t": 1787290206.0,
+   "verdict": {
+    "label": "PRE_FIRST_FILL_LIQUIDITY_AT_COMPLEMENT_PRICE_OBSERVED",
+    "snapshots_examined": 10,
+    "earliest_seen_s_before_first_fill": 61.0,
+    "latest_seen_s_before_first_fill": 1.0,
+    "max_bid_size_at_price": "0",
+    "max_ask_size_at_price": "281.0",
+    "why": "SIZE AT A PRICE in an anonymous book. This is NOT asserted to be L5's order, nor his counterparty's."
+   },
+   "first_to_opposite_s": 0.0
+  },
+  {
+   "market_slug": "btc-updown-15m-1787296500",
+   "n_fills": 245,
+   "first_token": "83382632747033594820713281397104619098400094322040539972729369852260944440831",
+   "first_price": "0.420000",
+   "first_role": "maker",
+   "first_t": 1787296506.0,
+   "opposite_token": "111391172532666726255234677943994769989466496466524244292211629245520313007849",
+   "opposite_price": "0.840000",
+   "opposite_role": "taker",
+   "opposite_t": 1787296521.0,
+   "verdict": {
+    "label": "PRE_FIRST_FILL_LIQUIDITY_AT_COMPLEMENT_PRICE_OBSERVED",
+    "snapshots_examined": 7,
+    "earliest_seen_s_before_first_fill": 64.0,
+    "latest_seen_s_before_first_fill": 1.0,
+    "max_bid_size_at_price": "0",
+    "max_ask_size_at_price": "236.0",
+    "why": "SIZE AT A PRICE in an anonymous book. This is NOT asserted to be L5's order, nor his counterparty's."
+   },
+   "first_to_opposite_s": 15.0
+  },
+  {
+   "market_slug": "btc-updown-15m-1787300100",
+   "n_fills": 398,
+   "first_token": "1850913401628293007994621867496115006695624924039532983681522971528992487442",
+   "first_price": "0.590000",
+   "first_role": "maker",
+   "first_t": 1787300107.0,
+   "opposite_token": "57006202117550541518521961689036825756655221835821437576802607839503907636078",
+   "opposite_price": "0.390000",
+   "opposite_role": "maker",
+   "opposite_t": 1787300134.0,
+   "verdict": {
+    "label": "PRE_FIRST_FILL_LIQUIDITY_AT_COMPLEMENT_PRICE_OBSERVED",
+    "snapshots_examined": 6,
+    "earliest_seen_s_before_first_fill": 58.0,
+    "latest_seen_s_before_first_fill": 5.0,
+    "max_bid_size_at_price": "211.74",
+    "max_ask_size_at_price": "0",
+    "why": "SIZE AT A PRICE in an anonymous book. This is NOT asserted to be L5's order, nor his counterparty's."
+   },
+   "first_to_opposite_s": 27.0
+  },
+  {
+   "market_slug": "btc-updown-15m-1787305500",
+   "n_fills": 246,
+   "first_token": "52654791214784241373087337558451000589277208516309514032416274652398466639092",
+   "first_price": "0.590000",
+   "first_role": "maker",
+   "first_t": 1787305506.0,
+   "opposite_token": "12058521546134409639599734692337965366177254906196152500500691588607977849795",
+   "opposite_price": "0.390000",
+   "opposite_role": "maker",
+   "opposite_t": 1787305521.0,
+   "verdict": {
+    "label": "PRE_FIRST_FILL_LIQUIDITY_AT_COMPLEMENT_PRICE_OBSERVED",
+    "snapshots_examined": 18,
+    "earliest_seen_s_before_first_fill": 64.0,
+    "latest_seen_s_before_first_fill": 1.0,
+    "max_bid_size_at_price": "1852.0",
+    "max_ask_size_at_price": "222.0",
+    "why": "SIZE AT A PRICE in an anonymous book. This is NOT asserted to be L5's order, nor his counterparty's."
+   },
+   "first_to_opposite_s": 15.0
+  },
+  {
+   "market_slug": "btc-updown-15m-1787306400",
+   "n_fills": 268,
+   "first_token": "14416592340950540945801608693393189139119239491754781295018014596076520942196",
+   "first_price": "0.460000",
+   "first_role": "maker",
+   "first_t": 1787306407.0,
+   "opposite_token": "50830420171160670624154433620588972779081471015448116738439344157061154820801",
+   "opposite_price": "0.440000",
+   "opposite_role": "maker",
+   "opposite_t": 1787306454.0,
+   "verdict": {
+    "label": "PRE_FIRST_FILL_LIQUIDITY_AT_COMPLEMENT_PRICE_OBSERVED",
+    "snapshots_examined": 9,
+    "earliest_seen_s_before_first_fill": 67.0,
+    "latest_seen_s_before_first_fill": 7.0,
+    "max_bid_size_at_price": "503.23",
+    "max_ask_size_at_price": "0",
+    "why": "SIZE AT A PRICE in an anonymous book. This is NOT asserted to be L5's order, nor his counterparty's."
+   },
+   "first_to_opposite_s": 47.0
+  },
+  {
+   "market_slug": "btc-updown-15m-1787307300",
+   "n_fills": 236,
+   "first_token": "72725167458857066535088887580151392707918501129306890140232660058418276225226",
+   "first_price": "0.570000",
+   "first_role": "maker",
+   "first_t": 1787307306.0,
+   "opposite_token": "95815248540219353140033614986271110424319486519533240272288918593877833451835",
+   "opposite_price": "0.480000",
+   "opposite_role": "maker",
+   "opposite_t": 1787307322.0,
+   "verdict": {
+    "label": "PRE_FIRST_FILL_LIQUIDITY_AT_COMPLEMENT_PRICE_OBSERVED",
+    "snapshots_examined": 7,
+    "earliest_seen_s_before_first_fill": 56.0,
+    "latest_seen_s_before_first_fill": 5.0,
+    "max_bid_size_at_price": "200.0",
+    "max_ask_size_at_price": "285.0",
+    "why": "SIZE AT A PRICE in an anonymous book. This is NOT asserted to be L5's order, nor his counterparty's."
+   },
+   "first_to_opposite_s": 16.0
+  },
+  {
+   "market_slug": "btc-updown-15m-1787311800",
+   "n_fills": 238,
+   "first_token": "41507143742792454373653280927870272713827782437572162399865647865584746441666",
+   "first_price": "0.430000",
+   "first_role": "maker",
+   "first_t": 1787311806.0,
+   "opposite_token": "109883474150629705400022168192615903490304320580514845817582910765392958324615",
+   "opposite_price": "0.410000",
+   "opposite_role": "maker",
+   "opposite_t": 1787311831.0,
+   "verdict": {
+    "label": "PRE_FIRST_FILL_LIQUIDITY_AT_COMPLEMENT_PRICE_OBSERVED",
+    "snapshots_examined": 24,
+    "earliest_seen_s_before_first_fill": 65.0,
+    "latest_seen_s_before_first_fill": 6.0,
+    "max_bid_size_at_price": "196.98",
+    "max_ask_size_at_price": "0",
+    "why": "SIZE AT A PRICE in an anonymous book. This is NOT asserted to be L5's order, nor his counterparty's."
+   },
+   "first_to_opposite_s": 25.0
+  },
+  {
+   "market_slug": "btc-updown-15m-1787362200",
+   "n_fills": 281,
+   "first_token": "17746763795151727267079145295136524064764795102982981086288601338416705891841",
+   "first_price": "0.500000",
+   "first_role": "maker",
+   "first_t": 1787362207.0,
+   "opposite_token": "59053489467876473663117833937156827384125133966597880426907837418755083118605",
+   "opposite_price": "0.350000",
+   "opposite_role": "maker",
+   "opposite_t": 1787362336.0,
+   "verdict": {
+    "label": "PRE_FIRST_FILL_LIQUIDITY_AT_COMPLEMENT_PRICE_OBSERVED",
+    "snapshots_examined": 17,
+    "earliest_seen_s_before_first_fill": 59.0,
+    "latest_seen_s_before_first_fill": 1.0,
+    "max_bid_size_at_price": "141.0",
+    "max_ask_size_at_price": "0",
+    "why": "SIZE AT A PRICE in an anonymous book. This is NOT asserted to be L5's order, nor his counterparty's."
+   },
+   "first_to_opposite_s": 129.0
+  },
+  {
+   "market_slug": "btc-updown-15m-1787363100",
+   "n_fills": 208,
+   "first_token": "58306571321996642443082328026865114876781946299719081948677288788696652860269",
+   "first_price": "0.530000",
+   "first_role": "taker",
+   "first_t": 1787363107.0,
+   "opposite_token": "97885698076066508844285778783112795919487711812945544986608533083132069283171",
+   "opposite_price": "0.450000",
+   "opposite_role": "taker",
+   "opposite_t": 1787363107.0,
+   "verdict": {
+    "label": "PRE_FIRST_FILL_LIQUIDITY_AT_COMPLEMENT_PRICE_OBSERVED",
+    "snapshots_examined": 40,
+    "earliest_seen_s_before_first_fill": 67.0,
+    "latest_seen_s_before_first_fill": 1.0,
+    "max_bid_size_at_price": "1991.0",
+    "max_ask_size_at_price": "210.0",
+    "why": "SIZE AT A PRICE in an anonymous book. This is NOT asserted to be L5's order, nor his counterparty's."
+   },
+   "first_to_opposite_s": 0.0
+  },
+  {
+   "market_slug": "btc-updown-15m-1787365800",
+   "n_fills": 302,
+   "first_token": "30759864932560425919287214608833322211597767159071052497377749806186627746233",
+   "first_price": "0.370000",
+   "first_role": "taker",
+   "first_t": 1787365807.0,
+   "opposite_token": "72266249524686852361660408215949777627474075494275628649972582568231543523912",
+   "opposite_price": "0.630000",
+   "opposite_role": "taker",
+   "opposite_t": 1787365807.0,
+   "verdict": {
+    "label": "PRE_FIRST_FILL_LIQUIDITY_AT_COMPLEMENT_PRICE_OBSERVED",
+    "snapshots_examined": 14,
+    "earliest_seen_s_before_first_fill": 66.0,
+    "latest_seen_s_before_first_fill": 5.0,
+    "max_bid_size_at_price": "0",
+    "max_ask_size_at_price": "448.2",
+    "why": "SIZE AT A PRICE in an anonymous book. This is NOT asserted to be L5's order, nor his counterparty's."
+   },
+   "first_to_opposite_s": 0.0
+  },
+  {
+   "market_slug": "btc-updown-15m-1787369400",
+   "n_fills": 220,
+   "first_token": "82043716617473588632854672808816246807298402218334971927981070244663300404685",
+   "first_price": "0.500000",
+   "first_role": "taker",
+   "first_t": 1787369407.0,
+   "opposite_token": "71881000607989322244571190852705184623007523731075259717556038672733236182123",
+   "opposite_price": "0.500000",
+   "opposite_role": "taker",
+   "opposite_t": 1787369407.0,
+   "verdict": {
+    "label": "PRE_FIRST_FILL_LIQUIDITY_AT_COMPLEMENT_PRICE_OBSERVED",
+    "snapshots_examined": 14,
+    "earliest_seen_s_before_first_fill": 62.0,
+    "latest_seen_s_before_first_fill": 4.0,
+    "max_bid_size_at_price": "163.39",
+    "max_ask_size_at_price": "408.0",
+    "why": "SIZE AT A PRICE in an anonymous book. This is NOT asserted to be L5's order, nor his counterparty's."
+   },
+   "first_to_opposite_s": 0.0
+  }
+ ]
+}

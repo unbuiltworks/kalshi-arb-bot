@@ -1,0 +1,244 @@
+{
+  "checks": {
+    "boundary_blocked": {
+      "mutation_boundary": "BLOCKED (readiness)",
+      "ok": true,
+      "readiness_mode": true
+    },
+    "call_graph": {
+      "claims": [
+        {
+          "module": "src.gemini_execution.ws_continuous",
+          "name": "reconcile_surface",
+          "reached": true
+        },
+        {
+          "module": "src.gemini_execution.ws_continuous",
+          "name": "_leg_slots",
+          "reached": true
+        },
+        {
+          "module": "src.gemini_execution.live_envelope",
+          "name": "would_breach",
+          "reached": true
+        },
+        {
+          "module": "src.gemini_execution.continuous_probe",
+          "name": "resolve_action_size",
+          "reached": true
+        },
+        {
+          "module": "src.gemini_execution.run_canary",
+          "name": "can_make_durable",
+          "reached": true
+        }
+      ],
+      "ok": true,
+      "unreached": [],
+      "why": "a safety function that tests assert but production never calls is the stale_orders class of defect"
+    },
+    "cross_field": {
+      "ok": true,
+      "violations": []
+    },
+    "dead_safety": {
+      "dead": [],
+      "ok": true,
+      "rows": [
+        {
+          "dead": false,
+          "defined": 1,
+          "name": "stale_orders",
+          "production_calls": 1
+        },
+        {
+          "dead": false,
+          "defined": 1,
+          "name": "risk_gates",
+          "production_calls": 2
+        },
+        {
+          "dead": false,
+          "defined": 2,
+          "name": "would_breach",
+          "production_calls": 2
+        },
+        {
+          "dead": false,
+          "defined": 1,
+          "name": "can_make_durable",
+          "production_calls": 1
+        },
+        {
+          "dead": false,
+          "defined": 1,
+          "name": "reconcile_surface",
+          "production_calls": 5
+        }
+      ]
+    },
+    "envelope_is_live_not_shadow": {
+      "envelope": "GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_V1",
+      "ok": true
+    },
+    "fields": {
+      "diffs": [],
+      "ok": true
+    },
+    "report_complete": {
+      "missing": [],
+      "ok": true
+    },
+    "spec_hash_matches": {
+      "declared": "d2f1f05d789387f52fc2e72cb4516342684c560c1b2484f54fe2a282c5e05a3c",
+      "ok": true,
+      "run": "d2f1f05d789387f52fc2e72cb4516342684c560c1b2484f54fe2a282c5e05a3c"
+    },
+    "stale_references": {
+      "checked": {
+        "branch": "claude/gemini-btc-economic-viability-h3u7zl",
+        "cohort_prefix": "GEMI-BTC15M",
+        "envelope_id": "GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_V1",
+        "workflow": ".github/workflows/gemini-settlement-gate.yml"
+      },
+      "hits": [],
+      "ok": true
+    },
+    "symbol_is_the_right_family": {
+      "expected_prefix": "GEMI-BTC15M",
+      "ok": true,
+      "symbol": "GEMI-BTC15M2609211545-UP"
+    },
+    "terms": {
+      "ok": true,
+      "raw": {
+        "acceptedVersion": 1,
+        "attempts": [
+          {
+            "body_keys": [
+              "acceptedVersion",
+              "hasAcceptedLatest",
+              "latestVersion"
+            ],
+            "method": "GET",
+            "status": 200
+          }
+        ],
+        "blocks_orders": false,
+        "hasAcceptedLatest": true,
+        "latestVersion": 1,
+        "method": "GET",
+        "readable": true,
+        "status": 200,
+        "verdict": "ACCEPTED",
+        "why": null
+      },
+      "state": "TRUE"
+    }
+  },
+  "expected": {
+    "action_size": "1",
+    "argv": [
+      "--auth-id",
+      "NO-AUTHORIZATION-IN-FORCE",
+      "--family",
+      "btc15m",
+      "--envelope",
+      "live_q1_btc15m",
+      "--entry-tte-band",
+      "840:880",
+      "--ledger",
+      "analysis/gemini/continuous_ledger.jsonl",
+      "--out",
+      "<out>",
+      "--wire",
+      "<wire>",
+      "--readiness"
+    ],
+    "auth_id": "NO-AUTHORIZATION-IN-FORCE",
+    "branch": "claude/gemini-btc-economic-viability-h3u7zl",
+    "bundle_sha": "6c6c544eff60b5ea9e70b1bb2c2fa8504c795c1f62a62af80c071952daaf0d32",
+    "cohort_prefix": "GEMI-BTC15M",
+    "commit_sha": "35def6c83ea3d5f55196d15bdf2348d51b9a6e35",
+    "envelope_id": "GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_V1",
+    "envelope_sha": "625375d1f3f5d37372cba91d7c22e074c2adef8477ac5e1a959486c45f8bd97b",
+    "executable_sha": "6846ebe397c56bfd5a8515648cf91db0a6eafeb4b5f14ca9ae6886272e2a479c",
+    "family": "btc15m",
+    "max_committed_usd": "2.50",
+    "max_concurrent_markets": 1,
+    "max_residual_usd": "2.00",
+    "max_working_orders": 2,
+    "minimum_rest_time_s": "30.0",
+    "remaining_budget": "NO_COHORT_DECLARED",
+    "symbol_family": "GEMI-BTC15M"
+  },
+  "label": "GEMINI_LIVE_READINESS_GATE_V1",
+  "labels": "EXPECTED == RESOLVED, proved immediately before the mutation boundary. The frame below is what WOULD have been sent; nothing was.",
+  "manifest_sha": "e88276096516f09233bead237e164a696042e4c1ea353f36f9f6a6ccecdbfa00",
+  "report_path": "analysis/gemini/readiness_run_20260921T153015Z.json",
+  "resolved": {
+    "action_size": "1",
+    "attempted_frames": [],
+    "auth_id": "NO-AUTHORIZATION-IN-FORCE",
+    "branch": "claude/gemini-btc-economic-viability-h3u7zl",
+    "bundle_sha": "6c6c544eff60b5ea9e70b1bb2c2fa8504c795c1f62a62af80c071952daaf0d32",
+    "cohort_prefix": "GEMI-BTC15M",
+    "commit_sha": "35def6c83ea3d5f55196d15bdf2348d51b9a6e35",
+    "envelope_id": "GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_V1",
+    "envelope_sha": "625375d1f3f5d37372cba91d7c22e074c2adef8477ac5e1a959486c45f8bd97b",
+    "executable_sha": "6846ebe397c56bfd5a8515648cf91db0a6eafeb4b5f14ca9ae6886272e2a479c",
+    "family": "btc15m",
+    "frame_quantity": null,
+    "lifecycle_max_rungs": 2,
+    "max_committed_usd": "2.50",
+    "max_concurrent_markets": "1",
+    "max_residual_usd": "2.00",
+    "max_working_orders": "2",
+    "minimum_rest_time_s": "30.0",
+    "mutation_boundary": "BLOCKED (readiness)",
+    "mutations_sent": 0,
+    "policy_max_rungs": 2,
+    "remaining_budget": "NO_COHORT_DECLARED",
+    "rest_floor_invoked": true,
+    "retained_counts_as_risk": true,
+    "spec_sha": "d2f1f05d789387f52fc2e72cb4516342684c560c1b2484f54fe2a282c5e05a3c",
+    "state": "READY_TO_MUTATE_BUT_UNAUTHORIZED",
+    "surface_shape": {
+      "leg_slots": 2,
+      "outcomes": 2,
+      "rung_count": 1
+    },
+    "symbol": "GEMI-BTC15M2609211545-UP",
+    "symbol_family": "GEMI-BTC15M",
+    "why": "not authorized: REQUIRED_AUTH_ID is None: no owner authorization has been issued for this driver. No environment variable can supply one.; AUTHORIZED_SHA is None: no reviewed executable has been named.; AUTHORIZED_ENVELOPE is None: no envelope was named.; transport arm: GEMINI_CANARY_LIVE is not YES"
+  },
+  "spec": {
+    "action_size": "1",
+    "auth_id": "NO-AUTHORIZATION-IN-FORCE",
+    "auth_id_note": "carried but NOT in spec_sha: readiness runs with the sentinel and live with the grant, so folding it in would make the readiness==live invariant unprovable by construction",
+    "bounds": {
+      "action_size": "1",
+      "cohort_prefix": "GEMI-BTC15M",
+      "max_actions": "12",
+      "max_committed_usd": "2.50",
+      "max_concurrent_markets": "1",
+      "max_no": "2",
+      "max_residual_usd": "2.00",
+      "max_same_side_run": "2",
+      "max_working_orders": "2",
+      "max_yes": "2"
+    },
+    "cohort": null,
+    "entry_tte_band": "840:880",
+    "envelope": "live_q1_btc15m",
+    "envelope_id": "GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_V1",
+    "family": "btc15m",
+    "label": "GEMINI_LIVE_PROBE_SPEC_V1",
+    "ledger": "analysis/gemini/continuous_ledger.jsonl",
+    "spec_id": "btc15m_q1",
+    "spec_sha": "d2f1f05d789387f52fc2e72cb4516342684c560c1b2484f54fe2a282c5e05a3c",
+    "symbol_family": "GEMI-BTC15M"
+  },
+  "utc": "2026-09-21T15:30:28.154042+00:00",
+  "verdict": "PASS"
+}

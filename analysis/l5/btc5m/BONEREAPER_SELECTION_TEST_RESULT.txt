@@ -1,0 +1,58 @@
+outcome = next window's price-to-beat vs this one's: known for 1029 of 1031 windows; agrees with the final quote on 979 of 979
+windows recorded here: 1031   with his buys and a known outcome here: 1015
+his venue's winner known for 1015 of them; it matches ours on 1001 (98.6%)
+DISCOVERY windows 573   VALIDATION windows 442
+
+== 1. his buys described with OUR venue's quotes at that moment (share of his dollars) ==
+   favourite  rising    71.4%
+   underdog   falling    8.9%
+   favourite  falling    7.3%
+   favourite  flat       5.7%
+   underdog   rising     4.4%
+   underdog   flat       2.4%
+
+== 2. DISCOVERY (11-17, 11-18): 573 windows ==
+  delay 0 quote(s):
+   B  his side at his times           n= 13978 px 0.766  pre-fee +0.0199 [+0.010,+0.029]   w= 571   after our fee +0.0068 [-0.003,+0.016]   w= 571
+      of which his favourite buys     n=  7309 px 0.858  pre-fee +0.0263 [+0.010,+0.043]   w= 571   after our fee +0.0142 [-0.002,+0.031]   w= 571
+      of which his underdog buys      n=  6669 px 0.343  pre-fee -0.0535 [-0.075,-0.032]   w= 568   after our fee -0.0727 [-0.094,-0.051]   w= 568
+   A  favourite here at his times     n= 13967 px 0.825  pre-fee +0.0244 [+0.008,+0.041]   w= 571   after our fee +0.0114 [-0.005,+0.028]   w= 571
+   paired, per window:  B - A (his choice of side)   -0.0045 [-0.016,+0.007] w=571
+  delay 1 quote(s):
+   B  his side at his times           n= 13944 px 0.740  pre-fee +0.0060 [-0.004,+0.016]   w= 572   after our fee -0.0074 [-0.018,+0.002]   w= 572
+      of which his favourite buys     n=  7397 px 0.846  pre-fee +0.0151 [-0.004,+0.033]   w= 572   after our fee +0.0028 [-0.016,+0.021]   w= 572
+      of which his underdog buys      n=  6547 px 0.328  pre-fee -0.0742 [-0.095,-0.055]   w= 570   after our fee -0.0928 [-0.113,-0.073]   w= 570
+   A  favourite here at his times     n= 13893 px 0.813  pre-fee +0.0230 [+0.005,+0.040]   w= 572   after our fee +0.0096 [-0.009,+0.027]   w= 572
+   paired, per window:  B - A (his choice of side)   -0.0170 [-0.029,-0.005] w=572
+   paired, per window:  A - favourite every point (his choice of moment)   -0.0042 [-0.012,+0.003] w=572
+  every 10 s point, one quote of delay:
+   A* favourite, his price/time habits n= 12141 px 0.742  pre-fee +0.0196 [+0.001,+0.038]   w= 573   after our fee +0.0046 [-0.014,+0.023]   w= 573
+      favourite, every point          n= 12198 px 0.746  pre-fee +0.0272 [+0.009,+0.044]   w= 573   after our fee +0.0126 [-0.005,+0.030]   w= 573
+   R1 favourite that just ROSE        n=  8148 px 0.778  pre-fee +0.0212 [+0.004,+0.038]   w= 573   after our fee +0.0080 [-0.009,+0.025]   w= 573
+   R2 favourite that just FELL        n=  2696 px 0.693  pre-fee +0.0385 [+0.011,+0.065]   w= 522   after our fee +0.0217 [-0.006,+0.048]   w= 522
+
+== 2. VALIDATION (11-19, 11-20): 442 windows ==
+  delay 0 quote(s):
+   B  his side at his times           n= 11094 px 0.756  pre-fee +0.0132 [-0.003,+0.028]   w= 420   after our fee -0.0002 [-0.016,+0.015]   w= 420
+      of which his favourite buys     n=  5865 px 0.842  pre-fee +0.0063 [-0.017,+0.029]   w= 420   after our fee -0.0061 [-0.030,+0.017]   w= 420
+      of which his underdog buys      n=  5229 px 0.341  pre-fee -0.0331 [-0.059,-0.005]   w= 417   after our fee -0.0523 [-0.078,-0.025]   w= 417
+   A  favourite here at his times     n= 11081 px 0.813  pre-fee +0.0052 [-0.018,+0.027]   w= 420   after our fee -0.0082 [-0.031,+0.014]   w= 420
+   paired, per window:  B - A (his choice of side)   +0.0080 [-0.004,+0.021] w=420
+  delay 1 quote(s):
+   B  his side at his times           n= 11100 px 0.732  pre-fee +0.0029 [-0.013,+0.018]   w= 420   after our fee -0.0109 [-0.027,+0.005]   w= 420
+      of which his favourite buys     n=  5900 px 0.833  pre-fee -0.0026 [-0.026,+0.021]   w= 420   after our fee -0.0153 [-0.039,+0.008]   w= 420
+      of which his underdog buys      n=  5200 px 0.328  pre-fee -0.0426 [-0.069,-0.015]   w= 419   after our fee -0.0613 [-0.087,-0.034]   w= 419
+   A  favourite here at his times     n= 11046 px 0.803  pre-fee -0.0009 [-0.024,+0.022]   w= 420   after our fee -0.0146 [-0.038,+0.008]   w= 420
+   paired, per window:  B - A (his choice of side)   +0.0038 [-0.010,+0.018] w=420
+   paired, per window:  A - favourite every point (his choice of moment)   -0.0089 [-0.017,-0.001] w=420
+  every 10 s point, one quote of delay:
+   A* favourite, his price/time habits n=  8684 px 0.746  pre-fee -0.0022 [-0.025,+0.021]   w= 420   after our fee -0.0169 [-0.040,+0.007]   w= 420
+      favourite, every point          n=  8724 px 0.748  pre-fee +0.0080 [-0.014,+0.029]   w= 420   after our fee -0.0063 [-0.028,+0.015]   w= 420
+   R1 favourite that just ROSE        n=  5741 px 0.779  pre-fee +0.0022 [-0.019,+0.023]   w= 420   after our fee -0.0107 [-0.032,+0.010]   w= 420
+   R2 favourite that just FELL        n=  1954 px 0.692  pre-fee +0.0072 [-0.025,+0.038]   w= 388   after our fee -0.0092 [-0.041,+0.022]   w= 388
+
+== 3. our controller (maker, both sides) on the same windows: per share bought, no fee ==
+   CRUDE FILL MODEL: a bid counts as filled only if the ask is at or below it 10 s later, which
+   keeps only fills the price ran through. Sign is informative; the size overstates the loss.
+   DISCOVERY   fills  8310   per share -0.0799 [-0.086,-0.074]   w= 573
+   VALIDATION  fills  6136   per share -0.0746 [-0.082,-0.067]   w= 420

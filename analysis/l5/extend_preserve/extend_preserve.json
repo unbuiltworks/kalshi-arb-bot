@@ -1,0 +1,1027 @@
+{
+ "arms": {
+  "CONTROL": {
+   "FILL_SUPPORTED": {
+    "by_market": {
+     "aec-mlb-lad-mia-2026-09-13": {
+      "avg_price_proxy": null,
+      "blocked_by_band": 67,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.0000",
+      "extra_contracts": "0",
+      "opportunities": 67,
+      "settlement_pnl_delta": "0.0000",
+      "shadow_fills": 0,
+      "winner": "dn"
+     },
+     "aec-setkameua-sapole-salvas-2026-09-13": {
+      "avg_price_proxy": null,
+      "blocked_by_band": 3,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.0000",
+      "extra_contracts": "0",
+      "opportunities": 3,
+      "settlement_pnl_delta": "0.0000",
+      "shadow_fills": 0,
+      "winner": "up"
+     },
+     "atc-epl-cov-bha-2026-09-13-bha": {
+      "avg_price_proxy": null,
+      "blocked_by_band": 4,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.0000",
+      "extra_contracts": "0",
+      "opportunities": 4,
+      "settlement_pnl_delta": "UNSETTLED",
+      "shadow_fills": 0,
+      "winner": null
+     }
+    },
+    "extra_capital_usd": "0.0000",
+    "settlement_pnl_delta_usd": "0.0000",
+    "shadow_fills": 0,
+    "unsettled_markets": [
+     "atc-epl-cov-bha-2026-09-13-bha"
+    ]
+   },
+   "FILL_UNKNOWN": {
+    "by_market": {
+     "aec-mlb-lad-mia-2026-09-13": {
+      "avg_price_proxy": null,
+      "blocked_by_band": 67,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.0000",
+      "extra_contracts": "0",
+      "opportunities": 67,
+      "settlement_pnl_delta": "0.0000",
+      "shadow_fills": 0,
+      "winner": "dn"
+     },
+     "aec-setkameua-sapole-salvas-2026-09-13": {
+      "avg_price_proxy": null,
+      "blocked_by_band": 3,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.0000",
+      "extra_contracts": "0",
+      "opportunities": 3,
+      "settlement_pnl_delta": "0.0000",
+      "shadow_fills": 0,
+      "winner": "up"
+     },
+     "atc-epl-cov-bha-2026-09-13-bha": {
+      "avg_price_proxy": null,
+      "blocked_by_band": 4,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.0000",
+      "extra_contracts": "0",
+      "opportunities": 4,
+      "settlement_pnl_delta": "UNSETTLED",
+      "shadow_fills": 0,
+      "winner": null
+     }
+    },
+    "extra_capital_usd": "0.0000",
+    "settlement_pnl_delta_usd": "0.0000",
+    "shadow_fills": 0,
+    "unsettled_markets": [
+     "atc-epl-cov-bha-2026-09-13-bha"
+    ]
+   },
+   "economics_decomposition": {
+    "confirmed_incentives": "NOT ATTRIBUTABLE: PMUS credits rewards at account level with an empty conditionId",
+    "directional_residual_pnl_delta_usd": {
+     "FILL_ASSUMED": "0.0000",
+     "TAPE_SUPPORTED": "0.0000"
+    },
+    "eventual_complete_fills": "unknown_not_observable_from_the_tape",
+    "eventual_complete_opportunities": "UNCHANGED -- the arms alter only whether an EXTEND is attempted",
+    "fees": "unknown_not_observable_from_the_tape",
+    "matched_inventory_produced": "0 contracts, same reason",
+    "matched_pair_pnl_delta": "0.0000 (by construction: no completion is imputed on top of a counterfactual fill)",
+    "net_realized": "the directional line only; nothing else in this table is a venue number",
+    "terminal_residual_frequency": "1.00 -- every counterfactual fill is still held at settlement"
+   }
+  },
+  "SHADOW_1_ENTRY_ONLY": {
+   "FILL_SUPPORTED": {
+    "by_market": {
+     "aec-mlb-lad-mia-2026-09-13": {
+      "avg_price_proxy": "0.4767",
+      "blocked_by_band": 0,
+      "blocked_by_residual_cap": 64,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "1.8162",
+      "extra_contracts": "3.81",
+      "opportunities": 67,
+      "settlement_pnl_delta": "1.9938",
+      "shadow_fills": 3,
+      "winner": "dn"
+     },
+     "aec-setkameua-sapole-salvas-2026-09-13": {
+      "avg_price_proxy": "0.1167",
+      "blocked_by_band": 0,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.3944",
+      "extra_contracts": "3.38",
+      "opportunities": 3,
+      "settlement_pnl_delta": "-0.3944",
+      "shadow_fills": 3,
+      "winner": "up"
+     },
+     "atc-epl-cov-bha-2026-09-13-bha": {
+      "avg_price_proxy": null,
+      "blocked_by_band": 0,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.0000",
+      "extra_contracts": "0",
+      "opportunities": 4,
+      "settlement_pnl_delta": "UNSETTLED",
+      "shadow_fills": 0,
+      "winner": null
+     }
+    },
+    "extra_capital_usd": "2.2106",
+    "settlement_pnl_delta_usd": "1.5994",
+    "shadow_fills": 6,
+    "unsettled_markets": [
+     "atc-epl-cov-bha-2026-09-13-bha"
+    ]
+   },
+   "FILL_UNKNOWN": {
+    "by_market": {
+     "aec-mlb-lad-mia-2026-09-13": {
+      "avg_price_proxy": "0.4767",
+      "blocked_by_band": 0,
+      "blocked_by_residual_cap": 64,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "1.8162",
+      "extra_contracts": "3.81",
+      "opportunities": 67,
+      "settlement_pnl_delta": "1.9938",
+      "shadow_fills": 3,
+      "winner": "dn"
+     },
+     "aec-setkameua-sapole-salvas-2026-09-13": {
+      "avg_price_proxy": "0.1167",
+      "blocked_by_band": 0,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "0.3944",
+      "extra_contracts": "3.38",
+      "opportunities": 3,
+      "settlement_pnl_delta": "-0.3944",
+      "shadow_fills": 3,
+      "winner": "up"
+     },
+     "atc-epl-cov-bha-2026-09-13-bha": {
+      "avg_price_proxy": "0.9800",
+      "blocked_by_band": 0,
+      "blocked_by_residual_cap": 0,
+      "blocked_by_spend_cap": 0,
+      "extra_capital_usd": "3.9984",
+      "extra_contracts": "4.08",
+      "opportunities": 4,
+      "settlement_pnl_delta": "UNSETTLED",
+      "shadow_fills": 4,
+      "winner": null
+     }
+    },
+    "extra_capital_usd": "6.2090",
+    "settlement_pnl_delta_usd": "1.5994",
+    "shadow_fills": 10,
+    "unsettled_markets": [
+     "atc-epl-cov-bha-2026-09-13-bha"
+    ]
+   },
+   "economics_decomposition": {
+    "confirmed_incentives": "NOT ATTRIBUTABLE: PMUS credits rewards at account level with an empty conditionId",
+    "directional_residual_pnl_delta_usd": {
+     "FILL_ASSUMED": "1.5994",
+     "TAPE_SUPPORTED": "1.5994"
+    },
+    "eventual_complete_fills": "unknown_not_observable_from_the_tape",
+    "eventual_complete_opportunities": "UNCHANGED -- the arms alter only whether an EXTEND is attempted",
+    "fees": "unknown_not_observable_from_the_tape",
+    "matched_inventory_produced": "0 contracts, same reason",
+    "matched_pair_pnl_delta": "0.0000 (by construction: no completion is imputed on top of a counterfactual fill)",
+    "net_realized": "the directional line only; nothing else in this table is a venue number",
+    "terminal_residual_frequency": "1.00 -- every counterfactual fill is still held at settlement"
+   }
+  }
+ },
+ "corpus": {
+  "band_firings": 75,
+  "bid_position": {
+   "above_legal_hi": 70,
+   "below_legal_lo": 5,
+   "inside_legal_band": 0
+  },
+  "by_concept": {
+   "ENTRY_BAND": 1,
+   "HELD_INVENTORY_BAND": 74
+  },
+  "by_market": {
+   "aec-mlb-lad-mia-2026-09-13": 67,
+   "aec-setkameua-buihen-kruvol-2026-09-13": 1,
+   "aec-setkameua-sapole-salvas-2026-09-13": 3,
+   "atc-epl-cov-bha-2026-09-13-bha": 4
+  },
+  "by_sampled_action": {
+   "extend": 70,
+   "open": 5
+  },
+  "decisions": 650,
+  "markets": 37
+ },
+ "downstream_complete_conversion_in_markets_the_arm_touches": {
+  "aec-mlb-lad-mia-2026-09-13": {
+   "filled": 4,
+   "orders": 125,
+   "rate": 0.032
+  },
+  "aec-setkameua-sapole-salvas-2026-09-13": {
+   "filled": 2,
+   "orders": 9,
+   "rate": 0.2222
+  },
+  "atc-epl-cov-bha-2026-09-13-bha": {
+   "filled": 4,
+   "orders": 32,
+   "rate": 0.125
+  }
+ },
+ "gates_held_at_production_values": {
+  "band": "unchanged",
+  "maker_only": true,
+  "max_residual_units": 6,
+  "note": "no cap was raised to make the arm work",
+  "per_market_cap_usd": "30.00",
+  "taker": "not enabled in any arm"
+ },
+ "labels": {
+  "arm_identity": "L5_EXTEND_PRESERVE == SHADOW_1_ENTRY_ONLY == band=entry_only|cap=6 (9d6feb46): one gate, three names",
+  "fill_rules": {
+   "FILL_SUPPORTED": "a real EXTEND order filled in the same market within 600 s",
+   "FILL_UNKNOWN": "every admitted EXTEND assumed filled -- UPPER BOUND, never a forecast"
+  },
+  "never_summed": "FILL_SUPPORTED and FILL_UNKNOWN are two readings of one arm, not two results to add",
+  "scope": "SHADOW ONLY; nothing submitted, repriced or cancelled; production unchanged"
+ },
+ "matched_pair_delta": {
+  "band_semantics": "0.0000 (by construction: no completion is imputed on top of a counterfactual fill)",
+  "reading": "both studies, both fill rules: the arm produces ZERO extra matched contracts",
+  "residual_cap_9d6feb46_matched_contracts_delta": "0.00"
+ },
+ "observed_maker_conversion": {
+  "by_market": {
+   "aec-atp-alezve-benshe-2026-09-13": {
+    "complete": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "extend": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "open": {
+     "filled": 0,
+     "orders": 4,
+     "rate": 0.0
+    }
+   },
+   "aec-atp-jayfri-maxbas-2026-09-13": {
+    "complete": {
+     "filled": 0,
+     "orders": 10,
+     "rate": 0.0
+    },
+    "extend": {
+     "filled": 3,
+     "orders": 21,
+     "rate": 0.1429
+    },
+    "open": {
+     "filled": 1,
+     "orders": 2,
+     "rate": 0.5
+    }
+   },
+   "aec-atpcq-maxzhu-thiloo-2026-09-13": {
+    "complete": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "extend": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "open": {
+     "filled": 0,
+     "orders": 4,
+     "rate": 0.0
+    }
+   },
+   "aec-cs2-mzp-ezt-2026-09-13": {
+    "complete": {
+     "filled": 2,
+     "orders": 26,
+     "rate": 0.0769
+    },
+    "extend": {
+     "filled": 2,
+     "orders": 40,
+     "rate": 0.05
+    },
+    "open": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    }
+   },
+   "aec-cs2-war-lag-2026-09-13": {
+    "complete": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "extend": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "open": {
+     "filled": 0,
+     "orders": 4,
+     "rate": 0.0
+    }
+   },
+   "aec-fibawwc-usa-fra-2026-09-13": {
+    "complete": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "extend": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "open": {
+     "filled": 0,
+     "orders": 4,
+     "rate": 0.0
+    }
+   },
+   "aec-lol-lll-png-2026-09-13": {
+    "complete": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "extend": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "open": {
+     "filled": 0,
+     "orders": 4,
+     "rate": 0.0
+    }
+   },
+   "aec-mlb-bal-tor-2026-09-13": {
+    "complete": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "extend": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "open": {
+     "filled": 0,
+     "orders": 4,
+     "rate": 0.0
+    }
+   },
+   "aec-mlb-cin-mil-2026-09-13": {
+    "complete": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "extend": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "open": {
+     "filled": 0,
+     "orders": 4,
+     "rate": 0.0
+    }
+   },
+   "aec-mlb-cle-min-2026-09-13": {
+    "complete": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "extend": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "open": {
+     "filled": 0,
+     "orders": 8,
+     "rate": 0.0
+    }
+   },
+   "aec-mlb-laa-wsh-2026-09-13": {
+    "complete": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "extend": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "open": {
+     "filled": 0,
+     "orders": 4,
+     "rate": 0.0
+    }
+   },
+   "aec-mlb-lad-mia-2026-09-13": {
+    "complete": {
+     "filled": 4,
+     "orders": 125,
+     "rate": 0.032
+    },
+    "extend": {
+     "filled": 6,
+     "orders": 16,
+     "rate": 0.375
+    },
+    "open": {
+     "filled": 1,
+     "orders": 1,
+     "rate": 1.0
+    }
+   },
+   "aec-mlb-phi-atl-2026-09-13": {
+    "complete": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "extend": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "open": {
+     "filled": 0,
+     "orders": 8,
+     "rate": 0.0
+    }
+   },
+   "aec-mlb-sea-ath-2026-09-13": {
+    "complete": {
+     "filled": 1,
+     "orders": 8,
+     "rate": 0.125
+    },
+    "extend": {
+     "filled": 0,
+     "orders": 5,
+     "rate": 0.0
+    },
+    "open": {
+     "filled": 1,
+     "orders": 7,
+     "rate": 0.1429
+    }
+   },
+   "aec-nfl-buf-hou-2026-09-13": {
+    "complete": {
+     "filled": 0,
+     "orders": 31,
+     "rate": 0.0
+    },
+    "extend": {
+     "filled": 3,
+     "orders": 21,
+     "rate": 0.1429
+    },
+    "open": {
+     "filled": 1,
+     "orders": 6,
+     "rate": 0.1667
+    }
+   },
+   "aec-setkamecz-malpet-bridav-2026-09-13": {
+    "complete": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "extend": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "open": {
+     "filled": 0,
+     "orders": 4,
+     "rate": 0.0
+    }
+   },
+   "aec-setkamecz-snimic-kruluk-2026-09-13": {
+    "complete": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "extend": {
+     "filled": 0,
+     "orders": 1,
+     "rate": 0.0
+    },
+    "open": {
+     "filled": 1,
+     "orders": 3,
+     "rate": 0.3333
+    }
+   },
+   "aec-setkamecz-vysmar-kocmar-2026-09-13": {
+    "complete": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "extend": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "open": {
+     "filled": 0,
+     "orders": 4,
+     "rate": 0.0
+    }
+   },
+   "aec-setkamemd-gridmi-todion-2026-09-13": {
+    "complete": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "extend": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "open": {
+     "filled": 0,
+     "orders": 4,
+     "rate": 0.0
+    }
+   },
+   "aec-setkameua-buihen-kruvol-2026-09-13": {
+    "complete": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "extend": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "open": {
+     "filled": 0,
+     "orders": 1,
+     "rate": 0.0
+    }
+   },
+   "aec-setkameua-fokill-beldmy-2026-09-13": {
+    "complete": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "extend": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "open": {
+     "filled": 0,
+     "orders": 4,
+     "rate": 0.0
+    }
+   },
+   "aec-setkameua-khevse-salvas-2026-09-13": {
+    "complete": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "extend": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "open": {
+     "filled": 0,
+     "orders": 4,
+     "rate": 0.0
+    }
+   },
+   "aec-setkameua-masyev-cherom-2026-09-13": {
+    "complete": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "extend": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "open": {
+     "filled": 0,
+     "orders": 8,
+     "rate": 0.0
+    }
+   },
+   "aec-setkameua-melval-masyev-2026-09-13": {
+    "complete": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "extend": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "open": {
+     "filled": 0,
+     "orders": 4,
+     "rate": 0.0
+    }
+   },
+   "aec-setkameua-sapole-salvas-2026-09-13": {
+    "complete": {
+     "filled": 2,
+     "orders": 9,
+     "rate": 0.2222
+    },
+    "extend": {
+     "filled": 3,
+     "orders": 9,
+     "rate": 0.3333
+    },
+    "open": {
+     "filled": 1,
+     "orders": 3,
+     "rate": 0.3333
+    }
+   },
+   "aec-setkameua-vasand-hubmak-2026-09-13": {
+    "complete": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "extend": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "open": {
+     "filled": 0,
+     "orders": 4,
+     "rate": 0.0
+    }
+   },
+   "aec-t20icr-eln-slr-2026-09-13": {
+    "complete": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "extend": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "open": {
+     "filled": 0,
+     "orders": 12,
+     "rate": 0.0
+    }
+   },
+   "aec-wta-alypar-varlep-2026-09-13": {
+    "complete": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "extend": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "open": {
+     "filled": 0,
+     "orders": 4,
+     "rate": 0.0
+    }
+   },
+   "aec-wta-carmon-katsco-2026-09-13": {
+    "complete": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "extend": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "open": {
+     "filled": 0,
+     "orders": 4,
+     "rate": 0.0
+    }
+   },
+   "aec-wta-panudv-loiboi-2026-09-13": {
+    "complete": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "extend": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "open": {
+     "filled": 0,
+     "orders": 8,
+     "rate": 0.0
+    }
+   },
+   "aec-wta-sartor-cardol-2026-09-13": {
+    "complete": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "extend": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "open": {
+     "filled": 0,
+     "orders": 4,
+     "rate": 0.0
+    }
+   },
+   "asc-lal-lev-fcb-2026-09-13-pos-2pt5": {
+    "complete": {
+     "filled": 3,
+     "orders": 19,
+     "rate": 0.1579
+    },
+    "extend": {
+     "filled": 2,
+     "orders": 12,
+     "rate": 0.1667
+    },
+    "open": {
+     "filled": 1,
+     "orders": 1,
+     "rate": 1.0
+    }
+   },
+   "asc-nfl-ari-lac-2026-09-13-2q-pos-4pt5": {
+    "complete": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "extend": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "open": {
+     "filled": 0,
+     "orders": 4,
+     "rate": 0.0
+    }
+   },
+   "atc-epl-cov-bha-2026-09-13-bha": {
+    "complete": {
+     "filled": 4,
+     "orders": 32,
+     "rate": 0.125
+    },
+    "extend": {
+     "filled": 1,
+     "orders": 13,
+     "rate": 0.0769
+    },
+    "open": {
+     "filled": 2,
+     "orders": 27,
+     "rate": 0.0741
+    }
+   },
+   "atc-lg1-lmf-rcl-2026-09-13-draw": {
+    "complete": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "extend": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "open": {
+     "filled": 0,
+     "orders": 4,
+     "rate": 0.0
+    }
+   },
+   "atc-sea-nap-bol-2026-09-13-nap": {
+    "complete": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "extend": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "open": {
+     "filled": 0,
+     "orders": 12,
+     "rate": 0.0
+    }
+   },
+   "tsc-nfl-bal-ind-2026-09-13-total-50pt5": {
+    "complete": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "extend": {
+     "filled": 0,
+     "orders": 0,
+     "rate": null
+    },
+    "open": {
+     "filled": 0,
+     "orders": 4,
+     "rate": 0.0
+    }
+   }
+  },
+  "global": {
+   "complete": {
+    "filled": 16,
+    "orders": 260,
+    "rate": 0.0615
+   },
+   "extend": {
+    "filled": 20,
+    "orders": 138,
+    "rate": 0.1449
+   },
+   "open": {
+    "filled": 9,
+    "orders": 191,
+    "rate": 0.0471
+   }
+  }
+ },
+ "prior_study_9d6feb46": {
+  "band=current|cap=6": {
+   "FILL_ASSUMED": {
+    "capital_deployed_delta_usd": "0.0000",
+    "directional_residual_pnl_delta": "0.0000",
+    "extra_extend_fills": 0,
+    "matched_contracts_delta": "0.00",
+    "matched_pair_pnl_delta": "0.0000",
+    "production_extends_refused_by_this_arm": 0
+   },
+   "TAPE_SUPPORTED": {
+    "capital_deployed_delta_usd": "0.0000",
+    "directional_residual_pnl_delta": "0.0000",
+    "extra_extend_fills": 0,
+    "matched_contracts_delta": "0.00",
+    "matched_pair_pnl_delta": "0.0000",
+    "production_extends_refused_by_this_arm": 0
+   },
+   "by_market_matched": {
+    "aec-cs2-mzp-ezt-2026-09-13": {
+     "arm_matched": "3.44",
+     "arm_terminal_residual": "7.88",
+     "production_matched": "3.44",
+     "production_terminal_residual": "7.88"
+    },
+    "aec-mlb-lad-mia-2026-09-13": {
+     "arm_matched": "6.08",
+     "arm_terminal_residual": "4.05",
+     "production_matched": "6.08",
+     "production_terminal_residual": "4.05"
+    },
+    "aec-setkameua-sapole-salvas-2026-09-13": {
+     "arm_matched": "2.79",
+     "arm_terminal_residual": "3.49",
+     "production_matched": "2.79",
+     "production_terminal_residual": "3.49"
+    },
+    "atc-epl-cov-bha-2026-09-13-bha": {
+     "arm_matched": "4.67",
+     "arm_terminal_residual": "1.00",
+     "production_matched": "4.67",
+     "production_terminal_residual": "1.00"
+    }
+   },
+   "p3_outcome_classes": {}
+  },
+  "band=entry_only|cap=6": {
+   "FILL_ASSUMED": {
+    "capital_deployed_delta_usd": "6.0289",
+    "directional_residual_pnl_delta": "1.4488",
+    "extra_extend_fills": 11,
+    "matched_contracts_delta": "0.00",
+    "matched_pair_pnl_delta": "0.1307",
+    "production_extends_refused_by_this_arm": 1
+   },
+   "TAPE_SUPPORTED": {
+    "capital_deployed_delta_usd": "2.0305",
+    "directional_residual_pnl_delta": "1.4488",
+    "extra_extend_fills": 7,
+    "matched_contracts_delta": "0.00",
+    "matched_pair_pnl_delta": "0.1307",
+    "production_extends_refused_by_this_arm": 1
+   },
+   "by_market_matched": {
+    "aec-cs2-mzp-ezt-2026-09-13": {
+     "arm_matched": "3.44",
+     "arm_terminal_residual": "7.88",
+     "production_matched": "3.44",
+     "production_terminal_residual": "7.88"
+    },
+    "aec-mlb-lad-mia-2026-09-13": {
+     "arm_matched": "6.08",
+     "arm_terminal_residual": "7.66",
+     "production_matched": "6.08",
+     "production_terminal_residual": "4.05"
+    },
+    "aec-setkameua-sapole-salvas-2026-09-13": {
+     "arm_matched": "2.79",
+     "arm_terminal_residual": "6.87",
+     "production_matched": "2.79",
+     "production_terminal_residual": "3.49"
+    },
+    "atc-epl-cov-bha-2026-09-13-bha": {
+     "arm_matched": "4.67",
+     "arm_terminal_residual": "5.08",
+     "production_matched": "4.67",
+     "production_terminal_residual": "1.00"
+    }
+   },
+   "p3_outcome_classes": {
+    "B_opposite_opportunity_appeared_no_supported_fill_then_C": 7
+   }
+  }
+ }
+}

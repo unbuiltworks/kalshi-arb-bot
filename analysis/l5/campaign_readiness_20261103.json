@@ -1,0 +1,160 @@
+{
+ "artifact": "analysis/l5/campaign_readiness_20261103.json",
+ "generated_utc": "2026-11-03T14:56:32.228563+00:00",
+ "verdict": "FAIL -- six contradictions between the requested campaign and the deployed code",
+ "deployment": {
+  "sha": "9c732c6e",
+  "deployment_id": "8d33d287",
+  "status": "SUCCESS",
+  "config_row_utc": "2026-11-03T14:54:11.236Z",
+  "image_digest": "sha256:e4be21dab335e31bccf6e4bc86fb4dc0014de74252e4bd247e91ac467e5af5c8",
+  "prior_commits_skipped": [
+   "655fd24c",
+   "74f54e9d",
+   "(predecessor)"
+  ],
+  "why": "watchPatterns is [deploy/l5_pmus_live/DEPLOY_TRIGGER]"
+ },
+ "parity": {
+  "commit": "9c732c6e",
+  "ids": 80,
+  "digest": "eb672d14b4baf439",
+  "identical": true
+ },
+ "verified_running_config": {
+  "armed": false,
+  "up_qty": "0",
+  "dn_qty": "0",
+  "still_fillable_orders": 0,
+  "maker_pair_ceiling": "0.96",
+  "completion_pair_ceiling": "1.00",
+  "ts_completion_at_touch": "false",
+  "book_completion_depth_ticks": 0,
+  "cancel_margin_s": 300.0,
+  "max_live_orders": 1,
+  "defensive_pair_ceiling": "1.20",
+  "defensive_execution_enabled": false,
+  "defensive_terminal_s": 600.0,
+  "guard_opens_s": 540.0,
+  "last_actionable_s": 585.0,
+  "window_strategy": "TWO_SIDED",
+  "series_allowlist": [
+   "cpc-btc-updown-15m-"
+  ],
+  "mandate_signing_key_absent_from_runtime": true,
+  "max_worst_case_deficit_usd": "1.50",
+  "taker_policy_max_outlay_usd": "3",
+  "taker_crossing_reachable": true,
+  "PASS": false,
+  "graded_failures": [
+   "submission_budget_open",
+   "submission_budget_complete",
+   "submission_budget_replace",
+   "submission_backstop",
+   "aggregate_exposure_usd",
+   "aggregate_exposure_in_force_usd",
+   "daily_realized_loss_halt_usd",
+   "max_windows_authorization"
+  ],
+  "graded_failures_reason": "all eight read NO_APPROVAL_IN_FORCE, which is CORRECT while disarmed: approval-scoped rows cannot be graded without a campaign approval. Same pattern as the previous verified deploy."
+ },
+ "contradictions": [
+  {
+   "id": 1,
+   "requested": "20 windows",
+   "deployed": "CA.MAX_WINDOWS = 8 (code constant)",
+   "row": "max_windows_code_ceiling effective 8, ok true",
+   "severity": "HARD",
+   "note": "20 windows cannot be authorized without changing a code constant"
+  },
+  {
+   "id": 2,
+   "requested": "20 x 15min = 18000s",
+   "deployed": "CA.MAX_CAMPAIGN_S = 14400s (4h)",
+   "row": "campaign_duration_ceiling_s effective 14400.0",
+   "severity": "HARD",
+   "note": "20 consecutive windows exceed the duration ceiling by 1 hour"
+  },
+  {
+   "id": 3,
+   "requested": "$100 aggregate capital",
+   "deployed": "CA.MAX_TOTAL_EXPOSURE_USD = 20 (code constant)",
+   "row": "approval_exposure_ceiling_usd effective 20, ok true",
+   "severity": "HARD",
+   "note": "the approval machinery caps exposure at $20, not $100"
+  },
+  {
+   "id": 4,
+   "requested": "$10 per-window exposure",
+   "deployed": "max_worst_case_deficit_usd = 1.50",
+   "severity": "HARD",
+   "note": "the forward worst-case gate binds at $1.50, far below $10. Raising it is a risk-control change and needs an explicit decision"
+  },
+  {
+   "id": 5,
+   "requested": "a completion experiment",
+   "deployed": "the completion window is COLLAPSED",
+   "row": "complete_cutoff_reachable effective FALSE; completion_collapsed_onto_entry_cutoff effective TRUE; binding_completion_deadline_s 600.0 == ts_entry_cutoff_s 600.0",
+   "severity": "HARD AND NEWLY DECISIVE",
+   "note": "ts_complete_cutoff_s is 720 but the BINDING deadline is 600, equal to the entry cutoff, because cancel_cutoff = WINDOW_S - 300. So a completion has NO time window of its own beyond entry. A campaign measuring completion fill rate cannot run against a collapsed completion deadline -- this is the single most important blocker and it is independent of at-touch placement"
+  },
+  {
+   "id": 6,
+   "requested": "1-contract opening clip",
+   "deployed": "ts_opening_leg_max_contracts = 3",
+   "severity": "CONFIG",
+   "note": "set L5_TS_OPENING_LEG_MAX_CONTRACTS=1 and PMUS_RESIDUAL_CAP_K=1"
+  }
+ ],
+ "compatible_as_requested": {
+  "daily_realized_loss_halt": "$5 matches approval_daily_loss_ceiling_usd 5",
+  "campaign_additional_loss": "deployed 10, requested 5 -- TIGHTER, settable",
+  "completion_crossing_outlay": "$3 matches taker_policy_max_outlay_usd 3",
+  "opening_pair_ceiling": "0.96 verified",
+  "completion_ceiling": "1.00 verified",
+  "one_market_one_order": "max_live_orders 1 verified"
+ },
+ "capital_reservation": {
+  "verdict": "PASS",
+  "formula": "cash_committed(filled) + pending_obligation(outstanding) + this_order",
+  "covers": [
+   "outstanding orders at full worst case",
+   "positions and UNSETTLED obligations in full (skips only SETTLED)",
+   "the proposed order as if fully filled"
+  ],
+  "scope": "max_cash_deployed_usd is RUN-SCOPED gross, not per-market",
+  "campaign_budget_gate": "gate 3b spans windows on the same two functions, closing concurrent-order, pending-commitment and residual evasion",
+  "forward_not_settled": true,
+  "fee_blindness": "pending_obligation is qty*price and excludes fees (<=$0.02/order at clip 1)"
+ },
+ "clip_1_executability": {
+  "verdict": "PASS",
+  "opening": "exempt_open (nothing held, nothing resting) -- cannot be refused by its own size",
+  "completion": "increases False -- it SHRINKS the worst case, so the cap never binds",
+  "cycles": "with k=1 and clip 1 the engine cannot EXTEND, so cycles are strictly sequential",
+  "rebate_consequence": "the engine's own row states the confirmed rebate floor is 2.52 contracts and earns $0.00 below it, so clip 1 forgoes the maker rebate entirely. rebate_usd was null on all four prior fills, so nothing we were counting is lost -- but it is a real giveaway, not free"
+ },
+ "cumulative_loss_gate": {
+  "verdict": "FAIL -- owner decision required",
+  "formula": "campaign_used = max(0, -cumulative_realized) + cash_committed + pending_obligation",
+  "cumulative_realized_is": "store.realized_today(), which the code states 'still carries the LIFETIME account-wide figure and still gates on it'",
+  "standing_figure_usd": "-53.2674",
+  "separation": {
+   "verified_cashflow_anchor": "-53.2674",
+   "usable_basis": "-1.6874",
+   "placeholder_priced_estimate": "-51.58"
+  },
+  "consequence": "a $100 campaign budget yields $46.73 of usable headroom; any budget <= $53.27 refuses every order immediately; 97% of the consumption is the $1/share conservative upper bound on legs whose true cost was never established",
+  "not_reset": true,
+  "legitimate_route": "l5_cost_basis_audit is read-only, writes nothing, and reconstructs true fills from the venue activity feed. correct_settled_market refuses CORRECTION_WOULD_RELAX_LOSS_HALT by design. The audit has NEVER been run -- no output artifact exists. Running it is the one piece of work that converts $51.58 of estimate into measurement, and the owner decides what follows"
+ },
+ "modelled_not_verified": "the 3%/46% halt figures are MODELLED from an equal-weight two-point settlement with independent cycles. Neither assumption is verified. They are not live probabilities.",
+ "safety": {
+  "armed": false,
+  "at_touch": "off",
+  "live_orders": 0,
+  "orders_submitted": 0,
+  "new_services": 0,
+  "loss_accounting_reset": false
+ }
+}

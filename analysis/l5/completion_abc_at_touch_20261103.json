@@ -1,0 +1,261 @@
+{
+ "artifact": "analysis/l5/completion_abc_at_touch_20261103.json",
+ "generated_utc": "2026-11-03T14:05:06.905371+00:00",
+ "instruction": "Test three completion policies against the same authenticated websocket and order-level evidence: A existing 0.96 depth-2, B at-touch maker under a fee-inclusive sub-$1.00 inventory-adjusted pair with positive margin, C stranded-only at a $0.99 fee-inclusive maximum under the same margin requirement.",
+ "headline": "B AND C ADMIT NOTHING THAT A REJECTS. Across 399 authenticated residual samples in four windows the admissible-moment count is 12 for all three policies and the B-only band is EMPTY, because B's extra range is pair_at_touch in (0.98, 1.00) and on a cent grid that is the single value 0.99, which never occurred. So this is NOT an economic loosening -- it is a pure placement change. And completion at the prevailing complement price is EXACTLY EV-neutral against holding the unmatched leg, before fees, at all 12 moments. The experiment therefore cannot improve expected P&L; its only legitimate purpose is to MEASURE maker fill probability at the touch against two ticks behind, which is the one unobservable blocking every completion decision.",
+ "item1_parity": {
+  "head": "6db042fc",
+  "ids": 80,
+  "digest": "eb672d14b4baf439",
+  "identical_to_baseline": true,
+  "summary": "54 failed, 15667 passed, 27 skipped, 1 xfailed, 26 errors in 433.85s",
+  "corrected_evidence_instrumentation_preserved": true,
+  "preserved": [
+   "missed_profitable_pair_in_state (v2)",
+   "evidence basis field",
+   "sample_residual_book first_leg_own_px",
+   "BookRing.preceding + fill_instant_bracket",
+   "src/l5_book_tape_coverage.py TAPE_NOT_SECOND_LEVEL guard"
+  ]
+ },
+ "evidence_base": {
+  "authenticated_residual_samples": 399,
+  "windows": [
+   "2026-11-02-2215z",
+   "2026-11-02-2230z (18s slice only)",
+   "2026-11-02-2245z",
+   "2026-11-02-2300z"
+  ],
+  "source": "L5_RESIDUAL_BOOK_SAMPLE, authenticated_ws, full 8-rung ladders",
+  "book_age_s_max": 0.2,
+  "order_level_fills_in_the_entire_campaign": 4,
+  "complement_fills_in_the_entire_campaign": 0,
+  "why_that_matters": "every one of the 4 venue-confirmed fills is a FIRST LEG. There is no order-level evidence of a completion fill at any depth, so NO policy's fill rate is supported by actual order-level evidence -- not A's, not B's, not C's. That is the central limitation of this study and it is why the recommendation is a measurement rather than a promotion."
+ },
+ "lot_level_acquisition_costs": {
+  "note": "the instruction warns against a misleading aggregate average. On this evidence each window holds exactly ONE lot, so lot-level and average coincide for three of four windows -- and the fourth shows exactly the failure the warning is about.",
+  "windows": [
+   {
+    "window": "2215z",
+    "venue_fill": "DOWN 1.92 @ wire 0.6100 = own 0.3900",
+    "engine_book": "dn 1.92 @ own 0.3900",
+    "agrees": true,
+    "lots": 1
+   },
+   {
+    "window": "2230z",
+    "venue_fill": "UP 2.04 @ wire 0.4700 = own 0.4700",
+    "engine_book": "up 2.04 @ own 0.4700",
+    "agrees": true,
+    "lots": 1
+   },
+   {
+    "window": "2245z",
+    "venue_fill": "DOWN 2 @ wire 0.5500 = own 0.4500",
+    "engine_book": "dn 2 @ own 0.4500",
+    "agrees": true,
+    "lots": 1
+   },
+   {
+    "window": "2300z",
+    "venue_fill": "UP 1.68 @ wire 0.2100 = own 0.2100",
+    "engine_book": "up 3.3600 @ own 0.605",
+    "agrees": false,
+    "lots": 2,
+    "diagnosis": "3.36 is exactly 2 x 1.68 and 0.605 is exactly (0.21 + 1.00)/2, so the book carries the real 1.68 lot at 0.21 BLENDED with a second 1.68 lot at the 1.00 unattested-basis placeholder. The venue order progress reports cumulative 1.68 with fill_count 1.",
+    "consequence": "using the aggregate 0.605 prices every 2300z completion at 1.77-1.94 and hides the window entirely. Using the venue-confirmed 0.2100 reveals SIX admissible moments. This single window is the whole case for the instruction's lot-level requirement.",
+    "caught_in_the_act": "the residual sampler shows 1.6800 at 23:00:21.091 and 3.3600 at 23:00:28.592 -- the doubling happened between two samples 7.5s apart"
+   }
+  ],
+  "prerequisite": "the 2300z-class basis contamination MUST be reconciled before any live completion experiment, because a live engine would price the pair from the contaminated basis and refuse or accept the wrong moments."
+ },
+ "policy_definitions_as_tested": {
+  "A": "existing. Quote the complement d=2 ticks behind its touch; admit when the inventory-adjusted pair <= 0.96. pair_behind = basis + (complement own at touch) - d*tick.",
+  "B": "at-touch maker. Quote the complement AT its touch; admit when the fee-inclusive inventory-adjusted pair < 1.00 AND the margin is strictly positive.",
+  "C": "stranded-only, fee-inclusive pair <= 0.99, same positive-margin requirement, and only against an already-filled unmatched leg.",
+  "fee_treatment": {
+   "maker_fee": "0.0000, VENUE-VERIFIED on all four maker fills via venue_order_progress.commission",
+   "maker_rebate": "ZERO ASSUMED. rebate_usd is null on all four fills, so no rebate is verified and none is credited to B or C. The 0.0125 maker coefficient is NOT applied.",
+   "taker_fee": "theta 0.0695, venue-verified per-market feeCoefficient, applied as theta*C*p*(1-p) when a policy would cross",
+   "net_effect": "for a MAKER completion the fee-inclusive pair equals the gross pair, because the verified maker fee is zero and no rebate is assumed"
+  }
+ },
+ "admissibility_results": {
+  "per_window": [
+   {
+    "window": "2215z",
+    "samples": 120,
+    "A": 5,
+    "B": 5,
+    "C": 5,
+    "B_only": 0,
+    "cheapest_at_touch_pair": "0.5700",
+    "all_past_cutoff": true,
+    "timing": "t+820 to t+841 against COMPLETE_CUTOFF_S 720 and a cancel cutoff of 600 at the deployed 300s margin. Every one of these five is correctly excluded by existing timing protections and none is actionable."
+   },
+   {
+    "window": "2230z",
+    "samples": 4,
+    "A": 0,
+    "B": 0,
+    "C": 0,
+    "B_only": 0,
+    "cheapest_at_touch_pair": "1.0600",
+    "note": "18-second slice only; consistent with the full 2230z forensics"
+   },
+   {
+    "window": "2245z",
+    "samples": 136,
+    "A": 1,
+    "B": 1,
+    "C": 1,
+    "B_only": 0,
+    "cheapest_at_touch_pair": "0.9800",
+    "actionable": 1,
+    "the_one_moment": {
+     "utc": "22:45:36.395",
+     "t_plus_s": 36,
+     "complement_own_at_touch": "0.5300",
+     "pair": "0.9800",
+     "margin_per_contract": "0.0200",
+     "gross_usd": "0.0400",
+     "queue_ahead_shares": "400.01",
+     "queue_multiple_of_need": "200.00"
+    }
+   },
+   {
+    "window": "2300z",
+    "samples": 139,
+    "A": 6,
+    "B": 6,
+    "C": 6,
+    "B_only": 0,
+    "cheapest_at_touch_pair": "0.9500",
+    "actionable": 6,
+    "basis": "venue-confirmed 0.2100, NOT the engine's contaminated 0.605",
+    "best_queue": {
+     "utc": "23:03:24.108",
+     "queue_ahead_shares": "5.00",
+     "queue_multiple_of_need": "2.98",
+     "pair": "0.9700",
+     "note": "the only moment in the campaign where queue-ahead was under 3x our need"
+    }
+   }
+  ],
+  "totals": {
+   "samples": 399,
+   "A": 12,
+   "B": 12,
+   "C": 12,
+   "B_only": 0,
+   "actionable_within_cutoffs": 7,
+   "actionable_on_an_uncontaminated_basis": 1
+  },
+  "why_B_only_is_zero": "pair_behind = pair_at_touch - d*tick = pair_at_touch - 0.02, so A admits pair_at_touch <= 0.98 while B admits pair_at_touch < 1.00. The B-only band is (0.98, 1.00), which on a one-cent grid is the single value 0.99. It occurred zero times in 399 samples.",
+  "what_B_actually_changes": "not WHETHER to complete but WHERE to rest. At an admissible moment A rests 2 ticks behind the touch and B rests at it: B pays 0.02 more per contract and requires no further adverse movement to trade. B trades 2 cents of locked margin for fill probability."
+ },
+ "expected_settlement_versus_holding": {
+  "the_identity": "completing locks margin = 1 - basis - mk. Holding the unmatched leg, marked at the SAME book, is worth (1 - mk) - basis, because a matched pair redeems exactly $1.00 and the complement trades at mk. Those are the same expression, so the difference is identically zero -- this is algebra, not a sample statistic.",
+  "after_fees": "strictly negative as a taker; neutral as a maker only because the verified maker fee is zero, and it would be positive only with a rebate that is NOT verified.",
+  "consequence": "a completion does not create expected value. It converts a position to certainty at fair value. ALL of a matched pair's value comes from the price at which the FIRST leg was acquired -- so no completion policy, at any depth or ceiling, can recover an adversely selected first leg.",
+  "the_2215z_illustration": "those five moments show margins of 10 to 43 cents a contract and look like free money. They are not: the complement got cheap precisely BECAUSE our held leg was winning, and holding it was worth exactly the same. The engine's own label has said this all along -- 'a defensive exit bounds a tail, it does not create edge: at the touch it is expected-value neutral before fees and negative by exactly the fee.'",
+  "SUPERSEDED_result": "EXACTLY EV-NEUTRAL, at all 12 admissible moments, to 4 decimals",
+  "result": "THE ARITHMETIC IDENTITY HOLDS; THE EV CLAIM DOES NOT. Conditional on the complement's price being the true settlement probability and execution being free, completing and holding are equal. Neither condition holds, so the sign of the comparison is UNMEASURED.",
+  "correction": "OWNER CORRECTION 2026-11-03, accepted: 'completing a position is not automatically expected-value neutral versus holding it. That depends on the true probability of settlement, execution costs, and the price paid for the hedge.' That is right and my framing was wrong. The ALGEBRA is sound -- 1 - basis - mk and (1 - mk) - basis are the same expression -- but calling it EV-neutral silently assumed that (1 - mk) IS the true settlement probability of the held leg. It is not. `mk` is one side of a spread, an OFFERED price rather than a mid or a probability; a maker completion also carries queue risk and may never fill; and a taker completion pays a fee that makes the comparison strictly negative. So the honest statement is CONDITIONAL: completing is EV-neutral against holding ONLY IF the complement's own price equals the true settlement probability and execution is free. Where the true probability is BELOW (1 - mk), completing is strictly better than holding; where it is above, strictly worse. Nothing in this programme has measured that probability, so the sign is UNKNOWN rather than zero -- and 'unknown' is not 'neutral', which is the same error I warned about with UNKNOWN not being NO.",
+  "what_is_still_true": [
+   "the identity 1 - basis - mk == (1 - mk) - basis, which is arithmetic",
+   "a completed pair below 1.00 locks a CONFIRMED gain against the basis actually paid",
+   "a taker completion pays a fee, so against a marked-to-book hold it is negative by exactly that fee",
+   "the 2215z moments are past the completion cutoff and were not actionable, which is a timing fact and needs no EV argument"
+  ],
+  "what_I_withdraw": [
+   "that completion 'cannot improve expected P&L' -- it can, if the true settlement probability is below (1 - mk)",
+   "that the experiment's only legitimate purpose is fill-rate measurement; net realized P&L is a legitimate outcome and the owner is right to want it measured"
+  ]
+ },
+ "execution_realism": {
+  "partial_fills": "none observed: all four venue fills completed in one print with remaining 0, so no partial-fill behaviour is measurable from this evidence",
+  "queue_position": "the venue publishes NO per-order queue position. queue_ahead_bound is an UPPER BOUND from displayed depth at the same rung. Across the 12 admissible moments it ranges 5.00 to 960.00 shares, i.e. 2.98x to 500x our need. A displayed quote is not a fill and no fill is claimed anywhere in this study.",
+  "cancel_replace_latency": "venue-confirmed from the campaign: fill to booked inventory 0.175s, fill to lifecycle release 1.241s, fill to first priced completion evaluation 1.571s against an earliest attachable book frame at 1.234s -- 0.337s of recoverable decision latency. Cancel verification now retries the idempotent read up to 3 times at 0.20/0.40s backoff while the cancel itself is sent once.",
+  "displayed_depth_sufficiency": "insufficient_displayed_depth was false on every sample; depth was never the binding constraint"
+ },
+ "should_we_stop_opening_first_legs_in_adverse_states": {
+  "answer": "NO -- not on this evidence, and not because adverse selection is absent",
+  "adverse_selection_is_real": "confirmed 4 of 4 windows with no survivorship: the complement got monotonically dearer after our fill in every window",
+  "but_no_state_signal_survives": "917d1ffe tested realized touch volatility, spread, extremity, imbalance and time-left over 15 windows chronologically 60/40. No filter is promotable: the >=300s and >=360s holdouts are IDENTICAL at -0.219, the >=420s holdout rests on one trade across six windows, and the combined filter is the WORST per dollar despite the best strand rate -- over-filtering destroys the profitable matched core.",
+  "and_our_own_fill_sample_is_four": "n=4 first-leg fills. No state-conditional entry rule can be fitted or validated on four observations, and I am not going to fit one.",
+  "the_mechanism_is_placement_not_state": "a maker buy resting d ticks BEHIND the touch can only fill when the market comes d ticks to it, which is adverse by construction, and the mechanism is symmetric in side. That points at the first leg's PLACEMENT, not at a market-state filter. Out of scope under 'do not change first-leg selection yet', and recorded rather than acted on."
+ },
+ "recommended_bounded_live_experiment": {
+  "what_it_is": "a FILL-PROBABILITY MEASUREMENT, not a profit experiment. It measures whether a complement resting AT the touch fills materially more often than one resting 2 ticks behind, with queue-ahead recorded at placement. That single unobservable blocks every completion policy decision and cannot be obtained from historical data, because the venue publishes no queue position.",
+  "why_not_framed_on_P&L": "completion is EV-neutral against holding before fees, so at this clip size P&L cannot distinguish A from B at any sample size we could run. A P&L success criterion would be measuring noise.",
+  "design": {
+   "arms": "alternate the completion quote depth by window: depth 2 (control) and depth 0 / at-touch (treatment). Alternate rather than randomise so each arm sees comparable time-of-day conditions.",
+   "admission_rule": "unchanged economics -- admit only when the fee-inclusive, lot-level, inventory-adjusted pair is < 1.00 with strictly positive margin. On this evidence that admits NOTHING the existing 0.96 depth-2 rule rejects, so the experiment carries no economic loosening.",
+   "windows": 20,
+   "expected_admissible_moments": "about 1.75 per window on campaign evidence, so roughly 35 across 20 windows, split about 17 per arm",
+   "statistical_honesty": "17 attempts per arm can detect a LARGE difference (for example 10% against 50%) and cannot detect a small one. If the measured difference is modest, the correct outcome is 'not resolved in 20 windows', not a promotion."
+  },
+  "limits": {
+   "max_exposure_per_window_usd": 2.0,
+   "max_exposure_basis": "one complement order, qty <= the unmatched leg, complement own price <= 0.99, so <= $1.98 at the deployed clip",
+   "max_cumulative_completion_notional_usd": 20.0,
+   "max_concurrent_markets": 1,
+   "max_live_orders": 1,
+   "cumulative_realized_loss_limit_usd": 5.0,
+   "stop_on_loss_limit": "HALT, fail closed, no automatic relaunch",
+   "unchanged": [
+    "ENTRY_CUTOFF_S 600",
+    "COMPLETE_CUTOFF_S 720",
+    "cancel margin 300s",
+    "watchdog",
+    "exact-order cancellation",
+    "reconciliation",
+    "residual cap",
+    "daily loss limit",
+    "HALT",
+    "settlement-only realized labelling"
+   ],
+   "not_enabled": [
+    "the $0.99 global cap stays DISABLED -- C is tested as an admission rule in replay only and is NOT part of the live arm",
+    "no opening pair-cap change",
+    "no first-leg selection change",
+    "both continuous-inventory flags stay OFF"
+   ]
+  },
+  "prerequisites_before_any_live_run": [
+   "reconcile the 2300z-class basis contamination; a contaminated basis makes the live pair computation wrong in both directions",
+   "confirm the live residual sampler now emits first_leg_own_px (shipped at 6db042fc, never yet run live)",
+   "preflight: zero open orders, armed false until the arming handshake, deployed SHA verified"
+  ],
+  "success_criteria": [
+   "at least 20 admissible moments observed across the 20 windows, with queue-ahead recorded at placement for every one",
+   "at least 10 resting completion attempts per arm",
+   "a measured at-touch fill rate exceeding the depth-2 rate by at least 20 percentage points, with both rates reported as counts not percentages alone",
+   "every fill venue-confirmed, every pair priced from a lot-level venue-confirmed basis, zero unattested-basis lots entering a pair computation",
+   "zero exposure, residual, loss-limit, watchdog or cancellation breaches"
+  ],
+  "failure_criteria": [
+   "any exposure or residual breach, any cancel-verification failure that leaves an order unresolved, or the cumulative loss limit reached -> stop immediately",
+   "fewer than 10 admissible moments in the first 10 windows -> stop and report that the opportunity rate is too low to measure",
+   "any pair computed from a placeholder or unattested basis -> stop; that is the 2300z defect recurring",
+   "a measured difference smaller than 20 points -> report NOT RESOLVED and do not promote either depth"
+  ],
+  "what_a_positive_result_would_license": "a decision on the completion ceiling and quote depth TOGETHER, which is the structural choice identified last turn. It would NOT license an opening-cap change or a first-leg selection change.",
+  "what_it_cannot_establish": "that completion improves expected P&L. It cannot, because of the EV identity. The value of this experiment is to stop the completion-policy question consuming cycles on unmeasurable ground."
+ },
+ "safety": {
+  "live_policy_changed": false,
+  "live_trading_authorized": false,
+  "pair_cap": "0.96 unchanged",
+  "completion_099_cap": "disabled",
+  "cancel_margin_s": 300.0,
+  "risk_limits": "unchanged",
+  "halt": "active",
+  "armed": false,
+  "new_services": 0,
+  "orders_placed": 0,
+  "changes_in_this_turn": "analysis and tests only; no src change",
+  "deployed": false
+ }
+}

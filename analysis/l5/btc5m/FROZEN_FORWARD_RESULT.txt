@@ -1,0 +1,36 @@
+FROZEN BTC5m TAKER-LONGSHOT -- FORWARD VALIDATION RESULT
+Frozen spec committed 3971183ea57f6332018458a46110937fccba0f26 BEFORE any
+forward window was fetched. Forward sample: windows opening 0440z..1110z on
+2026-11-19, collected from l5-btc5m-public-recorder after the freeze.
+
+DISCOVERY (226 windows to 0435z, t=180/maxpx 0.30): +0.0275 +- 0.0247 per share
+
+==============================================================================
+FROZEN HYPOTHESIS -- FORWARD VALIDATION
+==============================================================================
+frozen rule     : t=180s, take cheaper side at its offer if <= 0.30, hold to settlement
+discovery cutoff: 2026-11-19T04:40:00Z (windows before it are REFUSED)
+windows in file : 309
+  excluded before_discovery_cutoff    230
+forward windows : 79
+  not traded no_side_at_or_below_maxpx 16
+  not traded quote_stale_at_t180      8
+  not traded undecided_settlement     3
+QUALIFYING WINDOWS (n): 52
+
+realized outcomes : 4 of 52 won (7.7%)
+mean entry price  : 0.1213   mean taker fee: 0.0094
+mean quote age    : 1.01s (max allowed 6.0s)
+
+NET per share after taker fee
+  mean            : -0.0538
+  sd / se         : 0.2453 / 0.0340
+  95% bootstrap CI : [-0.1146, +0.0181]  INCLUDES ZERO
+  worst drawdown  : -3.3228 per share (cumulative, in order)
+
+at 20 shares a window:
+  mean/window     : -1.0761   sd/window: 4.9059
+  worst drawdown  : -66.46
+  days in sample  : 1, of which daily loss <= -$2: 1
+
+Hypothetical executions against a recorded public quote tape. NOT fills, NOT realized P&L, NOT confirmed earnings.

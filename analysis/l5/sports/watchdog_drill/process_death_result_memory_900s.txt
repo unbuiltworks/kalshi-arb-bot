@@ -1,0 +1,7 @@
+BOT READY ['o1', 'o2'] pid 1299
+{"phase": "1 bot alive", "open": 3, "exempt": ["o1", "o2"], "claimed_ids": 2, "cancelled": [], "not_ours": [["other-desk-1", "NOT_IN_OWNERSHIP_REGISTRY"]], "cancel_skipped": null, "claim_refused": null, "lanes": ["http://127.0.0.1:18496:OK:2"], "halt": "UNMANAGED_RESTING_ORDER"}
+BOT KILLED (SIGKILL), exit -9
+{"phase": "2 first sweep after death", "open": 3, "exempt": null, "claimed_ids": 2, "cancelled": ["o1", "o2"], "not_ours": [["other-desk-1", "NOT_IN_OWNERSHIP_REGISTRY"]], "cancel_skipped": null, "claim_refused": null, "lanes": null, "halt": null}
+{"phase": "3 next sweep", "open": 1, "exempt": null, "claimed_ids": 2, "cancelled": [], "not_ours": [["other-desk-1", "NOT_IN_OWNERSHIP_REGISTRY"]], "cancel_skipped": null, "claim_refused": null, "lanes": null, "halt": null}
+VENUE_CANCELS [('o1', 'aec-x'), ('o2', 'aec-x')] | STILL OPEN ['other-desk-1']
+exit 0

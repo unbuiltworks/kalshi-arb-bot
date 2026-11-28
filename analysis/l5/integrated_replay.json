@@ -1,0 +1,852 @@
+{
+ "default_params": {
+  "adverse": 0.03,
+  "margin": 0.03,
+  "risk": 0.1
+ },
+ "evidence_class": "L5 POLYMARKET PATHS with PMUS ticks and fees, ONE-MINUTE Coinbase reference -- not PMUS fills, not our own, and NOT the live venue index, which has no history on these windows",
+ "no_reference": {
+  "PAIR (deployed, no controller)": {
+   "buckets_per_contract": {
+    "completion": -0.023328874394652414,
+    "entry": 0.016604276131818176,
+    "fill": -0.039893053487967914,
+    "settlement": -0.00550801808475936,
+    "unmatched": 0.01568181956818182
+   },
+   "fills": 374,
+   "fills_per_window": 1.7725118483412323,
+   "max_unmatched_held": 1.0,
+   "net_per_contract": -0.03644385026737969,
+   "net_per_contract_ci95": [
+    -0.05350974930362106,
+    -0.021522309711286165
+   ],
+   "net_per_window": -0.06459715639810429,
+   "net_per_window_ci95": [
+    -0.09106459852232549,
+    -0.0381297142738831
+   ],
+   "net_total": -13.630000000000004,
+   "p05_window": -0.51,
+   "pair_cost_p50": 0.99,
+   "pairs": 167,
+   "unmatched_contracts": 40,
+   "unmatched_lost_frac": 0.925,
+   "unmatched_mean": -0.3825,
+   "windows": 211,
+   "windows_traded": 207,
+   "worst_unmatched_contract": -0.64,
+   "worst_window": -0.64
+  },
+  "STEER default": {
+   "buckets_per_contract": {
+    "completion": null,
+    "entry": null,
+    "fill": null,
+    "settlement": null,
+    "unmatched": null
+   },
+   "fills": 0,
+   "fills_per_window": 0.0,
+   "max_unmatched_held": 0.0,
+   "net_per_contract": null,
+   "net_per_contract_ci95": [
+    NaN,
+    NaN
+   ],
+   "net_per_window": 0.0,
+   "net_per_window_ci95": [
+    0.0,
+    0.0
+   ],
+   "net_total": 0.0,
+   "p05_window": 0.0,
+   "pair_cost_p50": null,
+   "pairs": 0,
+   "unmatched_contracts": 0,
+   "unmatched_lost_frac": null,
+   "unmatched_mean": null,
+   "windows": 211,
+   "windows_traded": 0,
+   "worst_unmatched_contract": null,
+   "worst_window": 0.0
+  },
+  "windows": 211
+ },
+ "rows": {
+  "PAIR (deployed, no controller)": {
+   "IS": {
+    "buckets_per_contract": {
+     "completion": -0.022276912217846157,
+     "entry": 0.017169227439999997,
+     "fill": -0.04215384688707693,
+     "settlement": -0.010338455943692308,
+     "unmatched": 0.006123064531692311
+    },
+    "fills": 325,
+    "fills_per_window": 1.7379679144385027,
+    "max_unmatched_held": 1.0,
+    "net_per_contract": -0.05147692307692309,
+    "net_per_contract_ci95": [
+     -0.07164556962025306,
+     -0.03355029585798826
+    ],
+    "net_per_window": -0.08946524064171124,
+    "net_per_window_ci95": [
+     -0.11978732756533031,
+     -0.059143153718092166
+    ],
+    "net_total": -16.730000000000004,
+    "p05_window": -0.51,
+    "pair_cost_p50": 0.99,
+    "pairs": 139,
+    "unmatched_contracts": 47,
+    "unmatched_lost_frac": 0.9361702127659575,
+    "unmatched_mean": -0.38553191489361704,
+    "windows": 187,
+    "windows_traded": 186,
+    "worst_unmatched_contract": -0.64,
+    "worst_window": -0.64
+   },
+   "OOS": {
+    "buckets_per_contract": {
+     "completion": -0.02236486451216217,
+     "entry": 0.016351351512612602,
+     "fill": -0.03815316208468468,
+     "settlement": -0.0015315312882882898,
+     "unmatched": 0.01682433249864865
+    },
+    "fills": 222,
+    "fills_per_window": 1.776,
+    "max_unmatched_held": 1.0,
+    "net_per_contract": -0.02887387387387388,
+    "net_per_contract_ci95": [
+     -0.050330188679245366,
+     -0.010000000000000007
+    ],
+    "net_per_window": -0.05128000000000002,
+    "net_per_window_ci95": [
+     -0.08490246510921896,
+     -0.017657534890781076
+    ],
+    "net_total": -6.410000000000002,
+    "p05_window": -0.51,
+    "pair_cost_p50": 0.99,
+    "pairs": 101,
+    "unmatched_contracts": 20,
+    "unmatched_lost_frac": 0.9,
+    "unmatched_mean": -0.371,
+    "windows": 125,
+    "windows_traded": 121,
+    "worst_unmatched_contract": -0.64,
+    "worst_window": -0.64
+   }
+  },
+  "STEER default, cancel latency 0s": {
+   "IS": {
+    "buckets_per_contract": {
+     "completion": -0.023208190754948812,
+     "entry": 0.024948829709556305,
+     "fill": -0.046518801090443686,
+     "settlement": 0.00890785056552901,
+     "unmatched": 0.011843007816040956
+    },
+    "fills": 293,
+    "fills_per_window": 1.5668449197860963,
+    "max_unmatched_held": 1.0,
+    "net_per_contract": -0.024027303754266222,
+    "net_per_contract_ci95": [
+     -0.04089285714285721,
+     -0.0073578595317726325
+    ],
+    "net_per_window": -0.03764705882352942,
+    "net_per_window_ci95": [
+     -0.06365562493745293,
+     -0.011638492709605913
+    ],
+    "net_total": -7.040000000000003,
+    "p05_window": -0.39,
+    "pair_cost_p50": 0.99,
+    "pairs": 126,
+    "unmatched_contracts": 41,
+    "unmatched_lost_frac": 0.7804878048780488,
+    "unmatched_mean": -0.20243902439024392,
+    "windows": 187,
+    "windows_traded": 167,
+    "worst_unmatched_contract": -0.76,
+    "worst_window": -0.76
+   },
+   "OOS": {
+    "buckets_per_contract": {
+     "completion": -0.01875676878810811,
+     "entry": 0.025810805759999996,
+     "fill": -0.04622779547513513,
+     "settlement": -0.002648648395675677,
+     "unmatched": 0.002849433925945942
+    },
+    "fills": 185,
+    "fills_per_window": 1.48,
+    "max_unmatched_held": 1.0,
+    "net_per_contract": -0.03897297297297298,
+    "net_per_contract_ci95": [
+     -0.0629378531073447,
+     -0.01668508287292822
+    ],
+    "net_per_window": -0.057680000000000016,
+    "net_per_window_ci95": [
+     -0.09107477248208652,
+     -0.02428522751791351
+    ],
+    "net_total": -7.210000000000002,
+    "p05_window": -0.42,
+    "pair_cost_p50": 0.99,
+    "pairs": 80,
+    "unmatched_contracts": 25,
+    "unmatched_lost_frac": 0.92,
+    "unmatched_mean": -0.3204,
+    "windows": 125,
+    "windows_traded": 105,
+    "worst_unmatched_contract": -0.77,
+    "worst_window": -0.77
+   }
+  },
+  "STEER default, cancel latency 2s": {
+   "IS": {
+    "buckets_per_contract": {
+     "completion": -0.023150684735616444,
+     "entry": 0.025102762827054786,
+     "fill": -0.04640413997157534,
+     "settlement": 0.009452055533219176,
+     "unmatched": 0.012363020045547946
+    },
+    "fills": 292,
+    "fills_per_window": 1.5614973262032086,
+    "max_unmatched_held": 1.0,
+    "net_per_contract": -0.02263698630136987,
+    "net_per_contract_ci95": [
+     -0.039624573378839664,
+     -0.005544217687074836
+    ],
+    "net_per_window": -0.035347593582887714,
+    "net_per_window_ci95": [
+     -0.061076262978265496,
+     -0.009618924187509932
+    ],
+    "net_total": -6.610000000000002,
+    "p05_window": -0.39,
+    "pair_cost_p50": 0.99,
+    "pairs": 126,
+    "unmatched_contracts": 40,
+    "unmatched_lost_frac": 0.775,
+    "unmatched_mean": -0.19675,
+    "windows": 187,
+    "windows_traded": 166,
+    "worst_unmatched_contract": -0.76,
+    "worst_window": -0.76
+   },
+   "OOS": {
+    "buckets_per_contract": {
+     "completion": -0.019032270624193548,
+     "entry": 0.02545698431505376,
+     "fill": -0.04710829127150537,
+     "settlement": -0.001344085731182797,
+     "unmatched": 0.007619061161290319
+    },
+    "fills": 186,
+    "fills_per_window": 1.488,
+    "max_unmatched_held": 1.0,
+    "net_per_contract": -0.03440860215053764,
+    "net_per_contract_ci95": [
+     -0.05613636363636368,
+     -0.013065326633165857
+    ],
+    "net_per_window": -0.05120000000000001,
+    "net_per_window_ci95": [
+     -0.08258970206314331,
+     -0.0198102979368567
+    ],
+    "net_total": -6.400000000000001,
+    "p05_window": -0.41000000000000003,
+    "pair_cost_p50": 0.99,
+    "pairs": 81,
+    "unmatched_contracts": 24,
+    "unmatched_lost_frac": 0.9166666666666666,
+    "unmatched_mean": -0.30041666666666667,
+    "windows": 125,
+    "windows_traded": 105,
+    "worst_unmatched_contract": -0.58,
+    "worst_window": -0.58
+   }
+  },
+  "STEER default, cancel latency 5s": {
+   "IS": {
+    "buckets_per_contract": {
+     "completion": -0.02254507695513699,
+     "entry": 0.0248972832969178,
+     "fill": -0.04650688052157534,
+     "settlement": 0.006952055527054792,
+     "unmatched": 0.01209987892671233
+    },
+    "fills": 292,
+    "fills_per_window": 1.5614973262032086,
+    "max_unmatched_held": 1.0,
+    "net_per_contract": -0.025102739726027407,
+    "net_per_contract_ci95": [
+     -0.041906354515050245,
+     -0.007891156462585057
+    ],
+    "net_per_window": -0.03919786096256686,
+    "net_per_window_ci95": [
+     -0.06514353316924018,
+     -0.013252188755893544
+    ],
+    "net_total": -7.330000000000003,
+    "p05_window": -0.39,
+    "pair_cost_p50": 0.99,
+    "pairs": 126,
+    "unmatched_contracts": 40,
+    "unmatched_lost_frac": 0.8,
+    "unmatched_mean": -0.21475,
+    "windows": 187,
+    "windows_traded": 166,
+    "worst_unmatched_contract": -0.76,
+    "worst_window": -0.76
+   },
+   "OOS": {
+    "buckets_per_contract": {
+     "completion": -0.019734054979255324,
+     "entry": 0.025398931338297865,
+     "fill": -0.04681990639414893,
+     "settlement": -0.0017021273723404266,
+     "unmatched": 0.008708221237234038
+    },
+    "fills": 188,
+    "fills_per_window": 1.504,
+    "max_unmatched_held": 1.0,
+    "net_per_contract": -0.03414893617021277,
+    "net_per_contract_ci95": [
+     -0.056011235955056235,
+     -0.013010752688172042
+    ],
+    "net_per_window": -0.05136000000000001,
+    "net_per_window_ci95": [
+     -0.08283072157201399,
+     -0.01988927842798604
+    ],
+    "net_total": -6.420000000000002,
+    "p05_window": -0.41000000000000003,
+    "pair_cost_p50": 0.99,
+    "pairs": 82,
+    "unmatched_contracts": 24,
+    "unmatched_lost_frac": 0.9166666666666666,
+    "unmatched_mean": -0.3016666666666667,
+    "windows": 125,
+    "windows_traded": 106,
+    "worst_unmatched_contract": -0.58,
+    "worst_window": -0.58
+   }
+  },
+  "STEER default, no withdrawals": {
+   "IS": {
+    "buckets_per_contract": {
+     "completion": -0.022913432379677426,
+     "entry": 0.02496776226419354,
+     "fill": -0.04554841510419355,
+     "settlement": -0.00022580397322580784,
+     "unmatched": 0.01778440532193549
+    },
+    "fills": 310,
+    "fills_per_window": 1.6577540106951871,
+    "max_unmatched_held": 1.0,
+    "net_per_contract": -0.02593548387096775,
+    "net_per_contract_ci95": [
+     -0.0413548387096775,
+     -0.011185410334346542
+    ],
+    "net_per_window": -0.04299465240641712,
+    "net_per_window_ci95": [
+     -0.06667730824271767,
+     -0.01931199657011658
+    ],
+    "net_total": -8.040000000000003,
+    "p05_window": -0.4,
+    "pair_cost_p50": 0.99,
+    "pairs": 137,
+    "unmatched_contracts": 36,
+    "unmatched_lost_frac": 0.8611111111111112,
+    "unmatched_mean": -0.2613888888888889,
+    "windows": 187,
+    "windows_traded": 173,
+    "worst_unmatched_contract": -0.5,
+    "worst_window": -0.5
+   },
+   "OOS": {
+    "buckets_per_contract": {
+     "completion": -0.02067308771442308,
+     "entry": 0.026562497762980766,
+     "fill": -0.04829326891201923,
+     "settlement": 0.0009615382485576916,
+     "unmatched": 0.011971166768749996
+    },
+    "fills": 208,
+    "fills_per_window": 1.664,
+    "max_unmatched_held": 1.0,
+    "net_per_contract": -0.029471153846153855,
+    "net_per_contract_ci95": [
+     -0.05047619047619053,
+     -0.00906666666666667
+    ],
+    "net_per_window": -0.049040000000000014,
+    "net_per_window_ci95": [
+     -0.08260524962563169,
+     -0.015474750374368337
+    ],
+    "net_total": -6.130000000000002,
+    "p05_window": -0.42,
+    "pair_cost_p50": 0.99,
+    "pairs": 91,
+    "unmatched_contracts": 26,
+    "unmatched_lost_frac": 0.8846153846153846,
+    "unmatched_mean": -0.27076923076923076,
+    "windows": 125,
+    "windows_traded": 117,
+    "worst_unmatched_contract": -0.58,
+    "worst_window": -0.58
+   }
+  },
+  "STEER tuned, cancel latency 0s": {
+   "IS": {
+    "buckets_per_contract": {
+     "completion": -0.022230576539849625,
+     "entry": 0.024962407631578944,
+     "fill": -0.04482081514285714,
+     "settlement": 0.0037593986030075187,
+     "unmatched": 0.024870938831578947
+    },
+    "fills": 133,
+    "fills_per_window": 0.7112299465240641,
+    "max_unmatched_held": 1.0,
+    "net_per_contract": -0.013458646616541364,
+    "net_per_contract_ci95": [
+     -0.04137614678899086,
+     0.011085271317829435
+    ],
+    "net_per_window": -0.009572192513368992,
+    "net_per_window_ci95": [
+     -0.027606082914527562,
+     0.008461697887789577
+    ],
+    "net_total": -1.7900000000000014,
+    "p05_window": 0.0,
+    "pair_cost_p50": 0.99,
+    "pairs": 60,
+    "unmatched_contracts": 13,
+    "unmatched_lost_frac": 0.6923076923076923,
+    "unmatched_mean": -0.18384615384615385,
+    "windows": 187,
+    "windows_traded": 73,
+    "worst_unmatched_contract": -0.74,
+    "worst_window": -0.74
+   },
+   "OOS": {
+    "buckets_per_contract": {
+     "completion": -0.01762499855,
+     "entry": 0.0276249969275,
+     "fill": -0.047249999802500005,
+     "settlement": 0.00700000132,
+     "unmatched": 0.016125000104999995
+    },
+    "fills": 80,
+    "fills_per_window": 0.64,
+    "max_unmatched_held": 1.0,
+    "net_per_contract": -0.014125000000000009,
+    "net_per_contract_ci95": [
+     -0.048571428571428606,
+     0.016091954022988502
+    ],
+    "net_per_window": -0.009040000000000006,
+    "net_per_window_ci95": [
+     -0.029300853224844946,
+     0.011220853224844934
+    ],
+    "net_total": -1.1300000000000008,
+    "p05_window": -0.3,
+    "pair_cost_p50": 0.99,
+    "pairs": 35,
+    "unmatched_contracts": 10,
+    "unmatched_lost_frac": 0.7,
+    "unmatched_mean": -0.148,
+    "windows": 125,
+    "windows_traded": 45,
+    "worst_unmatched_contract": -0.5700000000000001,
+    "worst_window": -0.5700000000000001
+   }
+  },
+  "STEER tuned, cancel latency 2s": {
+   "IS": {
+    "buckets_per_contract": {
+     "completion": -0.02152454790542636,
+     "entry": 0.025271319738759686,
+     "fill": -0.04548841775193799,
+     "settlement": 0.003875969102325581,
+     "unmatched": 0.02383466906434108
+    },
+    "fills": 129,
+    "fills_per_window": 0.6898395721925134,
+    "max_unmatched_held": 1.0,
+    "net_per_contract": -0.014031007751937996,
+    "net_per_contract_ci95": [
+     -0.04293233082706775,
+     0.011359999999999997
+    ],
+    "net_per_window": -0.009679144385026745,
+    "net_per_window_ci95": [
+     -0.027711243209266122,
+     0.008352954439212629
+    ],
+    "net_total": -1.8100000000000014,
+    "p05_window": 0.0,
+    "pair_cost_p50": 0.99,
+    "pairs": 58,
+    "unmatched_contracts": 13,
+    "unmatched_lost_frac": 0.6923076923076923,
+    "unmatched_mean": -0.18384615384615385,
+    "windows": 187,
+    "windows_traded": 71,
+    "worst_unmatched_contract": -0.74,
+    "worst_window": -0.74
+   },
+   "OOS": {
+    "buckets_per_contract": {
+     "completion": -0.01772151753544304,
+     "entry": 0.028354427625316456,
+     "fill": -0.048354430493670886,
+     "settlement": 0.0067088620962025315,
+     "unmatched": 0.012025316535443035
+    },
+    "fills": 79,
+    "fills_per_window": 0.632,
+    "max_unmatched_held": 1.0,
+    "net_per_contract": -0.018987341772151906,
+    "net_per_contract_ci95": [
+     -0.055806451612903284,
+     0.012916666666666663
+    ],
+    "net_per_window": -0.012000000000000005,
+    "net_per_window_ci95": [
+     -0.032992110345894096,
+     0.008992110345894084
+    ],
+    "net_total": -1.5000000000000007,
+    "p05_window": -0.3,
+    "pair_cost_p50": 0.99,
+    "pairs": 34,
+    "unmatched_contracts": 11,
+    "unmatched_lost_frac": 0.7272727272727273,
+    "unmatched_mean": -0.16727272727272727,
+    "windows": 125,
+    "windows_traded": 45,
+    "worst_unmatched_contract": -0.5700000000000001,
+    "worst_window": -0.5700000000000001
+   }
+  },
+  "STEER tuned, cancel latency 5s": {
+   "IS": {
+    "buckets_per_contract": {
+     "completion": -0.021730279783969467,
+     "entry": 0.025725192748091597,
+     "fill": -0.046412215887786254,
+     "settlement": 0.003816794001526717,
+     "unmatched": 0.024860050906870226
+    },
+    "fills": 131,
+    "fills_per_window": 0.7005347593582888,
+    "max_unmatched_held": 1.0,
+    "net_per_contract": -0.013740458015267186,
+    "net_per_contract_ci95": [
+     -0.04222222222222229,
+     0.011292517006802718
+    ],
+    "net_per_window": -0.009625668449197869,
+    "net_per_window_ci95": [
+     -0.027658664721784763,
+     0.008407327823389025
+    ],
+    "net_total": -1.8000000000000014,
+    "p05_window": 0.0,
+    "pair_cost_p50": 0.99,
+    "pairs": 59,
+    "unmatched_contracts": 13,
+    "unmatched_lost_frac": 0.6923076923076923,
+    "unmatched_mean": -0.18384615384615385,
+    "windows": 187,
+    "windows_traded": 72,
+    "worst_unmatched_contract": -0.74,
+    "worst_window": -0.74
+   },
+   "OOS": {
+    "buckets_per_contract": {
+     "completion": -0.017261903380952383,
+     "entry": 0.028214284269047617,
+     "fill": -0.04857142955238095,
+     "settlement": 0.0034523821238095233,
+     "unmatched": 0.008571428445238088
+    },
+    "fills": 84,
+    "fills_per_window": 0.672,
+    "max_unmatched_held": 1.0,
+    "net_per_contract": -0.025595238095238105,
+    "net_per_contract_ci95": [
+     -0.0642857142857143,
+     0.008510638297872335
+    ],
+    "net_per_window": -0.017200000000000007,
+    "net_per_window_ci95": [
+     -0.04059384229981017,
+     0.006193842299810154
+    ],
+    "net_total": -2.150000000000001,
+    "p05_window": -0.31,
+    "pair_cost_p50": 0.99,
+    "pairs": 36,
+    "unmatched_contracts": 12,
+    "unmatched_lost_frac": 0.75,
+    "unmatched_mean": -0.20916666666666667,
+    "windows": 125,
+    "windows_traded": 48,
+    "worst_unmatched_contract": -0.67,
+    "worst_window": -0.67
+   }
+  },
+  "STEER tuned, no withdrawals": {
+   "IS": {
+    "buckets_per_contract": {
+     "completion": -0.019454190084795327,
+     "entry": 0.02666666643157894,
+     "fill": -0.04495909608596491,
+     "settlement": 0.006842105395321638,
+     "unmatched": 0.013477613759064326
+    },
+    "fills": 171,
+    "fills_per_window": 0.9144385026737968,
+    "max_unmatched_held": 1.0,
+    "net_per_contract": -0.017426900584795332,
+    "net_per_contract_ci95": [
+     -0.041581920903954864,
+     0.005808823529411762
+    ],
+    "net_per_window": -0.015935828877005356,
+    "net_per_window_ci95": [
+     -0.03751244404327528,
+     0.005640786289264569
+    ],
+    "net_total": -2.9800000000000018,
+    "p05_window": -0.36,
+    "pair_cost_p50": 0.99,
+    "pairs": 76,
+    "unmatched_contracts": 19,
+    "unmatched_lost_frac": 0.7368421052631579,
+    "unmatched_mean": -0.1968421052631579,
+    "windows": 187,
+    "windows_traded": 95,
+    "worst_unmatched_contract": -0.74,
+    "worst_window": -0.74
+   },
+   "OOS": {
+    "buckets_per_contract": {
+     "completion": -0.021732281634645672,
+     "entry": 0.029276997142519683,
+     "fill": -0.049007033511023625,
+     "settlement": -0.0007086605858267708,
+     "unmatched": 0.021698537644094483
+    },
+    "fills": 127,
+    "fills_per_window": 1.016,
+    "max_unmatched_held": 1.0,
+    "net_per_contract": -0.020472440944881896,
+    "net_per_contract_ci95": [
+     -0.0495833333333334,
+     0.006095890410958894
+    ],
+    "net_per_window": -0.02080000000000001,
+    "net_per_window_ci95": [
+     -0.04852448657077176,
+     0.006924486570771743
+    ],
+    "net_total": -2.600000000000001,
+    "p05_window": -0.33,
+    "pair_cost_p50": 0.99,
+    "pairs": 56,
+    "unmatched_contracts": 15,
+    "unmatched_lost_frac": 0.7333333333333333,
+    "unmatched_mean": -0.21066666666666667,
+    "windows": 125,
+    "windows_traded": 71,
+    "worst_unmatched_contract": -0.87,
+    "worst_window": -0.87
+   }
+  }
+ },
+ "tuned_on_IS": {
+  "at_latency_s": 2.0,
+  "eligible": 15,
+  "grid": 15,
+  "grid_IS_positive": 0,
+  "params": {
+   "adverse": 0.03,
+   "margin": 0.03,
+   "risk": 0.3
+  }
+ },
+ "vs_pair": {
+  "STEER default, cancel latency 0s": {
+   "IS": {
+    "ci95": [
+     0.02,
+     0.08342245989304814
+    ],
+    "mean": 0.051818181818181826,
+    "windows": 187
+   },
+   "OOS": {
+    "ci95": [
+     -0.04112,
+     0.02720000000000001
+    ],
+    "mean": -0.006399999999999995,
+    "windows": 125
+   }
+  },
+  "STEER default, cancel latency 2s": {
+   "IS": {
+    "ci95": [
+     0.022299465240641712,
+     0.08566844919786096
+    ],
+    "mean": 0.054117647058823534,
+    "windows": 187
+   },
+   "OOS": {
+    "ci95": [
+     -0.03183999999999999,
+     0.03216000000000001
+    ],
+    "mean": 8.000000000000585e-05,
+    "windows": 125
+   }
+  },
+  "STEER default, cancel latency 5s": {
+   "IS": {
+    "ci95": [
+     0.018288770053475942,
+     0.08106951871657754
+    ],
+    "mean": 0.05026737967914439,
+    "windows": 187
+   },
+   "OOS": {
+    "ci95": [
+     -0.03128,
+     0.03168000000000001
+    ],
+    "mean": -7.99999999999943e-05,
+    "windows": 125
+   }
+  },
+  "STEER default, no withdrawals": {
+   "IS": {
+    "ci95": [
+     0.01909090909090909,
+     0.07427807486631016
+    ],
+    "mean": 0.046470588235294125,
+    "windows": 187
+   },
+   "OOS": {
+    "ci95": [
+     -0.03159999999999999,
+     0.03488
+    ],
+    "mean": 0.0022400000000000054,
+    "windows": 125
+   }
+  },
+  "STEER tuned, cancel latency 0s": {
+   "IS": {
+    "ci95": [
+     0.04475935828877007,
+     0.11481283422459894
+    ],
+    "mean": 0.07989304812834225,
+    "windows": 187
+   },
+   "OOS": {
+    "ci95": [
+     0.004800000000000017,
+     0.07992000000000002
+    ],
+    "mean": 0.04224000000000001,
+    "windows": 125
+   }
+  },
+  "STEER tuned, cancel latency 2s": {
+   "IS": {
+    "ci95": [
+     0.044759358288770056,
+     0.11470588235294119
+    ],
+    "mean": 0.07978609625668451,
+    "windows": 187
+   },
+   "OOS": {
+    "ci95": [
+     0.0009600000000000106,
+     0.07776000000000001
+    ],
+    "mean": 0.039280000000000016,
+    "windows": 125
+   }
+  },
+  "STEER tuned, cancel latency 5s": {
+   "IS": {
+    "ci95": [
+     0.04491978609625669,
+     0.11475935828877006
+    ],
+    "mean": 0.07983957219251338,
+    "windows": 187
+   },
+   "OOS": {
+    "ci95": [
+     -0.00647999999999999,
+     0.07424000000000001
+    ],
+    "mean": 0.03408000000000001,
+    "windows": 125
+   }
+  },
+  "STEER tuned, no withdrawals": {
+   "IS": {
+    "ci95": [
+     0.037647058823529415,
+     0.10919786096256685
+    ],
+    "mean": 0.0735294117647059,
+    "windows": 187
+   },
+   "OOS": {
+    "ci95": [
+     -0.01608,
+     0.07592000000000002
+    ],
+    "mean": 0.03048000000000001,
+    "windows": 125
+   }
+  }
+ },
+ "windows": {
+  "IS": 187,
+  "OOS": 125
+ }
+}

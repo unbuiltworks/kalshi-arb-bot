@@ -1,0 +1,17 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/gemini_5m_collector/Dockerfile",
+    "watchPatterns": [
+      "deploy/gemini_5m_collector/**",
+      "src/policy_d_port/collector.py"
+    ]
+  },
+  "deploy": {
+    "startCommand": "python3 -m src.policy_d_port.collector --gemini-only --hours 0 --out-dir /state/gemini-5m",
+    "restartPolicyType": "ALWAYS",
+    "restartPolicyMaxRetries": 100
+  },
+  "_status": "READ-ONLY Gemini BTC/ETH 5m collector. Public endpoints only: no credentials, no order path, no PMUS module. Window-aware subscription on the window's own clock; prints recorded unconditionally."
+}

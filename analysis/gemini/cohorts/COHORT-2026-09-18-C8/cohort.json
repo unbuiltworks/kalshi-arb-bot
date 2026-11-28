@@ -1,0 +1,13 @@
+{
+  "label": "GEMINI_MUTATION_COHORT_V1",
+  "cohort_id": "COHORT-2026-09-18-C8",
+  "created_utc": "2026-09-19T00:26:23.037195+00:00",
+  "budget": 6,
+  "ledger_path": "analysis/gemini/cohorts/COHORT-2026-09-18-C8/ledger.jsonl",
+  "predecessor_ledger": "analysis/gemini/cohorts/COHORT-2026-09-18-C7/ledger.jsonl",
+  "predecessor_sha256": "3e8399a3b1973f69ca806d1c07eb91899fa3ad774081ed5ec53eb1c956e0f0d8",
+  "predecessor_consumed": 6,
+  "envelope_max_actions": 12,
+  "note": "CONTINUOUS-8: REAL FILL -> COHERENT AUTHORITATIVE REFRESH -> INVENTORY CHANGE -> CHANGED L5 ACTION, entered EARLY by experimental scheduling rather than by dispatch accident. Budget is UNCHANGED at 6 by owner instruction; the projection from C4-C7 says that is likely to bind before a fill can be observed, and that is reported rather than quietly fixed. Chained to C7's ledger, so C7's 6 spent slots, C6's 6 and C5's frozen 3 with its UNKNOWN cannot be rewritten or recycled without this cohort refusing before the latch.",
+  "labels": "NO ROLLOVER: this budget is fixed and unused slots never carry. NO REWRITE: the predecessor ledger is hashed, never modified. NO AUTOMATIC CREATION: nothing in the package calls create()."
+}

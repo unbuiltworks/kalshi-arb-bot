@@ -1,0 +1,67 @@
+{
+ "label": "PMUS_BTC15M_WINDOW_SELECTOR_V1",
+ "closed_windows": 89,
+ "active": 35,
+ "quiet": 54,
+ "alternation": {
+  "length": 89,
+  "transitions": 67,
+  "transition_rate": 0.7614,
+  "note": "a rate near 1.0 is near-perfect alternation; 0.5 is what an independent coin would give"
+ },
+ "signal_a_prior_window": {
+  "n": 88,
+  "tp": 34,
+  "fp": 20,
+  "fn": 1,
+  "tn": 33,
+  "accuracy": 0.7614,
+  "precision": 0.6296,
+  "recall": 0.9714,
+  "false_positive_rate": 0.3774,
+  "false_negative_rate": 0.0286,
+  "base_rate_active": 0.3977,
+  "rule": "predict ACTIVE iff the immediately preceding window was QUIET",
+  "detection_latency_s": 0.0,
+  "uses_future_information": false,
+  "baseline_always_active": {
+   "accuracy": 0.3977,
+   "precision": 0.3977,
+   "recall": 1.0,
+   "false_positive_rate": 1.0
+  }
+ },
+ "signal_b_within_window": {
+  "windows": [
+   {
+    "market": "cpc-btc-updown-15m-2026-09-23-1330z",
+    "samples": 14,
+    "observed_total_contracts": 15307.8,
+    "active": true,
+    "first_shares_growth_s": null,
+    "first_two_sided_s": null,
+    "observed_span_s": 42.7
+   },
+   {
+    "market": "cpc-btc-updown-15m-2026-09-23-1345z",
+    "samples": 375,
+    "observed_total_contracts": 22371.5,
+    "active": true,
+    "first_shares_growth_s": 31.2,
+    "first_two_sided_s": 0.0,
+    "observed_span_s": 862.9
+   },
+   {
+    "market": "cpc-btc-updown-15m-2026-09-23-1400z",
+    "samples": 177,
+    "observed_total_contracts": 23365.5,
+    "active": true,
+    "first_shares_growth_s": 2.4,
+    "first_two_sided_s": 0.0,
+    "observed_span_s": 442.8
+   }
+  ],
+  "caveat": "sharesTraded refreshes on the gateway's ~30 s cache, so an onset latency below ~30 s is not resolvable here; these are UPPER BOUNDS on true onset"
+ },
+ "labels": "a VENUE SELECTOR; it never chooses a side and is not a directional signal"
+}

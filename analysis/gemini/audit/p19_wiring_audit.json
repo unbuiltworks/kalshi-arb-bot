@@ -1,0 +1,141 @@
+{
+  "label": "P19_SPEC_WIRING_AUDIT_V2",
+  "fields": {
+    "spec_id": {
+      "read_sites": [
+        "cohort_runner.py:231 ch[\"spec\"] = {\"spec_id\": spec.spec_id, \"spec_sha\": spec.spec_sha(),",
+        "cohort_runner.py:1540 print(\"spec       %s  %s\" % (spec.spec_id, spec.spec_sha()))",
+        "cohort_runner.py:931 \"spec_id\": spec.spec_id, \"spec_sha\": spec.spec_sha(),",
+        "cohort_runner.py:1464 % (spec.spec_id, spec.spec_sha(), a.expect_spec_sha))"
+      ],
+      "n": 4,
+      "reaches_execution_via": [
+        "direct read",
+        "property: __post_init__,invocation_fingerprint"
+      ],
+      "declared_class": "METADATA",
+      "verdict": "CONSUMED"
+    },
+    "family": {
+      "read_sites": [
+        "run_continuous.py:1865 a.family = spec.family",
+        "cohort_runner.py:232 \"family\": spec.family, \"envelope\": spec.envelope,"
+      ],
+      "n": 2,
+      "reaches_execution_via": [
+        "direct read",
+        "canonical_argv",
+        "property: family_obj,symbol_family,canonical_argv,invocation_fingerprint"
+      ],
+      "declared_class": "EXECUTABLE via argv --family",
+      "verdict": "CONSUMED"
+    },
+    "envelope": {
+      "read_sites": [
+        "run_continuous.py:1866 a.envelope = spec.envelope",
+        "cohort_runner.py:232 \"family\": spec.family, \"envelope\": spec.envelope,"
+      ],
+      "n": 2,
+      "reaches_execution_via": [
+        "direct read",
+        "canonical_argv",
+        "property: envelope_obj,__post_init__,effective_action_size,bounds,canonical_argv,invocation_fingerprint"
+      ],
+      "declared_class": "EXECUTABLE via argv --envelope",
+      "verdict": "CONSUMED"
+    },
+    "entry_tte_band": {
+      "read_sites": [
+        "run_continuous.py:1867 a.entry_tte_band = spec.entry_tte_band",
+        "cohort_runner.py:235 \"entry_tte_band\": spec.entry_tte_band,",
+        "cohort_runner.py:615 band = RC.parse_entry_band(spec.entry_tte_band)"
+      ],
+      "n": 3,
+      "reaches_execution_via": [
+        "direct read",
+        "canonical_argv",
+        "property: canonical_argv,invocation_fingerprint"
+      ],
+      "declared_class": "EXECUTABLE via argv --entry-tte-band",
+      "verdict": "CONSUMED"
+    },
+    "cohort": {
+      "read_sites": [],
+      "n": 0,
+      "reaches_execution_via": [
+        "property: budget_cohort,invocation_fingerprint"
+      ],
+      "declared_class": "EXECUTABLE via argv --cohort (through budget_cohort)",
+      "verdict": "CONSUMED"
+    },
+    "auth_id": {
+      "read_sites": [],
+      "n": 0,
+      "reaches_execution_via": [
+        "canonical_argv",
+        "property: canonical_argv,as_dict"
+      ],
+      "declared_class": "METADATA -- deliberately outside spec_sha; readiness runs the sentinel and live the grant",
+      "verdict": "CONSUMED"
+    },
+    "action_size": {
+      "read_sites": [
+        "cohort_runner.py:236 \"action_size\": spec.action_size,"
+      ],
+      "n": 1,
+      "reaches_execution_via": [
+        "direct read",
+        "property: __post_init__,invocation_fingerprint"
+      ],
+      "declared_class": "METADATA -- execution reads envelope.action_size; __post_init__ refuses any disagreement",
+      "verdict": "CONSUMED"
+    },
+    "ledger": {
+      "read_sites": [],
+      "n": 0,
+      "reaches_execution_via": [
+        "canonical_argv",
+        "property: canonical_argv,invocation_fingerprint"
+      ],
+      "declared_class": "EXECUTABLE via argv --ledger",
+      "verdict": "CONSUMED"
+    },
+    "live_cohort": {
+      "read_sites": [],
+      "n": 0,
+      "reaches_execution_via": [
+        "property: budget_cohort,as_dict"
+      ],
+      "declared_class": "METADATA -- the GRANTED ledger, outside spec_sha so a grant does not move the experiment's hash",
+      "verdict": "CONSUMED"
+    },
+    "quote_band": {
+      "read_sites": [
+        "run_continuous.py:1335 quote_band = getattr(probe_spec, \"quote_band\", None)",
+        "cohort_runner.py:237 \"quote_band\": (None if spec.quote_band is None",
+        "cohort_runner.py:238 else list(spec.quote_band)),"
+      ],
+      "n": 3,
+      "reaches_execution_via": [
+        "direct read",
+        "property: _quote_band_fingerprint"
+      ],
+      "declared_class": "EXECUTABLE via probe_spec= ONLY (not argv)",
+      "verdict": "CONSUMED"
+    },
+    "placement": {
+      "read_sites": [
+        "run_continuous.py:1343 placement = getattr(probe_spec, \"placement\", None)"
+      ],
+      "n": 1,
+      "reaches_execution_via": [
+        "direct read",
+        "property: _placement_fingerprint"
+      ],
+      "declared_class": "EXECUTABLE via probe_spec= ONLY (not argv), and VERIFIED off the driver after construction",
+      "verdict": "CONSUMED"
+    }
+  },
+  "no_path": [],
+  "unclassified": []
+}

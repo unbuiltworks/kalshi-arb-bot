@@ -1,0 +1,476 @@
+From 5c2fcea1c9af9e637307094a078a8f1f54834c70 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 20 Nov 2026 17:54:49 +0000
+Subject: [PATCH 1/2] l5-pmus-live: publish what each of today's retired
+ markets was booked at
+
+An added key on the account-risk record, summing exactly to the UTC-day
+figure the daily halt reads. Read-only; no gate reads it.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01HTk927uH8zwpj6gLES92PF
+---
+ src/l5_live_execution.py                     | 41 +++++++++
+ src/l5_pmus_live_runner.py                   | 18 ++++
+ tests/test_l5_retired_results_publication.py | 91 ++++++++++++++++++++
+ 3 files changed, 150 insertions(+)
+ create mode 100644 tests/test_l5_retired_results_publication.py
+
+diff --git a/src/l5_live_execution.py b/src/l5_live_execution.py
+index 9581dd013..2b4fb869e 100644
+--- a/src/l5_live_execution.py
++++ b/src/l5_live_execution.py
+@@ -2620,6 +2620,47 @@ class InventoryStore:
+                 return None
+         return total
+ 
++    def retired_results_current_utc_day(self, *, now: Optional[float] = None
++                                        ) -> Optional[Dict[str, str]]:
++        """What `realized_current_utc_day` is the SUM of, market by market.
++
++        Same rows, same day test, same refusals -- so the values here add up
++        to that figure exactly and are read in the same pass over the same
++        state. None wherever that method returns None.
++
++        WHY IT IS PUBLISHED. A second strategy on this account adds its own
++        settled losses to this ledger's day figure. Being told only WHICH
++        markets were retired is not enough to avoid counting one twice: a
++        row can be retired at a result that is not the market's loss (zero
++        when the account was closed flat; a $1-a-share bound on the NET
++        position, which is zero when the residual side wins). With the
++        amount, the reader can add exactly the shortfall and never less.
++        READ-ONLY.
++        """
++        ts = (dt.datetime.now(dt.timezone.utc) if now is None
++              else dt.datetime.fromtimestamp(float(now), dt.timezone.utc))
++        day = ts.strftime("%Y-%m-%d")
++        try:
++            resid = D(str(self.state.get("realized_unattributed") or 0))
++        except (InvalidOperation, TypeError, ValueError):
++            return None
++        if resid != 0:
++            return None
++        out: Dict[str, str] = {}
++        for mkt, row in (self.state.get("retired_markets") or {}).items():
++            if not isinstance(row, Mapping):
++                return None
++            stamp = str(row.get("t") or "")
++            if not stamp:
++                return None
++            if not stamp.startswith(day):
++                continue
++            try:
++                out[str(mkt)] = str(D(str(row.get("settlement_pnl") or 0)))
++            except (InvalidOperation, TypeError, ValueError):
++                return None
++        return out
++
+     def verified_l5_net_for_gates(self) -> Optional[D]:
+         """Return verified after-fee L5 net, never legacy estimated gross.
+ 
+diff --git a/src/l5_pmus_live_runner.py b/src/l5_pmus_live_runner.py
+index 5e335d46d..4ccc1daa0 100644
+--- a/src/l5_pmus_live_runner.py
++++ b/src/l5_pmus_live_runner.py
+@@ -6694,6 +6694,11 @@ class Runner:
+                                       else bool(-lifetime >= cum)),
+             "operator_halt": bool(operator_halted()),
+             "retired_markets": retired[-400:],
++            # WHAT EACH OF TODAY'S RETIRED MARKETS CONTRIBUTED to
++            # `utc_day_realized_usd`. Added key only. None when the day
++            # itself is unknown; a reader without it adds everything.
++            "retired_results_utc_day": self._retired_results_line(
++                day.get("utc_day")),
+             # the venue-equity controls a second strategy must also honour.
+             # Added keys only: every figure above is computed as before.
+             **self.equity_risk_lines(),
+@@ -6702,6 +6707,19 @@ class Runner:
+                        "hold a looser copy. Read-only."),
+         }
+ 
++    def _retired_results_line(self, utc_day: Any) -> Optional[Dict[str, Any]]:
++        """Today's retired markets with the result each was booked at.
++        Never raises: unreadable is None, which a reader treats as absent."""
++        try:
++            got = self.store.retired_results_current_utc_day()
++        except BaseException as exc:                           # noqa: BLE001
++            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
++                raise
++            return None
++        if got is None or not utc_day:
++            return None
++        return {"utc_day": str(utc_day), "results": got}
++
+     def day_realized_line(self) -> Dict[str, Any]:
+         """The figure the DAILY loss halt actually reads, published.
+ 
+diff --git a/tests/test_l5_retired_results_publication.py b/tests/test_l5_retired_results_publication.py
+new file mode 100644
+index 000000000..0a5eff34a
+--- /dev/null
++++ b/tests/test_l5_retired_results_publication.py
+@@ -0,0 +1,91 @@
++"""Today's retired markets are published WITH the result each was booked
++at, so another strategy can add exactly what this ledger is missing."""
++import datetime as dt
++from decimal import Decimal as D
++
++import pytest
++
++from src import l5_live_execution as LX
++from src import l5_pmus_live_runner as R
++
++NOW = dt.datetime(2026, 11, 20, 17, 8, tzinfo=dt.timezone.utc).timestamp()
++M1 = "cpc-btc-updown-5m-2026-11-20-1420z"
++M2 = "cpc-btc-updown-5m-2026-11-20-1705z"
++OLD = "cpc-btc-updown-15m-2026-11-19-1200z"
++
++
++@pytest.fixture
++def store(tmp_path):
++    s = LX.InventoryStore(str(tmp_path / "inv.json"))
++    s.state["retired_markets"] = {
++        M1: {"t": "2026-11-20T14:25:49+00:00", "settlement_pnl": "-0.0114"},
++        M2: {"t": "2026-11-20T17:10:47+00:00", "settlement_pnl": "-0.44"},
++        OLD: {"t": "2026-11-19T12:16:00+00:00", "settlement_pnl": "-3"}}
++    return s
++
++
++def test_it_lists_exactly_todays_rows_with_their_amounts(store):
++    got = store.retired_results_current_utc_day(now=NOW)
++    assert got == {M1: "-0.0114", M2: "-0.44"}
++
++
++def test_it_sums_to_the_figure_the_daily_halt_reads(store):
++    got = store.retired_results_current_utc_day(now=NOW)
++    assert sum(D(v) for v in got.values()) \
++        == store.realized_current_utc_day(now=NOW)
++
++
++@pytest.mark.parametrize("break_it", [
++    lambda s: s.state["retired_markets"].__setitem__("x", "not a row"),
++    lambda s: s.state["retired_markets"].__setitem__(
++        "x", {"t": "", "settlement_pnl": "1"}),
++    lambda s: s.state["retired_markets"].__setitem__(
++        "x", {"t": "2026-11-20T01:00:00+00:00", "settlement_pnl": "?"}),
++    lambda s: s.state.__setitem__("realized_unattributed", "-1"),
++])
++def test_it_is_unknown_exactly_when_the_day_figure_is(store, break_it):
++    break_it(store)
++    assert store.realized_current_utc_day(now=NOW) is None
++    assert store.retired_results_current_utc_day(now=NOW) is None
++
++
++def test_a_restated_row_is_published_at_its_restated_amount(store):
++    store.state["retired_markets"][M2]["settlement_pnl"] = "-0.0151"
++    assert store.retired_results_current_utc_day(now=NOW)[M2] == "-0.0151"
++
++
++def test_reading_changes_nothing(store):
++    before = repr(store.state)
++    store.retired_results_current_utc_day(now=NOW)
++    assert repr(store.state) == before
++
++
++def test_the_risk_record_carries_it_as_an_added_key():
++    src = open(R.__file__, encoding="utf-8").read()
++    i = src.index("def account_risk_line(")
++    body = src[i:src.index("\n    def ", i + 10)]
++    assert '"retired_results_utc_day"' in body
++    #: every earlier key is still there
++    for k in ("utc_day_realized_usd", "daily_halt_usd",
++              "lifetime_realized_usd", "cumulative_loss_ceiling_usd",
++              "operator_halt", '"retired_markets"'):
++        assert k in body, k
++
++
++def test_the_line_never_raises_and_says_none_when_unknown():
++    class S:
++        def retired_results_current_utc_day(self):
++            raise RuntimeError("disk")
++
++    class Rn:
++        _retired_results_line = R.Runner._retired_results_line
++        store = S()
++    assert Rn()._retired_results_line("2026-11-20") is None
++
++    class S2:
++        def retired_results_current_utc_day(self):
++            return {M1: "-0.0114"}
++    Rn.store = S2()
++    assert Rn()._retired_results_line(None) is None
++    assert Rn()._retired_results_line("2026-11-20") == {
++        "utc_day": "2026-11-20", "results": {M1: "-0.0114"}}
+-- 
+2.43.0
+
+
+From 1e75294f3db6a7ba8bb67d07649dc89e80cc567b Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 20 Nov 2026 18:28:08 +0000
+Subject: [PATCH 2/2] l5-pmus-live: publish what the lifetime figure is made of
+
+The last cash re-anchor and every row retired since, with a flag that is
+true only when the two add up to the lifetime figure. Added key on the
+account-risk record; read-only; no gate reads it.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01HTk927uH8zwpj6gLES92PF
+---
+ src/l5_live_execution.py                     |  82 +++++++++++++
+ src/l5_pmus_live_runner.py                   |  12 ++
+ tests/test_l5_retired_results_publication.py | 118 +++++++++++++++++++
+ 3 files changed, 212 insertions(+)
+
+diff --git a/src/l5_live_execution.py b/src/l5_live_execution.py
+index 2b4fb869e..f9746d821 100644
+--- a/src/l5_live_execution.py
++++ b/src/l5_live_execution.py
+@@ -2661,6 +2661,88 @@ class InventoryStore:
+                 return None
+         return out
+ 
++    #: above this many rows the published map is cut to the newest and
++    #: marked incomplete; a reader then treats a market it cannot find as
++    #: not booked
++    LIFETIME_BASIS_MAX_ROWS = 3000
++
++    def lifetime_basis(self) -> Optional[Dict[str, Any]]:
++        """What the lifetime realized figure is MADE OF, for a second
++        strategy that must not count its own results twice or not at all.
++
++        The lifetime figure is the last cash re-anchor plus every row
++        retired since. So a result is inside it in exactly two ways:
++
++          - it settled before the re-anchor's flat-account cash read
++            (`cash_read_utc`): the cash already contained it; or
++          - this ledger retired it after the re-anchor was applied
++            (`rebased_at_utc`), at the amount in `results_since_rebase`.
++
++        `reconciled` is True only when the re-anchor total plus those rows
++        EQUALS the lifetime figure now. Anything else -- a row restated
++        from before the re-anchor, an entry this method does not
++        understand -- is False, and a reader must then assume nothing of
++        its own is booked. With no re-anchor on record every row counts and
++        both times are None.
++
++        None when a row's time or amount, or the re-anchor record, cannot
++        be read. READ-ONLY.
++        """
++        try:
++            rows = self.state.get("retired_markets") or {}
++            log = [r for r in (self.state.get("accounting_rebase_log") or [])
++                   if isinstance(r, Mapping)]
++            rebased_at, base = None, D(0)
++            if log:
++                last = log[-1]
++                rebased_at = dt.datetime.fromisoformat(
++                    str(last["t"]).replace("Z", "+00:00"))
++                base = D(str(last["attributed"])) + D(str(last["unattributed"]))
++            cash_read = None
++            anchor = self.state.get("cash_anchor")
++            if log:
++                cash_read = dt.datetime.fromisoformat(
++                    str((anchor or {})["at_read_utc"]).replace("Z", "+00:00"))
++                if cash_read > rebased_at:
++                    return None
++            since: Dict[str, str] = {}
++            stamps: Dict[str, dt.datetime] = {}
++            total = base
++            for mkt, row in rows.items():
++                if not isinstance(row, Mapping):
++                    return None
++                at = dt.datetime.fromisoformat(
++                    str(row["t"]).replace("Z", "+00:00"))
++                pnl = D(str(row.get("settlement_pnl") or 0))
++                if not pnl.is_finite():
++                    return None
++                if rebased_at is not None and at <= rebased_at:
++                    continue
++                since[str(mkt)] = str(pnl)
++                stamps[str(mkt)] = at
++                total += pnl
++            reconciled = bool(total == self.realized_today())
++            complete = len(since) <= self.LIFETIME_BASIS_MAX_ROWS
++            if not complete:
++                keep = sorted(since, key=lambda m: stamps[m])[
++                    -self.LIFETIME_BASIS_MAX_ROWS:]
++                since = {m: since[m] for m in keep}
++            return {
++                "cash_read_utc": (None if cash_read is None
++                                  else cash_read.isoformat()),
++                "rebased_at_utc": (None if rebased_at is None
++                                   else rebased_at.isoformat()),
++                "results_since_rebase": since,
++                "rows": len(since), "complete": complete,
++                "reconciled": reconciled,
++                "lifetime_realized_usd": str(self.realized_today()),
++                "labels": ("reconciled=False or complete=False: assume "
++                           "nothing of yours is booked unless it is named "
++                           "here. A result settled before cash_read_utc is "
++                           "inside the cash re-anchor.")}
++        except (KeyError, TypeError, ValueError, InvalidOperation):
++            return None
++
+     def verified_l5_net_for_gates(self) -> Optional[D]:
+         """Return verified after-fee L5 net, never legacy estimated gross.
+ 
+diff --git a/src/l5_pmus_live_runner.py b/src/l5_pmus_live_runner.py
+index 4ccc1daa0..fc3a936ec 100644
+--- a/src/l5_pmus_live_runner.py
++++ b/src/l5_pmus_live_runner.py
+@@ -6699,6 +6699,9 @@ class Runner:
+             # itself is unknown; a reader without it adds everything.
+             "retired_results_utc_day": self._retired_results_line(
+                 day.get("utc_day")),
++            # WHAT THE LIFETIME FIGURE IS MADE OF: the cash re-anchor and
++            # every row retired since. Added key only; None when unknown.
++            "lifetime_basis": self._lifetime_basis_line(),
+             # the venue-equity controls a second strategy must also honour.
+             # Added keys only: every figure above is computed as before.
+             **self.equity_risk_lines(),
+@@ -6720,6 +6723,15 @@ class Runner:
+             return None
+         return {"utc_day": str(utc_day), "results": got}
+ 
++    def _lifetime_basis_line(self) -> Optional[Dict[str, Any]]:
++        """`store.lifetime_basis()` behind a total wrap. Never raises."""
++        try:
++            return self.store.lifetime_basis()
++        except BaseException as exc:                           # noqa: BLE001
++            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
++                raise
++            return None
++
+     def day_realized_line(self) -> Dict[str, Any]:
+         """The figure the DAILY loss halt actually reads, published.
+ 
+diff --git a/tests/test_l5_retired_results_publication.py b/tests/test_l5_retired_results_publication.py
+index 0a5eff34a..c459157ab 100644
+--- a/tests/test_l5_retired_results_publication.py
++++ b/tests/test_l5_retired_results_publication.py
+@@ -89,3 +89,121 @@ def test_the_line_never_raises_and_says_none_when_unknown():
+     assert Rn()._retired_results_line(None) is None
+     assert Rn()._retired_results_line("2026-11-20") == {
+         "utc_day": "2026-11-20", "results": {M1: "-0.0114"}}
++
++
++# ================================================= the lifetime basis
++
++REBASE = {"t": "2026-11-16T00:20:00+00:00", "attributed": "-30",
++          "unattributed": "-9.468", "cash_delta": "-39.468", "reason": "r"}
++ANCHOR = {"at_read_utc": "2026-11-16T00:11:52Z"}
++PRE = "cpc-btc-updown-5m-2026-11-15-2300z"
++
++
++@pytest.fixture
++def anchored(tmp_path):
++    s = LX.InventoryStore(str(tmp_path / "inv.json"))
++    s.state["accounting_rebase_log"] = [dict(REBASE)]
++    s.state["cash_anchor"] = dict(ANCHOR)
++    s.state["realized_attributed"] = "-30.0114"
++    s.state["realized_unattributed"] = "-9.468"
++    s.state["retired_markets"] = {
++        PRE: {"t": "2026-11-15T23:05:00+00:00", "settlement_pnl": "-7"},
++        M1: {"t": "2026-11-20T14:25:49+00:00", "settlement_pnl": "-0.0114"}}
++    return s
++
++
++def test_it_lists_only_rows_retired_after_the_reanchor(anchored):
++    b = anchored.lifetime_basis()
++    assert b["results_since_rebase"] == {M1: "-0.0114"}
++    assert b["cash_read_utc"] == "2026-11-16T00:11:52+00:00"
++    assert b["rebased_at_utc"] == "2026-11-16T00:20:00+00:00"
++    assert b["complete"] is True and b["reconciled"] is True
++    assert b["lifetime_realized_usd"] == str(anchored.realized_today())
++
++
++def test_reconciled_means_anchor_plus_rows_equals_the_lifetime_figure(
++        anchored):
++    anchored.state["realized_attributed"] = "-30.5"     # something else moved
++    assert anchored.lifetime_basis()["reconciled"] is False
++
++
++def test_a_restated_row_stays_reconciled_when_the_total_moves_with_it(
++        anchored):
++    anchored.state["retired_markets"][M2] = {
++        "t": "2026-11-20T17:10:47+00:00", "settlement_pnl": "-0.44"}
++    anchored.state["realized_attributed"] = "-30.4514"
++    assert anchored.lifetime_basis()["reconciled"] is True
++    anchored.state["retired_markets"][M2]["settlement_pnl"] = "-0.0151"
++    anchored.state["realized_attributed"] = "-30.0265"
++    b = anchored.lifetime_basis()
++    assert b["reconciled"] is True
++    assert b["results_since_rebase"][M2] == "-0.0151"
++
++
++def test_with_no_reanchor_every_row_counts(tmp_path):
++    s = LX.InventoryStore(str(tmp_path / "inv.json"))
++    s.state["retired_markets"] = {
++        M1: {"t": "2026-11-20T14:25:49+00:00", "settlement_pnl": "-0.0114"}}
++    s.state["realized_attributed"] = "-0.0114"
++    b = s.lifetime_basis()
++    assert b["cash_read_utc"] is None and b["rebased_at_utc"] is None
++    assert b["results_since_rebase"] == {M1: "-0.0114"}
++    assert b["reconciled"] is True
++
++
++@pytest.mark.parametrize("break_it", [
++    lambda s: s.state["retired_markets"].__setitem__("x", "not a row"),
++    lambda s: s.state["retired_markets"].__setitem__(
++        "x", {"t": "", "settlement_pnl": "1"}),
++    lambda s: s.state["retired_markets"].__setitem__(
++        "x", {"t": "2026-11-20T01:00:00+00:00", "settlement_pnl": "?"}),
++    lambda s: s.state["retired_markets"].__setitem__(
++        "x", {"t": "2026-11-20T01:00:00+00:00", "settlement_pnl": "nan"}),
++    lambda s: s.state.__setitem__("cash_anchor", {}),
++    lambda s: s.state.__setitem__("cash_anchor",
++                                  {"at_read_utc": "2026-11-17T00:00:00Z"}),
++    lambda s: s.state["accounting_rebase_log"][-1].pop("attributed"),
++    lambda s: s.state["accounting_rebase_log"][-1].__setitem__("t", "?"),
++])
++def test_anything_unreadable_makes_the_basis_unknown(anchored, break_it):
++    break_it(anchored)
++    assert anchored.lifetime_basis() is None
++
++
++def test_past_the_row_limit_it_keeps_the_newest_and_says_incomplete(
++        anchored, monkeypatch):
++    monkeypatch.setattr(LX.InventoryStore, "LIFETIME_BASIS_MAX_ROWS", 2)
++    for i in range(4):
++        anchored.state["retired_markets"]["m%d" % i] = {
++            "t": "2026-11-20T15:0%d:00+00:00" % i, "settlement_pnl": "0"}
++    b = anchored.lifetime_basis()
++    assert b["complete"] is False and b["rows"] == 2
++    assert set(b["results_since_rebase"]) == {"m2", "m3"}
++
++
++def test_reading_the_basis_changes_nothing(anchored):
++    before = repr(anchored.state)
++    anchored.lifetime_basis()
++    assert repr(anchored.state) == before
++
++
++def test_the_risk_record_carries_the_basis_as_an_added_key():
++    src = open(R.__file__, encoding="utf-8").read()
++    i = src.index("def account_risk_line(")
++    body = src[i:src.index("\n    def ", i + 10)]
++    assert '"lifetime_basis"' in body
++    for k in ("utc_day_realized_usd", "lifetime_realized_usd",
++              "cumulative_loss_ceiling_usd", '"retired_markets"',
++              '"retired_results_utc_day"'):
++        assert k in body, k
++
++
++def test_the_basis_line_never_raises():
++    class S:
++        def lifetime_basis(self):
++            raise RuntimeError("disk")
++
++    class Rn:
++        _lifetime_basis_line = R.Runner._lifetime_basis_line
++        store = S()
++    assert Rn()._lifetime_basis_line() is None
+-- 
+2.43.0
+

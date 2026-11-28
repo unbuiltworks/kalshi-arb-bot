@@ -1,0 +1,609 @@
+{
+  "label": "GEMINI_L5_CONTINUOUS_RUN_V1",
+  "authorization_id": "OWNER-2026-09-22-GEMINI-BTC15M-Q1-CAP4-COHORT-2",
+  "driver_executable_sha": "f90b84c91d2e171e6805503e71dd523ecb7380b4d0d6067b0325a76fd73e0903",
+  "wire": [
+    {
+      "utc": "2026-09-22T12:00:32.123605+00:00",
+      "method": "order.place",
+      "elapsed_s": 0.042,
+      "params": {
+        "symbol": "GEMI-BTC15M2609221215-UP",
+        "side": "BUY",
+        "type": "LIMIT",
+        "timeInForce": "MOC",
+        "price": "0.47",
+        "quantity": "1",
+        "eventOutcome": "YES",
+        "clientOrderId": "l5cp-owner-2026-yes-cbbdfd06"
+      },
+      "ack": {
+        "id": "l5cp-ca80fc9fecfb459c828b564c225d3f5b",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC15M2609221215-UP",
+          "orderId": "145828836351798527",
+          "transactTime": 1790078432100592475,
+          "price": "0.4700",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      }
+    },
+    {
+      "utc": "2026-09-22T12:00:32.166698+00:00",
+      "method": "order.place",
+      "elapsed_s": 0.0371,
+      "params": {
+        "symbol": "GEMI-BTC15M2609221215-UP",
+        "side": "BUY",
+        "type": "LIMIT",
+        "timeInForce": "MOC",
+        "price": "0.43",
+        "quantity": "1",
+        "eventOutcome": "NO",
+        "clientOrderId": "l5cp-owner-2026-no-54fd1624"
+      },
+      "ack": {
+        "id": "l5cp-3a326b5180974a92aace8ed9ef790061",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC15M2609221215-UP",
+          "orderId": "145828836351798533",
+          "transactTime": 1790078432145684729,
+          "price": "0.4300",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      }
+    },
+    {
+      "utc": "2026-09-22T12:00:52.301828+00:00",
+      "method": "order.place",
+      "elapsed_s": 0.0376,
+      "params": {
+        "symbol": "GEMI-BTC15M2609221215-UP",
+        "side": "BUY",
+        "type": "LIMIT",
+        "timeInForce": "MOC",
+        "price": "0.39",
+        "quantity": "1",
+        "eventOutcome": "NO",
+        "clientOrderId": "l5cp-owner-2026-no-7d4d1ddd"
+      },
+      "ack": {
+        "id": "l5cp-976a3f135dc24b30a8caf0e137849d5f",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC15M2609221215-UP",
+          "orderId": "145828836351801717",
+          "transactTime": 1790078452280393334,
+          "price": "0.3900",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      }
+    },
+    {
+      "utc": "2026-09-22T12:01:00.922409+00:00",
+      "method": "order.place",
+      "elapsed_s": 0.0372,
+      "params": {
+        "symbol": "GEMI-BTC15M2609221215-UP",
+        "side": "BUY",
+        "type": "LIMIT",
+        "timeInForce": "MOC",
+        "price": "0.36",
+        "quantity": "1",
+        "eventOutcome": "NO",
+        "clientOrderId": "l5cp-owner-2026-no-843fd462"
+      },
+      "ack": {
+        "id": "l5cp-d34acc24d09a4d5280284bcc885a46f9",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC15M2609221215-UP",
+          "orderId": "145828836351803059",
+          "transactTime": 1790078460901352434,
+          "price": "0.3600",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      }
+    },
+    {
+      "utc": "2026-09-22T12:01:10.031090+00:00",
+      "method": "order.place",
+      "elapsed_s": 0.0409,
+      "params": {
+        "symbol": "GEMI-BTC15M2609221215-UP",
+        "side": "BUY",
+        "type": "LIMIT",
+        "timeInForce": "MOC",
+        "price": "0.31",
+        "quantity": "1",
+        "eventOutcome": "NO",
+        "clientOrderId": "l5cp-owner-2026-no-19901570"
+      },
+      "ack": {
+        "id": "l5cp-ad2c2759e18b4bf0995ef048e2f42dd6",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC15M2609221215-UP",
+          "orderId": "145828836351804979",
+          "transactTime": 1790078470009838023,
+          "price": "0.3100",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      }
+    },
+    {
+      "utc": "2026-09-22T12:01:50.911035+00:00",
+      "method": "order.place",
+      "elapsed_s": 0.0379,
+      "params": {
+        "symbol": "GEMI-BTC15M2609221215-UP",
+        "side": "BUY",
+        "type": "LIMIT",
+        "timeInForce": "MOC",
+        "price": "0.34",
+        "quantity": "1",
+        "eventOutcome": "YES",
+        "clientOrderId": "l5cp-owner-2026-yes-0b12ce06"
+      },
+      "ack": {
+        "id": "l5cp-ada0c4ed0bd448d9a90e57b405fde273",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC15M2609221215-UP",
+          "orderId": "145828836351814477",
+          "transactTime": 1790078510889337905,
+          "price": "0.3400",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      }
+    },
+    {
+      "utc": "2026-09-22T12:09:56.412966+00:00",
+      "method": "order.place",
+      "elapsed_s": 0.0367,
+      "params": {
+        "symbol": "GEMI-BTC15M2609221215-UP",
+        "side": "BUY",
+        "type": "LIMIT",
+        "timeInForce": "MOC",
+        "price": "0.35",
+        "quantity": "1",
+        "eventOutcome": "YES",
+        "clientOrderId": "l5cp-owner-2026-yes-75bc7375"
+      },
+      "ack": {
+        "id": "l5cp-8d26ad1ad46a46999ff454f92bc5f97c",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC15M2609221215-UP",
+          "orderId": "145828836351908965",
+          "transactTime": 1790078996392525237,
+          "price": "0.3500",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      }
+    },
+    {
+      "utc": "2026-09-22T12:13:40.879075+00:00",
+      "method": "order.cancel",
+      "elapsed_s": 0.0365,
+      "params": {
+        "orderId": "145828836351908965"
+      },
+      "ack": {
+        "id": "l5cp-4da9fe3de7d7492f9e498729b5f3f473",
+        "status": 200,
+        "result": {
+          "orderId": "",
+          "symbol": "",
+          "status": ""
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "orderId": "str",
+          "symbol": "str",
+          "status": "str"
+        }
+      }
+    }
+  ],
+  "place_acks_observed": [
+    {
+      "utc": "2026-09-22T12:00:32.123605+00:00",
+      "status": 200,
+      "accepted": true,
+      "client_order_id": "l5cp-owner-2026-yes-cbbdfd06",
+      "order_id_paths": [
+        {
+          "path": "result.orderId",
+          "value": "145828836351798527",
+          "type": "str"
+        }
+      ],
+      "ack": {
+        "id": "l5cp-ca80fc9fecfb459c828b564c225d3f5b",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC15M2609221215-UP",
+          "orderId": "145828836351798527",
+          "transactTime": 1790078432100592475,
+          "price": "0.4700",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      },
+      "error": null,
+      "evidence": "OBSERVED: this is the venue's own reply, recorded at the socket seam"
+    },
+    {
+      "utc": "2026-09-22T12:00:32.166698+00:00",
+      "status": 200,
+      "accepted": true,
+      "client_order_id": "l5cp-owner-2026-no-54fd1624",
+      "order_id_paths": [
+        {
+          "path": "result.orderId",
+          "value": "145828836351798533",
+          "type": "str"
+        }
+      ],
+      "ack": {
+        "id": "l5cp-3a326b5180974a92aace8ed9ef790061",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC15M2609221215-UP",
+          "orderId": "145828836351798533",
+          "transactTime": 1790078432145684729,
+          "price": "0.4300",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      },
+      "error": null,
+      "evidence": "OBSERVED: this is the venue's own reply, recorded at the socket seam"
+    },
+    {
+      "utc": "2026-09-22T12:00:52.301828+00:00",
+      "status": 200,
+      "accepted": true,
+      "client_order_id": "l5cp-owner-2026-no-7d4d1ddd",
+      "order_id_paths": [
+        {
+          "path": "result.orderId",
+          "value": "145828836351801717",
+          "type": "str"
+        }
+      ],
+      "ack": {
+        "id": "l5cp-976a3f135dc24b30a8caf0e137849d5f",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC15M2609221215-UP",
+          "orderId": "145828836351801717",
+          "transactTime": 1790078452280393334,
+          "price": "0.3900",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      },
+      "error": null,
+      "evidence": "OBSERVED: this is the venue's own reply, recorded at the socket seam"
+    },
+    {
+      "utc": "2026-09-22T12:01:00.922409+00:00",
+      "status": 200,
+      "accepted": true,
+      "client_order_id": "l5cp-owner-2026-no-843fd462",
+      "order_id_paths": [
+        {
+          "path": "result.orderId",
+          "value": "145828836351803059",
+          "type": "str"
+        }
+      ],
+      "ack": {
+        "id": "l5cp-d34acc24d09a4d5280284bcc885a46f9",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC15M2609221215-UP",
+          "orderId": "145828836351803059",
+          "transactTime": 1790078460901352434,
+          "price": "0.3600",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      },
+      "error": null,
+      "evidence": "OBSERVED: this is the venue's own reply, recorded at the socket seam"
+    },
+    {
+      "utc": "2026-09-22T12:01:10.031090+00:00",
+      "status": 200,
+      "accepted": true,
+      "client_order_id": "l5cp-owner-2026-no-19901570",
+      "order_id_paths": [
+        {
+          "path": "result.orderId",
+          "value": "145828836351804979",
+          "type": "str"
+        }
+      ],
+      "ack": {
+        "id": "l5cp-ad2c2759e18b4bf0995ef048e2f42dd6",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC15M2609221215-UP",
+          "orderId": "145828836351804979",
+          "transactTime": 1790078470009838023,
+          "price": "0.3100",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      },
+      "error": null,
+      "evidence": "OBSERVED: this is the venue's own reply, recorded at the socket seam"
+    },
+    {
+      "utc": "2026-09-22T12:01:50.911035+00:00",
+      "status": 200,
+      "accepted": true,
+      "client_order_id": "l5cp-owner-2026-yes-0b12ce06",
+      "order_id_paths": [
+        {
+          "path": "result.orderId",
+          "value": "145828836351814477",
+          "type": "str"
+        }
+      ],
+      "ack": {
+        "id": "l5cp-ada0c4ed0bd448d9a90e57b405fde273",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC15M2609221215-UP",
+          "orderId": "145828836351814477",
+          "transactTime": 1790078510889337905,
+          "price": "0.3400",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      },
+      "error": null,
+      "evidence": "OBSERVED: this is the venue's own reply, recorded at the socket seam"
+    },
+    {
+      "utc": "2026-09-22T12:09:56.412966+00:00",
+      "status": 200,
+      "accepted": true,
+      "client_order_id": "l5cp-owner-2026-yes-75bc7375",
+      "order_id_paths": [
+        {
+          "path": "result.orderId",
+          "value": "145828836351908965",
+          "type": "str"
+        }
+      ],
+      "ack": {
+        "id": "l5cp-8d26ad1ad46a46999ff454f92bc5f97c",
+        "status": 200,
+        "result": {
+          "symbol": "GEMI-BTC15M2609221215-UP",
+          "orderId": "145828836351908965",
+          "transactTime": 1790078996392525237,
+          "price": "0.3500",
+          "status": "OPEN",
+          "type": "LIMIT",
+          "side": "BUY"
+        }
+      },
+      "ack_types": {
+        "id": "str",
+        "status": "int",
+        "result": {
+          "symbol": "str",
+          "orderId": "str",
+          "transactTime": "int",
+          "price": "str",
+          "status": "str",
+          "type": "str",
+          "side": "str"
+        }
+      },
+      "error": null,
+      "evidence": "OBSERVED: this is the venue's own reply, recorded at the socket seam"
+    }
+  ]
+}

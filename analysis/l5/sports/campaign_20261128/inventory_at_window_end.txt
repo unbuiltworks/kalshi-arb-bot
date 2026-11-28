@@ -1,0 +1,8 @@
+atpdb-aregonreyvar-ambroggomez-2026-11-2 YES 1.00@0.590 NO 1.00@0.380 pairs 1.00 pair_cost 0.97 unpaired 0.00 NO cost 0.00
+setkameua-bokrom-priser-2026-11-28       YES 3.30@0.471 NO 2.19@0.502 pairs 2.19 pair_cost 0.9726 unpaired 1.11 YES cost 0.52
+setkameua-masyev-cherom-2026-11-28       YES 3.00@0.530 NO 0.64@0.440 pairs 0.64 pair_cost 0.97 unpaired 2.36 YES cost 1.25
+setkameua-plivol-kovnaz-2026-11-28       YES 2.00@0.410 NO 1.19@0.560 pairs 1.19 pair_cost 0.97 unpaired 0.81 YES cost 0.33
+setkameua-beldmy-kvaiho-2026-11-28       YES 1.85@0.376 NO 0.00@0.000 pairs 0.00 pair_cost None unpaired 1.85 YES cost 0.70
+setkameua-makyar-karole-2026-11-28       YES 0.00@0.000 NO 3.55@0.491 pairs 0.00 pair_cost None unpaired 3.55 NO cost 1.74
+setkameua-kanden-kotand-2026-11-28       YES 1.00@0.590 NO 1.00@0.380 pairs 1.00 pair_cost 0.97 unpaired 0.00 NO cost 0.00
+TOTAL pairs 6.02 locked edge (book) +0.1750; unpaired cost 4.54 (worst case if all lose)

@@ -1,0 +1,791 @@
+{
+  "label": "GEMINI_SETTLEMENT_PROBE_V1",
+  "ok": true,
+  "account_reads": [
+    {
+      "path": "/v1/balances",
+      "status": 200,
+      "reachable": true,
+      "shape": {
+        "kind": "list",
+        "rows": 1,
+        "row_keys": [
+          "_timestamp",
+          "amount",
+          "available",
+          "availableForWithdrawal",
+          "currency",
+          "type"
+        ]
+      }
+    },
+    {
+      "path": "/v1/transfers",
+      "status": 200,
+      "reachable": true,
+      "shape": {
+        "kind": "list",
+        "rows": 9,
+        "row_keys": [
+          "advanceEid",
+          "amount",
+          "currency",
+          "eid",
+          "method",
+          "purpose",
+          "status",
+          "timestampms",
+          "type"
+        ]
+      }
+    },
+    {
+      "path": "/v1/notionalvolume",
+      "status": 200,
+      "reachable": true,
+      "shape": {
+        "kind": "dict",
+        "keys": [
+          "api_maker_fee_bps",
+          "api_taker_fee_bps",
+          "block_maker_fee_bps",
+          "block_taker_fee_bps",
+          "date",
+          "fix_maker_fee_bps",
+          "fix_taker_fee_bps",
+          "last_updated_ms",
+          "notional_1d_volume",
+          "notional_30d_volume",
+          "web_maker_fee_bps",
+          "web_taker_fee_bps"
+        ],
+        "lists": {
+          "notional_1d_volume": {
+            "kind": "list",
+            "rows": 0,
+            "row_keys": []
+          }
+        }
+      }
+    }
+  ],
+  "settlement_candidates": [
+    {
+      "path": "/v1/prediction-markets/settlements",
+      "status": 404,
+      "reachable": true,
+      "shape": {
+        "kind": "dict",
+        "keys": [
+          "message",
+          "reason",
+          "result"
+        ],
+        "lists": {}
+      }
+    },
+    {
+      "path": "/v1/prediction-markets/positions",
+      "status": 200,
+      "reachable": true,
+      "shape": {
+        "kind": "dict",
+        "keys": [
+          "positions",
+          "total"
+        ],
+        "lists": {
+          "positions": {
+            "kind": "list",
+            "rows": 0,
+            "row_keys": []
+          }
+        }
+      }
+    },
+    {
+      "path": "/v1/settlements",
+      "status": 404,
+      "reachable": true,
+      "shape": {
+        "kind": "dict",
+        "keys": [
+          "message",
+          "reason",
+          "result"
+        ],
+        "lists": {}
+      }
+    }
+  ],
+  "settlement_endpoint_found": [
+    "/v1/prediction-markets/positions"
+  ],
+  "settlement_endpoint_exists": true,
+  "per_symbol": [
+    {
+      "symbol": "GEMI-BTC05M2609181255-UP",
+      "mytrades_status": 200,
+      "rows": 0,
+      "legs_parsed": 0,
+      "unparseable": false,
+      "position": "0",
+      "proof_chain": {
+        "symbol": "GEMI-BTC05M2609181255-UP",
+        "links": [
+          {
+            "link": "contract",
+            "present": true,
+            "value": "GEMI-BTC05M2609181255-UP",
+            "source": "the symbol under account"
+          },
+          {
+            "link": "expiry",
+            "present": true,
+            "value": "2026-09-18T12:55:00+00:00",
+            "source": "parsed from the venue's own symbol",
+            "why": null
+          },
+          {
+            "link": "authoritative_outcome",
+            "present": false,
+            "value": null,
+            "source": null,
+            "why": "candidate endpoints answering: /v1/prediction-markets/positions"
+          },
+          {
+            "link": "position",
+            "present": false,
+            "value": "0",
+            "source": "/v1/mytrades",
+            "why": "no authoritative fill for this symbol"
+          },
+          {
+            "link": "settlement_cashflow",
+            "present": false,
+            "value": null,
+            "source": null,
+            "why": "no attributable cash movement; a balance change without source identity is not attribution"
+          },
+          {
+            "link": "fees",
+            "present": false,
+            "value": "0",
+            "source": "/v1/mytrades fee fields"
+          },
+          {
+            "link": "ledger_reconciliation",
+            "present": false,
+            "value": null,
+            "source": "venue cash vs arithmetic over our own legs",
+            "why": "nothing to reconcile until both a settlement value and a cash movement exist"
+          }
+        ],
+        "complete": false,
+        "first_break": "authoritative_outcome",
+        "missing_links": [
+          "authoritative_outcome",
+          "position",
+          "settlement_cashflow",
+          "fees",
+          "ledger_reconciliation"
+        ],
+        "labels": "a chain is as good as its weakest link, so this reports the FIRST break rather than a count of what works."
+      }
+    },
+    {
+      "symbol": "GEMI-BTC05M2609181250-UP",
+      "mytrades_status": 200,
+      "rows": 0,
+      "legs_parsed": 0,
+      "unparseable": false,
+      "position": "0",
+      "proof_chain": {
+        "symbol": "GEMI-BTC05M2609181250-UP",
+        "links": [
+          {
+            "link": "contract",
+            "present": true,
+            "value": "GEMI-BTC05M2609181250-UP",
+            "source": "the symbol under account"
+          },
+          {
+            "link": "expiry",
+            "present": true,
+            "value": "2026-09-18T12:50:00+00:00",
+            "source": "parsed from the venue's own symbol",
+            "why": null
+          },
+          {
+            "link": "authoritative_outcome",
+            "present": false,
+            "value": null,
+            "source": null,
+            "why": "candidate endpoints answering: /v1/prediction-markets/positions"
+          },
+          {
+            "link": "position",
+            "present": false,
+            "value": "0",
+            "source": "/v1/mytrades",
+            "why": "no authoritative fill for this symbol"
+          },
+          {
+            "link": "settlement_cashflow",
+            "present": false,
+            "value": null,
+            "source": null,
+            "why": "no attributable cash movement; a balance change without source identity is not attribution"
+          },
+          {
+            "link": "fees",
+            "present": false,
+            "value": "0",
+            "source": "/v1/mytrades fee fields"
+          },
+          {
+            "link": "ledger_reconciliation",
+            "present": false,
+            "value": null,
+            "source": "venue cash vs arithmetic over our own legs",
+            "why": "nothing to reconcile until both a settlement value and a cash movement exist"
+          }
+        ],
+        "complete": false,
+        "first_break": "authoritative_outcome",
+        "missing_links": [
+          "authoritative_outcome",
+          "position",
+          "settlement_cashflow",
+          "fees",
+          "ledger_reconciliation"
+        ],
+        "labels": "a chain is as good as its weakest link, so this reports the FIRST break rather than a count of what works."
+      }
+    },
+    {
+      "symbol": "GEMI-BTC05M2609181245-UP",
+      "mytrades_status": 200,
+      "rows": 0,
+      "legs_parsed": 0,
+      "unparseable": false,
+      "position": "0",
+      "proof_chain": {
+        "symbol": "GEMI-BTC05M2609181245-UP",
+        "links": [
+          {
+            "link": "contract",
+            "present": true,
+            "value": "GEMI-BTC05M2609181245-UP",
+            "source": "the symbol under account"
+          },
+          {
+            "link": "expiry",
+            "present": true,
+            "value": "2026-09-18T12:45:00+00:00",
+            "source": "parsed from the venue's own symbol",
+            "why": null
+          },
+          {
+            "link": "authoritative_outcome",
+            "present": false,
+            "value": null,
+            "source": null,
+            "why": "candidate endpoints answering: /v1/prediction-markets/positions"
+          },
+          {
+            "link": "position",
+            "present": false,
+            "value": "0",
+            "source": "/v1/mytrades",
+            "why": "no authoritative fill for this symbol"
+          },
+          {
+            "link": "settlement_cashflow",
+            "present": false,
+            "value": null,
+            "source": null,
+            "why": "no attributable cash movement; a balance change without source identity is not attribution"
+          },
+          {
+            "link": "fees",
+            "present": false,
+            "value": "0",
+            "source": "/v1/mytrades fee fields"
+          },
+          {
+            "link": "ledger_reconciliation",
+            "present": false,
+            "value": null,
+            "source": "venue cash vs arithmetic over our own legs",
+            "why": "nothing to reconcile until both a settlement value and a cash movement exist"
+          }
+        ],
+        "complete": false,
+        "first_break": "authoritative_outcome",
+        "missing_links": [
+          "authoritative_outcome",
+          "position",
+          "settlement_cashflow",
+          "fees",
+          "ledger_reconciliation"
+        ],
+        "labels": "a chain is as good as its weakest link, so this reports the FIRST break rather than a count of what works."
+      }
+    },
+    {
+      "symbol": "GEMI-BTC05M2609181240-UP",
+      "mytrades_status": 200,
+      "rows": 0,
+      "legs_parsed": 0,
+      "unparseable": false,
+      "position": "0",
+      "proof_chain": {
+        "symbol": "GEMI-BTC05M2609181240-UP",
+        "links": [
+          {
+            "link": "contract",
+            "present": true,
+            "value": "GEMI-BTC05M2609181240-UP",
+            "source": "the symbol under account"
+          },
+          {
+            "link": "expiry",
+            "present": true,
+            "value": "2026-09-18T12:40:00+00:00",
+            "source": "parsed from the venue's own symbol",
+            "why": null
+          },
+          {
+            "link": "authoritative_outcome",
+            "present": false,
+            "value": null,
+            "source": null,
+            "why": "candidate endpoints answering: /v1/prediction-markets/positions"
+          },
+          {
+            "link": "position",
+            "present": false,
+            "value": "0",
+            "source": "/v1/mytrades",
+            "why": "no authoritative fill for this symbol"
+          },
+          {
+            "link": "settlement_cashflow",
+            "present": false,
+            "value": null,
+            "source": null,
+            "why": "no attributable cash movement; a balance change without source identity is not attribution"
+          },
+          {
+            "link": "fees",
+            "present": false,
+            "value": "0",
+            "source": "/v1/mytrades fee fields"
+          },
+          {
+            "link": "ledger_reconciliation",
+            "present": false,
+            "value": null,
+            "source": "venue cash vs arithmetic over our own legs",
+            "why": "nothing to reconcile until both a settlement value and a cash movement exist"
+          }
+        ],
+        "complete": false,
+        "first_break": "authoritative_outcome",
+        "missing_links": [
+          "authoritative_outcome",
+          "position",
+          "settlement_cashflow",
+          "fees",
+          "ledger_reconciliation"
+        ],
+        "labels": "a chain is as good as its weakest link, so this reports the FIRST break rather than a count of what works."
+      }
+    },
+    {
+      "symbol": "GEMI-BTC05M2609181235-UP",
+      "mytrades_status": 200,
+      "rows": 0,
+      "legs_parsed": 0,
+      "unparseable": false,
+      "position": "0",
+      "proof_chain": {
+        "symbol": "GEMI-BTC05M2609181235-UP",
+        "links": [
+          {
+            "link": "contract",
+            "present": true,
+            "value": "GEMI-BTC05M2609181235-UP",
+            "source": "the symbol under account"
+          },
+          {
+            "link": "expiry",
+            "present": true,
+            "value": "2026-09-18T12:35:00+00:00",
+            "source": "parsed from the venue's own symbol",
+            "why": null
+          },
+          {
+            "link": "authoritative_outcome",
+            "present": false,
+            "value": null,
+            "source": null,
+            "why": "candidate endpoints answering: /v1/prediction-markets/positions"
+          },
+          {
+            "link": "position",
+            "present": false,
+            "value": "0",
+            "source": "/v1/mytrades",
+            "why": "no authoritative fill for this symbol"
+          },
+          {
+            "link": "settlement_cashflow",
+            "present": false,
+            "value": null,
+            "source": null,
+            "why": "no attributable cash movement; a balance change without source identity is not attribution"
+          },
+          {
+            "link": "fees",
+            "present": false,
+            "value": "0",
+            "source": "/v1/mytrades fee fields"
+          },
+          {
+            "link": "ledger_reconciliation",
+            "present": false,
+            "value": null,
+            "source": "venue cash vs arithmetic over our own legs",
+            "why": "nothing to reconcile until both a settlement value and a cash movement exist"
+          }
+        ],
+        "complete": false,
+        "first_break": "authoritative_outcome",
+        "missing_links": [
+          "authoritative_outcome",
+          "position",
+          "settlement_cashflow",
+          "fees",
+          "ledger_reconciliation"
+        ],
+        "labels": "a chain is as good as its weakest link, so this reports the FIRST break rather than a count of what works."
+      }
+    },
+    {
+      "symbol": "GEMI-BTC05M2609181230-UP",
+      "mytrades_status": 200,
+      "rows": 0,
+      "legs_parsed": 0,
+      "unparseable": false,
+      "position": "0",
+      "proof_chain": {
+        "symbol": "GEMI-BTC05M2609181230-UP",
+        "links": [
+          {
+            "link": "contract",
+            "present": true,
+            "value": "GEMI-BTC05M2609181230-UP",
+            "source": "the symbol under account"
+          },
+          {
+            "link": "expiry",
+            "present": true,
+            "value": "2026-09-18T12:30:00+00:00",
+            "source": "parsed from the venue's own symbol",
+            "why": null
+          },
+          {
+            "link": "authoritative_outcome",
+            "present": false,
+            "value": null,
+            "source": null,
+            "why": "candidate endpoints answering: /v1/prediction-markets/positions"
+          },
+          {
+            "link": "position",
+            "present": false,
+            "value": "0",
+            "source": "/v1/mytrades",
+            "why": "no authoritative fill for this symbol"
+          },
+          {
+            "link": "settlement_cashflow",
+            "present": false,
+            "value": null,
+            "source": null,
+            "why": "no attributable cash movement; a balance change without source identity is not attribution"
+          },
+          {
+            "link": "fees",
+            "present": false,
+            "value": "0",
+            "source": "/v1/mytrades fee fields"
+          },
+          {
+            "link": "ledger_reconciliation",
+            "present": false,
+            "value": null,
+            "source": "venue cash vs arithmetic over our own legs",
+            "why": "nothing to reconcile until both a settlement value and a cash movement exist"
+          }
+        ],
+        "complete": false,
+        "first_break": "authoritative_outcome",
+        "missing_links": [
+          "authoritative_outcome",
+          "position",
+          "settlement_cashflow",
+          "fees",
+          "ledger_reconciliation"
+        ],
+        "labels": "a chain is as good as its weakest link, so this reports the FIRST break rather than a count of what works."
+      }
+    }
+  ],
+  "gate": {
+    "label": "GEMINI_SETTLEMENT_GATE_V1",
+    "gate": "BLOCKED",
+    "n": 6,
+    "n_blocked": 6,
+    "missing_union": [
+      "AUTHORITATIVE_FILLS",
+      "CASH_CONFIRMED",
+      "FEES_ACCOUNTED",
+      "POSITION_AT_EXPIRY",
+      "SETTLEMENT_VALUE"
+    ],
+    "public_surface": "PUBLIC_SURFACE_CANNOT_ESTABLISH_SETTLEMENT",
+    "instruments": [
+      {
+        "label": "GEMINI_SETTLEMENT_GATE_V1",
+        "symbol": "GEMI-BTC05M2609181255-UP",
+        "n_legs": 0,
+        "position_at_expiry": "0",
+        "fills_cash": "0",
+        "fees": "0",
+        "settlement_value": null,
+        "settlement_source": null,
+        "inferred_settlement_value": null,
+        "satisfied": {
+          "AUTHORITATIVE_FILLS": false,
+          "POSITION_AT_EXPIRY": false,
+          "SETTLEMENT_VALUE": false,
+          "CASH_CONFIRMED": false,
+          "FEES_ACCOUNTED": false
+        },
+        "missing": [
+          "AUTHORITATIVE_FILLS",
+          "POSITION_AT_EXPIRY",
+          "SETTLEMENT_VALUE",
+          "CASH_CONFIRMED",
+          "FEES_ACCOUNTED"
+        ],
+        "gate": "BLOCKED",
+        "reconstructed_cash": null,
+        "separate_ledgers": [
+          "maker_rebate",
+          "taker_rebate",
+          "liquidity_reward"
+        ],
+        "labels": [
+          "REALIZED is the venue's cash movement. reconstructed_cash is arithmetic on our own records and is a cross-check only.",
+          "inferred_settlement_value comes from the underlying and is a MODEL. It is never realized, whatever it agrees with.",
+          "rebates and rewards are separate ledgers and never enter trading P&L until actually credited and source-accounted."
+        ]
+      },
+      {
+        "label": "GEMINI_SETTLEMENT_GATE_V1",
+        "symbol": "GEMI-BTC05M2609181250-UP",
+        "n_legs": 0,
+        "position_at_expiry": "0",
+        "fills_cash": "0",
+        "fees": "0",
+        "settlement_value": null,
+        "settlement_source": null,
+        "inferred_settlement_value": null,
+        "satisfied": {
+          "AUTHORITATIVE_FILLS": false,
+          "POSITION_AT_EXPIRY": false,
+          "SETTLEMENT_VALUE": false,
+          "CASH_CONFIRMED": false,
+          "FEES_ACCOUNTED": false
+        },
+        "missing": [
+          "AUTHORITATIVE_FILLS",
+          "POSITION_AT_EXPIRY",
+          "SETTLEMENT_VALUE",
+          "CASH_CONFIRMED",
+          "FEES_ACCOUNTED"
+        ],
+        "gate": "BLOCKED",
+        "reconstructed_cash": null,
+        "separate_ledgers": [
+          "maker_rebate",
+          "taker_rebate",
+          "liquidity_reward"
+        ],
+        "labels": [
+          "REALIZED is the venue's cash movement. reconstructed_cash is arithmetic on our own records and is a cross-check only.",
+          "inferred_settlement_value comes from the underlying and is a MODEL. It is never realized, whatever it agrees with.",
+          "rebates and rewards are separate ledgers and never enter trading P&L until actually credited and source-accounted."
+        ]
+      },
+      {
+        "label": "GEMINI_SETTLEMENT_GATE_V1",
+        "symbol": "GEMI-BTC05M2609181245-UP",
+        "n_legs": 0,
+        "position_at_expiry": "0",
+        "fills_cash": "0",
+        "fees": "0",
+        "settlement_value": null,
+        "settlement_source": null,
+        "inferred_settlement_value": null,
+        "satisfied": {
+          "AUTHORITATIVE_FILLS": false,
+          "POSITION_AT_EXPIRY": false,
+          "SETTLEMENT_VALUE": false,
+          "CASH_CONFIRMED": false,
+          "FEES_ACCOUNTED": false
+        },
+        "missing": [
+          "AUTHORITATIVE_FILLS",
+          "POSITION_AT_EXPIRY",
+          "SETTLEMENT_VALUE",
+          "CASH_CONFIRMED",
+          "FEES_ACCOUNTED"
+        ],
+        "gate": "BLOCKED",
+        "reconstructed_cash": null,
+        "separate_ledgers": [
+          "maker_rebate",
+          "taker_rebate",
+          "liquidity_reward"
+        ],
+        "labels": [
+          "REALIZED is the venue's cash movement. reconstructed_cash is arithmetic on our own records and is a cross-check only.",
+          "inferred_settlement_value comes from the underlying and is a MODEL. It is never realized, whatever it agrees with.",
+          "rebates and rewards are separate ledgers and never enter trading P&L until actually credited and source-accounted."
+        ]
+      },
+      {
+        "label": "GEMINI_SETTLEMENT_GATE_V1",
+        "symbol": "GEMI-BTC05M2609181240-UP",
+        "n_legs": 0,
+        "position_at_expiry": "0",
+        "fills_cash": "0",
+        "fees": "0",
+        "settlement_value": null,
+        "settlement_source": null,
+        "inferred_settlement_value": null,
+        "satisfied": {
+          "AUTHORITATIVE_FILLS": false,
+          "POSITION_AT_EXPIRY": false,
+          "SETTLEMENT_VALUE": false,
+          "CASH_CONFIRMED": false,
+          "FEES_ACCOUNTED": false
+        },
+        "missing": [
+          "AUTHORITATIVE_FILLS",
+          "POSITION_AT_EXPIRY",
+          "SETTLEMENT_VALUE",
+          "CASH_CONFIRMED",
+          "FEES_ACCOUNTED"
+        ],
+        "gate": "BLOCKED",
+        "reconstructed_cash": null,
+        "separate_ledgers": [
+          "maker_rebate",
+          "taker_rebate",
+          "liquidity_reward"
+        ],
+        "labels": [
+          "REALIZED is the venue's cash movement. reconstructed_cash is arithmetic on our own records and is a cross-check only.",
+          "inferred_settlement_value comes from the underlying and is a MODEL. It is never realized, whatever it agrees with.",
+          "rebates and rewards are separate ledgers and never enter trading P&L until actually credited and source-accounted."
+        ]
+      },
+      {
+        "label": "GEMINI_SETTLEMENT_GATE_V1",
+        "symbol": "GEMI-BTC05M2609181235-UP",
+        "n_legs": 0,
+        "position_at_expiry": "0",
+        "fills_cash": "0",
+        "fees": "0",
+        "settlement_value": null,
+        "settlement_source": null,
+        "inferred_settlement_value": null,
+        "satisfied": {
+          "AUTHORITATIVE_FILLS": false,
+          "POSITION_AT_EXPIRY": false,
+          "SETTLEMENT_VALUE": false,
+          "CASH_CONFIRMED": false,
+          "FEES_ACCOUNTED": false
+        },
+        "missing": [
+          "AUTHORITATIVE_FILLS",
+          "POSITION_AT_EXPIRY",
+          "SETTLEMENT_VALUE",
+          "CASH_CONFIRMED",
+          "FEES_ACCOUNTED"
+        ],
+        "gate": "BLOCKED",
+        "reconstructed_cash": null,
+        "separate_ledgers": [
+          "maker_rebate",
+          "taker_rebate",
+          "liquidity_reward"
+        ],
+        "labels": [
+          "REALIZED is the venue's cash movement. reconstructed_cash is arithmetic on our own records and is a cross-check only.",
+          "inferred_settlement_value comes from the underlying and is a MODEL. It is never realized, whatever it agrees with.",
+          "rebates and rewards are separate ledgers and never enter trading P&L until actually credited and source-accounted."
+        ]
+      },
+      {
+        "label": "GEMINI_SETTLEMENT_GATE_V1",
+        "symbol": "GEMI-BTC05M2609181230-UP",
+        "n_legs": 0,
+        "position_at_expiry": "0",
+        "fills_cash": "0",
+        "fees": "0",
+        "settlement_value": null,
+        "settlement_source": null,
+        "inferred_settlement_value": null,
+        "satisfied": {
+          "AUTHORITATIVE_FILLS": false,
+          "POSITION_AT_EXPIRY": false,
+          "SETTLEMENT_VALUE": false,
+          "CASH_CONFIRMED": false,
+          "FEES_ACCOUNTED": false
+        },
+        "missing": [
+          "AUTHORITATIVE_FILLS",
+          "POSITION_AT_EXPIRY",
+          "SETTLEMENT_VALUE",
+          "CASH_CONFIRMED",
+          "FEES_ACCOUNTED"
+        ],
+        "gate": "BLOCKED",
+        "reconstructed_cash": null,
+        "separate_ledgers": [
+          "maker_rebate",
+          "taker_rebate",
+          "liquidity_reward"
+        ],
+        "labels": [
+          "REALIZED is the venue's cash movement. reconstructed_cash is arithmetic on our own records and is a cross-check only.",
+          "inferred_settlement_value comes from the underlying and is a MODEL. It is never realized, whatever it agrees with.",
+          "rebates and rewards are separate ledgers and never enter trading P&L until actually credited and source-accounted."
+        ]
+      }
+    ],
+    "authorizes": "nothing on its own. An OPEN gate means settlement accounting CAN close, not that a probe is approved. Live authorization remains a separate human decision."
+  },
+  "labels": [
+    "READ ONLY. No order transport is imported or reachable here.",
+    "a 404 on a settlement candidate is a RESULT: it says the credit does not live there, which is what nobody had established.",
+    "no credential value is read, printed, logged or returned by this module; it only reports whether one was present."
+  ]
+}

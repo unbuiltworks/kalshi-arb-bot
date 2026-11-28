@@ -1,0 +1,24 @@
+days 7.85  trades 12301  usdc 17536783  per day: 1567 trades, $2234829  median trade $17.5  mean $1425.6
+sides Counter({'BUY': 12072, 'SELL': 229})
+price bucket | trades | usdc | share of usdc
+  <0.05         130         6450   0.0%
+  0.05-0.2      341       393017   2.2%
+  0.2-0.4      3315      2970147  16.9%
+  0.4-0.6      4447      8779736  50.1%
+  0.6-0.8      3816      4544826  25.9%
+  0.8-0.95       99       250584   1.4%
+  0.95-0.99     130       509674   2.9%
+  >=0.99         23        82349   0.5%
+conditions traded 189; both outcomes bought in 10 (5%), holding 9% of usdc
+matched shares across both-sided conditions 30328 at average pair cost 1.0349 (locked gross $-1058)
+SAMPLE settled in file: 97 conditions, cost $10002700, redeemed $18026928, net $8024229 (80.22% of cost), 93 won
+  note: losing positions produce no REDEEM row, so this sample OVERSTATES profit; see below
+  all buys in file $17289380 vs all redeems in file $18089631
+  nfl    n   19 cost    3674332 redeemed    6834512
+  nba    n   46 cost    2541927 redeemed    4803966
+  ufc    n    9 cost    1274341 redeemed    2515062
+  lol    n    8 cost     886475 redeemed    1144664
+  epl    n    4 cost     835825 redeemed    1778102
+  will   n   11 cost     789800 redeemed     950622
+trades per tx hash: 1.00
+market kind by usdc {'other/moneyline': 12831910, 'spread': 4025542, 'total': 679331}

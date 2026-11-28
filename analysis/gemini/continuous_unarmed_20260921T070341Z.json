@@ -1,0 +1,303 @@
+{
+  "label": "GEMINI_L5_CONTINUOUS_RUN_V1",
+  "started_utc": "2026-09-21T07:03:41.307873+00:00",
+  "authorization_id": "NO-AUTHORIZATION-IN-FORCE",
+  "driver_executable_sha": "c1ada77a919c9c0cf226b4eb0c56aed6495f7e8fe1ece9261150aa6c26377763",
+  "envelope_name": "GEMINI_L5_SHADOW_ENVELOPE_Q001",
+  "envelope_sha": "c5e88347601e24885e8cdb3cfb5b7a803b0b872948cce896c80a60023da51887",
+  "envelope": {
+    "name": "GEMINI_L5_SHADOW_ENVELOPE_Q001",
+    "action_size": "0.01",
+    "max_actions": "12",
+    "max_same_side_run": "4",
+    "max_residual_contracts": "0.04",
+    "max_imbalance_contracts": "0.04",
+    "max_yes_contracts": "0.10",
+    "max_no_contracts": "0.10",
+    "max_total_spend_usd": "0.15",
+    "max_committed_usd": "0.15",
+    "max_residual_usd": "0.04",
+    "max_working_orders": "2",
+    "max_concurrent_markets": "1",
+    "cohort_prefix": "GEMI-BTC05M",
+    "worst_case_loss_usd": "0.15"
+  },
+  "driver_envelope_sha": "47f257f208017841d633c1bf5e2420eda2ca87b0ab502da34bd9d7e19690cf22",
+  "bundle_sha": "6b35be2ac54bf0e4e4b2fee8396d52402f1362af4737e28a1e29da0bdc7b3983",
+  "invoker_note": "this invoker is NOT covered by the authorized executable_sha, which covers the driver. It holds no bound of its own; every limit is enforced inside ws_continuous.Driver.",
+  "entry_schedule": {
+    "in_band": true,
+    "band": [
+      240.0,
+      280.0
+    ],
+    "waited_s": 106.01,
+    "polls": 15,
+    "entered_tte_s": 273.23812770843506,
+    "selection": {
+      "eligible": true,
+      "chosen": {
+        "symbol": "GEMI-BTC05M2609210710-UP",
+        "tte_s": 273.23812770843506,
+        "contract_status": "active",
+        "market_state": "open"
+      },
+      "band": [
+        240.0,
+        280.0
+      ],
+      "cohort": "BTC5m",
+      "considered": [
+        {
+          "symbol": "GEMI-BTC05M2609210710-UP",
+          "tte_s": 273.23812770843506,
+          "contract_status": "active",
+          "market_state": "open"
+        }
+      ]
+    },
+    "observed": [
+      {
+        "waited_s": 62.82,
+        "tte_s": [
+          18.20319414138794,
+          -281.79680585861206,
+          -581.7968058586121,
+          -881.7968058586121
+        ]
+      },
+      {
+        "waited_s": 70.02,
+        "tte_s": [
+          10.864349842071533,
+          -289.13565015792847,
+          -589.1356501579285,
+          -889.1356501579285
+        ]
+      },
+      {
+        "waited_s": 77.67,
+        "tte_s": [
+          3.6645946502685547,
+          -296.33540534973145,
+          -596.3354053497314,
+          -896.3354053497314
+        ]
+      },
+      {
+        "waited_s": 85.4,
+        "tte_s": [
+          296.0132234096527,
+          -3.98677659034729,
+          -303.9867765903473,
+          -603.9867765903473
+        ]
+      },
+      {
+        "waited_s": 93.14,
+        "tte_s": [
+          288.2793424129486,
+          -11.720657587051392,
+          -311.7206575870514,
+          -611.7206575870514
+        ]
+      },
+      {
+        "waited_s": 100.45,
+        "tte_s": [
+          280.5441737174988,
+          -19.45582628250122,
+          -319.4558262825012,
+          -619.4558262825012
+        ]
+      }
+    ],
+    "labels": "EXPERIMENTAL SCHEDULING ONLY: this chose WHEN to begin. The controller, prices, sizing and every bound are unchanged and know nothing about it."
+  },
+  "symbol_selection": {
+    "eligible": true,
+    "chosen": {
+      "symbol": "GEMI-BTC05M2609210710-UP",
+      "tte_s": 273.23812770843506,
+      "contract_status": "active",
+      "market_state": "open"
+    },
+    "band": [
+      240.0,
+      280.0
+    ],
+    "cohort": "BTC5m",
+    "considered": [
+      {
+        "symbol": "GEMI-BTC05M2609210710-UP",
+        "tte_s": 273.23812770843506,
+        "contract_status": "active",
+        "market_state": "open"
+      }
+    ]
+  },
+  "terms_status": {
+    "readable": true,
+    "verdict": "ACCEPTED",
+    "method": "GET",
+    "status": 200,
+    "hasAcceptedLatest": true,
+    "acceptedVersion": 1,
+    "latestVersion": 1,
+    "blocks_orders": false,
+    "attempts": [
+      {
+        "method": "GET",
+        "status": 200,
+        "body_keys": [
+          "acceptedVersion",
+          "hasAcceptedLatest",
+          "latestVersion"
+        ]
+      }
+    ],
+    "why": null
+  },
+  "preflight": {
+    "agrees": true,
+    "discrepancies": [],
+    "checked_before_latch": true
+  },
+  "cohort": {
+    "label": "GEMINI_MUTATION_COHORT_V1",
+    "cohort_id": "COHORT-2026-09-18-C8B",
+    "created_utc": "2026-09-19T00:45:53.192937+00:00",
+    "budget": 12,
+    "consumed": 11,
+    "remaining": 1,
+    "ledger_path": "analysis/gemini/cohorts/COHORT-2026-09-18-C8B/ledger.jsonl",
+    "envelope_max_actions": 12,
+    "predecessor": {
+      "intact": true,
+      "predecessor_ledger": "analysis/gemini/cohorts/COHORT-2026-09-18-C7/ledger.jsonl",
+      "recorded_sha256": "3e8399a3b1973f69ca806d1c07eb91899fa3ad774081ed5ec53eb1c956e0f0d8",
+      "current_sha256": "3e8399a3b1973f69ca806d1c07eb91899fa3ad774081ed5ec53eb1c956e0f0d8",
+      "recorded_consumed": 6,
+      "current_consumed": 6,
+      "why": null
+    },
+    "note": "CONTINUOUS-8: REAL FILL -> COHERENT AUTHORITATIVE REFRESH -> INVENTORY CHANGE -> CHANGED L5 ACTION, entered EARLY (240-280s TTE) by experimental scheduling rather than by dispatch accident. BUDGET 12 = CP.MAX_ACTIONS, the EXISTING frozen envelope ceiling: this is LIFECYCLE CAPACITY for a window that runs ~2x longer, not financial risk. Every absolute bound is unchanged -- $0.15 spend, 0.04 residual, 0.04 imbalance, 0.10 per leg, 0.01 size, MOC maker-only, no pair-cost ceiling. LINEAGE, EXPLICIT: chained to C7's ledger, NOT to C8's. verify_predecessor is SINGLE-HOP, so whichever ledger this names is the only one whose bytes this cohort enforces before the latch -- and C8's ledger is EMPTY, carrying no mutation history to protect. Chaining to it would have left C7's six spent slots unguarded by the live path. C5/C6/C7 chained to the last cohort that had actually consumed slots; those coincided with the immediate predecessor until now. C8 (0/6) is ABANDONED, kept byte-for-byte, never to be used, and pinned by test rather than by this chain.",
+    "labels": "the cohort budget is a TIGHTENING of the envelope, never an extension of it. No rollover, no automatic successor."
+  },
+  "authoritative_state": {
+    "fills": [],
+    "open_orders": [],
+    "order_history": {
+      "readable": true,
+      "verdict": "NO_ORDERS_ON_RECORD",
+      "total_rows": 0
+    },
+    "active": {
+      "ok": true,
+      "status": 200,
+      "request_shape": "json_body"
+    },
+    "terminal_seen": 0,
+    "trades": 0,
+    "coherence_readers": {
+      "terminal_history_readable": true,
+      "trades_readable": true,
+      "terminal_history_error": null,
+      "trades_error": null,
+      "why": "the gate explains a disappearance from these two reads plus filled history; if either is unreadable, an unexplained order stops the window instead of being assumed away"
+    }
+  },
+  "ledger_unresolved": [],
+  "ledger_consumed_slots": 11,
+  "pre_latch_recovery": {
+    "checked_before_latch": true,
+    "checked_before_authorization": true,
+    "recovered": true,
+    "inventory": {
+      "yes_qty": "0",
+      "no_qty": "0",
+      "matched_qty": "0",
+      "directional_residual": "0",
+      "inventory_imbalance": "0",
+      "avg_yes_cost": null,
+      "avg_no_cost": null,
+      "effective_matched_pair_cost": null,
+      "total_spend_usd": "0",
+      "same_side_run": {
+        "leg": null,
+        "len": 0
+      },
+      "n_fills": 0,
+      "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+    },
+    "working": "venue authoritative: 0 resting (+none / -none)",
+    "budget_consumed": 11,
+    "budget_note": "max(ledger 11, venue 0): a disagreement is always read upward",
+    "outstanding": {
+      "verdict": "CLEAR",
+      "tradeable": true,
+      "committed_usd": "0",
+      "blocking": [],
+      "foreign": [],
+      "released": [],
+      "why": null,
+      "labels": "only this read releases committed cash. A cancel ack is a receipt, not a release."
+    },
+    "budget_left": 1
+  },
+  "position_gate": {
+    "read": {
+      "path": "/v1/prediction-markets/positions",
+      "status": 200,
+      "ok": true,
+      "why": null,
+      "total": 0
+    },
+    "n_rows_for_symbol": 0,
+    "reconciliation": {
+      "label": "GEMINI_POSITION_LEDGER_V1",
+      "symbol": "GEMI-BTC05M2609210710-UP",
+      "our_signed": "0",
+      "our_yes_qty": "0",
+      "our_no_qty": "0",
+      "our_matched": "0",
+      "venue_representation": "FLAT_NO_ROWS",
+      "venue_signed": "0",
+      "implies_model": "B or C -- nothing is held, so it netted or was cashed out",
+      "matched_is_verified": false,
+      "matched_label": "our_matched is OUR OWN bookkeeping. Until the venue representation is resolved it is NOT confirmed state and must not be reported as Gemini economics.",
+      "verdict": "AGREE",
+      "tradeable": true,
+      "why": null
+    }
+  },
+  "authorization": {
+    "authorized": false,
+    "required_auth_id": "OWNER-2026-09-21-GEMINI-Q1-LIVE-1",
+    "authorized_sha": "c1ada77a919c9c0cf226b4eb0c56aed6495f7e8fe1ece9261150aa6c26377763",
+    "executable_sha": "c1ada77a919c9c0cf226b4eb0c56aed6495f7e8fe1ece9261150aa6c26377763",
+    "authorized_envelope": "47f257f208017841d633c1bf5e2420eda2ca87b0ab502da34bd9d7e19690cf22",
+    "envelope_sha": "47f257f208017841d633c1bf5e2420eda2ca87b0ab502da34bd9d7e19690cf22",
+    "arming": {
+      "armed": false,
+      "live_flag": false,
+      "auth_id_present": false,
+      "auth_id_matches": false,
+      "expiry_supplied": false,
+      "expired": null,
+      "expected_auth_id": "OWNER-2026-09-21-GEMINI-Q1-LIVE-1",
+      "why_not": "GEMINI_CANARY_LIVE is not YES"
+    },
+    "why_not": [
+      "transport arm: GEMINI_CANARY_LIVE is not YES"
+    ],
+    "labels": "an authorization names an EXECUTABLE and an ENVELOPE. Editing either after review invalidates it, which is the point: approval attaches to what was read, not to a name."
+  },
+  "state": "READY_TO_MUTATE_BUT_UNAUTHORIZED",
+  "why": "not authorized: transport arm: GEMINI_CANARY_LIVE is not YES",
+  "latch": {
+    "consumed": false,
+    "why": "authorization was refused BEFORE the latch was spent; the authorization is untouched"
+  },
+  "finished_utc": "2026-09-21T07:05:30.077158+00:00"
+}

@@ -1,0 +1,30 @@
+== discovered on FIRST half, scored on SECOND half ==
+   cells with >=30 quotes: 124   positive in discovery: 32
+   of those, positive on the other half: 12 (38%)
+   discovery  selected cells: +0.7966 USD per window [-0.5035,+2.1971]  (9516 quotes)
+   OTHER HALF selected cells: -0.2901 USD per window [-1.1390,+0.6510]  (9908 quotes)
+   OTHER HALF every cell:     -3.6699 USD per window [-4.7978,-2.5090]
+   best discovery cells -> other half (EV per quote):
+     depth  0c  bid 0.15-0.35  t60-150   +0.0394 (n=363) -> -0.0149 (n=321)
+     depth  1c  bid 0.15-0.35  t60-150   +0.0190 (n=363) -> -0.0108 (n=321)
+     depth  0c  bid 0.00-0.15  t150-240   +0.0188 (n=402) -> +0.0074 (n=351)
+     depth  1c  bid 0.00-0.15  t150-240   +0.0163 (n=339) -> +0.0190 (n=288)
+     depth 12c  bid 0.65-0.85  t0-60   +0.0159 (n=174) -> -0.0048 (n=180)
+     depth  2c  bid 0.00-0.15  t150-240   +0.0144 (n=280) -> +0.0160 (n=222)
+     depth  3c  bid 0.00-0.15  t150-240   +0.0138 (n=232) -> +0.0121 (n=185)
+     depth  2c  bid 0.85-1.00  t60-150   +0.0105 (n=207) -> -0.0083 (n=295)
+== discovered on SECOND half, scored on FIRST half ==
+   cells with >=30 quotes: 149   positive in discovery: 31
+   of those, positive on the other half: 12 (39%)
+   discovery  selected cells: +0.6769 USD per window [+0.0361,+1.3820]  (6029 quotes)
+   OTHER HALF selected cells: -0.0401 USD per window [-0.8333,+0.7642]  (5896 quotes)
+   OTHER HALF every cell:     -3.5358 USD per window [-4.8283,-2.2625]
+   best discovery cells -> other half (EV per quote):
+     depth  1c  bid 0.00-0.15  t0-60   +0.1029 (n=35) -> -0.0386 (n=14)
+     depth  0c  bid 0.00-0.15  t0-60   +0.0780 (n=35) -> -0.0514 (n=14)
+     depth  0c  bid 0.65-0.85  t0-60   +0.0528 (n=180) -> -0.0189 (n=174)
+     depth  1c  bid 0.65-0.85  t0-60   +0.0504 (n=180) -> -0.0193 (n=174)
+     depth  2c  bid 0.65-0.85  t0-60   +0.0399 (n=180) -> -0.0217 (n=174)
+     depth  3c  bid 0.65-0.85  t0-60   +0.0259 (n=180) -> -0.0060 (n=174)
+     depth  1c  bid 0.00-0.15  t150-240   +0.0190 (n=288) -> +0.0163 (n=339)
+     depth  8c  bid 0.85-1.00  t0-60   +0.0179 (n=33) -> +0.0000 (n=12)

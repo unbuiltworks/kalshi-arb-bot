@@ -1,0 +1,65 @@
+== A. Bonereaper's real BTC5m buys, by date ==
+-- bought at 0.55-0.85
+   2026-03-25     +0.0812 [-0.044,+0.192]   w= 28 n=  695 pnl  +1679.93
+                  per fill +0.0295 (n=695)   dollars +1679.93 on 20284 (+8.28%)
+   2026-08-30/31  +0.0579 [+0.020,+0.097]   w=267 n= 4720 pnl  -2868.55
+                  per fill -0.0294 (n=4720)   dollars -2868.55 on 83750 (-3.43%)
+-- bought at 0.65-0.85
+   2026-03-25     +0.1014 [-0.031,+0.214]   w= 26 n=  391 pnl  +1251.85
+                  per fill +0.0487 (n=391)   dollars +1251.85 on 14313 (+8.75%)
+   2026-08-30/31  +0.0533 [+0.012,+0.092]   w=253 n= 2575 pnl   -787.73
+                  per fill -0.0102 (n=2575)   dollars -787.73 on 56139 (-1.40%)
+-- bought at 0.55-0.70
+   2026-03-25     +0.1060 [-0.026,+0.229]   w= 28 n=  434 pnl   +960.75
+                  per fill +0.0316 (n=434)   dollars +960.75 on 9174 (+10.47%)
+   2026-08-30/31  +0.0627 [+0.016,+0.109]   w=245 n= 3089 pnl  -2057.65
+                  per fill -0.0381 (n=3089)   dollars -2057.65 on 42294 (-4.87%)
+-- bought at 0.15-0.45 (the underdog)
+   2026-03-25     -0.0803 [-0.185,+0.046]   w= 27 n=  699 pnl   -332.33
+                  per fill -0.0372 (n=699)   dollars -332.33 on 7541 (-4.41%)
+   2026-08-30/31  -0.0567 [-0.092,-0.021]   w=265 n= 6921 pnl  -3284.03
+                  per fill -0.0118 (n=6921)   dollars -3284.03 on 43987 (-7.47%)
+-- bought at every price
+   2026-03-25     +0.0144 [-0.042,+0.062]   w= 30 n= 2112 pnl  +2221.82
+                  per fill +0.0014 (n=2112)   dollars +2221.82 on 61178 (+3.63%)
+   2026-08-30/31  -0.0123 [-0.030,+0.005]   w=273 n=16575 pnl  -8955.11
+                  per fill -0.0173 (n=16575)   dollars -8955.11 on 271447 (-3.30%)
+
+== B. the existing controller on 187 PMUS windows ==
+
+== PART B: the existing controller, USD per window, mean [95% over windows] ==
+-- live configuration (both sides)
+   FIRST HALF  fills 1541  matched -0.0075 [-0.014,-0.000]  residual -0.0122 [-0.028,+0.005]
+               net -0.0197 [-0.040,+0.002]   avg matched pair cost 1.0171
+   SECOND HALF fills 1543  matched -0.0094 [-0.015,-0.003]  residual -0.0200 [-0.034,-0.004]
+               net -0.0294 [-0.047,-0.010]   avg matched pair cost 1.0227
+-- band 0.55-0.85
+   FIRST HALF  fills  319  matched -0.0200 [-0.025,-0.015]  residual +0.0021 [-0.009,+0.012]
+               net -0.0179 [-0.031,-0.006]   avg matched pair cost 1.2798
+   SECOND HALF fills  316  matched -0.0204 [-0.026,-0.015]  residual +0.0061 [-0.004,+0.015]
+               net -0.0143 [-0.027,-0.002]   avg matched pair cost 1.3065
+-- band 0.65-0.85
+   FIRST HALF  fills  202  matched -0.0098 [-0.014,-0.006]  residual +0.0015 [-0.008,+0.010]
+               net -0.0083 [-0.019,+0.002]   avg matched pair cost 1.4443
+   SECOND HALF fills  218  matched -0.0123 [-0.017,-0.008]  residual +0.0038 [-0.005,+0.012]
+               net -0.0084 [-0.020,+0.002]   avg matched pair cost 1.4664
+-- band 0.55-0.70
+   FIRST HALF  fills  245  matched -0.0113 [-0.014,-0.008]  residual -0.0044 [-0.016,+0.007]
+               net -0.0157 [-0.029,-0.004]   avg matched pair cost 1.2133
+   SECOND HALF fills  214  matched -0.0102 [-0.014,-0.007]  residual +0.0017 [-0.008,+0.011]
+               net -0.0085 [-0.020,+0.002]   avg matched pair cost 1.2278
+-- band 0.55-0.85, no new entry after 240 s
+   FIRST HALF  fills  313  matched -0.0189 [-0.024,-0.014]  residual +0.0020 [-0.009,+0.012]
+               net -0.0169 [-0.030,-0.005]   avg matched pair cost 1.2765
+   SECOND HALF fills  307  matched -0.0187 [-0.024,-0.014]  residual +0.0069 [-0.003,+0.016]
+               net -0.0117 [-0.025,+0.001]   avg matched pair cost 1.3001
+-- band 0.55-0.85, no new entry after 150 s
+   FIRST HALF  fills  269  matched -0.0126 [-0.016,-0.009]  residual -0.0040 [-0.016,+0.008]
+               net -0.0167 [-0.029,-0.004]   avg matched pair cost 1.2561
+   SECOND HALF fills  257  matched -0.0124 [-0.016,-0.009]  residual +0.0055 [-0.005,+0.015]
+               net -0.0069 [-0.019,+0.005]   avg matched pair cost 1.2788
+-- band 0.15-0.45 (the underdog only)
+   FIRST HALF  fills  517  matched +0.0242 [+0.018,+0.031]  residual -0.0314 [-0.048,-0.013]
+               net -0.0071 [-0.027,+0.014]   avg matched pair cost 0.7211
+   SECOND HALF fills  499  matched +0.0216 [+0.015,+0.029]  residual -0.0310 [-0.048,-0.011]
+               net -0.0094 [-0.030,+0.014]   avg matched pair cost 0.7110

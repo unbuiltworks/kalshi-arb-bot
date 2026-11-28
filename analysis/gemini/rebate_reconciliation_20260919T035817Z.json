@@ -1,0 +1,207 @@
+{
+  "label": "GEMINI_REBATE_RECONCILIATION_V1",
+  "utc": "2026-09-19T03:58:17.828956+00:00",
+  "window": {
+    "since_utc": null,
+    "until_utc": null
+  },
+  "readable": true,
+  "credits": {
+    "readable": true,
+    "credits": [
+      {
+        "eid": 368822540373,
+        "utc": "2026-08-27T21:03:53.801000+00:00",
+        "timestampms": 1787864633801,
+        "amount": "0.01",
+        "currency": "USD",
+        "type": "AdminCredit",
+        "purpose": "Predictions maker rebate",
+        "status": "Complete",
+        "source": "POST /v1/transfers (authenticated account record)",
+        "related_fills": null,
+        "related_fills_why": "this surface carries no order id, no symbol and no fill linkage; fill-level attribution is NOT available and is not invented",
+        "attribution_confidence": "UNATTRIBUTED",
+        "labels": "CONFIRMED: an authoritative account record shows this credit. It is realized rebate income, reported on its own line and never merged into trading P&L."
+      },
+      {
+        "eid": 368823437387,
+        "utc": "2026-08-28T21:03:42.786000+00:00",
+        "timestampms": 1787951022786,
+        "amount": "0.07",
+        "currency": "USD",
+        "type": "AdminCredit",
+        "purpose": "Predictions maker rebate",
+        "status": "Complete",
+        "source": "POST /v1/transfers (authenticated account record)",
+        "related_fills": null,
+        "related_fills_why": "this surface carries no order id, no symbol and no fill linkage; fill-level attribution is NOT available and is not invented",
+        "attribution_confidence": "UNATTRIBUTED",
+        "labels": "CONFIRMED: an authoritative account record shows this credit. It is realized rebate income, reported on its own line and never merged into trading P&L."
+      },
+      {
+        "eid": 368824547191,
+        "utc": "2026-08-29T21:03:52.357000+00:00",
+        "timestampms": 1788037432357,
+        "amount": "0.05",
+        "currency": "USD",
+        "type": "AdminCredit",
+        "purpose": "Predictions maker rebate",
+        "status": "Complete",
+        "source": "POST /v1/transfers (authenticated account record)",
+        "related_fills": null,
+        "related_fills_why": "this surface carries no order id, no symbol and no fill linkage; fill-level attribution is NOT available and is not invented",
+        "attribution_confidence": "UNATTRIBUTED",
+        "labels": "CONFIRMED: an authoritative account record shows this credit. It is realized rebate income, reported on its own line and never merged into trading P&L."
+      },
+      {
+        "eid": 368825667773,
+        "utc": "2026-08-30T21:03:41.290000+00:00",
+        "timestampms": 1788123821290,
+        "amount": "0.14",
+        "currency": "USD",
+        "type": "AdminCredit",
+        "purpose": "Predictions maker rebate",
+        "status": "Complete",
+        "source": "POST /v1/transfers (authenticated account record)",
+        "related_fills": null,
+        "related_fills_why": "this surface carries no order id, no symbol and no fill linkage; fill-level attribution is NOT available and is not invented",
+        "attribution_confidence": "UNATTRIBUTED",
+        "labels": "CONFIRMED: an authoritative account record shows this credit. It is realized rebate income, reported on its own line and never merged into trading P&L."
+      },
+      {
+        "eid": 368827790024,
+        "utc": "2026-09-01T21:03:46.546000+00:00",
+        "timestampms": 1788296626546,
+        "amount": "0.17",
+        "currency": "USD",
+        "type": "AdminCredit",
+        "purpose": "Predictions maker rebate",
+        "status": "Complete",
+        "source": "POST /v1/transfers (authenticated account record)",
+        "related_fills": null,
+        "related_fills_why": "this surface carries no order id, no symbol and no fill linkage; fill-level attribution is NOT available and is not invented",
+        "attribution_confidence": "UNATTRIBUTED",
+        "labels": "CONFIRMED: an authoritative account record shows this credit. It is realized rebate income, reported on its own line and never merged into trading P&L."
+      },
+      {
+        "eid": 368835478761,
+        "utc": "2026-09-08T22:27:16.466000+00:00",
+        "timestampms": 1788906436466,
+        "amount": "0.06",
+        "currency": "USD",
+        "type": "AdminCredit",
+        "purpose": "Predictions maker rebate",
+        "status": "Complete",
+        "source": "POST /v1/transfers (authenticated account record)",
+        "related_fills": null,
+        "related_fills_why": "this surface carries no order id, no symbol and no fill linkage; fill-level attribution is NOT available and is not invented",
+        "attribution_confidence": "UNATTRIBUTED",
+        "labels": "CONFIRMED: an authoritative account record shows this credit. It is realized rebate income, reported on its own line and never merged into trading P&L."
+      },
+      {
+        "eid": 368835488128,
+        "utc": "2026-09-08T22:38:23.882000+00:00",
+        "timestampms": 1788907103882,
+        "amount": "0.01",
+        "currency": "USD",
+        "type": "AdminCredit",
+        "purpose": "Predictions maker rebate",
+        "status": "Complete",
+        "source": "POST /v1/transfers (authenticated account record)",
+        "related_fills": null,
+        "related_fills_why": "this surface carries no order id, no symbol and no fill linkage; fill-level attribution is NOT available and is not invented",
+        "attribution_confidence": "UNATTRIBUTED",
+        "labels": "CONFIRMED: an authoritative account record shows this credit. It is realized rebate income, reported on its own line and never merged into trading P&L."
+      }
+    ],
+    "n": 7,
+    "total": "0.51",
+    "currencies": [
+      "USD"
+    ],
+    "why": null
+  },
+  "maker_volume": {
+    "readable": true,
+    "rows_matched": 0,
+    "prefix": "GEMI-",
+    "maker_notional_total": "0",
+    "maker_notional_by_day": {},
+    "maker_notional_by_symbol": {},
+    "maker_fill_count_by_day": {},
+    "source": "POST /v1/tradevolume (venue's own maker notional)",
+    "labels": "the venue's OWN maker notional, which is the book it pays rebates from -- a better denominator than a sum of our own fills.",
+    "coverage": {
+      "readable": true,
+      "n_rows": 62,
+      "distinct_symbols": 62,
+      "symbols_sample": [
+        "gemi-btc05m2608271730-up",
+        "gemi-btc05m2608272040-up",
+        "gemi-btc05m2608272235-up",
+        "gemi-btc05m2608272250-up",
+        "gemi-btc05m2608272300-up",
+        "gemi-btc05m2608272350-up",
+        "gemi-btc05m2608280005-up",
+        "gemi-btc05m2608280550-up",
+        "gemi-btc05m2608291955-up",
+        "gemi-btc05m2608300230-up",
+        "gemi-btc05m2608301245-up",
+        "gemi-btc05m2608302105-up"
+      ],
+      "prediction_symbols": [],
+      "date_range": [
+        "2026-08-21",
+        "2026-09-18"
+      ],
+      "verdict": "NO_PREDICTION_INSTRUMENTS_ON_THIS_SURFACE",
+      "why": "this endpoint returned 62 row(s) across 62 symbol(s) and NONE of them is a prediction instrument, so it is the spot/derivatives volume surface and cannot supply a prediction maker denominator"
+    },
+    "mytrades_unscoped": {
+      "readable": true,
+      "n_maker_trades": 62,
+      "maker_notional": "52.2604",
+      "by_day": {
+        "2026-08-27": "5.64",
+        "2026-08-28": "3.20",
+        "2026-08-29": "5.25",
+        "2026-08-30": "18.98",
+        "2026-08-31": "0.25",
+        "2026-09-01": "17.45",
+        "2026-09-02": "1.47",
+        "2026-09-18": "0.0173",
+        "2026-09-19": "0.0031"
+      },
+      "rows_returned": 105,
+      "source": "POST /v1/mytrades (OUR OWN executions, unscoped)",
+      "caveat": "this is our execution record, not the venue's rebate book, and it is bounded by whatever retention the endpoint applies. Reported as a separate candidate denominator, never silently substituted."
+    }
+  },
+  "economics": {
+    "window": {
+      "since_utc": null,
+      "until_utc": null
+    },
+    "attribution_confidence": "UNATTRIBUTED",
+    "labels": "aggregate economics only. The credit surface names no fills, so no fill-level attribution exists and none is fabricated.",
+    "credits_in_window": 7,
+    "rebates_confirmed_usd": "0.51",
+    "credit_utcs": [
+      "2026-08-27T21:03:53.801000+00:00",
+      "2026-08-28T21:03:42.786000+00:00",
+      "2026-08-29T21:03:52.357000+00:00",
+      "2026-08-30T21:03:41.290000+00:00",
+      "2026-09-01T21:03:46.546000+00:00",
+      "2026-09-08T22:27:16.466000+00:00",
+      "2026-09-08T22:38:23.882000+00:00"
+    ],
+    "computable": false,
+    "why": "the venue reports NO maker notional on prediction instruments for the period read, so there is no defensible denominator. A credit with no measurable volume behind it is recorded as an aggregate and left unrated."
+  },
+  "sources": {
+    "credits": "POST /v1/transfers",
+    "maker_volume": "POST /v1/tradevolume",
+    "located_by": "rebate_probe survey 2026-09-19; the prediction-market rebate/reward paths all 404 and these two are what exists"
+  }
+}

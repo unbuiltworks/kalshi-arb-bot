@@ -1,0 +1,139 @@
+{
+ "schema": "price_level_calibration/1",
+ "question": "Is price calibrated conditional on having filled, and does any miscalibration survive out of sample?",
+ "evidence_class": "L5 POLYMARKET HISTORY -- not PMUS, not our own fills",
+ "what_was_observed": {
+  "action_level_rows": 63686,
+  "fill_level_rows": 693916,
+  "windows": 527,
+  "fields": [
+   "s",
+   "own_px",
+   "q",
+   "side",
+   "act",
+   "pre_up",
+   "pre_dn",
+   "pre_imb",
+   "post_imb",
+   "pre_up_avg",
+   "pre_dn_avg",
+   "mt",
+   "win"
+  ]
+ },
+ "what_is_missing": [
+  "BTC spot at the decision timestamp",
+  "the window strike",
+  "the contemporaneous Polymarket order book",
+  "queue position and fill latency",
+  "fees and credited incentives on L5 fills",
+  "quotes that rested UNFILLED (only fills are recorded)"
+ ],
+ "calibration_fill_conditioned": {
+  "labels": "alpha = P(won|px) - px, measured on ACTUAL fills, so fill-conditioned adverse selection is already inside it",
+  "pooled": {
+   "n": 693916,
+   "alpha": "+0.00116",
+   "z": "+1.94"
+  },
+  "favourite_longshot_bias": {
+   "favourites_0.80_0.95": {
+    "IS": {
+     "n": 47279,
+     "alpha": "+0.00643",
+     "z": "+4.4"
+    },
+    "OOS_Aug": {
+     "n": 48162,
+     "alpha": "+0.00822",
+     "z": "+5.6"
+    },
+    "verdict": "SURVIVES"
+   },
+   "longshots_0.10_0.20": {
+    "IS": {
+     "n": 34990,
+     "alpha": "-0.00682",
+     "z": "-3.7"
+    },
+    "OOS_Aug": {
+     "n": 55499,
+     "alpha": "-0.01327",
+     "z": "-9.1"
+    },
+    "verdict": "ADVERSE, SURVIVES"
+   }
+  },
+  "per_bucket_sign_replication": {
+   "agree": 8,
+   "flip": 6,
+   "note": "the mid range 0.40-0.60 flips; the extremes 0.15 and 0.80-0.95 replicate"
+  }
+ },
+ "maker_vs_taker": {
+  "labels": "from l5_actions, which carries mt. The 694k fill set does not.",
+  "favourites_0.80_0.95": {
+   "maker": {
+    "n": 6189,
+    "alpha": "+0.03471",
+    "z": "+9.4"
+   },
+   "taker": {
+    "n": 596,
+    "alpha": "+0.02259",
+    "z": "+1.9"
+   }
+  },
+  "longshots_0.10_0.20": {
+   "maker": {
+    "n": 9348,
+    "alpha": "-0.03504",
+    "z": "-10.7"
+   }
+  },
+  "our_first_leg_band_0.20_0.60": {
+   "maker": {
+    "n": 23506,
+    "alpha": "-0.00918",
+    "z": "-3.0"
+   }
+  },
+  "unresolved": "the action-level magnitude (+0.0347) is ~4x the fill-level one (+0.0082). Both agree in sign and significance; the discrepancy is NOT resolved."
+ },
+ "our_own_realized_cross_check": {
+  "labels": "our 44 venue-settled stranded legs with a measurable basis. This is REALIZED money, not replay.",
+  "longshot_le_0.20": {
+   "legs": 5,
+   "units": "8.86",
+   "pnl": "+0.6910",
+   "per_unit": "+0.0780"
+  },
+  "our_band_0.20_0.60": {
+   "legs": 33,
+   "units": "65.22",
+   "pnl": "-11.0504",
+   "per_unit": "-0.1694"
+  },
+  "mid_0.60_0.80": {
+   "legs": 4,
+   "units": "5.01",
+   "pnl": "-3.0910",
+   "per_unit": "-0.6170"
+  },
+  "favourite_ge_0.80": {
+   "legs": 2,
+   "units": "2.31",
+   "pnl": "-1.6459",
+   "per_unit": "-0.7125"
+  },
+  "verdict": "DOES NOT CONFIRM. Our favourite region LOST and our longshot region WON -- the opposite sign to L5 -- on 2 and 5 legs respectively. Underpowered to the point of carrying no information."
+ },
+ "power_required": {
+  "target_effect": "+0.0347 per contract (L5 maker favourite alpha)",
+  "per_leg_sd_at_p_0.87": "0.3363",
+  "legs_needed_for_2_sigma": 376,
+  "legs_we_have_at_favourite_prices": 2
+ },
+ "verdict": "A prospective rule IS supported by L5 history: condition the maker quote on PRICE LEVEL, which is known at decision time. It replicates out of sample at the extremes. It CANNOT be promoted, for three reasons stated separately: (1) it is Polymarket evidence and we hold ZERO PMUS fill-conditioned outcomes by price level; (2) it is DIRECTIONAL, not pair-based, and the executor has no authorized action class for holding a directional position to settlement; (3) the two L5 datasets disagree 4x on magnitude."
+}

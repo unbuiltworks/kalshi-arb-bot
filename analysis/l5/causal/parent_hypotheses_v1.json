@@ -1,0 +1,120 @@
+{
+  "base_lot_hypotheses": {
+    "n": 1142,
+    "dispersion": {
+      "cv_executed_qty": 0.7969,
+      "cv_notional_usd": 1.2123,
+      "reads": "a PROBABILITY-SCALED NOTIONAL rule makes notional the tighter quantity; a FIXED LOT makes share count the tighter one",
+      "tighter": "share_count"
+    },
+    "fixed_base_lot": {
+      "share_100_by_probability": {
+        "<=0.10": 0.2547,
+        "0.30-0.50": 0.1886,
+        "0.50-0.70": 0.1333,
+        "0.70-0.90": 0.1313,
+        ">0.90": 0.3009,
+        "0.10-0.30": 0.1654
+      },
+      "spread_across_probability": 0.1696,
+      "share_100_by_inventory": {
+        ">400": 0.2178,
+        "0": 0.1026,
+        "25-100": 0.1538,
+        "100-400": 0.133,
+        "<=25": 0.0385
+      },
+      "spread_across_inventory": 0.1793,
+      "reads": "a fixed lot is FLAT in both; a large spread falsifies it"
+    },
+    "inventory_scaled": {
+      "median_qty_by_inventory": {
+        ">400": 38.0,
+        "0": 37.24,
+        "25-100": 28.46,
+        "100-400": 26.24,
+        "<=25": 24.38
+      },
+      "reads": "an inventory-scaled lot rises or falls monotonically with inventory"
+    },
+    "ladder_rung": {
+      "share_of_100s_in_a_ladder": 0.3674,
+      "share_of_others_in_a_ladder": 0.37,
+      "reads": "a ladder rung appears in ladders MORE than other sizes; similar shares mean 100 is not specifically a rung"
+    },
+    "notional_usd": {
+      "median": 9.0,
+      "modes": [
+        [
+          1.0,
+          20
+        ],
+        [
+          5.0,
+          12
+        ],
+        [
+          2.0,
+          11
+        ],
+        [
+          3.0,
+          10
+        ],
+        [
+          9.0,
+          8
+        ],
+        [
+          4.0,
+          8
+        ],
+        [
+          96.0,
+          6
+        ],
+        [
+          0.1,
+          6
+        ]
+      ],
+      "median_for_100_lots": 39.0
+    }
+  },
+  "opposite_outcome_event_time": {
+    "n": 1015,
+    "median_dt_s": 18,
+    "p25": 7,
+    "p75": 48,
+    "within_0s": {
+      "share": 0.0384,
+      "median_implied_pair": 0.99,
+      "share_pair_below_1": 0.7692
+    },
+    "within_1s": {
+      "share": 0.0729,
+      "median_implied_pair": 0.99,
+      "share_pair_below_1": 0.7162
+    },
+    "within_5s": {
+      "share": 0.202,
+      "median_implied_pair": 0.99,
+      "share_pair_below_1": 0.6439
+    },
+    "within_15s": {
+      "share": 0.4414,
+      "median_implied_pair": 0.99,
+      "share_pair_below_1": 0.6094
+    },
+    "within_30s": {
+      "share": 0.6404,
+      "median_implied_pair": 0.99,
+      "share_pair_below_1": 0.5846
+    },
+    "within_60s": {
+      "share": 0.799,
+      "median_implied_pair": 0.99,
+      "share_pair_below_1": 0.5647
+    }
+  }
+}

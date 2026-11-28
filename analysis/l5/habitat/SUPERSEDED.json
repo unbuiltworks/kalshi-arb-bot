@@ -1,0 +1,68 @@
+{
+  "label": "L5_HABITAT_SCORE_SUPERSEDED_OUTPUTS",
+  "recorded_utc": "2026-09-17T17:11:25.692095+00:00",
+  "authority": "OWNER 2026-09-17: 'explicitly supersede both defective habitat outputs so they cannot be reused'",
+  "commit": "8245805a6f7e79881b699c208f607b03d3bbe00a",
+  "VOID_DO_NOT_CITE": [
+    {
+      "output": "median-market reported as the venue",
+      "published_numbers": {
+        "GEMINI_BTC05M_harder_side": {
+          "5s": 0.0,
+          "30s": 0.0,
+          "60s": 0.0,
+          "120s": 0.0
+        },
+        "PMUS_SPORTS_harder_side": {
+          "5s": 0.0086,
+          "30s": 0.0192,
+          "60s": 0.0257,
+          "120s": 0.0595
+        }
+      },
+      "defect": "the median across markets was labelled the venue. On a venue with 325 markets of which most never trade, the median market is idle, so this understated BOTH venues and reported Gemini as exactly zero when it is not.",
+      "why_it_matters": "it got the venue RANKING wrong, which is the decision the metric exists to inform"
+    },
+    {
+      "output": "cross-market pooled continuation",
+      "published_numbers": {
+        "PMUS_SPORTS_harder_side": {
+          "5s": 0.2919,
+          "30s": 0.6905,
+          "60s": 0.7858,
+          "120s": 0.8301
+        }
+      },
+      "defect": "every market's quotes were merged with every market's interactions, so an observation in market X could be completed by a trade in market Y. On 325 markets that inflated PMUS to 0.83.",
+      "why_it_matters": "it would have made PMUS look like a solved habitat"
+    }
+  ],
+  "REPLACEMENT": {
+    "method": "POOLED = per-market counts SUMMED, an observation only ever completed by a trade in the SAME market; reported beside the MEDIAN MARKET, each named for the question it answers",
+    "pooled_harder_side": {
+      "GEMINI_BTC05M": {
+        "5s": 0.0042,
+        "30s": 0.0205,
+        "60s": 0.0368,
+        "120s": 0.0713,
+        "n": 3803
+      },
+      "PMUS_SPORTS": {
+        "5s": 0.0292,
+        "30s": 0.0592,
+        "60s": 0.0969,
+        "120s": 0.1307,
+        "n": 20404
+      },
+      "POLYMARKET_BTC15M": {
+        "5s": 0.0244,
+        "30s": 0.0297,
+        "60s": 0.0393,
+        "120s": 0.0626,
+        "n": 942
+      }
+    },
+    "polymarket_note": "was UNMEASURABLE from the recorder alone -- L5 fill rows carry no price -- and was made measurable by joining the market's own public prints afterwards, read-only, without touching the running recorder"
+  },
+  "STANDING_LIMITATION": "RANDOM-MOMENT CONTINUATION IS NOT SUFFICIENT AS A HABITAT METRIC. It asks 'if filled at an arbitrary qualifying moment, would the other side trade?' L5's measured episodes are moments he WAS filled while already resting on both sides. The two do not estimate the same probability and must never be compared as if they did. CONDITIONAL_PASSIVE_SURFACE_HABITAT_V1 is the second, separate layer."
+}

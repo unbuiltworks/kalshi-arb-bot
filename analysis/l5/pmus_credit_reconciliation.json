@@ -1,0 +1,48 @@
+{
+ "not_realized": {
+  "audit_caveats": {
+   "mlb": "MLB markets present: 980 (483 live) across 26 games (1 live) at 2026-10-07T03:07:34.353607+00:00; 980/980 carry a positive feeCoefficient (maker-rebate formula applies to fee-charging markets; the rebate itself is credited per fill and is $0.00 below 1.62 shares after cent rounding); 0/980 currently have an ACTIVE liquidity-reward program period, 0/980 any period; MLB entries in the program list: 0 of 40000 (400 pages walked, TRUNCATED -- a sample, which cannot support an absence claim; and the list is an ACTIVE-ONLY view, so it is what is running now and says nothing about what has run before)",
+   "reading": "only observed / venue-confirmed credits are realized; published programs and formula estimates are labelled and never counted"
+  },
+  "formula_estimate_at_our_size_usd": "0.00",
+  "published_programs_covering_our_markets": 0
+ },
+ "observed_unattributed_earnings_total": {
+  "earnings_endpoint_usd": "10.5100000000000001",
+  "labels": "the venue's own total, but with no fill attribution. Never summed with the per-fill figure."
+ },
+ "provenance": {
+  "deployment": "d1e64a5b-7c40-4791-9d6c-92cf480d501b (REMOVED)",
+  "full_document": "written to container-local /tmp/PMUS_INCENTIVES_REAUDIT.json and LOST",
+  "log_timestamp_utc": "2026-10-07T03:07:47.893004880Z",
+  "railway_log_retention_floor_utc": "2026-10-07T03:02:47.613686260Z",
+  "runs_after_2026_11_02": "none; service emitted nothing after 2026-11-01T15:40:00Z",
+  "source": "pmus_incentive_audit single run recovered from Railway deploy logs"
+ },
+ "realized_venue_credited_on_our_fills": {
+  "charged_usd": "2.8600",
+  "contracts_denominator": null,
+  "credited_usd": "10.3600",
+  "fills_at_or_above_rebate_floor": 944,
+  "fills_with_a_credit": 825,
+  "labels": "VENUE-REPORTED on our own fills. `contracts_denominator` is null because the verdict summary carries fill COUNTS and not contract quantities, so no per-contract rate may be derived from this block alone -- ask `per_contract_rate` and it refuses.",
+  "net_usd": "7.5000",
+  "per_fill_rows": 0
+ },
+ "retrieved_at_utc": "2026-10-07T03:02:51.400379+00:00",
+ "schema": "pmus_credit_reconciliation/1",
+ "unresolved": [
+  {
+   "difference_usd": "0.1500000000000001",
+   "earnings_endpoint_usd": "10.5100000000000001",
+   "item": "earnings_endpoint_vs_per_fill_total",
+   "per_fill_usd": "10.3600",
+   "why": "two venue figures for the same thing that the audit did not reconcile. Neither is discarded and they are never summed."
+  },
+  {
+   "item": "per_fill_credit_detail_absent",
+   "remedy": "re-run the audit with its full document written to this durable store",
+   "why": "no per-fill rows in this document. The 2026-10-07 run wrote them to container-local /tmp on a deployment that has been REMOVED, so the detail behind its $10.36 is unrecoverable. Attribution of a credit to a market or a strategy is impossible without them."
+  }
+ ]
+}

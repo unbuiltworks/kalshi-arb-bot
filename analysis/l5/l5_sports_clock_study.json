@@ -1,0 +1,3126 @@
+{
+ "canonical_l5": {
+  "inventory_bucket": {
+   "counts": {
+    "flat": 643,
+    "imb1-10": 3561,
+    "imb10-50": 13913,
+    "imb>50": 51529
+   },
+   "n": 69646,
+   "share": {
+    "flat": 0.0092,
+    "imb1-10": 0.0511,
+    "imb10-50": 0.1998,
+    "imb>50": 0.7399
+   }
+  },
+  "model_sha256_16": "bbb55bf90638d2bd",
+  "n_transitions": 69646,
+  "price_bucket": {
+   "counts": {
+    "p10-25c": 14313,
+    "p25-45c": 13609,
+    "p45-55c": 6886,
+    "p55-75c": 13684,
+    "p75-90c": 8839,
+    "p<10c": 8061,
+    "p>90c": 4254
+   },
+   "n": 69646,
+   "share": {
+    "p10-25c": 0.2055,
+    "p25-45c": 0.1954,
+    "p45-55c": 0.0989,
+    "p55-75c": 0.1965,
+    "p75-90c": 0.1269,
+    "p<10c": 0.1157,
+    "p>90c": 0.0611
+   }
+  },
+  "tte_bucket": {
+   "counts": {
+    "tte2-5m": 17623,
+    "tte30-120s": 10478,
+    "tte5-10m": 22630,
+    "tte<30s": 844,
+    "tte>10m": 18071
+   },
+   "n": 69646,
+   "share": {
+    "tte2-5m": 0.253,
+    "tte30-120s": 0.1504,
+    "tte5-10m": 0.3249,
+    "tte<30s": 0.0121,
+    "tte>10m": 0.2595
+   }
+  }
+ },
+ "canonical_tte_support": {
+  "by_tte_bucket": {
+   "tte2-5m": {
+    "durations": {
+     "15": 14779,
+     "5": 4291
+    },
+    "max_s": 299.0,
+    "min_s": 120.0,
+    "n": 19070,
+    "share": 0.2649
+   },
+   "tte30-120s": {
+    "durations": {
+     "15": 7089,
+     "5": 3634
+    },
+    "max_s": 119.0,
+    "min_s": 30.0,
+    "n": 10723,
+    "share": 0.149
+   },
+   "tte5-10m": {
+    "durations": {
+     "15": 22706
+    },
+    "max_s": 599.0,
+    "min_s": 300.0,
+    "n": 22706,
+    "share": 0.3154
+   },
+   "tte<30s": {
+    "durations": {
+     "15": 483,
+     "5": 373
+    },
+    "max_s": 29.0,
+    "min_s": -5.0,
+    "n": 856,
+    "share": 0.0119
+   },
+   "tte>10m": {
+    "durations": {
+     "15": 18629
+    },
+    "max_s": 896.0,
+    "min_s": 600.0,
+    "n": 18629,
+    "share": 0.2588
+   }
+  },
+  "note": "L5's canonical tape contains ONLY 5- and 15-minute windows, so its 'tte>10m' bucket is bounded above by the 15-minute window length -- it means 'the opening third of a 15-minute window', not 'more than ten minutes from resolution'.",
+  "trades": 71984,
+  "window_durations_minutes": {
+   "15": 556,
+   "5": 1660
+  },
+  "windows": 2216
+ },
+ "causal_audit": {
+  "claim": "every clock field for decision i is reproduced exactly from rows[:i+1]; no field reads a later decision, a settlement outcome, or any future venue state",
+  "fields_checked": 5080,
+  "mismatches": 0
+ },
+ "clock_diagnostics": {
+  "all": {
+   "c1_event_progress": {
+    "by_basis": {
+     "None": 7,
+     "inning/unknown|logged_game_proximity": 51,
+     "match_minute/unknown|logged_game_proximity": 74,
+     "period_token/halftime/unknown|logged_game_proximity": 6,
+     "period_token/quarters/unknown|logged_game_proximity": 159,
+     "period_token/sets/unknown|logged_game_proximity": 308,
+     "unknown_series_length": 6,
+     "unrecognised_period_token": 24
+    },
+    "by_period_token": {
+     "2H": 18,
+     "45'": 50,
+     "56'": 9,
+     "60'": 9,
+     "77'": 6,
+     "Bot 7th": 5,
+     "Bot 8th": 27,
+     "Bot 9th": 12,
+     "HT": 6,
+     "LIVE": 6,
+     "Map 3": 6,
+     "Mid 4th": 6,
+     "Mid 7th": 1,
+     "None": 7,
+     "Q1": 147,
+     "Q2": 12,
+     "S1": 4,
+     "S2": 107,
+     "S3": 100,
+     "S4": 11,
+     "S5": 86
+    },
+    "caveat": "the venue serves the CURRENT state of an event and cannot be replayed; the only retrospective record for R5F is the probe's own selection rows, which are written at market entry, so the attached game position goes stale while a market is held. Effective independent units are MARKETS, not decisions: each market contributes essentially one event phase.",
+    "decisions": 635,
+    "decisions_with_a_venue_game_position": 598,
+    "observation_age_s_pcts": {
+     "max": 1682.4,
+     "p0": 0.1,
+     "p25": 13.2,
+     "p50": 50.2,
+     "p75": 328.7,
+     "p90": 661.5
+    },
+    "share": 0.9417
+   },
+   "c2_market_lifecycle": {
+    "reason": "market.endDate on a live sports market is a fixed gameStartTime + 14 d contract expiry; on a closed market it is overwritten and can precede gameStartTime. Neither is a resolution time.",
+    "remaining_tradeable_life": "NOT SERVED by the venue",
+    "since_first_decision_s_available": 635
+   },
+   "c3_local_regime": {
+    "decisions_with_a_touch": 617,
+    "drift_counts": {
+     "drift2-5c": 83,
+     "drift<2c": 90,
+     "drift>=5c": 212,
+     "drift_unknown": 250
+    },
+    "episodes": 170,
+    "phase_counts": {
+     "ep15-60s": 177,
+     "ep<15s": 367,
+     "ep>=60s": 91
+    }
+   }
+  },
+  "in_sample": {
+   "c1_event_progress": {
+    "by_basis": {
+     "None": 3,
+     "inning/unknown|logged_game_proximity": 39,
+     "match_minute/unknown|logged_game_proximity": 74,
+     "period_token/sets/unknown|logged_game_proximity": 168,
+     "unknown_series_length": 6,
+     "unrecognised_period_token": 24
+    },
+    "by_period_token": {
+     "2H": 18,
+     "45'": 50,
+     "56'": 9,
+     "60'": 9,
+     "77'": 6,
+     "Bot 8th": 27,
+     "Bot 9th": 12,
+     "LIVE": 6,
+     "Map 3": 6,
+     "None": 3,
+     "S2": 63,
+     "S3": 94,
+     "S4": 5,
+     "S5": 6
+    },
+    "caveat": "the venue serves the CURRENT state of an event and cannot be replayed; the only retrospective record for R5F is the probe's own selection rows, which are written at market entry, so the attached game position goes stale while a market is held. Effective independent units are MARKETS, not decisions: each market contributes essentially one event phase.",
+    "decisions": 314,
+    "decisions_with_a_venue_game_position": 281,
+    "observation_age_s_pcts": {
+     "max": 920.2,
+     "p0": 0.1,
+     "p25": 14.3,
+     "p50": 51.1,
+     "p75": 309.0,
+     "p90": 614.5
+    },
+    "share": 0.8949
+   },
+   "c2_market_lifecycle": {
+    "reason": "market.endDate on a live sports market is a fixed gameStartTime + 14 d contract expiry; on a closed market it is overwritten and can precede gameStartTime. Neither is a resolution time.",
+    "remaining_tradeable_life": "NOT SERVED by the venue",
+    "since_first_decision_s_available": 314
+   },
+   "c3_local_regime": {
+    "decisions_with_a_touch": 304,
+    "drift_counts": {
+     "drift2-5c": 32,
+     "drift<2c": 48,
+     "drift>=5c": 114,
+     "drift_unknown": 120
+    },
+    "episodes": 89,
+    "phase_counts": {
+     "ep15-60s": 93,
+     "ep<15s": 178,
+     "ep>=60s": 43
+    }
+   }
+  },
+  "oos": {
+   "c1_event_progress": {
+    "by_basis": {
+     "None": 4,
+     "inning/unknown|logged_game_proximity": 12,
+     "period_token/halftime/unknown|logged_game_proximity": 6,
+     "period_token/quarters/unknown|logged_game_proximity": 159,
+     "period_token/sets/unknown|logged_game_proximity": 140
+    },
+    "by_period_token": {
+     "Bot 7th": 5,
+     "HT": 6,
+     "Mid 4th": 6,
+     "Mid 7th": 1,
+     "None": 4,
+     "Q1": 147,
+     "Q2": 12,
+     "S1": 4,
+     "S2": 44,
+     "S3": 6,
+     "S4": 6,
+     "S5": 80
+    },
+    "caveat": "the venue serves the CURRENT state of an event and cannot be replayed; the only retrospective record for R5F is the probe's own selection rows, which are written at market entry, so the attached game position goes stale while a market is held. Effective independent units are MARKETS, not decisions: each market contributes essentially one event phase.",
+    "decisions": 321,
+    "decisions_with_a_venue_game_position": 317,
+    "observation_age_s_pcts": {
+     "max": 1682.4,
+     "p0": 0.1,
+     "p25": 12.6,
+     "p50": 47.4,
+     "p75": 345.4,
+     "p90": 783.5
+    },
+    "share": 0.9875
+   },
+   "c2_market_lifecycle": {
+    "reason": "market.endDate on a live sports market is a fixed gameStartTime + 14 d contract expiry; on a closed market it is overwritten and can precede gameStartTime. Neither is a resolution time.",
+    "remaining_tradeable_life": "NOT SERVED by the venue",
+    "since_first_decision_s_available": 321
+   },
+   "c3_local_regime": {
+    "decisions_with_a_touch": 313,
+    "drift_counts": {
+     "drift2-5c": 51,
+     "drift<2c": 42,
+     "drift>=5c": 98,
+     "drift_unknown": 130
+    },
+    "episodes": 81,
+    "phase_counts": {
+     "ep15-60s": 84,
+     "ep<15s": 189,
+     "ep>=60s": 48
+    }
+   }
+  }
+ },
+ "coverage_of_logs": {
+  "campaign_rows": 1195,
+  "files": 21,
+  "files_unreadable": [],
+  "kinds": {
+   "REALIZED": 2,
+   "advance_gate": 1,
+   "campaign_continuation_start": 1,
+   "campaign_interrupted": 1,
+   "campaign_start": 3,
+   "campaign_state_restored": 3,
+   "fidelity_gate": 151,
+   "fidelity_verdict": 64,
+   "funnel": 193,
+   "incentive_audit": 2,
+   "orphan_sweep": 3,
+   "ramp_ladder": 3,
+   "recovery_burst": 2,
+   "resume_start": 145,
+   "resume_wait": 30,
+   "selection": 166,
+   "session_end": 251,
+   "session_start": 66,
+   "settlement": 106,
+   "status_unavailable": 2
+  },
+  "parsed_rows": 1195,
+  "truncated_rows": 0
+ },
+ "event_phase_market_level": {
+  "all": {
+   "markets": [
+    {
+     "all_completed": true,
+     "cohort": "oos",
+     "completed_fills": 1,
+     "event_phases": [
+      "ev_early(<0.34)"
+     ],
+     "periods": [
+      "Q1"
+     ],
+     "reduced_fills": 1,
+     "residual_fills": 1,
+     "slug": "asc-cfb-smu-flst-2026-09-07-neg-10pt5"
+    },
+    {
+     "all_completed": true,
+     "cohort": "oos",
+     "completed_fills": 6,
+     "event_phases": [
+      "ev_early(<0.34)"
+     ],
+     "periods": [
+      "Q1"
+     ],
+     "reduced_fills": 6,
+     "residual_fills": 6,
+     "slug": "asc-cfb-smu-flst-2026-09-07-neg-13pt5"
+    },
+    {
+     "all_completed": true,
+     "cohort": "oos",
+     "completed_fills": 4,
+     "event_phases": [
+      "ev_late(>=0.67)"
+     ],
+     "periods": [
+      "S5"
+     ],
+     "reduced_fills": 4,
+     "residual_fills": 4,
+     "slug": "aec-atp-karkha-leatie-2026-09-07"
+    },
+    {
+     "all_completed": true,
+     "cohort": "in_sample",
+     "completed_fills": 3,
+     "event_phases": [
+      "ev_late(>=0.67)"
+     ],
+     "periods": [
+      "Bot 9th"
+     ],
+     "reduced_fills": 3,
+     "residual_fills": 3,
+     "slug": "aec-mlb-az-kc-2026-09-07"
+    },
+    {
+     "all_completed": false,
+     "cohort": "oos",
+     "completed_fills": 0,
+     "event_phases": [
+      "ev_late(>=0.67)"
+     ],
+     "periods": [
+      "S5"
+     ],
+     "reduced_fills": 8,
+     "residual_fills": 9,
+     "slug": "aec-setkameua-malden-stoole-2026-09-08"
+    },
+    {
+     "all_completed": false,
+     "cohort": "in_sample",
+     "completed_fills": 0,
+     "event_phases": [
+      "ev_late(>=0.67)"
+     ],
+     "periods": [
+      "Bot 8th"
+     ],
+     "reduced_fills": 0,
+     "residual_fills": 2,
+     "slug": "tsc-mlb-laa-bos-2026-09-07-7pt5"
+    },
+    {
+     "all_completed": false,
+     "cohort": "in_sample",
+     "completed_fills": 0,
+     "event_phases": [
+      "ev_mid(0.34-0.67)"
+     ],
+     "periods": [
+      "S3"
+     ],
+     "reduced_fills": 1,
+     "residual_fills": 4,
+     "slug": "aec-setkamecz-tomvoj-ticjir-2026-09-07"
+    },
+    {
+     "all_completed": true,
+     "cohort": "oos",
+     "completed_fills": 6,
+     "event_phases": [
+      "ev_mid(0.34-0.67)"
+     ],
+     "periods": [
+      "S2"
+     ],
+     "reduced_fills": 6,
+     "residual_fills": 6,
+     "slug": "aec-setkamemd-ghifio-butdum-2026-09-08"
+    },
+    {
+     "all_completed": false,
+     "cohort": "in_sample",
+     "completed_fills": 0,
+     "event_phases": [
+      "ev_mid(0.34-0.67)"
+     ],
+     "periods": [
+      "S2"
+     ],
+     "reduced_fills": 0,
+     "residual_fills": 1,
+     "slug": "aec-setkamemd-scovla-otgand-2026-09-07"
+    },
+    {
+     "all_completed": true,
+     "cohort": "in_sample",
+     "completed_fills": 3,
+     "event_phases": [
+      "ev_mid(0.34-0.67)"
+     ],
+     "periods": [
+      "S3"
+     ],
+     "reduced_fills": 3,
+     "residual_fills": 3,
+     "slug": "aec-setkameua-malden-pytiva-2026-09-07"
+    },
+    {
+     "all_completed": true,
+     "cohort": "in_sample",
+     "completed_fills": 4,
+     "event_phases": [
+      "ev_mid(0.34-0.67)"
+     ],
+     "periods": [
+      "S2"
+     ],
+     "reduced_fills": 4,
+     "residual_fills": 4,
+     "slug": "aec-setkameua-naiole-khaser-2026-09-07"
+    },
+    {
+     "all_completed": true,
+     "cohort": "in_sample",
+     "completed_fills": 5,
+     "event_phases": [
+      "ev_mid(0.34-0.67)"
+     ],
+     "periods": [
+      "45'"
+     ],
+     "reduced_fills": 5,
+     "residual_fills": 5,
+     "slug": "atc-ekst-psz-plo-2026-09-07-draw"
+    },
+    {
+     "all_completed": true,
+     "cohort": "in_sample",
+     "completed_fills": 2,
+     "event_phases": [
+      "ev_mid(0.34-0.67)",
+      "ev_unknown"
+     ],
+     "periods": [
+      "None",
+      "S2"
+     ],
+     "reduced_fills": 2,
+     "residual_fills": 2,
+     "slug": "aec-setkamemd-salvea-dupale-2026-09-07"
+    }
+   ],
+   "markets_fully_completed_by_event_phase": {
+    "ev_early(<0.34)": {
+     "markets": 2,
+     "markets_fully_completed": 2
+    },
+    "ev_late(>=0.67)": {
+     "markets": 4,
+     "markets_fully_completed": 2
+    },
+    "ev_mid(0.34-0.67)": {
+     "markets": 7,
+     "markets_fully_completed": 5
+    }
+   },
+   "note": "this is the sample the C1 effect actually rests on: a handful of MARKETS, not tens of fills"
+  },
+  "in_sample_EXPLORATORY": {
+   "markets": [
+    {
+     "all_completed": true,
+     "cohort": "in_sample",
+     "completed_fills": 3,
+     "event_phases": [
+      "ev_late(>=0.67)"
+     ],
+     "periods": [
+      "Bot 9th"
+     ],
+     "reduced_fills": 3,
+     "residual_fills": 3,
+     "slug": "aec-mlb-az-kc-2026-09-07"
+    },
+    {
+     "all_completed": false,
+     "cohort": "in_sample",
+     "completed_fills": 0,
+     "event_phases": [
+      "ev_late(>=0.67)"
+     ],
+     "periods": [
+      "Bot 8th"
+     ],
+     "reduced_fills": 0,
+     "residual_fills": 2,
+     "slug": "tsc-mlb-laa-bos-2026-09-07-7pt5"
+    },
+    {
+     "all_completed": false,
+     "cohort": "in_sample",
+     "completed_fills": 0,
+     "event_phases": [
+      "ev_mid(0.34-0.67)"
+     ],
+     "periods": [
+      "S3"
+     ],
+     "reduced_fills": 1,
+     "residual_fills": 4,
+     "slug": "aec-setkamecz-tomvoj-ticjir-2026-09-07"
+    },
+    {
+     "all_completed": false,
+     "cohort": "in_sample",
+     "completed_fills": 0,
+     "event_phases": [
+      "ev_mid(0.34-0.67)"
+     ],
+     "periods": [
+      "S2"
+     ],
+     "reduced_fills": 0,
+     "residual_fills": 1,
+     "slug": "aec-setkamemd-scovla-otgand-2026-09-07"
+    },
+    {
+     "all_completed": true,
+     "cohort": "in_sample",
+     "completed_fills": 3,
+     "event_phases": [
+      "ev_mid(0.34-0.67)"
+     ],
+     "periods": [
+      "S3"
+     ],
+     "reduced_fills": 3,
+     "residual_fills": 3,
+     "slug": "aec-setkameua-malden-pytiva-2026-09-07"
+    },
+    {
+     "all_completed": true,
+     "cohort": "in_sample",
+     "completed_fills": 4,
+     "event_phases": [
+      "ev_mid(0.34-0.67)"
+     ],
+     "periods": [
+      "S2"
+     ],
+     "reduced_fills": 4,
+     "residual_fills": 4,
+     "slug": "aec-setkameua-naiole-khaser-2026-09-07"
+    },
+    {
+     "all_completed": true,
+     "cohort": "in_sample",
+     "completed_fills": 5,
+     "event_phases": [
+      "ev_mid(0.34-0.67)"
+     ],
+     "periods": [
+      "45'"
+     ],
+     "reduced_fills": 5,
+     "residual_fills": 5,
+     "slug": "atc-ekst-psz-plo-2026-09-07-draw"
+    },
+    {
+     "all_completed": true,
+     "cohort": "in_sample",
+     "completed_fills": 2,
+     "event_phases": [
+      "ev_mid(0.34-0.67)",
+      "ev_unknown"
+     ],
+     "periods": [
+      "None",
+      "S2"
+     ],
+     "reduced_fills": 2,
+     "residual_fills": 2,
+     "slug": "aec-setkamemd-salvea-dupale-2026-09-07"
+    }
+   ],
+   "markets_fully_completed_by_event_phase": {
+    "ev_late(>=0.67)": {
+     "markets": 2,
+     "markets_fully_completed": 1
+    },
+    "ev_mid(0.34-0.67)": {
+     "markets": 6,
+     "markets_fully_completed": 4
+    }
+   },
+   "note": "this is the sample the C1 effect actually rests on: a handful of MARKETS, not tens of fills"
+  },
+  "oos_VALIDATION": {
+   "markets": [
+    {
+     "all_completed": true,
+     "cohort": "oos",
+     "completed_fills": 1,
+     "event_phases": [
+      "ev_early(<0.34)"
+     ],
+     "periods": [
+      "Q1"
+     ],
+     "reduced_fills": 1,
+     "residual_fills": 1,
+     "slug": "asc-cfb-smu-flst-2026-09-07-neg-10pt5"
+    },
+    {
+     "all_completed": true,
+     "cohort": "oos",
+     "completed_fills": 6,
+     "event_phases": [
+      "ev_early(<0.34)"
+     ],
+     "periods": [
+      "Q1"
+     ],
+     "reduced_fills": 6,
+     "residual_fills": 6,
+     "slug": "asc-cfb-smu-flst-2026-09-07-neg-13pt5"
+    },
+    {
+     "all_completed": true,
+     "cohort": "oos",
+     "completed_fills": 4,
+     "event_phases": [
+      "ev_late(>=0.67)"
+     ],
+     "periods": [
+      "S5"
+     ],
+     "reduced_fills": 4,
+     "residual_fills": 4,
+     "slug": "aec-atp-karkha-leatie-2026-09-07"
+    },
+    {
+     "all_completed": false,
+     "cohort": "oos",
+     "completed_fills": 0,
+     "event_phases": [
+      "ev_late(>=0.67)"
+     ],
+     "periods": [
+      "S5"
+     ],
+     "reduced_fills": 8,
+     "residual_fills": 9,
+     "slug": "aec-setkameua-malden-stoole-2026-09-08"
+    },
+    {
+     "all_completed": true,
+     "cohort": "oos",
+     "completed_fills": 6,
+     "event_phases": [
+      "ev_mid(0.34-0.67)"
+     ],
+     "periods": [
+      "S2"
+     ],
+     "reduced_fills": 6,
+     "residual_fills": 6,
+     "slug": "aec-setkamemd-ghifio-butdum-2026-09-08"
+    }
+   ],
+   "markets_fully_completed_by_event_phase": {
+    "ev_early(<0.34)": {
+     "markets": 2,
+     "markets_fully_completed": 2
+    },
+    "ev_late(>=0.67)": {
+     "markets": 2,
+     "markets_fully_completed": 1
+    },
+    "ev_mid(0.34-0.67)": {
+     "markets": 1,
+     "markets_fully_completed": 1
+    }
+   },
+   "note": "this is the sample the C1 effect actually rests on: a handful of MARKETS, not tens of fills"
+  }
+ },
+ "frozen_mapping": {
+  "causality": "every component is a function of the current decision, strictly earlier decisions on the same market, and venue fields published before the decision; asserted by causal_audit()",
+  "event_phase": {
+   "buckets": [
+    "ev_unknown",
+    "ev_early(<0.34)",
+    "ev_mid(0.34-0.67)",
+    "ev_late(>=0.67)"
+   ],
+   "missing_policy": "ev_unknown -- never extrapolated from a clock or from endDate",
+   "source": "venue-served period/score/ended via src.pmus_event_progress.proximity"
+  },
+  "id": "L5_SPORTS_CLOCK_v1",
+  "intent": "A shadow-only annotation that replaces the degenerate tte_bucket with two causally-computable sports clocks. It is NOT a replacement state key: the live lookup stays on the frozen v1/v3 key until an out-of-sample gate is passed.",
+  "inventory_bucket": [
+   "flat",
+   "imb1-10",
+   "imb10-50",
+   "imb>50"
+  ],
+  "not_used": [
+   "settlement outcome",
+   "realized pnl",
+   "any later decision",
+   "market endDate (a fixed gameStartTime + 14d contract expiry, not a resolution time)"
+  ],
+  "price_bucket": [
+   "p<10c",
+   "p10-25c",
+   "p25-45c",
+   "p45-55c",
+   "p55-75c",
+   "p75-90c",
+   "p>90c"
+  ],
+  "regime_phase": {
+   "buckets": [
+    "ep<15s",
+    "ep15-60s",
+    "ep>=60s"
+   ],
+   "episode_gap_s": 300.0,
+   "material_move_cents": 2.0,
+   "source": "our own decision tape: seconds since the last material move of the yes-equivalent touch"
+  },
+  "state_key": "{price_bucket}|{event_phase}|{regime_phase}|{inventory_bucket}"
+ },
+ "frozen_mapping_sha256_16": "df3408c843ee7c25",
+ "information_test_on_l5_own_tape": {
+  "H_relation_bits": 1.0668,
+  "by_feature": {
+   "inventory": {
+    "H_rel_given_X_bits": 0.9906,
+    "held_out_log_loss_bits": 0.9915,
+    "information_gain_bits": 0.0762,
+    "states": 4
+   },
+   "price": {
+    "H_rel_given_X_bits": 1.0621,
+    "held_out_log_loss_bits": 1.0631,
+    "information_gain_bits": 0.0047,
+    "states": 7
+   },
+   "price+inventory (time dropped)": {
+    "H_rel_given_X_bits": 0.9856,
+    "held_out_log_loss_bits": 0.9871,
+    "information_gain_bits": 0.0812,
+    "states": 28
+   },
+   "price+regime_age+inventory (tte->regime)": {
+    "H_rel_given_X_bits": 0.9851,
+    "held_out_log_loss_bits": 0.9883,
+    "information_gain_bits": 0.0817,
+    "states": 79
+   },
+   "price+tte+inventory (LIVE KEY)": {
+    "H_rel_given_X_bits": 0.9812,
+    "held_out_log_loss_bits": 0.9853,
+    "information_gain_bits": 0.0856,
+    "states": 136
+   },
+   "price+tte+regime_age+inventory": {
+    "H_rel_given_X_bits": 0.9792,
+    "held_out_log_loss_bits": 0.9876,
+    "information_gain_bits": 0.0877,
+    "states": 297
+   },
+   "regime_age": {
+    "H_rel_given_X_bits": 1.0666,
+    "held_out_log_loss_bits": 1.0675,
+    "information_gain_bits": 0.0002,
+    "states": 3
+   },
+   "tte": {
+    "H_rel_given_X_bits": 1.065,
+    "held_out_log_loss_bits": 1.066,
+    "information_gain_bits": 0.0018,
+    "states": 5
+   }
+  },
+  "n": 69768,
+  "reading": "held-out log-loss is the honest column: lower is better. A time dimension that helps must beat 'price+inventory (time dropped)'.",
+  "relation_marginal": {
+   "complete": 0.484,
+   "extend": 0.5067,
+   "open": 0.0093,
+   "sell": 0.0
+  }
+ },
+ "input_manifest": {
+  "files": [
+   {
+    "bytes": 1250907,
+    "file": "0d32c1a5_0050_0110.txt",
+    "sha256_16": "aaa074de20a085cc"
+   },
+   {
+    "bytes": 1205176,
+    "file": "430638c7_0145_0220.txt",
+    "sha256_16": "6f5256b46fd2448e"
+   },
+   {
+    "bytes": 1685781,
+    "file": "c6c55506_0109_0145.txt",
+    "sha256_16": "a15d54d27ebab2b2"
+   },
+   {
+    "bytes": 64097,
+    "file": "continuation_0033.txt",
+    "sha256_16": "6211cba995da0dfb"
+   },
+   {
+    "bytes": 138344,
+    "file": "malden_stoole_0044_0109.txt",
+    "sha256_16": "937e39988db8bcc1"
+   },
+   {
+    "bytes": 91865,
+    "file": "order_rejected_1920_2100.txt",
+    "sha256_16": "492934ad7d63f20a"
+   },
+   {
+    "bytes": 295449,
+    "file": "preview_complement_1920_2100.txt",
+    "sha256_16": "469b2f36d4cb7f32"
+   },
+   {
+    "bytes": 3957376,
+    "file": "selection_funnel_1920_2100.txt",
+    "sha256_16": "2b7471e3da657629"
+   },
+   {
+    "bytes": 227414,
+    "file": "selection_funnel_resumed_0030.txt",
+    "sha256_16": "773b9beeb909dab2"
+   },
+   {
+    "bytes": 388782,
+    "file": "sessend_2100_0110.txt",
+    "sha256_16": "1e82396e1c08b76b"
+   },
+   {
+    "bytes": 81684,
+    "file": "session_end_1920_1940.txt",
+    "sha256_16": "3f785722be13c48c"
+   },
+   {
+    "bytes": 180847,
+    "file": "session_end_1940_1950.txt",
+    "sha256_16": "3176cad213a712d9"
+   },
+   {
+    "bytes": 233249,
+    "file": "session_end_1950_2000.txt",
+    "sha256_16": "3a5defaaf32e6a22"
+   },
+   {
+    "bytes": 109000,
+    "file": "session_end_2000_2010.txt",
+    "sha256_16": "40dcb3f7291933b9"
+   },
+   {
+    "bytes": 118569,
+    "file": "session_end_2010_2020.txt",
+    "sha256_16": "023fb2f3758b5fe1"
+   },
+   {
+    "bytes": 229724,
+    "file": "session_end_2020_2030.txt",
+    "sha256_16": "d8481411f0b1aa71"
+   },
+   {
+    "bytes": 163237,
+    "file": "session_end_2030_2040.txt",
+    "sha256_16": "6d82446e1d9aa2aa"
+   },
+   {
+    "bytes": 69112,
+    "file": "session_end_2040_2050.txt",
+    "sha256_16": "56e7482a062db684"
+   },
+   {
+    "bytes": 84573,
+    "file": "session_end_2050_2100.txt",
+    "sha256_16": "05f663cc072de7b0"
+   },
+   {
+    "bytes": 223317,
+    "file": "settlement_1920_0908.txt",
+    "sha256_16": "1b0c52a9c9e9eca6"
+   },
+   {
+    "bytes": 69829,
+    "file": "stop_2058.txt",
+    "sha256_16": "5920846b9ba9ffeb"
+   }
+  ],
+  "input_set_sha256_16": "55516865b37cde2b",
+  "n_files": 21
+ },
+ "labels": {
+  "counterfactual": "did not happen; fill-assumed, queue and depth not modelled",
+  "derived": "arithmetic on the ledger's fills / venue rows",
+  "exploratory": "in-sample (R5F day 1); hypothesis generation only",
+  "measured": "read from the venue's keyless public gateway at probe time",
+  "oos": "out-of-sample (2026-09-08 00:51Z onward); evaluated against the mapping frozen before it was looked at",
+  "realized": "the venue's own number (settlement rows only)"
+ },
+ "losing_markets": [
+  "aec-setkamecz-tomvoj-ticjir-2026-09-07",
+  "aec-setkamemd-scovla-otgand-2026-09-07",
+  "aec-setkameua-malden-stoole-2026-09-08",
+  "tsc-mlb-laa-bos-2026-09-07-7pt5"
+ ],
+ "loss_partition_from_ledger": {
+  "non_reconciling_markets": [
+   {
+    "partition_sum_usd": "-7.4951",
+    "residual_contribution_usd": "-1.5079",
+    "slug": "aec-setkameua-malden-stoole-2026-09-08"
+   }
+  ],
+  "note": "a non-reconciling market is EXCLUDED from the totals above. src/l5_r5f_sequence_ledger's FIFO residual walk was built for the day-1 cohort; on a market that opens, completes and re-opens several times it attributes more dollars than the market's residual contribution. Reported as a finding, not patched here (the ledger is another session's file).",
+  "reconciling_markets": [
+   "aec-setkamecz-tomvoj-ticjir-2026-09-07",
+   "aec-setkamemd-scovla-otgand-2026-09-07",
+   "tsc-mlb-laa-bos-2026-09-07-7pt5"
+  ],
+  "reconciling_totals_usd": {
+   "execution_queue_failure": -3.1844,
+   "faithful_l5_behavior": 0.0,
+   "market_selection_transfer": -1.924,
+   "remaining_shell_distortion": -3.2609
+  }
+ },
+ "loss_partition_ledger_raw_totals_UNAUDITED": {
+  "execution_queue_failure": "-8.8802",
+  "faithful_l5_behavior": "0.0000",
+  "market_selection_transfer": "-3.7233",
+  "remaining_shell_distortion": "-3.2609"
+ },
+ "market_runs": [
+  {
+   "decisions": 44,
+   "directional_residual": "10.35",
+   "entry_yes_equiv": 0.44,
+   "fills": 4,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.04,
+   "matched_pair_cost": "1.110705394190871369294605809",
+   "matched_pairs": "4.11",
+   "max_excursion_cents": 41.0,
+   "net_move_cents": -40.0,
+   "realized_usd_venue": "-3.8778",
+   "settlement_status": "REALIZED",
+   "slug": "aec-setkamecz-tomvoj-ticjir-2026-09-07"
+  },
+  {
+   "decisions": 33,
+   "directional_residual": null,
+   "entry_yes_equiv": 0.38,
+   "fills": 7,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.79,
+   "matched_pair_cost": null,
+   "matched_pairs": null,
+   "max_excursion_cents": 41.0,
+   "net_move_cents": 41.0,
+   "realized_usd_venue": null,
+   "settlement_status": null,
+   "slug": "aec-setkamemd-ghifio-butdum-2026-09-08"
+  },
+  {
+   "decisions": 28,
+   "directional_residual": "0.00",
+   "entry_yes_equiv": 0.53,
+   "fills": 5,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.37,
+   "matched_pair_cost": "0.9955636743215031315240083507",
+   "matched_pairs": "9.58",
+   "max_excursion_cents": 39.0,
+   "net_move_cents": -16.0,
+   "realized_usd_venue": null,
+   "settlement_status": "SETTLED_REALIZED_UNCONFIRMED",
+   "slug": "aec-setkameua-naiole-khaser-2026-09-07"
+  },
+  {
+   "decisions": 28,
+   "directional_residual": "9.62",
+   "entry_yes_equiv": 0.38,
+   "fills": 2,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.06,
+   "matched_pair_cost": null,
+   "matched_pairs": "0",
+   "max_excursion_cents": 35.0,
+   "net_move_cents": -32.0,
+   "realized_usd_venue": "-3.1213",
+   "settlement_status": "REALIZED",
+   "slug": "tsc-mlb-laa-bos-2026-09-07-7pt5"
+  },
+  {
+   "decisions": 27,
+   "directional_residual": "0.00",
+   "entry_yes_equiv": 0.46,
+   "fills": 6,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.58,
+   "matched_pair_cost": "0.9680510752688172043010752688",
+   "matched_pairs": "11.16",
+   "max_excursion_cents": 29.0,
+   "net_move_cents": 12.0,
+   "realized_usd_venue": null,
+   "settlement_status": "SETTLED_REALIZED_UNCONFIRMED",
+   "slug": "aec-atp-karkha-leatie-2026-09-07"
+  },
+  {
+   "decisions": 25,
+   "directional_residual": "5.07",
+   "entry_yes_equiv": 0.36,
+   "fills": 1,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.12,
+   "matched_pair_cost": null,
+   "matched_pairs": "0",
+   "max_excursion_cents": 28.0,
+   "net_move_cents": -24.0,
+   "realized_usd_venue": "-1.8252",
+   "settlement_status": "REALIZED",
+   "slug": "aec-setkamemd-scovla-otgand-2026-09-07"
+  },
+  {
+   "decisions": 68,
+   "directional_residual": "0.00",
+   "entry_yes_equiv": 0.39,
+   "fills": 6,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.51,
+   "matched_pair_cost": "0.8829178885630498533724340176",
+   "matched_pairs": "13.64",
+   "max_excursion_cents": 27.0,
+   "net_move_cents": 12.0,
+   "realized_usd_venue": null,
+   "settlement_status": "SETTLED_REALIZED_UNCONFIRMED",
+   "slug": "atc-ekst-psz-plo-2026-09-07-draw"
+  },
+  {
+   "decisions": 74,
+   "directional_residual": null,
+   "entry_yes_equiv": 0.43,
+   "fills": 7,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.2,
+   "matched_pair_cost": null,
+   "matched_pairs": null,
+   "max_excursion_cents": 24.0,
+   "net_move_cents": -23.0,
+   "realized_usd_venue": null,
+   "settlement_status": null,
+   "slug": "asc-cfb-smu-flst-2026-09-07-neg-13pt5"
+  },
+  {
+   "decisions": 28,
+   "directional_residual": null,
+   "entry_yes_equiv": 0.44,
+   "fills": 7,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.68,
+   "matched_pair_cost": null,
+   "matched_pairs": null,
+   "max_excursion_cents": 24.0,
+   "net_move_cents": 24.0,
+   "realized_usd_venue": null,
+   "settlement_status": null,
+   "slug": "asc-cfb-smu-flst-2026-09-07-neg-3pt5"
+  },
+  {
+   "decisions": 43,
+   "directional_residual": "4.76",
+   "entry_yes_equiv": 0.46,
+   "fills": 9,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.51,
+   "matched_pair_cost": "0.9421275163582855890548198240",
+   "matched_pairs": "18.90",
+   "max_excursion_cents": 21.0,
+   "net_move_cents": 5.0,
+   "realized_usd_venue": "-0.4141",
+   "settlement_status": "REALIZED",
+   "slug": "aec-setkameua-malden-stoole-2026-09-08"
+  },
+  {
+   "decisions": 14,
+   "directional_residual": "0.0",
+   "entry_yes_equiv": 0.64,
+   "fills": 4,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.46,
+   "matched_pair_cost": "0.9524137931034482758620689656",
+   "matched_pairs": "8.7",
+   "max_excursion_cents": 18.0,
+   "net_move_cents": -18.0,
+   "realized_usd_venue": null,
+   "settlement_status": "SETTLED_REALIZED_UNCONFIRMED",
+   "slug": "aec-wta-anatik-darsem-2026-09-07"
+  },
+  {
+   "decisions": 12,
+   "directional_residual": null,
+   "entry_yes_equiv": 0.4,
+   "fills": 1,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.57,
+   "matched_pair_cost": null,
+   "matched_pairs": null,
+   "max_excursion_cents": 17.0,
+   "net_move_cents": 17.0,
+   "realized_usd_venue": null,
+   "settlement_status": null,
+   "slug": "asc-cfb-smu-flst-2026-09-07-neg-6pt5"
+  },
+  {
+   "decisions": 12,
+   "directional_residual": "0.00",
+   "entry_yes_equiv": 0.36,
+   "fills": 6,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.5,
+   "matched_pair_cost": "0.9708049242424242424242424243",
+   "matched_pairs": "15.84",
+   "max_excursion_cents": 14.0,
+   "net_move_cents": 14.0,
+   "realized_usd_venue": null,
+   "settlement_status": "SETTLED_REALIZED_UNCONFIRMED",
+   "slug": "aec-mlb-az-kc-2026-09-07"
+  },
+  {
+   "decisions": 12,
+   "directional_residual": null,
+   "entry_yes_equiv": 0.61,
+   "fills": 6,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.52,
+   "matched_pair_cost": null,
+   "matched_pairs": null,
+   "max_excursion_cents": 9.0,
+   "net_move_cents": -9.0,
+   "realized_usd_venue": null,
+   "settlement_status": null,
+   "slug": "aec-atp-artgea-botzan-2026-09-06"
+  },
+  {
+   "decisions": 6,
+   "directional_residual": null,
+   "entry_yes_equiv": 0.51,
+   "fills": 0,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.45,
+   "matched_pair_cost": null,
+   "matched_pairs": null,
+   "max_excursion_cents": 6.0,
+   "net_move_cents": -6.0,
+   "realized_usd_venue": null,
+   "settlement_status": null,
+   "slug": "tsc-mlb-stl-sf-2026-09-07-6pt5"
+  },
+  {
+   "decisions": 12,
+   "directional_residual": null,
+   "entry_yes_equiv": 0.58,
+   "fills": 0,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.56,
+   "matched_pair_cost": null,
+   "matched_pairs": null,
+   "max_excursion_cents": 5.0,
+   "net_move_cents": -2.0,
+   "realized_usd_venue": null,
+   "settlement_status": null,
+   "slug": "aec-setkamemd-turmax-dupale-2026-09-07"
+  },
+  {
+   "decisions": 24,
+   "directional_residual": "0.0",
+   "entry_yes_equiv": 0.41,
+   "fills": 6,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.44,
+   "matched_pair_cost": "0.9833532934131736526946107785",
+   "matched_pairs": "16.7",
+   "max_excursion_cents": 5.0,
+   "net_move_cents": 3.0,
+   "realized_usd_venue": null,
+   "settlement_status": "SETTLED_REALIZED_UNCONFIRMED",
+   "slug": "aec-setkameua-malden-pytiva-2026-09-07"
+  },
+  {
+   "decisions": 12,
+   "directional_residual": "0.00",
+   "entry_yes_equiv": 0.62,
+   "fills": 2,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.58,
+   "matched_pair_cost": "0.995",
+   "matched_pairs": "4.23",
+   "max_excursion_cents": 4.0,
+   "net_move_cents": -4.0,
+   "realized_usd_venue": null,
+   "settlement_status": "SETTLED_REALIZED_UNCONFIRMED",
+   "slug": "aec-atp-fracer-aleblo-2026-09-06"
+  },
+  {
+   "decisions": 5,
+   "directional_residual": null,
+   "entry_yes_equiv": 0.57,
+   "fills": 0,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.53,
+   "matched_pair_cost": null,
+   "matched_pairs": null,
+   "max_excursion_cents": 4.0,
+   "net_move_cents": -4.0,
+   "realized_usd_venue": null,
+   "settlement_status": null,
+   "slug": "aec-setkameua-hreiur-konrom-2026-09-08"
+  },
+  {
+   "decisions": 12,
+   "directional_residual": null,
+   "entry_yes_equiv": 0.55,
+   "fills": 0,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.52,
+   "matched_pair_cost": null,
+   "matched_pairs": null,
+   "max_excursion_cents": 3.0,
+   "net_move_cents": -3.0,
+   "realized_usd_venue": null,
+   "settlement_status": null,
+   "slug": "aec-setkameua-hrykos-skaser-2026-09-08"
+  },
+  {
+   "decisions": 9,
+   "directional_residual": null,
+   "entry_yes_equiv": 0.47,
+   "fills": 2,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.44,
+   "matched_pair_cost": null,
+   "matched_pairs": null,
+   "max_excursion_cents": 3.0,
+   "net_move_cents": -3.0,
+   "realized_usd_venue": null,
+   "settlement_status": null,
+   "slug": "asc-cfb-smu-flst-2026-09-07-neg-10pt5"
+  },
+  {
+   "decisions": 5,
+   "directional_residual": "0.00",
+   "entry_yes_equiv": 0.4,
+   "fills": 4,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.42,
+   "matched_pair_cost": "0.98",
+   "matched_pairs": "10.82",
+   "max_excursion_cents": 2.0,
+   "net_move_cents": 2.0,
+   "realized_usd_venue": null,
+   "settlement_status": "SETTLED_REALIZED_UNCONFIRMED",
+   "slug": "aec-setkamemd-salvea-dupale-2026-09-07"
+  },
+  {
+   "decisions": 6,
+   "directional_residual": null,
+   "entry_yes_equiv": 0.38,
+   "fills": 0,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.39,
+   "matched_pair_cost": null,
+   "matched_pairs": null,
+   "max_excursion_cents": 1.0,
+   "net_move_cents": 1.0,
+   "realized_usd_venue": null,
+   "settlement_status": null,
+   "slug": "aec-cs2-ntr-cs-2026-09-07"
+  },
+  {
+   "decisions": 18,
+   "directional_residual": null,
+   "entry_yes_equiv": 0.53,
+   "fills": 0,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.54,
+   "matched_pair_cost": null,
+   "matched_pairs": null,
+   "max_excursion_cents": 1.0,
+   "net_move_cents": 1.0,
+   "realized_usd_venue": null,
+   "settlement_status": null,
+   "slug": "asc-cfb-smu-flst-2026-09-07-neg-2pt5"
+  },
+  {
+   "decisions": 18,
+   "directional_residual": "0.00",
+   "entry_yes_equiv": 0.61,
+   "fills": 5,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.61,
+   "matched_pair_cost": "0.99984375",
+   "matched_pairs": "8.32",
+   "max_excursion_cents": 1.0,
+   "net_move_cents": 0.0,
+   "realized_usd_venue": null,
+   "settlement_status": "SETTLED_REALIZED_UNCONFIRMED",
+   "slug": "atc-sea-udi-laz-2026-09-07-udi"
+  },
+  {
+   "decisions": 6,
+   "directional_residual": null,
+   "entry_yes_equiv": 0.58,
+   "fills": 0,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.58,
+   "matched_pair_cost": null,
+   "matched_pairs": null,
+   "max_excursion_cents": 0.0,
+   "net_move_cents": 0.0,
+   "realized_usd_venue": null,
+   "settlement_status": null,
+   "slug": "aec-cfb-smu-flst-2026-09-07"
+  },
+  {
+   "decisions": 6,
+   "directional_residual": null,
+   "entry_yes_equiv": 0.37,
+   "fills": 0,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.37,
+   "matched_pair_cost": null,
+   "matched_pairs": null,
+   "max_excursion_cents": 0.0,
+   "net_move_cents": 0.0,
+   "realized_usd_venue": null,
+   "settlement_status": null,
+   "slug": "aec-setkameua-derdmy-abaspa-2026-09-08"
+  },
+  {
+   "decisions": 6,
+   "directional_residual": null,
+   "entry_yes_equiv": 0.36,
+   "fills": 0,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.36,
+   "matched_pair_cost": null,
+   "matched_pairs": null,
+   "max_excursion_cents": 0.0,
+   "net_move_cents": 0.0,
+   "realized_usd_venue": null,
+   "settlement_status": null,
+   "slug": "aec-setkameua-hreiur-kuzgre-2026-09-08"
+  },
+  {
+   "decisions": 6,
+   "directional_residual": null,
+   "entry_yes_equiv": 0.69,
+   "fills": 0,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.69,
+   "matched_pair_cost": null,
+   "matched_pairs": null,
+   "max_excursion_cents": 0.0,
+   "net_move_cents": 0.0,
+   "realized_usd_venue": null,
+   "settlement_status": null,
+   "slug": "aec-setkameua-kuzgre-krovit-2026-09-07"
+  },
+  {
+   "decisions": 6,
+   "directional_residual": null,
+   "entry_yes_equiv": 0.49,
+   "fills": 0,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.49,
+   "matched_pair_cost": null,
+   "matched_pairs": null,
+   "max_excursion_cents": 0.0,
+   "net_move_cents": 0.0,
+   "realized_usd_venue": null,
+   "settlement_status": null,
+   "slug": "asc-cfb-smu-flst-2026-09-07-1h-neg-1pt5"
+  },
+  {
+   "decisions": 6,
+   "directional_residual": null,
+   "entry_yes_equiv": 0.64,
+   "fills": 0,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.64,
+   "matched_pair_cost": null,
+   "matched_pairs": null,
+   "max_excursion_cents": 0.0,
+   "net_move_cents": 0.0,
+   "realized_usd_venue": null,
+   "settlement_status": null,
+   "slug": "atc-arg2-chi-qui-2026-09-05-chi"
+  },
+  {
+   "decisions": 6,
+   "directional_residual": null,
+   "entry_yes_equiv": 0.43,
+   "fills": 0,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.43,
+   "matched_pair_cost": null,
+   "matched_pairs": null,
+   "max_excursion_cents": 0.0,
+   "net_move_cents": 0.0,
+   "realized_usd_venue": null,
+   "settlement_status": null,
+   "slug": "atc-lpa-uni-iac-2026-09-07-draw"
+  },
+  {
+   "decisions": 6,
+   "directional_residual": null,
+   "entry_yes_equiv": 0.46,
+   "fills": 0,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.46,
+   "matched_pair_cost": null,
+   "matched_pairs": null,
+   "max_excursion_cents": 0.0,
+   "net_move_cents": 0.0,
+   "realized_usd_venue": null,
+   "settlement_status": null,
+   "slug": "tsc-cfb-smu-flst-2026-09-07-total-53pt5"
+  },
+  {
+   "decisions": 6,
+   "directional_residual": null,
+   "entry_yes_equiv": 0.61,
+   "fills": 0,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.61,
+   "matched_pair_cost": null,
+   "matched_pairs": null,
+   "max_excursion_cents": 0.0,
+   "net_move_cents": 0.0,
+   "realized_usd_venue": null,
+   "settlement_status": null,
+   "slug": "tsc-mlb-stl-sf-2026-09-07-f5-2pt5"
+  },
+  {
+   "decisions": 6,
+   "directional_residual": null,
+   "entry_yes_equiv": 0.42,
+   "fills": 0,
+   "labels": "path fields are DESCRIPTIVE (whole-market), not features",
+   "last_yes_equiv": 0.42,
+   "matched_pair_cost": null,
+   "matched_pairs": null,
+   "max_excursion_cents": 0.0,
+   "net_move_cents": 0.0,
+   "realized_usd_venue": null,
+   "settlement_status": null,
+   "slug": "tsc-sea-udi-laz-2026-09-07-2pt5"
+  }
+ ],
+ "oos_gate": {
+  "applies_to": "any live use of the event-progress clock, in any form",
+  "id": "L5_SPORTS_CLOCK_v1_OOS_GATE",
+  "if_it_fails": "record the shadow numbers and change nothing.",
+  "must_all_pass": [
+   {
+    "name": "sample",
+    "requirement": ">= 60 residual-creating fills spread over >= 40 DISTINCT markets and >= 4 leagues, collected AFTER the mapping hash below was written, in shadow"
+   },
+   {
+    "name": "effect",
+    "requirement": "completion(ev_early|ev_mid) - completion(ev_late), cluster-bootstrapped over markets, has a 95% CI whose LOWER bound is > 0.10 (not merely excludes zero)"
+   },
+   {
+    "name": "coherence",
+    "requirement": "the substituted key must not lose action fidelity: agreement with the frozen v1/v3 relation draw, measured on the same rows, must not fall by more than 0.5 pp, and the held-out log-loss of price+event_phase+inventory must be <= that of price+tte+inventory on the SAME rows"
+   },
+   {
+    "name": "coverage",
+    "requirement": "a venue-served game position on >= 90% of decisions with an observation age p90 <= 120 s (i.e. the clock is polled per decision, not carried from market entry)"
+   },
+   {
+    "name": "no_pnl_only_promotion",
+    "requirement": "a P&L improvement alone does NOT satisfy this gate; the coherence criterion must pass on its own"
+   }
+  ],
+  "why_a_gate_at_all": "the in-sample effect is null and the out-of-sample effect rests on 5 markets; a gate is the only thing standing between a 13-market pattern and a live behaviour change"
+ },
+ "outcome_linkage": {
+  "all": {
+   "completion_by_drift_bucket": {
+    "drift2-5c": {
+     "hits": 4,
+     "n": 7,
+     "rate": 0.5714
+    },
+    "drift<2c": {
+     "hits": 6,
+     "n": 7,
+     "rate": 0.8571
+    },
+    "drift>=5c": {
+     "hits": 13,
+     "n": 23,
+     "rate": 0.5652
+    },
+    "drift_unknown": {
+     "hits": 11,
+     "n": 13,
+     "rate": 0.8462
+    }
+   },
+   "completion_by_event_phase": {
+    "ev_early(<0.34)": {
+     "hits": 7,
+     "n": 7,
+     "rate": 1.0
+    },
+    "ev_late(>=0.67)": {
+     "hits": 7,
+     "n": 18,
+     "rate": 0.3889
+    },
+    "ev_mid(0.34-0.67)": {
+     "hits": 19,
+     "n": 24,
+     "rate": 0.7917
+    },
+    "ev_unknown": {
+     "hits": 1,
+     "n": 1,
+     "rate": 1.0
+    }
+   },
+   "completion_by_regime_phase": {
+    "ep15-60s": {
+     "hits": 10,
+     "n": 14,
+     "rate": 0.7143
+    },
+    "ep<15s": {
+     "hits": 18,
+     "n": 30,
+     "rate": 0.6
+    },
+    "ep>=60s": {
+     "hits": 6,
+     "n": 6,
+     "rate": 1.0
+    }
+   },
+   "completion_by_tte_bucket": {
+    "tte>10m": {
+     "hits": 34,
+     "n": 50,
+     "rate": 0.68
+    }
+   },
+   "completion_latency_median_s": {
+    "c1_event_phase": {
+     "ev_early(<0.34)": {
+      "median_s": 1426.0,
+      "n": 7
+     },
+     "ev_late(>=0.67)": {
+      "median_s": 16.7,
+      "n": 7
+     },
+     "ev_mid(0.34-0.67)": {
+      "median_s": 96.5,
+      "n": 19
+     },
+     "ev_unknown": {
+      "median_s": 3.4,
+      "n": 1
+     }
+    },
+    "c3_drift_bucket": {
+     "drift2-5c": {
+      "median_s": 230.6,
+      "n": 4
+     },
+     "drift<2c": {
+      "median_s": 581.0,
+      "n": 6
+     },
+     "drift>=5c": {
+      "median_s": 73.4,
+      "n": 13
+     },
+     "drift_unknown": {
+      "median_s": 16.7,
+      "n": 11
+     }
+    },
+    "c3_regime_phase": {
+     "ep15-60s": {
+      "median_s": 121.2,
+      "n": 10
+     },
+     "ep<15s": {
+      "median_s": 41.9,
+      "n": 18
+     },
+     "ep>=60s": {
+      "median_s": 581.0,
+      "n": 6
+     }
+    }
+   },
+   "decisions": 635,
+   "effects": {
+    "completion(ev_early|mid) - completion(ev_late)": {
+     "B_defined": 3911,
+     "ci95": [
+      -0.266,
+      0.9231
+     ],
+     "clusters": 13,
+     "labels": "cluster bootstrap over markets; percentile CI",
+     "point": 0.4498
+    },
+    "completion(quiet regime) - completion(drift>=5c)": {
+     "B_defined": 4000,
+     "ci95": [
+      -0.1765,
+      0.5622
+     ],
+     "clusters": 13,
+     "labels": "cluster bootstrap over markets; percentile CI",
+     "point": 0.2848
+    },
+    "fill_rate(ep<15s) - fill_rate(ep>=60s)": {
+     "B_defined": 4000,
+     "ci95": [
+      -0.1761,
+      0.1081
+     ],
+     "clusters": 35,
+     "labels": "cluster bootstrap over markets; percentile CI",
+     "point": -0.0099
+    }
+   },
+   "fill_rate_by_drift_bucket": {
+    "drift2-5c": {
+     "hits": 11,
+     "n": 77,
+     "rate": 0.1429
+    },
+    "drift<2c": {
+     "hits": 11,
+     "n": 84,
+     "rate": 0.131
+    },
+    "drift>=5c": {
+     "hits": 37,
+     "n": 168,
+     "rate": 0.2202
+    },
+    "drift_unknown": {
+     "hits": 31,
+     "n": 232,
+     "rate": 0.1336
+    }
+   },
+   "fill_rate_by_event_phase": {
+    "ev_early(<0.34)": {
+     "hits": 17,
+     "n": 157,
+     "rate": 0.1083
+    },
+    "ev_late(>=0.67)": {
+     "hits": 29,
+     "n": 133,
+     "rate": 0.218
+    },
+    "ev_mid(0.34-0.67)": {
+     "hits": 37,
+     "n": 235,
+     "rate": 0.1574
+    },
+    "ev_unknown": {
+     "hits": 7,
+     "n": 36,
+     "rate": 0.1944
+    }
+   },
+   "fill_rate_by_regime_phase": {
+    "ep15-60s": {
+     "hits": 22,
+     "n": 154,
+     "rate": 0.1429
+    },
+    "ep<15s": {
+     "hits": 54,
+     "n": 327,
+     "rate": 0.1651
+    },
+    "ep>=60s": {
+     "hits": 14,
+     "n": 80,
+     "rate": 0.175
+    }
+   },
+   "fill_rate_by_tte_bucket": {
+    "tte>10m": {
+     "hits": 90,
+     "n": 561,
+     "rate": 0.1604
+    }
+   },
+   "order_placing_decisions": 561,
+   "residual_creating_fills": 50,
+   "residual_reduced_by_event_phase": {
+    "ev_early(<0.34)": {
+     "hits": 7,
+     "n": 7,
+     "rate": 1.0
+    },
+    "ev_late(>=0.67)": {
+     "hits": 15,
+     "n": 18,
+     "rate": 0.8333
+    },
+    "ev_mid(0.34-0.67)": {
+     "hits": 20,
+     "n": 24,
+     "rate": 0.8333
+    },
+    "ev_unknown": {
+     "hits": 1,
+     "n": 1,
+     "rate": 1.0
+    }
+   },
+   "residual_reduced_by_regime_phase": {
+    "ep15-60s": {
+     "hits": 13,
+     "n": 14,
+     "rate": 0.9286
+    },
+    "ep<15s": {
+     "hits": 24,
+     "n": 30,
+     "rate": 0.8
+    },
+    "ep>=60s": {
+     "hits": 6,
+     "n": 6,
+     "rate": 1.0
+    }
+   }
+  },
+  "in_sample_EXPLORATORY": {
+   "completion_by_drift_bucket": {
+    "drift2-5c": {
+     "hits": 0,
+     "n": 2,
+     "rate": 0.0
+    },
+    "drift<2c": {
+     "hits": 3,
+     "n": 3,
+     "rate": 1.0
+    },
+    "drift>=5c": {
+     "hits": 7,
+     "n": 10,
+     "rate": 0.7
+    },
+    "drift_unknown": {
+     "hits": 7,
+     "n": 9,
+     "rate": 0.7778
+    }
+   },
+   "completion_by_event_phase": {
+    "ev_late(>=0.67)": {
+     "hits": 3,
+     "n": 5,
+     "rate": 0.6
+    },
+    "ev_mid(0.34-0.67)": {
+     "hits": 13,
+     "n": 18,
+     "rate": 0.7222
+    },
+    "ev_unknown": {
+     "hits": 1,
+     "n": 1,
+     "rate": 1.0
+    }
+   },
+   "completion_by_regime_phase": {
+    "ep15-60s": {
+     "hits": 6,
+     "n": 7,
+     "rate": 0.8571
+    },
+    "ep<15s": {
+     "hits": 8,
+     "n": 14,
+     "rate": 0.5714
+    },
+    "ep>=60s": {
+     "hits": 3,
+     "n": 3,
+     "rate": 1.0
+    }
+   },
+   "completion_by_tte_bucket": {
+    "tte>10m": {
+     "hits": 17,
+     "n": 24,
+     "rate": 0.7083
+    }
+   },
+   "completion_latency_median_s": {
+    "c1_event_phase": {
+     "ev_late(>=0.67)": {
+      "median_s": 3.3,
+      "n": 3
+     },
+     "ev_mid(0.34-0.67)": {
+      "median_s": 73.4,
+      "n": 13
+     },
+     "ev_unknown": {
+      "median_s": 3.4,
+      "n": 1
+     }
+    },
+    "c3_drift_bucket": {
+     "drift<2c": {
+      "median_s": 215.1,
+      "n": 3
+     },
+     "drift>=5c": {
+      "median_s": 31.4,
+      "n": 7
+     },
+     "drift_unknown": {
+      "median_s": 9.2,
+      "n": 7
+     }
+    },
+    "c3_regime_phase": {
+     "ep15-60s": {
+      "median_s": 73.4,
+      "n": 6
+     },
+     "ep<15s": {
+      "median_s": 31.4,
+      "n": 8
+     },
+     "ep>=60s": {
+      "median_s": 215.1,
+      "n": 3
+     }
+    }
+   },
+   "decisions": 314,
+   "effects": {
+    "completion(ev_early|mid) - completion(ev_late)": {
+     "B_defined": 3030,
+     "ci95": [
+      -0.5909,
+      0.9474
+     ],
+     "clusters": 8,
+     "labels": "cluster bootstrap over markets; percentile CI",
+     "point": 0.1222
+    },
+    "completion(quiet regime) - completion(drift>=5c)": {
+     "B_defined": 3965,
+     "ci95": [
+      -0.375,
+      0.5923
+     ],
+     "clusters": 8,
+     "labels": "cluster bootstrap over markets; percentile CI",
+     "point": 0.1333
+    },
+    "fill_rate(ep<15s) - fill_rate(ep>=60s)": {
+     "B_defined": 3991,
+     "ci95": [
+      -0.1966,
+      0.2258
+     ],
+     "clusters": 16,
+     "labels": "cluster bootstrap over markets; percentile CI",
+     "point": -0.0131
+    }
+   },
+   "fill_rate_by_drift_bucket": {
+    "drift2-5c": {
+     "hits": 2,
+     "n": 26,
+     "rate": 0.0769
+    },
+    "drift<2c": {
+     "hits": 6,
+     "n": 44,
+     "rate": 0.1364
+    },
+    "drift>=5c": {
+     "hits": 17,
+     "n": 71,
+     "rate": 0.2394
+    },
+    "drift_unknown": {
+     "hits": 20,
+     "n": 110,
+     "rate": 0.1818
+    }
+   },
+   "fill_rate_by_event_phase": {
+    "ev_late(>=0.67)": {
+     "hits": 8,
+     "n": 45,
+     "rate": 0.1778
+    },
+    "ev_mid(0.34-0.67)": {
+     "hits": 30,
+     "n": 174,
+     "rate": 0.1724
+    },
+    "ev_unknown": {
+     "hits": 7,
+     "n": 32,
+     "rate": 0.2188
+    }
+   },
+   "fill_rate_by_regime_phase": {
+    "ep15-60s": {
+     "hits": 13,
+     "n": 72,
+     "rate": 0.1806
+    },
+    "ep<15s": {
+     "hits": 25,
+     "n": 142,
+     "rate": 0.1761
+    },
+    "ep>=60s": {
+     "hits": 7,
+     "n": 37,
+     "rate": 0.1892
+    }
+   },
+   "fill_rate_by_tte_bucket": {
+    "tte>10m": {
+     "hits": 45,
+     "n": 251,
+     "rate": 0.1793
+    }
+   },
+   "order_placing_decisions": 251,
+   "residual_creating_fills": 24,
+   "residual_reduced_by_event_phase": {
+    "ev_late(>=0.67)": {
+     "hits": 3,
+     "n": 5,
+     "rate": 0.6
+    },
+    "ev_mid(0.34-0.67)": {
+     "hits": 14,
+     "n": 18,
+     "rate": 0.7778
+    },
+    "ev_unknown": {
+     "hits": 1,
+     "n": 1,
+     "rate": 1.0
+    }
+   },
+   "residual_reduced_by_regime_phase": {
+    "ep15-60s": {
+     "hits": 6,
+     "n": 7,
+     "rate": 0.8571
+    },
+    "ep<15s": {
+     "hits": 9,
+     "n": 14,
+     "rate": 0.6429
+    },
+    "ep>=60s": {
+     "hits": 3,
+     "n": 3,
+     "rate": 1.0
+    }
+   }
+  },
+  "oos_VALIDATION": {
+   "completion_by_drift_bucket": {
+    "drift2-5c": {
+     "hits": 4,
+     "n": 5,
+     "rate": 0.8
+    },
+    "drift<2c": {
+     "hits": 3,
+     "n": 4,
+     "rate": 0.75
+    },
+    "drift>=5c": {
+     "hits": 6,
+     "n": 13,
+     "rate": 0.4615
+    },
+    "drift_unknown": {
+     "hits": 4,
+     "n": 4,
+     "rate": 1.0
+    }
+   },
+   "completion_by_event_phase": {
+    "ev_early(<0.34)": {
+     "hits": 7,
+     "n": 7,
+     "rate": 1.0
+    },
+    "ev_late(>=0.67)": {
+     "hits": 4,
+     "n": 13,
+     "rate": 0.3077
+    },
+    "ev_mid(0.34-0.67)": {
+     "hits": 6,
+     "n": 6,
+     "rate": 1.0
+    }
+   },
+   "completion_by_regime_phase": {
+    "ep15-60s": {
+     "hits": 4,
+     "n": 7,
+     "rate": 0.5714
+    },
+    "ep<15s": {
+     "hits": 10,
+     "n": 16,
+     "rate": 0.625
+    },
+    "ep>=60s": {
+     "hits": 3,
+     "n": 3,
+     "rate": 1.0
+    }
+   },
+   "completion_by_tte_bucket": {
+    "tte>10m": {
+     "hits": 17,
+     "n": 26,
+     "rate": 0.6538
+    }
+   },
+   "completion_latency_median_s": {
+    "c1_event_phase": {
+     "ev_early(<0.34)": {
+      "median_s": 1426.0,
+      "n": 7
+     },
+     "ev_late(>=0.67)": {
+      "median_s": 195.6,
+      "n": 4
+     },
+     "ev_mid(0.34-0.67)": {
+      "median_s": 130.2,
+      "n": 6
+     }
+    },
+    "c3_drift_bucket": {
+     "drift2-5c": {
+      "median_s": 230.6,
+      "n": 4
+     },
+     "drift<2c": {
+      "median_s": 581.0,
+      "n": 3
+     },
+     "drift>=5c": {
+      "median_s": 195.6,
+      "n": 6
+     },
+     "drift_unknown": {
+      "median_s": 1660.7,
+      "n": 4
+     }
+    },
+    "c3_regime_phase": {
+     "ep15-60s": {
+      "median_s": 438.6,
+      "n": 4
+     },
+     "ep<15s": {
+      "median_s": 195.6,
+      "n": 10
+     },
+     "ep>=60s": {
+      "median_s": 581.0,
+      "n": 3
+     }
+    }
+   },
+   "decisions": 321,
+   "effects": {
+    "completion(ev_early|mid) - completion(ev_late)": {
+     "B_defined": 3412,
+     "ci95": [
+      0.0,
+      1.0
+     ],
+     "clusters": 5,
+     "labels": "cluster bootstrap over markets; percentile CI",
+     "point": 0.6923
+    },
+    "completion(quiet regime) - completion(drift>=5c)": {
+     "B_defined": 3938,
+     "ci95": [
+      0.0,
+      0.6833
+     ],
+     "clusters": 5,
+     "labels": "cluster bootstrap over markets; percentile CI",
+     "point": 0.4135
+    },
+    "fill_rate(ep<15s) - fill_rate(ep>=60s)": {
+     "B_defined": 3863,
+     "ci95": [
+      -0.5215,
+      0.1268
+     ],
+     "clusters": 19,
+     "labels": "cluster bootstrap over markets; percentile CI",
+     "point": -0.006
+    }
+   },
+   "fill_rate_by_drift_bucket": {
+    "drift2-5c": {
+     "hits": 9,
+     "n": 51,
+     "rate": 0.1765
+    },
+    "drift<2c": {
+     "hits": 5,
+     "n": 40,
+     "rate": 0.125
+    },
+    "drift>=5c": {
+     "hits": 20,
+     "n": 97,
+     "rate": 0.2062
+    },
+    "drift_unknown": {
+     "hits": 11,
+     "n": 122,
+     "rate": 0.0902
+    }
+   },
+   "fill_rate_by_event_phase": {
+    "ev_early(<0.34)": {
+     "hits": 17,
+     "n": 157,
+     "rate": 0.1083
+    },
+    "ev_late(>=0.67)": {
+     "hits": 21,
+     "n": 88,
+     "rate": 0.2386
+    },
+    "ev_mid(0.34-0.67)": {
+     "hits": 7,
+     "n": 61,
+     "rate": 0.1148
+    },
+    "ev_unknown": {
+     "hits": 0,
+     "n": 4,
+     "rate": 0.0
+    }
+   },
+   "fill_rate_by_regime_phase": {
+    "ep15-60s": {
+     "hits": 9,
+     "n": 82,
+     "rate": 0.1098
+    },
+    "ep<15s": {
+     "hits": 29,
+     "n": 185,
+     "rate": 0.1568
+    },
+    "ep>=60s": {
+     "hits": 7,
+     "n": 43,
+     "rate": 0.1628
+    }
+   },
+   "fill_rate_by_tte_bucket": {
+    "tte>10m": {
+     "hits": 45,
+     "n": 310,
+     "rate": 0.1452
+    }
+   },
+   "order_placing_decisions": 310,
+   "residual_creating_fills": 26,
+   "residual_reduced_by_event_phase": {
+    "ev_early(<0.34)": {
+     "hits": 7,
+     "n": 7,
+     "rate": 1.0
+    },
+    "ev_late(>=0.67)": {
+     "hits": 12,
+     "n": 13,
+     "rate": 0.9231
+    },
+    "ev_mid(0.34-0.67)": {
+     "hits": 6,
+     "n": 6,
+     "rate": 1.0
+    }
+   },
+   "residual_reduced_by_regime_phase": {
+    "ep15-60s": {
+     "hits": 7,
+     "n": 7,
+     "rate": 1.0
+    },
+    "ep<15s": {
+     "hits": 15,
+     "n": 16,
+     "rate": 0.9375
+    },
+    "ep>=60s": {
+     "hits": 3,
+     "n": 3,
+     "rate": 1.0
+    }
+   }
+  }
+ },
+ "owner_ref": "#167 comment 5577894093",
+ "parameters": {
+  "bootstrap_B": 4000,
+  "bootstrap_seed": 20260908,
+  "drift_window_s": 120.0,
+  "gap_s": 300.0,
+  "in_sample_end_utc": "2026-09-07T23:00:00+00:00",
+  "k_cents": 2.0
+ },
+ "question": "most defensible sports analogue of L5's crypto seconds_to_settlement / window-phase state; and whether the current mapping materially explains R5F residual losses or missed completions",
+ "realized_usd_venue_sum": "-9.2384",
+ "regime_clock_sensitivity": {
+  "k=1.0c": {
+   "episodes": 228,
+   "phase_share": {
+    "ep15-60s": 0.2488,
+    "ep<15s": 0.6929,
+    "ep>=60s": 0.0583
+   }
+  },
+  "k=2.0c": {
+   "episodes": 170,
+   "phase_share": {
+    "ep15-60s": 0.2787,
+    "ep<15s": 0.578,
+    "ep>=60s": 0.1433
+   }
+  },
+  "k=3.0c": {
+   "episodes": 151,
+   "phase_share": {
+    "ep15-60s": 0.2882,
+    "ep<15s": 0.5244,
+    "ep>=60s": 0.1874
+   }
+  },
+  "k=5.0c": {
+   "episodes": 109,
+   "phase_share": {
+    "ep15-60s": 0.2835,
+    "ep<15s": 0.4236,
+    "ep>=60s": 0.2929
+   }
+  }
+ },
+ "sample": {
+  "decisions": 635,
+  "fills": 90,
+  "in_sample_decisions": 314,
+  "in_sample_markets": 16,
+  "in_sample_window_utc": [
+   "2026-09-07T19:24:46.627181+00:00",
+   "2026-09-07T20:58:26.801232+00:00"
+  ],
+  "markets": 35,
+  "oos_decisions": 321,
+  "oos_markets": 19,
+  "oos_window_utc": [
+   "2026-09-08T00:51:17.648514+00:00",
+   "2026-09-08T02:14:54.895313+00:00"
+  ],
+  "residual_creating_fills": 50,
+  "warning": "SMALL. Every rate below is a handful of markets; the cluster bootstrap CIs are the honest read, not the point estimates."
+ },
+ "smallest_shadow_only_implementation": {
+  "changes": [
+   "on each decision row, alongside the existing `state`, add `sports_clock`: {event_phase, game_period, game_proximity, proximity_basis, observation_age_s, regime_phase, regime_age_s, trailing_drift_cents, mapping_sha}",
+   "no change to `state`, to the lookup key, to relation selection, to sizing, to pricing, to admission, or to any cap or gate",
+   "the annotation must be written even when it is ev_unknown, so the coverage number in the gate is measurable"
+  ],
+  "coherence_argument_not_pnl": "the case for recording it is that the live key currently asserts a state ('tte>10m') that in L5's training data means 'the opening third of a 15-minute crypto window'. Recording the event phase makes the translation auditable: we can finally SAY which sports states we are mapping onto which crypto states, and show the mapping is not outcome-derived. That is worth doing even if the P&L effect is zero, and it is the only reason offered here.",
+  "explicitly_not_changed": [
+   "the frozen action model (sha bbb55bf90638d2bd) and lookup v3",
+   "the fidelity gate",
+   "the safety shell",
+   "the approvals file",
+   "market admission / selection ranking"
+  ],
+  "how_it_gets_evaluated": "re-run this study with --logs pointed at the shadow logs; the OOS gate above is the pass condition. Until it passes, the annotation is measurement only.",
+  "id": "L5_SPORTS_CLOCK_v1_SHADOW",
+  "one_line": "attach the venue-served event phase and the local-regime age to every decision row as ANNOTATION, and change nothing else",
+  "why_this_and_not_more": "the live probe already fetches the venue's live-event feed every cycle (src/pmus_event_progress.table, wired into src/pmus_l5_continuous_session for the ranker) and already writes game_period / game_proximity onto SELECTION rows. The only thing missing is that the annotation is not written per DECISION, so the clock goes stale the moment a market is held -- observation age p90 661 s in this cohort. Nothing new has to be fetched."
+ },
+ "tte_degeneracy": {
+  "live_r5f": {
+   "inventory_bucket": {
+    "counts": {
+     "flat": 298,
+     "imb1-10": 57,
+     "imb10-50": 269,
+     "imb>50": 11
+    },
+    "n": 635,
+    "share": {
+     "flat": 0.4693,
+     "imb1-10": 0.0898,
+     "imb10-50": 0.4236,
+     "imb>50": 0.0173
+    }
+   },
+   "price_bucket": {
+    "counts": {
+     "p10-25c": 22,
+     "p25-45c": 330,
+     "p45-55c": 130,
+     "p55-75c": 131,
+     "p75-90c": 22
+    },
+    "n": 635,
+    "share": {
+     "p10-25c": 0.0346,
+     "p25-45c": 0.5197,
+     "p45-55c": 0.2047,
+     "p55-75c": 0.2063,
+     "p75-90c": 0.0346
+    }
+   },
+   "tte_bucket": {
+    "counts": {
+     "tte>10m": 635
+    },
+    "n": 635,
+    "share": {
+     "tte>10m": 1.0
+    }
+   }
+  },
+  "live_r5f_in_sample": {
+   "inventory_bucket": {
+    "counts": {
+     "flat": 139,
+     "imb1-10": 25,
+     "imb10-50": 150
+    },
+    "n": 314,
+    "share": {
+     "flat": 0.4427,
+     "imb1-10": 0.0796,
+     "imb10-50": 0.4777
+    }
+   },
+   "price_bucket": {
+    "counts": {
+     "p10-25c": 20,
+     "p25-45c": 192,
+     "p45-55c": 32,
+     "p55-75c": 49,
+     "p75-90c": 21
+    },
+    "n": 314,
+    "share": {
+     "p10-25c": 0.0637,
+     "p25-45c": 0.6115,
+     "p45-55c": 0.1019,
+     "p55-75c": 0.1561,
+     "p75-90c": 0.0669
+    }
+   },
+   "tte_bucket": {
+    "counts": {
+     "tte>10m": 314
+    },
+    "n": 314,
+    "share": {
+     "tte>10m": 1.0
+    }
+   }
+  },
+  "live_r5f_oos": {
+   "inventory_bucket": {
+    "counts": {
+     "flat": 159,
+     "imb1-10": 32,
+     "imb10-50": 119,
+     "imb>50": 11
+    },
+    "n": 321,
+    "share": {
+     "flat": 0.4953,
+     "imb1-10": 0.0997,
+     "imb10-50": 0.3707,
+     "imb>50": 0.0343
+    }
+   },
+   "price_bucket": {
+    "counts": {
+     "p10-25c": 2,
+     "p25-45c": 138,
+     "p45-55c": 98,
+     "p55-75c": 82,
+     "p75-90c": 1
+    },
+    "n": 321,
+    "share": {
+     "p10-25c": 0.0062,
+     "p25-45c": 0.4299,
+     "p45-55c": 0.3053,
+     "p55-75c": 0.2555,
+     "p75-90c": 0.0031
+    }
+   },
+   "tte_bucket": {
+    "counts": {
+     "tte>10m": 321
+    },
+    "n": 321,
+    "share": {
+     "tte>10m": 1.0
+    }
+   }
+  },
+  "share_of_l5_decisions_in_buckets_we_never_occupy": 0.7404,
+  "why": "src/pmus_l5_action_shadow.SPORTS_TTE_DEFAULT_S = 1e9 -- an in-game sports market has no settlement clock on the tape, so TTE collapses to the coarsest bucket. The venue's only settlement-like field, market.endDate, is a fixed gameStartTime + 14 d CONTRACT EXPIRY (see src/pmus_event_progress docstring and market_detail below), so wiring it in would not un-degenerate the key."
+ },
+ "venue_coverage": {
+  "auth": "none (keyless public gateway, GET)",
+  "by_league": {
+   "arg2": {
+    "events_listed": 16,
+    "live_at_probe": 0,
+    "observed": "not_observed",
+    "populated_fields": {},
+    "samples": [],
+    "substates": {}
+   },
+   "atp": {
+    "events_listed": 50,
+    "live_at_probe": 1,
+    "observed": "yes",
+    "populated_fields": {
+     "createdAt": 1,
+     "ended": 1,
+     "eventId": 1,
+     "gameId": 1,
+     "id": 1,
+     "live": 1,
+     "period": 1,
+     "score": 1,
+     "tennisState.round": 1,
+     "tennisState.servingTeamId": 1,
+     "tennisState.tournamentName": 1,
+     "type": 1,
+     "updatedAt": 1
+    },
+    "samples": [
+     {
+      "period": "S3",
+      "score": "6-2, 6-2, 0-0",
+      "substates": [
+       "tennisState"
+      ],
+      "ticker": "atp-alezve-lucdar-2026-09-07"
+     }
+    ],
+    "substates": {
+     "tennisState": 1
+    }
+   },
+   "cfb": {
+    "events_listed": 50,
+    "live_at_probe": 1,
+    "observed": "yes",
+    "populated_fields": {
+     "createdAt": 1,
+     "elapsed": 2,
+     "ended": 1,
+     "eventId": 1,
+     "footballState.down": 1,
+     "footballState.driveState": 1,
+     "footballState.timeouts": 1,
+     "footballState.yard": 1,
+     "id": 1,
+     "live": 1,
+     "period": 1,
+     "periodScores": 1,
+     "score": 1,
+     "sportradarGameId": 1,
+     "type": 1,
+     "updatedAt": 1
+    },
+    "samples": [
+     {
+      "period": "Q2",
+      "score": "17-10",
+      "substates": [
+       "footballState"
+      ],
+      "ticker": "cfb-smu-flst-2026-09-07"
+     }
+    ],
+    "substates": {
+     "footballState": 1
+    }
+   },
+   "cs2": {
+    "events_listed": 50,
+    "live_at_probe": 0,
+    "observed": "not_observed",
+    "populated_fields": {},
+    "samples": [],
+    "substates": {}
+   },
+   "dota2": {
+    "events_listed": 13,
+    "live_at_probe": 1,
+    "observed": "yes",
+    "populated_fields": {
+     "createdAt": 1,
+     "ended": 1,
+     "eventId": 1,
+     "id": 1,
+     "live": 1,
+     "period": 1,
+     "score": 1,
+     "sportradarGameId": 1,
+     "type": 1,
+     "updatedAt": 1
+    },
+    "samples": [
+     {
+      "period": "Game 1",
+      "score": "0-0",
+      "substates": [],
+      "ticker": "dota2-db-yg-2026-09-05"
+     }
+    ],
+    "substates": {}
+   },
+   "ekst": {
+    "events_listed": 9,
+    "live_at_probe": 0,
+    "observed": "not_observed",
+    "populated_fields": {},
+    "samples": [],
+    "substates": {}
+   },
+   "epl": {
+    "events_listed": 10,
+    "live_at_probe": 0,
+    "observed": "not_observed",
+    "populated_fields": {},
+    "samples": [],
+    "substates": {}
+   },
+   "itfm": {
+    "events_listed": 0,
+    "live_at_probe": 0,
+    "observed": "not_observed",
+    "populated_fields": {},
+    "samples": [],
+    "substates": {}
+   },
+   "itfw": {
+    "events_listed": 0,
+    "live_at_probe": 0,
+    "observed": "not_observed",
+    "populated_fields": {},
+    "samples": [],
+    "substates": {}
+   },
+   "lol": {
+    "events_listed": 15,
+    "live_at_probe": 0,
+    "observed": "not_observed",
+    "populated_fields": {},
+    "samples": [],
+    "substates": {}
+   },
+   "mlb": {
+    "events_listed": 38,
+    "live_at_probe": 3,
+    "observed": "yes",
+    "populated_fields": {
+     "baseballState.balls": 3,
+     "baseballState.inningHalf": 3,
+     "baseballState.onFirst": 3,
+     "baseballState.onSecond": 3,
+     "baseballState.onThird": 3,
+     "baseballState.outs": 3,
+     "baseballState.strikes": 3,
+     "createdAt": 3,
+     "ended": 3,
+     "eventId": 3,
+     "gameId": 3,
+     "id": 3,
+     "live": 3,
+     "mainSpreadLine": 3,
+     "mainTotalLine": 3,
+     "marketGroupStats": 3,
+     "period": 3,
+     "score": 3,
+     "sportradarGameId": 3,
+     "type": 3,
+     "updatedAt": 3
+    },
+    "samples": [
+     {
+      "period": "Top 9th",
+      "score": "2-3",
+      "substates": [
+       "baseballState"
+      ],
+      "ticker": "mlb-stl-sf-2026-09-07"
+     },
+     {
+      "period": "Top 6th",
+      "score": "1-2",
+      "substates": [
+       "baseballState"
+      ],
+      "ticker": "mlb-cin-lad-2026-09-07"
+     }
+    ],
+    "substates": {
+     "baseballState": 3
+    }
+   },
+   "nba": {
+    "events_listed": 0,
+    "live_at_probe": 0,
+    "observed": "not_observed",
+    "populated_fields": {},
+    "samples": [],
+    "substates": {}
+   },
+   "nfl": {
+    "events_listed": 32,
+    "live_at_probe": 0,
+    "observed": "not_observed",
+    "populated_fields": {},
+    "samples": [],
+    "substates": {}
+   },
+   "nhl": {
+    "events_listed": 0,
+    "live_at_probe": 0,
+    "observed": "not_observed",
+    "populated_fields": {},
+    "samples": [],
+    "substates": {}
+   },
+   "sea": {
+    "events_listed": 10,
+    "live_at_probe": 0,
+    "observed": "not_observed",
+    "populated_fields": {},
+    "samples": [],
+    "substates": {}
+   },
+   "setkamecz": {
+    "events_listed": 48,
+    "live_at_probe": 0,
+    "observed": "not_observed",
+    "populated_fields": {},
+    "samples": [],
+    "substates": {}
+   },
+   "setkamemd": {
+    "events_listed": 35,
+    "live_at_probe": 1,
+    "observed": "yes",
+    "populated_fields": {
+     "createdAt": 1,
+     "ended": 1,
+     "eventId": 1,
+     "id": 1,
+     "live": 1,
+     "period": 1,
+     "score": 1,
+     "sportradarGameId": 1,
+     "type": 1,
+     "updatedAt": 1
+    },
+    "samples": [
+     {
+      "period": "S2",
+      "score": "11-9, 4-2",
+      "substates": [],
+      "ticker": "setkamemd-sirvea-barser-2026-09-08"
+     }
+    ],
+    "substates": {}
+   },
+   "setkameua": {
+    "events_listed": 50,
+    "live_at_probe": 2,
+    "observed": "yes",
+    "populated_fields": {
+     "createdAt": 2,
+     "ended": 2,
+     "eventId": 2,
+     "id": 2,
+     "live": 2,
+     "period": 2,
+     "score": 2,
+     "sportradarGameId": 2,
+     "type": 2,
+     "updatedAt": 2
+    },
+    "samples": [
+     {
+      "period": "S2",
+      "score": "12-10, 5-5",
+      "substates": [],
+      "ticker": "setkameua-konrom-lobmyr-2026-09-08"
+     },
+     {
+      "period": "S1",
+      "score": "5-8",
+      "substates": [],
+      "ticker": "setkameua-perand-fommyk-2026-09-08"
+     }
+    ],
+    "substates": {}
+   },
+   "valorant": {
+    "events_listed": 10,
+    "live_at_probe": 0,
+    "observed": "not_observed",
+    "populated_fields": {},
+    "samples": [],
+    "substates": {}
+   },
+   "wta": {
+    "events_listed": 40,
+    "live_at_probe": 1,
+    "observed": "yes",
+    "populated_fields": {
+     "createdAt": 1,
+     "ended": 1,
+     "eventId": 1,
+     "gameId": 1,
+     "id": 1,
+     "live": 1,
+     "period": 1,
+     "score": 1,
+     "tennisState.round": 1,
+     "tennisState.servingTeamId": 1,
+     "tennisState.tournamentName": 1,
+     "type": 1,
+     "updatedAt": 1
+    },
+    "samples": [
+     {
+      "period": "S2",
+      "score": "7-5, 1-0",
+      "substates": [
+       "tennisState"
+      ],
+      "ticker": "wta-julpar-lizcab-2026-09-08"
+     }
+    ],
+    "substates": {
+     "tennisState": 1
+    }
+   },
+   "wtt": {
+    "events_listed": 50,
+    "live_at_probe": 0,
+    "observed": "not_observed",
+    "populated_fields": {},
+    "samples": [],
+    "substates": {}
+   }
+  },
+  "declared_but_not_observed_in_this_window": [
+   "cricketState",
+   "soccerState",
+   "ufcState"
+  ],
+  "declared_source": "the venue's published OpenAPI for /v1/events and /v2/sports; DECLARED is not the same as served -- a league with no live event at probe time is 'not_observed', which is missing evidence, not evidence of absence",
+  "gateway": "https://gateway.polymarket.us",
+  "labels": "read from the venue's keyless public gateway at probe time",
+  "market_detail": {
+   "aec-atp-artgea-botzan-2026-09-06": {
+    "endDate": "2026-09-07T22:15:46Z",
+    "endDate_before_gameStartTime": false,
+    "endDate_minus_gameStart_days": 0.06,
+    "gameStartTime": "2026-09-07T20:45:00Z",
+    "sportsMarketType": "tennis_match_winner",
+    "startDate": "2026-09-06T02:16:39Z"
+   },
+   "aec-atp-fracer-aleblo-2026-09-06": {
+    "endDate": "2026-09-07T17:41:26Z",
+    "endDate_before_gameStartTime": true,
+    "endDate_minus_gameStart_days": -0.02,
+    "gameStartTime": "2026-09-07T18:10:00Z",
+    "sportsMarketType": "tennis_match_winner",
+    "startDate": "2026-09-05T20:02:29Z"
+   },
+   "aec-atp-karkha-leatie-2026-09-07": {
+    "endDate": "2026-09-07T21:52:56Z",
+    "endDate_before_gameStartTime": false,
+    "endDate_minus_gameStart_days": 0.01,
+    "gameStartTime": "2026-09-07T21:45:00Z",
+    "sportsMarketType": "tennis_match_winner",
+    "startDate": "2026-09-06T05:45:02Z"
+   },
+   "aec-cfb-smu-flst-2026-09-07": {
+    "endDate": "2026-09-21T23:30:00Z",
+    "endDate_before_gameStartTime": false,
+    "endDate_minus_gameStart_days": 14.0,
+    "gameStartTime": "2026-09-07T23:30:00Z",
+    "sportsMarketType": "football_team_full_game_winner",
+    "startDate": "2026-08-11T15:22:45Z"
+   },
+   "aec-cs2-ntr-cs-2026-09-07": {
+    "endDate": "2026-09-07T16:55:09Z",
+    "endDate_before_gameStartTime": true,
+    "endDate_minus_gameStart_days": -0.02,
+    "gameStartTime": "2026-09-07T17:30:00Z",
+    "sportsMarketType": "esports_match_winner",
+    "startDate": "2026-09-05T23:30:38Z"
+   },
+   "aec-mlb-az-kc-2026-09-07": {
+    "endDate": "2026-09-07T17:13:53Z",
+    "endDate_before_gameStartTime": true,
+    "endDate_minus_gameStart_days": -0.04,
+    "gameStartTime": "2026-09-07T18:10:00Z",
+    "sportsMarketType": "baseball_team_full_game_winner",
+    "startDate": "2026-09-04T04:04:09Z"
+   },
+   "aec-setkamecz-tomvoj-ticjir-2026-09-07": {
+    "endDate": "2026-09-07T16:02:28Z",
+    "endDate_before_gameStartTime": true,
+    "endDate_minus_gameStart_days": -0.15,
+    "gameStartTime": "2026-09-07T19:45:00Z",
+    "sportsMarketType": "table_tennis_match_winner",
+    "startDate": "2026-09-06T19:55:38Z"
+   },
+   "aec-setkamemd-ghifio-butdum-2026-09-08": {
+    "endDate": "2026-09-07T22:16:43Z",
+    "endDate_before_gameStartTime": true,
+    "endDate_minus_gameStart_days": -0.16,
+    "gameStartTime": "2026-09-08T02:00:00Z",
+    "sportsMarketType": "table_tennis_match_winner",
+    "startDate": "2026-09-07T02:50:56Z"
+   }
+  },
+  "probed_utc": "2026-09-08T02:37:56.224149+00:00",
+  "venue_declared_event_fields": [
+   "score",
+   "period",
+   "elapsed",
+   "clock",
+   "live",
+   "ended",
+   "status",
+   "gameStartTime",
+   "startTime",
+   "startDate",
+   "endDate",
+   "gameId",
+   "sportradarGameId",
+   "currentInnings",
+   "innings",
+   "inningHalf",
+   "outs"
+  ],
+  "venue_declared_substates": [
+   "baseballState",
+   "footballState",
+   "soccerState",
+   "tennisState",
+   "cricketState",
+   "ufcState"
+  ]
+ },
+ "verdicts": {
+  "q1_is_the_time_dimension_degenerate": {
+   "answer": "YES, completely",
+   "evidence": "635 of 635 decisions (100.0%) sit in the single bucket 'tte>10m'; the tte dimension takes one value across the whole live sample, in-sample and out-of-sample alike.",
+   "sharper": "the shared label is misleading in the other direction too: in L5's canonical tape 'tte>10m' is bounded at 896 s and comes entirely from 15-minute windows, so it means 'the opening third of a 15-minute crypto window'. Our sports decisions sit hours from resolution and key into it."
+  },
+  "q2_does_the_mapping_explain_the_residual_losses": {
+   "answer": "NO",
+   "corollary": "the degeneracy is a COHERENCE defect -- we key a crypto model on a state it never trained on -- not, on this evidence, the cause of the losses.",
+   "realized_usd_venue_sum": "-9.2384",
+   "reason": "a feature that takes one value cannot explain any variation in outcome. The tte bucket is identical on the markets that paired to zero residual and on the markets that stranded residual, so it accounts for 0 of the loss.",
+   "where_the_loss_actually_sits": {
+    "non_reconciling_markets": [
+     {
+      "partition_sum_usd": "-7.4951",
+      "residual_contribution_usd": "-1.5079",
+      "slug": "aec-setkameua-malden-stoole-2026-09-08"
+     }
+    ],
+    "note": "a non-reconciling market is EXCLUDED from the totals above. src/l5_r5f_sequence_ledger's FIFO residual walk was built for the day-1 cohort; on a market that opens, completes and re-opens several times it attributes more dollars than the market's residual contribution. Reported as a finding, not patched here (the ledger is another session's file).",
+    "reconciling_markets": [
+     "aec-setkamecz-tomvoj-ticjir-2026-09-07",
+     "aec-setkamemd-scovla-otgand-2026-09-07",
+     "tsc-mlb-laa-bos-2026-09-07-7pt5"
+    ],
+    "reconciling_totals_usd": {
+     "execution_queue_failure": -3.1844,
+     "faithful_l5_behavior": 0.0,
+     "market_selection_transfer": -1.924,
+     "remaining_shell_distortion": -3.2609
+    }
+   }
+  },
+  "q3_is_the_degeneracy_costing_action_fidelity": {
+   "answer": "MUCH LESS THAN IT LOOKS",
+   "caveat": "this measures the RELATION distribution the key is used for. It says nothing about the economics of holding residual, which is a different question and is where the sports/crypto difference actually bites.",
+   "evidence": "on L5's OWN crypto tape the tte dimension carries 0.17% of the entropy of his next relation and buys 0.0018 bits held-out over price+inventory; the inventory dimension carries ~7%. Losing the time dimension loses very little of what the key does."
+  },
+  "q4_mini_window": {
+   "answer": "EPISODES EXIST; EPISODE PHASE DOES NOT PREDICT OUR OUTCOMES ON THIS SAMPLE",
+   "episodes": 170,
+   "fill_rate_effect": {
+    "B_defined": 4000,
+    "ci95": [
+     -0.1761,
+     0.1081
+    ],
+    "clusters": 35,
+    "labels": "cluster bootstrap over markets; percentile CI",
+    "point": -0.0099
+   },
+   "reading": "a local price/flow episode structure is clearly present and is not degenerate, but within-episode phase separates neither fills nor completions here."
+  },
+  "q5_best_analogue": {
+   "answer": "the venue-served EVENT-PROGRESS clock (period / score / ended), NOT a wall clock and NOT the local-regime clock",
+   "recommendation": "do NOT substitute it into the live key. Record it in shadow, per decision, and re-run this study against the OOS gate.",
+   "robustness_check_FAILS": {
+    "meaning": "late-game markets DO keep pairing, they just do not finish. That is consistent with the crypto intuition, and equally consistent with 'we ran out of runway / cap on those markets'. On this sample the two cannot be separated.",
+    "residual_reduced_by_event_phase": {
+     "ev_early(<0.34)": {
+      "hits": 7,
+      "n": 7,
+      "rate": 1.0
+     },
+     "ev_late(>=0.67)": {
+      "hits": 15,
+      "n": 18,
+      "rate": 0.8333
+     },
+     "ev_mid(0.34-0.67)": {
+      "hits": 20,
+      "n": 24,
+      "rate": 0.8333
+     },
+     "ev_unknown": {
+      "hits": 1,
+      "n": 1,
+      "rate": 1.0
+     }
+    },
+    "strict_completion_by_event_phase": {
+     "ev_early(<0.34)": {
+      "hits": 7,
+      "n": 7,
+      "rate": 1.0
+     },
+     "ev_late(>=0.67)": {
+      "hits": 7,
+      "n": 18,
+      "rate": 0.3889
+     },
+     "ev_mid(0.34-0.67)": {
+      "hits": 19,
+      "n": 24,
+      "rate": 0.7917
+     },
+     "ev_unknown": {
+      "hits": 1,
+      "n": 1,
+      "rate": 1.0
+     }
+    },
+    "what": "the C1 gradient survives only under the STRICT outcome 'the residual later reached zero'. Under the softer outcome 'the residual was later reduced at all' the gradient disappears."
+   },
+   "sample_it_rests_on": {
+    "ev_early(<0.34)": {
+     "markets": 2,
+     "markets_fully_completed": 2
+    },
+    "ev_late(>=0.67)": {
+     "markets": 4,
+     "markets_fully_completed": 2
+    },
+    "ev_mid(0.34-0.67)": {
+     "markets": 7,
+     "markets_fully_completed": 5
+    }
+   },
+   "status": "NOT ESTABLISHED -- see the sample and the robustness check below",
+   "why": "it is the only one of the three that is (a) served by the venue for most leagues we trade, (b) monotone toward resolution the way seconds_to_settlement is, and (c) directionally associated with completion here. The market-lifecycle clock has no served endpoint (endDate is a contract expiry) and the local-regime clock is, on L5's own tape, a WORSE time dimension than tte."
+  }
+ }
+}

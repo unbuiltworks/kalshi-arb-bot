@@ -1,0 +1,1372 @@
+From cfac6707cb82caaf9b4d0cdbe7aa46f6fb20ac1f Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 20 Nov 2026 01:27:09 +0000
+Subject: [PATCH] l5-pmus-live: owner-listed venue-superset cost correction,
+ off by default
+
+The diagnostic of 2026-11-20 found 40 settled markets inside the account-wide
+loss figure where the venue's fills contain more than this ledger recorded
+(one leg adopted, the other never seen) and the row is booked at $1 a share.
+
+attest_retired_market_cost gains one more form, VENUE_SUPERSET_OWNER_LISTED,
+reachable only when the caller hands in the owner's listed figures for that
+market and every one equals what is found: both venue quantities and costs,
+both ledger quantities, settlement value, booked and corrected result. It
+also requires the ledger quantity contained in the venue's, every held side
+never costed, zero readable fees, a feed read to its end, and a settlement
+after the last accounting re-anchor. Without a listing the method behaves
+exactly as before.
+
+l5_venue_superset_correction is the only caller. OFF unless
+L5_VENUE_SUPERSET_CORRECTION is set. INSPECT runs the real correction on a
+copy of the ledger that cannot be saved. APPLY writes only when
+L5_VENUE_SUPERSET_CORRECTION_APPROVED equals the SHA-256 of the shipped
+manifest (40 markets, +97.3165 in total). Two unreadable rows are excluded.
+No limit is changed.
+
+45 tests. One existing allowlist changed: the image data-file guard now
+names the manifest, as it does the earlier cost-basis manifests.
+
+Not deployed, not applied.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01HTk927uH8zwpj6gLES92PF
+---
+ config/venue_superset_manifest_20261120.json | 455 +++++++++++++++++++
+ deploy/l5_pmus_live/Dockerfile               |   2 +
+ src/l5_live_execution.py                     | 118 ++++-
+ src/l5_pmus_live_runner.py                   |  31 ++
+ src/l5_venue_superset_correction.py          | 195 ++++++++
+ tests/test_l5_live_runner_graft.py           |   3 +
+ tests/test_l5_venue_superset_correction.py   | 433 ++++++++++++++++++
+ 7 files changed, 1233 insertions(+), 4 deletions(-)
+ create mode 100644 config/venue_superset_manifest_20261120.json
+ create mode 100644 src/l5_venue_superset_correction.py
+ create mode 100644 tests/test_l5_venue_superset_correction.py
+
+diff --git a/config/venue_superset_manifest_20261120.json b/config/venue_superset_manifest_20261120.json
+new file mode 100644
+index 000000000..ef7cf83e6
+--- /dev/null
++++ b/config/venue_superset_manifest_20261120.json
+@@ -0,0 +1,455 @@
++{
++ "booked_total": "-107.20000000",
++ "corrected_total": "-9.88350000",
++ "count": 40,
++ "delta_total": "97.31650000",
++ "excluded_unreadable": [
++  "aec-testcr-afg-zim-2026-11-13",
++  "aec-utr-gaskan-hanbra-2026-11-17"
++ ],
++ "id": "venue-superset-20261120",
++ "markets": {
++  "aec-atp-edwwin-enzagu-2026-11-17": {
++   "booked_pnl": "-5.00000000",
++   "corrected_pnl": "-1.20760000",
++   "cost_down": "20.05760000",
++   "cost_up": "21.15000000",
++   "ledger_down": "0",
++   "ledger_up": "5.0000",
++   "venue_down": "40.0000",
++   "venue_up": "40.0000",
++   "yes_value": "0.0000"
++  },
++  "aec-atp-hynbar-alegal-2026-11-16": {
++   "booked_pnl": "0E-8",
++   "corrected_pnl": "0.25000000",
++   "cost_down": "3.00000000",
++   "cost_up": "1.75000000",
++   "ledger_down": "0",
++   "ledger_up": "5.0000",
++   "venue_down": "5.0000",
++   "venue_up": "5.0000",
++   "yes_value": "1.0000"
++  },
++  "aec-atp-maxgur-oribat-2026-11-17": {
++   "booked_pnl": "-5.00000000",
++   "corrected_pnl": "-0.70000000",
++   "cost_down": "3.60000000",
++   "cost_up": "2.10000000",
++   "ledger_down": "0",
++   "ledger_up": "5.0000",
++   "venue_down": "5.0000",
++   "venue_up": "5.0000",
++   "yes_value": "0.0000"
++  },
++  "aec-atp-zacvii-geobla-2026-11-17": {
++   "booked_pnl": "-3.61000000",
++   "corrected_pnl": "0.25000000",
++   "cost_down": "2.60000000",
++   "cost_up": "2.15000000",
++   "ledger_down": "0",
++   "ledger_up": "3.6100",
++   "venue_down": "5.0000",
++   "venue_up": "5.0000",
++   "yes_value": "0.0000"
++  },
++  "aec-cs2-bca-big-2026-11-18": {
++   "booked_pnl": "-5.00000000",
++   "corrected_pnl": "-0.74080000",
++   "cost_down": "4.88480000",
++   "cost_up": "1.77600000",
++   "ledger_down": "0",
++   "ledger_up": "5.0000",
++   "venue_down": "5.9200",
++   "venue_up": "5.9200",
++   "yes_value": "0.0000"
++  },
++  "aec-cs2-envy-mzp-2026-11-17": {
++   "booked_pnl": "-5.00000000",
++   "corrected_pnl": "-0.56000000",
++   "cost_down": "2.55000000",
++   "cost_up": "4.01000000",
++   "ledger_down": "5.0000",
++   "ledger_up": "0",
++   "venue_down": "6.0000",
++   "venue_up": "6.0000",
++   "yes_value": "1.0000"
++  },
++  "aec-cs2-ep-ytigeres-2026-11-16": {
++   "booked_pnl": "0E-8",
++   "corrected_pnl": "0.02000000",
++   "cost_down": "0.42000000",
++   "cost_up": "0.56000000",
++   "ledger_down": "0",
++   "ledger_up": "1.0000",
++   "venue_down": "1.0000",
++   "venue_up": "1.0000",
++   "yes_value": "1.0000"
++  },
++  "aec-cs2-hero-prv-2026-11-16": {
++   "booked_pnl": "0E-8",
++   "corrected_pnl": "-0.01000000",
++   "cost_down": "2.14000000",
++   "cost_up": "2.87000000",
++   "ledger_down": "0",
++   "ledger_up": "1.0000",
++   "venue_down": "5.0000",
++   "venue_up": "5.0000",
++   "yes_value": "1.0000"
++  },
++  "aec-cs2-unity-gl-2026-11-18": {
++   "booked_pnl": "-0.51000000",
++   "corrected_pnl": "-0.04080000",
++   "cost_down": "0.33150000",
++   "cost_up": "0.21930000",
++   "ledger_down": "0",
++   "ledger_up": "0.5100",
++   "venue_down": "0.5100",
++   "venue_up": "0.5100",
++   "yes_value": "0.0000"
++  },
++  "aec-cs2-vp-priv-2026-11-16": {
++   "booked_pnl": "0E-8",
++   "corrected_pnl": "0.05000000",
++   "cost_down": "1.62000000",
++   "cost_up": "1.33000000",
++   "ledger_down": "1.0000",
++   "ledger_up": "0",
++   "venue_down": "3.0000",
++   "venue_up": "3.0000",
++   "yes_value": "0.0000"
++  },
++  "aec-cs2-ytigeres-jumbo-2026-11-16": {
++   "booked_pnl": "0E-8",
++   "corrected_pnl": "-0.12000000",
++   "cost_down": "0.53000000",
++   "cost_up": "0.59000000",
++   "ledger_down": "1.0000",
++   "ledger_up": "0",
++   "venue_down": "1.0000",
++   "venue_up": "1.0000",
++   "yes_value": "0.0000"
++  },
++  "aec-dota2-aur-pari-2026-11-18": {
++   "booked_pnl": "0E-8",
++   "corrected_pnl": "-0.15000000",
++   "cost_down": "5.10000000",
++   "cost_up": "5.05000000",
++   "ledger_down": "0.2000",
++   "ledger_up": "0",
++   "venue_down": "10.0000",
++   "venue_up": "10.0000",
++   "yes_value": "0.0000"
++  },
++  "aec-dota2-gl-lgd-2026-11-16": {
++   "booked_pnl": "-1.00000000",
++   "corrected_pnl": "0.04000000",
++   "cost_down": "1.91000000",
++   "cost_up": "1.05000000",
++   "ledger_down": "0",
++   "ledger_up": "1.0000",
++   "venue_down": "3.0000",
++   "venue_up": "3.0000",
++   "yes_value": "0.0000"
++  },
++  "aec-dota2-xe-ch-2026-11-17": {
++   "booked_pnl": "-5.00000000",
++   "corrected_pnl": "-0.65000000",
++   "cost_down": "10.45000000",
++   "cost_up": "5.20000000",
++   "ledger_down": "0",
++   "ledger_up": "5.0000",
++   "venue_down": "15.0000",
++   "venue_up": "15.0000",
++   "yes_value": "0.0000"
++  },
++  "aec-itfme-johmon-matrey-2026-11-18": {
++   "booked_pnl": "-5.00000000",
++   "corrected_pnl": "-0.20190000",
++   "cost_down": "2.33930000",
++   "cost_up": "3.05260000",
++   "ledger_down": "0",
++   "ledger_up": "5.0000",
++   "venue_down": "5.1900",
++   "venue_up": "5.1900",
++   "yes_value": "0.0000"
++  },
++  "aec-itfme-santav-livdam-2026-11-17": {
++   "booked_pnl": "-5.00000000",
++   "corrected_pnl": "-0.45000000",
++   "cost_down": "1.45000000",
++   "cost_up": "4.00000000",
++   "ledger_down": "5.0000",
++   "ledger_up": "0",
++   "venue_down": "5.0000",
++   "venue_up": "5.0000",
++   "yes_value": "1.0000"
++  },
++  "aec-itfme-wisabd-gabdeb-2026-11-18": {
++   "booked_pnl": "0E-8",
++   "corrected_pnl": "-0.05000000",
++   "cost_down": "1.80000000",
++   "cost_up": "3.25000000",
++   "ledger_down": "5.0000",
++   "ledger_up": "0",
++   "venue_down": "5.0000",
++   "venue_up": "5.0000",
++   "yes_value": "0.0000"
++  },
++  "aec-itfwo-anasob-renjam-2026-11-18": {
++   "booked_pnl": "-0.12000000",
++   "corrected_pnl": "-0.00600000",
++   "cost_down": "1.83480000",
++   "cost_up": "3.29120000",
++   "ledger_down": "0.1200",
++   "ledger_up": "0",
++   "venue_down": "5.1200",
++   "venue_up": "5.1200",
++   "yes_value": "1.0000"
++  },
++  "aec-itfwo-avasch-jiaibr-2026-11-18": {
++   "booked_pnl": "-5.00000000",
++   "corrected_pnl": "-0.35000000",
++   "cost_down": "2.60000000",
++   "cost_up": "2.75000000",
++   "ledger_down": "5.0000",
++   "ledger_up": "0",
++   "venue_down": "5.0000",
++   "venue_up": "5.0000",
++   "yes_value": "1.0000"
++  },
++  "aec-itfwo-carpla-merezz-2026-11-18": {
++   "booked_pnl": "-5.00000000",
++   "corrected_pnl": "-0.55000000",
++   "cost_down": "3.75000000",
++   "cost_up": "1.80000000",
++   "ledger_down": "0",
++   "ledger_up": "5.0000",
++   "venue_down": "5.0000",
++   "venue_up": "5.0000",
++   "yes_value": "0.0000"
++  },
++  "aec-itfwo-fedurg-krinov-2026-11-18": {
++   "booked_pnl": "-5.00000000",
++   "corrected_pnl": "-0.50000000",
++   "cost_down": "1.70000000",
++   "cost_up": "3.80000000",
++   "ledger_down": "5.0000",
++   "ledger_up": "0",
++   "venue_down": "5.0000",
++   "venue_up": "5.0000",
++   "yes_value": "1.0000"
++  },
++  "aec-itfwo-julmya-madhag-2026-11-18": {
++   "booked_pnl": "-5.00000000",
++   "corrected_pnl": "-0.10000000",
++   "cost_down": "2.70000000",
++   "cost_up": "2.40000000",
++   "ledger_down": "5.0000",
++   "ledger_up": "0",
++   "venue_down": "5.0000",
++   "venue_up": "5.0000",
++   "yes_value": "1.0000"
++  },
++  "aec-itfwo-pialov-julstr-2026-11-18": {
++   "booked_pnl": "-5.00000000",
++   "corrected_pnl": "-0.05000000",
++   "cost_down": "2.40000000",
++   "cost_up": "2.65000000",
++   "ledger_down": "0",
++   "ledger_up": "5.0000",
++   "venue_down": "5.0000",
++   "venue_up": "5.0000",
++   "yes_value": "0.0000"
++  },
++  "aec-nba-atl-mil-2026-11-15": {
++   "booked_pnl": "-1.00000000",
++   "corrected_pnl": "-0.03000000",
++   "cost_down": "0.32000000",
++   "cost_up": "0.71000000",
++   "ledger_down": "1.0000",
++   "ledger_up": "0",
++   "venue_down": "1.0000",
++   "venue_up": "1.0000",
++   "yes_value": "1.0000"
++  },
++  "aec-nba-det-sa-2026-11-17": {
++   "booked_pnl": "-5.00000000",
++   "corrected_pnl": "0.60000000",
++   "cost_down": "4.35000000",
++   "cost_up": "5.05000000",
++   "ledger_down": "5.0000",
++   "ledger_up": "0",
++   "venue_down": "10.0000",
++   "venue_up": "10.0000",
++   "yes_value": "1.0000"
++  },
++  "aec-nba-hou-mia-2026-11-16": {
++   "booked_pnl": "-2.00000000",
++   "corrected_pnl": "-0.18000000",
++   "cost_down": "3.14000000",
++   "cost_up": "2.04000000",
++   "ledger_down": "0",
++   "ledger_up": "2.0000",
++   "venue_down": "5.0000",
++   "venue_up": "5.0000",
++   "yes_value": "0.0000"
++  },
++  "aec-nba-mem-was-2026-11-16": {
++   "booked_pnl": "0E-8",
++   "corrected_pnl": "0E-8",
++   "cost_down": "2.28000000",
++   "cost_up": "2.72000000",
++   "ledger_down": "0",
++   "ledger_up": "1.0000",
++   "venue_down": "5.0000",
++   "venue_up": "5.0000",
++   "yes_value": "1.0000"
++  },
++  "aec-nba-ny-tor-2026-11-17": {
++   "booked_pnl": "0E-8",
++   "corrected_pnl": "0.85000000",
++   "cost_down": "6.05000000",
++   "cost_up": "8.10000000",
++   "ledger_down": "0",
++   "ledger_up": "5.0000",
++   "venue_down": "15.0000",
++   "venue_up": "15.0000",
++   "yes_value": "1.0000"
++  },
++  "aec-nba-por-min-2026-11-17": {
++   "booked_pnl": "-2.00000000",
++   "corrected_pnl": "0.35000000",
++   "cost_down": "4.34000000",
++   "cost_up": "2.31000000",
++   "ledger_down": "0",
++   "ledger_up": "2.0000",
++   "venue_down": "7.0000",
++   "venue_up": "7.0000",
++   "yes_value": "0.0000"
++  },
++  "aec-nhl-mon-nyr-2026-11-16": {
++   "booked_pnl": "0E-8",
++   "corrected_pnl": "0.08000000",
++   "cost_down": "0.88000000",
++   "cost_up": "1.04000000",
++   "ledger_down": "1.0000",
++   "ledger_up": "0",
++   "venue_down": "2.0000",
++   "venue_up": "2.0000",
++   "yes_value": "0.0000"
++  },
++  "aec-setkamecz-lopvla-hajmir-2026-11-18": {
++   "booked_pnl": "-5.00000000",
++   "corrected_pnl": "0.30000000",
++   "cost_down": "2.75000000",
++   "cost_up": "1.95000000",
++   "ledger_down": "0",
++   "ledger_up": "5.0000",
++   "venue_down": "5.0000",
++   "venue_up": "5.0000",
++   "yes_value": "0.0000"
++  },
++  "aec-setkameua-hreiur-chaboh-2026-11-18": {
++   "booked_pnl": "-0.16000000",
++   "corrected_pnl": "-0.16640000",
++   "cost_down": "1.24800000",
++   "cost_up": "3.07840000",
++   "ledger_down": "0.1600",
++   "ledger_up": "0",
++   "venue_down": "4.1600",
++   "venue_up": "4.1600",
++   "yes_value": "1.0000"
++  },
++  "aec-setkameua-khevse-helval-2026-11-18": {
++   "booked_pnl": "-4.80000000",
++   "corrected_pnl": "0.10000000",
++   "cost_down": "2.20000000",
++   "cost_up": "2.70000000",
++   "ledger_down": "4.8000",
++   "ledger_up": "0",
++   "venue_down": "5.0000",
++   "venue_up": "5.0000",
++   "yes_value": "1.0000"
++  },
++  "aec-setkameua-kobvit-hrykos-2026-11-17": {
++   "booked_pnl": "-5.00000000",
++   "corrected_pnl": "-0.40000000",
++   "cost_down": "3.85000000",
++   "cost_up": "1.55000000",
++   "ledger_down": "0",
++   "ledger_up": "5.0000",
++   "venue_down": "5.0000",
++   "venue_up": "5.0000",
++   "yes_value": "0.0000"
++  },
++  "aec-setkameua-kotand-lipole-2026-11-18": {
++   "booked_pnl": "0E-8",
++   "corrected_pnl": "0.15000000",
++   "cost_down": "2.00000000",
++   "cost_up": "2.85000000",
++   "ledger_down": "0",
++   "ledger_up": "5.0000",
++   "venue_down": "5.0000",
++   "venue_up": "5.0000",
++   "yes_value": "1.0000"
++  },
++  "aec-setkameua-pytiva-fasiva-2026-11-17": {
++   "booked_pnl": "-5.00000000",
++   "corrected_pnl": "0.15000000",
++   "cost_down": "2.95000000",
++   "cost_up": "1.90000000",
++   "ledger_down": "0",
++   "ledger_up": "5.0000",
++   "venue_down": "5.0000",
++   "venue_up": "5.0000",
++   "yes_value": "0.0000"
++  },
++  "aec-valorant-xjg-ur-2026-11-18": {
++   "booked_pnl": "-5.00000000",
++   "corrected_pnl": "-5.45000000",
++   "cost_down": "3.25000000",
++   "cost_up": "7.20000000",
++   "ledger_down": "0",
++   "ledger_up": "5.0000",
++   "venue_down": "5.0000",
++   "venue_up": "15.0000",
++   "yes_value": "0.0000"
++  },
++  "aec-wta-guimar-sofcos-2026-11-18": {
++   "booked_pnl": "-5.00000000",
++   "corrected_pnl": "-0.20000000",
++   "cost_down": "1.85000000",
++   "cost_up": "3.35000000",
++   "ledger_down": "5.0000",
++   "ledger_up": "0",
++   "venue_down": "5.0000",
++   "venue_up": "5.0000",
++   "yes_value": "1.0000"
++  },
++  "aec-wtt-elezah-chalut-2026-11-18": {
++   "booked_pnl": "0E-8",
++   "corrected_pnl": "-0.55000000",
++   "cost_down": "3.48100000",
++   "cost_up": "2.24900000",
++   "ledger_down": "0",
++   "ledger_up": "5.0000",
++   "venue_down": "5.1800",
++   "venue_up": "5.1800",
++   "yes_value": "1.0000"
++  },
++  "cpc-btc-updown-5m-2026-11-16-0335z": {
++   "booked_pnl": "-2.00000000",
++   "corrected_pnl": "0.34000000",
++   "cost_down": "1.50000000",
++   "cost_up": "0.16000000",
++   "ledger_down": "0",
++   "ledger_up": "2.0000",
++   "venue_down": "2.0000",
++   "venue_up": "2.0000",
++   "yes_value": "0.0000"
++  }
++ },
++ "rule": "VENUE_SUPERSET_OWNER_LISTED",
++ "source": "read-only diagnostic on l5-pmus-live deployment 4efa8e28, 2026-11-20 00:25-00:42Z; analysis/l5/btc5m/evidence/venue_cost_diagnostic_rows_20261120.json"
++}
+diff --git a/deploy/l5_pmus_live/Dockerfile b/deploy/l5_pmus_live/Dockerfile
+index cc6c0d09d..459e4969d 100644
+--- a/deploy/l5_pmus_live/Dockerfile
++++ b/deploy/l5_pmus_live/Dockerfile
+@@ -193,6 +193,8 @@ COPY src/l5_venue_cost_attestation.py src/l5_venue_cost_attestation.py
+ COPY src/l5_venue_cost_diagnostic.py src/l5_venue_cost_diagnostic.py
+ COPY src/l5_equity_baseline.py src/l5_equity_baseline.py
+ COPY src/l5_equity_feed.py src/l5_equity_feed.py
++COPY src/l5_venue_superset_correction.py src/l5_venue_superset_correction.py
++COPY config/venue_superset_manifest_20261120.json config/venue_superset_manifest_20261120.json
+ # The blocked-arm switch gate, called from the HEARTBEAT when
+ # L5_ARM_SWITCH_PROBE is on. Its import is guarded, so a missing COPY
+ # would NOT fail the boot -- it would report PROBE_FAILED:
+diff --git a/src/l5_live_execution.py b/src/l5_live_execution.py
+index 2c45f30a0..9581dd013 100644
+--- a/src/l5_live_execution.py
++++ b/src/l5_live_execution.py
+@@ -3647,10 +3647,19 @@ class InventoryStore:
+     def attest_retired_market_cost(self, market: str, *,
+                                    legs: Mapping[str, Any],
+                                    walk: Mapping[str, Any],
+-                                   correction_id: str) -> Dict[str, Any]:
++                                   correction_id: str,
++                                   expect_superset: Optional[
++                                       Mapping[str, Any]] = None
++                                   ) -> Dict[str, Any]:
+         """Replace a RETIRED market's $1/share upper bound with the cost the
+         VENUE's own fills state -- only when they reconcile exactly.
+ 
++        `expect_superset` (default None: behaviour exactly as before) admits
++        ONE more form, for a market the owner has listed by its exact
++        figures: the venue's fills CONTAIN the ledger's quantity and exceed
++        it, because this ledger recorded one leg of a position and never the
++        other. See `_superset_refusal` for everything that form requires.
++
+         THE DEFECT. A position this ledger did not open (another strategy's
+         legs, adopted from the venue) is booked at $1 a share. A BTC5m leg
+         that rested at $0.08 therefore books 12.5x its real cost, and a
+@@ -3797,9 +3806,18 @@ class InventoryStore:
+               and held[UP] - held[DOWN] == venue[UP] - venue[DOWN]):
+             form = "VENUE_NET"
+         else:
+-            return no("VENUE_QTY_NE_LEDGER_QTY",
+-                      venue_up=str(venue[UP]), venue_down=str(venue[DOWN]),
+-                      ledger_up=str(held[UP]), ledger_down=str(held[DOWN]))
++            why = self._superset_refusal(
++                expect_superset, row=row, held=held, venue=venue,
++                derived=derived, v=v, old_pnl=old_pnl, walk=walk,
++                unknown_keys=unknown_keys, market=market)
++            if why is not None:
++                return no("VENUE_QTY_NE_LEDGER_QTY",
++                          venue_up=str(venue[UP]),
++                          venue_down=str(venue[DOWN]),
++                          ledger_up=str(held[UP]),
++                          ledger_down=str(held[DOWN]),
++                          superset=why)
++            form = self.VENUE_SUPERSET_FORM
+         for side in (UP, DOWN):
+             key = "%s|%s" % (market, side)
+             if held[side] > 0 and key not in unknown_keys:
+@@ -3914,6 +3932,98 @@ class InventoryStore:
+                 "realized_before": before,
+                 "realized_after": self.realized_lines()}
+ 
++    VENUE_SUPERSET_FORM = "VENUE_SUPERSET_OWNER_LISTED"
++    SUPERSET_FIELDS = frozenset((
++        "venue_up", "venue_down", "cost_up", "cost_down", "ledger_up",
++        "ledger_down", "yes_value", "booked_pnl", "corrected_pnl"))
++
++    def _superset_refusal(self, expect: Any, *, row: Mapping[str, Any],
++                          held: Mapping[str, D], venue: Mapping[str, D],
++                          derived: Mapping[str, Mapping[str, Any]], v: D,
++                          old_pnl: D, walk: Mapping[str, Any],
++                          unknown_keys: List[str], market: str
++                          ) -> Optional[str]:
++        """None when the owner-listed superset form holds, else why not.
++
++        THE CASE (diagnostic of 2026-11-20, 94 of 97 rows). The venue's fills
++        hold MORE than this ledger does: it adopted one leg of a position
++        and never saw the other, so a bought pair is booked as a one-sided
++        loss at $1 a share. The exact rule refuses, correctly, because the
++        quantities differ. This admits that case and nothing wider.
++
++        READS ONLY. Every condition is a refusal; nothing is clamped,
++        defaulted or approximated:
++
++          * the caller must hand in the owner's listed figures for THIS
++            market, and every one must equal what is found here now: both
++            venue quantities, both venue costs, both ledger quantities, the
++            settlement value, the booked result and the corrected result.
++            A fill added, removed or repriced since the list was written
++            changes one of them and refuses;
++          * the ledger's quantity must be contained in the venue's on both
++            sides, and exceeded on at least one;
++          * every side the ledger holds must be one it never had a cost
++            for -- a side it KNEW is never re-priced by this form;
++          * every venue leg's fee must be readable and ZERO, because fees
++            are not in the booked result and a non-zero one would make the
++            corrected figure wrong by that amount;
++          * the feed must have been read to its END, not to a time floor:
++            a missing fill is exactly what this form cannot tolerate;
++          * the row must have settled AFTER the last accounting re-anchor.
++            A row settled before it is no longer in the account-wide total,
++            so adding its improvement would credit a loss the total does
++            not hold.
++        """
++        if expect is None:
++            return "NOT_OWNER_LISTED"
++        if not isinstance(expect, Mapping) \
++                or set(expect) != self.SUPERSET_FIELDS:
++            return "LISTING_FIELDS"
++        want = {k: finite_decimal(expect.get(k)) for k in self.SUPERSET_FIELDS}
++        if any(x is None for x in want.values()):
++            return "LISTING_UNREADABLE"
++        if not (held[UP] <= venue[UP] and held[DOWN] <= venue[DOWN]):
++            return "LEDGER_NOT_CONTAINED_IN_VENUE"
++        if held[UP] == venue[UP] and held[DOWN] == venue[DOWN]:
++            return "NOT_A_SUPERSET"
++        for side in (UP, DOWN):
++            if held[side] > 0 and "%s|%s" % (market, side) \
++                    not in unknown_keys:
++                return "KNOWN_SIDE:%s" % side
++        cost = {}
++        for side in (UP, DOWN):
++            leg = derived.get(side)
++            if leg is None:
++                cost[side] = D(0)
++                continue
++            fee = finite_decimal(leg.get("fees"))
++            if fee is None:
++                return "FEE_UNREADABLE:%s" % side
++            if fee != 0:
++                return "FEE_NOT_ZERO:%s" % side
++            cost[side] = D(str(leg["cost"]))
++        if not isinstance(walk, Mapping) or walk.get("by") != "END_OF_FEED":
++            return "FEED_NOT_READ_TO_ITS_END"
++        rebases = [str(r.get("t")) for r in
++                   (self.state.get("accounting_rebase_log") or [])
++                   if isinstance(r, Mapping) and r.get("t")]
++        settled = str(row.get("t") or "")
++        if not settled:
++            return "SETTLEMENT_TIME_UNREADABLE"
++        if rebases and settled < max(rebases):
++            return "SETTLED_BEFORE_THE_LAST_REBASE"
++        found = {"venue_up": venue[UP], "venue_down": venue[DOWN],
++                 "cost_up": cost[UP], "cost_down": cost[DOWN],
++                 "ledger_up": held[UP], "ledger_down": held[DOWN],
++                 "yes_value": v, "booked_pnl": old_pnl,
++                 "corrected_pnl": (venue[UP] * v + venue[DOWN] * (D(1) - v)
++                                   - cost[UP] - cost[DOWN])}
++        for k in sorted(found):
++            if found[k] != want[k]:
++                return "LISTED_%s_NE_FOUND:%s!=%s" % (k.upper(), want[k],
++                                                      found[k])
++        return None
++
+     def correct_settled_market(self, market: str, *, correction_id: str,
+                                expect: Mapping[str, Any],
+                                corrected_yes_value: D,
+diff --git a/src/l5_pmus_live_runner.py b/src/l5_pmus_live_runner.py
+index 5b4386bbc..5e335d46d 100644
+--- a/src/l5_pmus_live_runner.py
++++ b/src/l5_pmus_live_runner.py
+@@ -3003,6 +3003,36 @@ class Runner:
+                                         "refusal": bad},
+                     "equity_value": {"usd": None, "unavailable_why": bad}}
+ 
++    def maybe_correct_venue_supersets(self, now: float) -> None:
++        """The owner-listed venue-superset cost corrections.
++
++        OFF unless `L5_VENUE_SUPERSET_CORRECTION` is set. `INSPECT` runs the
++        real correction against a copy of the ledger that cannot be saved
++        and reports what it would do. `APPLY` writes, and only when
++        `L5_VENUE_SUPERSET_CORRECTION_APPROVED` equals the shipped
++        manifest's SHA-256. It changes no limit. ANY failure is swallowed:
++        this can never stop a tick. See `l5_venue_superset_correction`.
++        """
++        try:
++            from src import l5_venue_superset_correction as VSC
++            if not (os.environ.get(VSC.MODE_ENV) or "").strip():
++                return
++            job = getattr(self, "_venue_superset_correction", None)
++            if job is None:
++                job = VSC.Correction()
++                self._venue_superset_correction = job
++            out = job.step(self.store, self.transport, float(now))
++            if not out.get("idle") and not out.get("walking"):
++                emit("L5_VENUE_SUPERSET_CORRECTION", out)
++        except BaseException as exc:                           # noqa: BLE001
++            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
++                raise
++            try:
++                self.stats["venue_superset_correction_error:%s"
++                           % type(exc).__name__] += 1
++            except BaseException:                              # noqa: BLE001
++                pass
++
+     def maybe_diagnose_venue_costs(self, now: float) -> None:
+         """READ-ONLY: print the venue's fills beside this ledger's figures
+         for the rows the attestation gave up on.
+@@ -11605,6 +11635,7 @@ class Runner:
+         self.maybe_attest_venue_costs(now)
+         self.maybe_diagnose_venue_costs(now)
+         self.maybe_watch_equity_transfers(now)
++        self.maybe_correct_venue_supersets(now)
+         # a book that has gone uncertain gets another authoritative read,
+         # rather than latching the session shut until a redeploy
+         self.reconcile_if_needed(now)
+diff --git a/src/l5_venue_superset_correction.py b/src/l5_venue_superset_correction.py
+new file mode 100644
+index 000000000..ad18e8f14
+--- /dev/null
++++ b/src/l5_venue_superset_correction.py
+@@ -0,0 +1,195 @@
++"""Apply the owner-listed venue-superset cost corrections, or preview them.
++
++WHAT THIS IS FOR. The diagnostic of 2026-11-20 found 40 settled markets,
++inside the account-wide loss figure, where the venue's fills contain more
++than this ledger recorded (it adopted one leg of a position and never the
++other) and the row is booked at $1 a share. `InventoryStore.
++attest_retired_market_cost` can now correct such a row when it is handed the
++owner's listed figures for it. This module is the only caller that hands
++them in, and it does so only for the markets in ONE shipped manifest.
++
++TWO MODES, AND OFF.
++
++  OFF      `L5_VENUE_SUPERSET_CORRECTION` unset. Nothing is read.
++  INSPECT  the value `INSPECT`. The feed is read (GET), and every listed
++           market is run through the REAL correction code against a COPY of
++           the ledger whose save is disabled. The real ledger is not
++           touched. Reports exactly what APPLY would do.
++  APPLY    the value `APPLY` AND `L5_VENUE_SUPERSET_CORRECTION_APPROVED`
++           equal to the SHA-256 of the manifest file as shipped. The owner
++           approves that exact list of figures; a different file is a
++           different hash and is refused.
++
++WHAT IT CANNOT DO. It cannot correct a market that is not in the manifest,
++or one whose venue quantities, costs, ledger quantities, settlement value,
++booked result or corrected result differ in any digit from the list. It
++never raises a limit, resets a total or touches a row it was not handed.
++Each trade id is consumed once by the store's own guard, so no fill is used
++twice. One pass per process; a second pass finds the rows already corrected
++and does nothing.
++"""
++from __future__ import annotations
++
++import copy
++import datetime as dt
++import hashlib
++import json
++import os
++from decimal import Decimal as D
++from typing import Any, Dict, Mapping, Optional
++
++from src import l5_venue_cost_attestation as VCA
++
++MODE_ENV = "L5_VENUE_SUPERSET_CORRECTION"
++APPROVAL_ENV = "L5_VENUE_SUPERSET_CORRECTION_APPROVED"
++MANIFEST_PATH = os.path.join(
++    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
++    "config", "venue_superset_manifest_20261120.json")
++MAX_MARKETS = VCA.MAX_MARKETS_PER_WALK
++FIELDS = frozenset((
++    "venue_up", "venue_down", "cost_up", "cost_down", "ledger_up",
++    "ledger_down", "yes_value", "booked_pnl", "corrected_pnl"))
++
++
++def load_manifest(path: Optional[str] = None) -> Dict[str, Any]:
++    """The shipped list and the hash the owner approves. Never raises."""
++    try:
++        with open(path or MANIFEST_PATH, "rb") as fh:
++            raw = fh.read()
++        doc = json.loads(raw.decode("utf-8"))
++        markets = doc.get("markets")
++        if not isinstance(markets, dict) or not markets:
++            return {"ok": False, "why": "NO_MARKETS"}
++        if len(markets) > MAX_MARKETS:
++            return {"ok": False, "why": "TOO_MANY_MARKETS"}
++        for m, e in markets.items():
++            if not isinstance(e, dict) or set(e) != FIELDS:
++                return {"ok": False, "why": "ENTRY_FIELDS", "market": m}
++        if doc.get("count") != len(markets):
++            return {"ok": False, "why": "COUNT_NE_MARKETS"}
++        return {"ok": True, "id": str(doc.get("id")),
++                "sha256": hashlib.sha256(raw).hexdigest(),
++                "markets": markets}
++    except Exception as exc:                                   # noqa: BLE001
++        return {"ok": False, "why": "MANIFEST_%s" % type(exc).__name__}
++
++
++def mode(manifest: Mapping[str, Any],
++         env: Optional[Mapping[str, str]] = None) -> Dict[str, Any]:
++    e = os.environ if env is None else env
++    want = str(e.get(MODE_ENV) or "").strip()
++    if not want:
++        return {"mode": "OFF"}
++    if not manifest.get("ok"):
++        return {"mode": "REFUSED", "why": manifest.get("why")}
++    if want == "INSPECT":
++        return {"mode": "INSPECT"}
++    if want != "APPLY":
++        return {"mode": "REFUSED", "why": "MODE_NOT_RECOGNISED"}
++    given = str(e.get(APPROVAL_ENV) or "").strip()
++    if not given:
++        return {"mode": "REFUSED", "why": "APPLY_WITHOUT_APPROVAL"}
++    if given != manifest["sha256"]:
++        return {"mode": "REFUSED",
++                "why": "APPROVAL_IS_FOR_A_DIFFERENT_MANIFEST"}
++    return {"mode": "APPLY"}
++
++
++def _detached(store: Any) -> Any:
++    """A copy of the ledger that CANNOT be saved: same class, same code,
++    deep-copied state, `save` a no-op. For INSPECT only."""
++    twin = object.__new__(type(store))
++    twin.__dict__.update({k: v for k, v in vars(store).items()
++                          if k != "state"})
++    twin.state = copy.deepcopy(store.state)
++    twin.save = lambda *a, **k: None
++    return twin
++
++
++class Correction:
++    """One paced pass. Progress in memory; the result is emitted once."""
++
++    def __init__(self, manifest: Optional[Mapping[str, Any]] = None) -> None:
++        self.manifest = dict(manifest) if manifest is not None \
++            else load_manifest()
++        self.walk: Optional[VCA.Walk] = None
++        self.finished = False
++        self.last_step = 0.0
++        self.next_allowed = 0.0
++
++    def step(self, store: Any, transport: Any, now: float) -> Dict[str, Any]:
++        md = mode(self.manifest)
++        if md["mode"] == "OFF":
++            return {"idle": "OFF"}
++        if self.finished:
++            return {"idle": "DONE"}
++        if md["mode"] == "REFUSED":
++            self.finished = True
++            return {"refused": md.get("why"), "applied": 0}
++        if transport is None:
++            return {"idle": "NO_TRANSPORT"}
++        if now < self.next_allowed \
++                or now - self.last_step < VCA.STEP_INTERVAL_S:
++            return {"idle": "PACED"}
++        self.last_step = now
++        markets = sorted(self.manifest["markets"])
++        if self.walk is None:
++            self.walk = VCA.Walk(markets,
++                                 started_at=dt.datetime.now(dt.timezone.utc))
++        w = self.walk
++        if not w.sufficient and w.ended is None:
++            w.step(transport, VCA.PAGES_PER_STEP)
++        if not w.sufficient:
++            if w.ended is None:
++                return {"walking": w.proof()}
++            self.walk = None
++            if str(w.ended).startswith("error"):
++                self.next_allowed = now + VCA.ERROR_BACKOFF_S
++                return {"walk_failed": w.ended}
++            self.finished = True
++            return {"walk_insufficient": w.proof(), "applied": 0}
++        target = store if md["mode"] == "APPLY" else _detached(store)
++        before = target.realized_lines()
++        results, applied, delta = [], 0, D(0)
++        for m in markets:
++            entry = self.manifest["markets"][m]
++            got = VCA.legs_from_rows(w.rows, m)
++            if not got.get("ok"):
++                results.append({"market": m, "attested": False,
++                                "reason": str(got.get("reason"))})
++                continue
++            out = target.attest_retired_market_cost(
++                m, legs=got["legs"], walk=w.proof(),
++                correction_id="venue-superset|%s|%s" % (
++                    self.manifest["id"], m),
++                expect_superset=entry)
++            rec = {"market": m, "attested": bool(out.get("attested"))}
++            if out.get("attested"):
++                applied += 1
++                delta += D(str(out.get("delta")))
++                rec.update(old_pnl=out.get("old_pnl"),
++                           new_pnl=out.get("new_pnl"),
++                           delta=out.get("delta"))
++            else:
++                rec.update(reason=out.get("reason"),
++                           superset=out.get("superset"))
++            results.append(rec)
++        self.finished = True
++        self.walk = None
++        after = target.realized_lines()
++        return {"mode": md["mode"], "manifest_id": self.manifest["id"],
++                "manifest_sha256": self.manifest["sha256"],
++                "listed": len(markets),
++                "would_apply" if md["mode"] == "INSPECT" else "applied":
++                    applied,
++                "refused": len(markets) - applied,
++                "delta_usd": str(delta),
++                "realized_attributed_before": before.get(
++                    "realized_attributed"),
++                "realized_attributed_after": after.get("realized_attributed"),
++                "ledger_written": md["mode"] == "APPLY" and applied > 0,
++                "walk": w.proof(), "results": results,
++                "labels": ("INSPECT ran the real correction against a copy "
++                           "that cannot be saved; the ledger is unchanged. "
++                           "APPLY wrote only the markets shown attested. "
++                           "No limit was changed by either.")}
+diff --git a/tests/test_l5_live_runner_graft.py b/tests/test_l5_live_runner_graft.py
+index f13749c4d..22a7c7bc3 100644
+--- a/tests/test_l5_live_runner_graft.py
++++ b/tests/test_l5_live_runner_graft.py
+@@ -282,6 +282,9 @@ ALLOWED_DATA = {
+     # the owner-approved one-leg restatement of the manual 19:15Z trade
+     # (2026-11-12): read only when L5_COST_BASIS_BATCH_MANIFEST names it
+     "config/cost_basis_batch_manifest_20261112_manual1915z.json",
++    # the 40 owner-listed venue-superset corrections (2026-11-20): read only
++    # when L5_VENUE_SUPERSET_CORRECTION is set
++    "config/venue_superset_manifest_20261120.json",
+     # the frozen v2 action model the shadow controller loads at construction
+     "analysis/l5/l5_action_model_v2.json",
+ }
+diff --git a/tests/test_l5_venue_superset_correction.py b/tests/test_l5_venue_superset_correction.py
+new file mode 100644
+index 000000000..18a7dc604
+--- /dev/null
++++ b/tests/test_l5_venue_superset_correction.py
+@@ -0,0 +1,433 @@
++"""The owner-listed venue-superset correction.
++
++It writes to a ledger that gates money, so the tests are about refusal: it
++must correct exactly the listed markets at exactly the listed figures, and
++nothing else, under an approval bound to one manifest.
++"""
++from __future__ import annotations
++
++import copy
++import hashlib
++import json
++from decimal import Decimal as D
++from pathlib import Path
++
++import pytest
++
++from src import l5_live_execution as LX
++from src import l5_venue_cost_attestation as VCA
++from src import l5_venue_superset_correction as VSC
++
++from tests.test_l5_venue_cost_attestation import (
++    Feed, _no_retry_spacing, deposit, fill, retire, run_until_idle,  # noqa: F401
++)
++
++ROOT = Path(__file__).resolve().parents[1]
++MA = "aec-nba-det-sa-2026-11-17"            # ledger 5 UP, venue 10 + 10
++MB = "aec-cs2-vp-priv-2026-11-16"           # ledger 1 DOWN, venue 3 + 3
++MC = "aec-nba-hou-mia-2026-11-16"           # not listed
++REBASE = "2026-11-16T00:58:25.162832+00:00"
++
++
++def fills():
++    return [
++        fill(MA, "UP", "10", "0.46", "TA1", "VA1", t="2026-11-17T20:00:00Z"),
++        fill(MA, "DOWN", "10", "0.48", "TA2", "VA2",
++             t="2026-11-17T20:01:00Z"),
++        fill(MB, "UP", "3", "0.50", "TB1", "VB1", t="2026-11-16T10:00:00Z"),
++        fill(MB, "DOWN", "2", "0.48", "TB2", "VB2", t="2026-11-16T10:01:00Z"),
++        fill(MB, "DOWN", "1", "0.49", "TB3", "VB3", t="2026-11-16T10:02:00Z"),
++        fill(MC, "UP", "5", "0.50", "TC1", "VC1", t="2026-11-16T11:00:00Z"),
++        fill(MC, "DOWN", "5", "0.53", "TC2", "VC2", t="2026-11-16T11:01:00Z"),
++        deposit("2026-11-10T05:00:00Z"),
++    ]
++
++
++LISTED = {
++    MA: {"venue_up": "10", "venue_down": "10", "cost_up": "4.60",
++         "cost_down": "4.80", "ledger_up": "5", "ledger_down": "0",
++         "yes_value": "0", "booked_pnl": "-5", "corrected_pnl": "0.60"},
++    MB: {"venue_up": "3", "venue_down": "3", "cost_up": "1.50",
++         "cost_down": "1.45", "ledger_up": "0", "ledger_down": "1",
++         "yes_value": "0", "booked_pnl": "0", "corrected_pnl": "0.05"},
++}
++
++
++def manifest(markets=None, **over):
++    m = {"ok": True, "id": "test-manifest", "sha256": "a" * 64,
++         "markets": copy.deepcopy(markets if markets is not None else LISTED)}
++    m.update(over)
++    return m
++
++
++@pytest.fixture
++def store(tmp_path):
++    """A real ledger in the production state: three rows at the $1 bound
++    that the REAL attestation gave up on, settled after a re-anchor."""
++    s = LX.InventoryStore(str(tmp_path / "inv.json"))
++    for k in ("realized_unattributed",):
++        s.state[k] = "0"
++    s.state["realized_attributed"] = "0"
++    s.state["realized_today"] = "0"
++    s.state["accounting_rebase_log"] = [{"t": REBASE, "id": "r"}]
++    retire(s, MA, up="5", yes="0", t="2026-11-18T03:00:00+00:00")
++    retire(s, MB, dn="1", yes="0", t="2026-11-16T14:00:00+00:00")
++    retire(s, MC, up="2", yes="0", t="2026-11-16T15:00:00+00:00")
++    run_until_idle(s, Feed([fills()]))
++    book = s.state[VCA.STATE_KEY]["markets"]
++    assert {book[m]["status"] for m in (MA, MB, MC)} == {"UPPER_BOUND_KEPT"}
++    assert s.realized_today() == D("-7")
++    return s
++
++
++def on(monkeypatch, mode, approval=None):
++    monkeypatch.setenv(VSC.MODE_ENV, mode)
++    if approval is None:
++        monkeypatch.delenv(VSC.APPROVAL_ENV, raising=False)
++    else:
++        monkeypatch.setenv(VSC.APPROVAL_ENV, approval)
++
++
++def drive(store, feed, man=None, steps=80):
++    job = VSC.Correction(man if man is not None else manifest())
++    now, outs = 9_000.0, []
++    for _ in range(steps):
++        now += VCA.STEP_INTERVAL_S + 1
++        out = job.step(store, feed, now)
++        if not out.get("idle") and not out.get("walking"):
++            outs.append(out)
++    return outs
++
++
++def snapshot(store, tmp_path):
++    return (copy.deepcopy(store.state), (tmp_path / "inv.json").read_bytes())
++
++
++# --- off, inspect, apply -----------------------------------------------------
++
++def test_unset_it_reads_nothing_and_writes_nothing(store, tmp_path,
++                                                   monkeypatch):
++    monkeypatch.delenv(VSC.MODE_ENV, raising=False)
++    monkeypatch.setenv(VSC.APPROVAL_ENV, "a" * 64)      # approval alone: no
++    before = snapshot(store, tmp_path)
++    feed = Feed([fills()])
++    assert drive(store, feed) == []
++    assert feed.reads == [] and snapshot(store, tmp_path) == before
++
++
++def test_inspect_reports_what_apply_would_do_and_changes_nothing(
++        store, tmp_path, monkeypatch):
++    on(monkeypatch, "INSPECT")
++    before = snapshot(store, tmp_path)
++    out, = drive(store, Feed([fills()]))
++    assert snapshot(store, tmp_path) == before
++    assert out["mode"] == "INSPECT" and out["would_apply"] == 2
++    assert out["ledger_written"] is False
++    assert D(out["delta_usd"]) == D("5.65")
++    assert D(out["realized_attributed_before"]) == D("-7")
++    assert D(out["realized_attributed_after"]) == D("-1.35")
++    assert store.realized_today() == D("-7")
++
++
++def test_apply_without_approval_is_refused(store, tmp_path, monkeypatch):
++    on(monkeypatch, "APPLY")
++    before = snapshot(store, tmp_path)
++    feed = Feed([fills()])
++    out, = drive(store, feed)
++    assert out == {"refused": "APPLY_WITHOUT_APPROVAL", "applied": 0}
++    assert feed.reads == [] and snapshot(store, tmp_path) == before
++
++
++@pytest.mark.parametrize("approval", ["b" * 64, "yes", "APPROVED", "a" * 63])
++def test_an_approval_for_any_other_manifest_is_refused(
++        store, tmp_path, monkeypatch, approval):
++    on(monkeypatch, "APPLY", approval)
++    before = snapshot(store, tmp_path)
++    out, = drive(store, Feed([fills()]))
++    assert out["refused"] == "APPROVAL_IS_FOR_A_DIFFERENT_MANIFEST"
++    assert snapshot(store, tmp_path) == before
++
++
++@pytest.mark.parametrize("word", ["apply", "YES", "1", "INSPECT_AND_APPLY"])
++def test_an_unknown_mode_is_refused(store, tmp_path, monkeypatch, word):
++    on(monkeypatch, word, "a" * 64)
++    before = snapshot(store, tmp_path)
++    out, = drive(store, Feed([fills()]))
++    assert out["refused"] == "MODE_NOT_RECOGNISED"
++    assert snapshot(store, tmp_path) == before
++
++
++def test_apply_corrects_exactly_the_listed_markets(store, monkeypatch):
++    on(monkeypatch, "APPLY", "a" * 64)
++    out, = drive(store, Feed([fills()]))
++    assert out["mode"] == "APPLY" and out["applied"] == 2
++    rows = store.state["retired_markets"]
++    assert D(rows[MA]["settlement_pnl"]) == D("0.60")
++    assert D(rows[MB]["settlement_pnl"]) == D("0.05")
++    assert rows[MA]["venue_qty_form"] == "VENUE_SUPERSET_OWNER_LISTED"
++    assert D(rows[MA]["cost_superseded"]["settlement_pnl"]) == D("-5")
++    # the unlisted market is exactly as it was: still at the bound
++    assert D(rows[MC]["settlement_pnl"]) == D("-2")
++    assert rows[MC]["pnl_provenance"] == VCA.UPPER_BOUND
++    assert store.realized_today() == D("-1.35")
++    assert D(store.state["realized_today"]) == D("-1.35")
++    assert D(store.state["realized_unattributed"]) == 0
++    ids = [r["id"] for r in store.state["cost_basis_corrections"]]
++    assert ids == ["venue-superset|test-manifest|" + MB,
++                   "venue-superset|test-manifest|" + MA]
++
++
++def test_inspect_and_apply_agree_to_the_cent(store, monkeypatch):
++    on(monkeypatch, "INSPECT")
++    seen, = drive(store, Feed([fills()]))
++    on(monkeypatch, "APPLY", "a" * 64)
++    done, = drive(store, Feed([fills()]))
++    assert seen["delta_usd"] == done["delta_usd"]
++    assert seen["realized_attributed_after"] \
++        == done["realized_attributed_after"]
++    assert [r["market"] for r in seen["results"] if r["attested"]] \
++        == [r["market"] for r in done["results"] if r["attested"]]
++
++
++def test_a_second_pass_and_a_restart_apply_nothing_more(store, tmp_path,
++                                                        monkeypatch):
++    on(monkeypatch, "APPLY", "a" * 64)
++    drive(store, Feed([fills()]))
++    after = snapshot(store, tmp_path)
++    again, = drive(store, Feed([fills()]))                 # a new process
++    assert again["applied"] == 0
++    assert {r["reason"] for r in again["results"]} \
++        == {"CORRECTION_ALREADY_APPLIED"}
++    reborn = LX.InventoryStore(str(tmp_path / "inv.json"))
++    third, = drive(reborn, Feed([fills()]))
++    assert third["applied"] == 0
++    assert reborn.realized_today() == D("-1.35")
++    assert snapshot(store, tmp_path)[1] == after[1]
++
++
++# --- every figure in the listing binds ---------------------------------------
++
++def _listed(market, **over):
++    m = copy.deepcopy(LISTED)
++    m[market].update(over)
++    return m
++
++
++@pytest.mark.parametrize("field, value", [
++    ("venue_up", "9"), ("venue_down", "11"), ("cost_up", "4.61"),
++    ("cost_down", "4.79"), ("ledger_up", "4"), ("ledger_down", "1"),
++    ("yes_value", "1"), ("booked_pnl", "-4.99"), ("corrected_pnl", "0.61"),
++])
++def test_one_wrong_digit_in_the_listing_refuses_that_market(
++        store, monkeypatch, field, value):
++    on(monkeypatch, "APPLY", "a" * 64)
++    out, = drive(store, Feed([fills()]),
++                 manifest(_listed(MA, **{field: value})))
++    by = {r["market"]: r for r in out["results"]}
++    assert by[MA]["attested"] is False
++    assert by[MA]["superset"].startswith("LISTED_%s_NE_FOUND" % field.upper())
++    assert by[MB]["attested"] is True                 # the other still goes
++    assert D(store.state["retired_markets"][MA]["settlement_pnl"]) == D("-5")
++
++
++def test_a_fill_added_since_the_list_was_written_refuses(store, monkeypatch):
++    on(monkeypatch, "APPLY", "a" * 64)
++    extra = fills() + [fill(MA, "UP", "1", "0.40", "TA9", "VA9",
++                            t="2026-11-17T20:05:00Z")]
++    out, = drive(store, Feed([extra]))
++    by = {r["market"]: r for r in out["results"]}
++    assert by[MA]["attested"] is False
++    assert by[MA]["superset"].startswith("LISTED_")
++
++
++def test_a_fee_on_any_leg_refuses(store, monkeypatch):
++    on(monkeypatch, "APPLY", "a" * 64)
++    f = fills()
++    f[0] = fill(MA, "UP", "10", "0.46", "TA1", "VA1",
++                t="2026-11-17T20:00:00Z", fee="0.02")
++    out, = drive(store, Feed([f]))
++    by = {r["market"]: r for r in out["results"]}
++    assert by[MA]["attested"] is False
++    assert "FEE" in (by[MA].get("superset") or by[MA].get("reason"))
++
++
++def test_a_row_settled_before_the_rebase_is_refused(store, monkeypatch):
++    """Its loss is no longer in the total; adding its improvement would be
++    a credit against nothing."""
++    store.state["retired_markets"][MB]["t"] = "2026-11-15T20:00:00+00:00"
++    on(monkeypatch, "APPLY", "a" * 64)
++    out, = drive(store, Feed([fills()]))
++    by = {r["market"]: r for r in out["results"]}
++    assert by[MB]["superset"] == "SETTLED_BEFORE_THE_LAST_REBASE"
++    assert D(store.state["retired_markets"][MB]["settlement_pnl"]) == 0
++
++
++def test_a_side_the_ledger_already_had_a_cost_for_is_refused(store,
++                                                             monkeypatch):
++    row = store.state["retired_markets"][MA]
++    row["unverified_cost_basis_keys"] = [MA + "|DOWN"]
++    on(monkeypatch, "APPLY", "a" * 64)
++    out, = drive(store, Feed([fills()]))
++    by = {r["market"]: r for r in out["results"]}
++    assert by[MA]["attested"] is False
++    assert by[MA]["superset"] == "KNOWN_SIDE:UP"
++
++
++def test_venue_holding_less_than_the_ledger_is_refused(store, monkeypatch):
++    f = [x for x in fills()
++         if (x.get("trade") or {}).get("id") not in ("TB2", "TB3")]
++    on(monkeypatch, "APPLY", "a" * 64)
++    out, = drive(store, Feed([f]))
++    by = {r["market"]: r for r in out["results"]}
++    assert by[MB]["attested"] is False
++    assert by[MB]["superset"] == "LEDGER_NOT_CONTAINED_IN_VENUE"
++
++
++def test_a_feed_not_read_to_its_end_applies_nothing(store, tmp_path,
++                                                    monkeypatch):
++    on(monkeypatch, "APPLY", "a" * 64)
++    monkeypatch.setattr(VCA, "MAX_WALK_PAGES", 1)
++    before = snapshot(store, tmp_path)
++    out, = drive(store, Feed([fills(), [deposit("2026-11-01T00:00:00Z")]],
++                             eof=False))
++    assert out.get("applied") == 0 and "walk_insufficient" in out
++    assert snapshot(store, tmp_path) == before
++
++
++def test_a_trade_already_used_by_another_correction_is_refused(
++        store, monkeypatch):
++    store.state.setdefault("cost_basis_corrections", []).append(
++        {"id": "earlier", "trade_ids": ["TA2"]})
++    on(monkeypatch, "APPLY", "a" * 64)
++    out, = drive(store, Feed([fills()]))
++    by = {r["market"]: r for r in out["results"]}
++    assert by[MA]["reason"] == "TRADE_ID_ALREADY_CONSUMED"
++
++
++# --- the store verb itself ---------------------------------------------------
++
++def test_without_a_listing_the_store_refuses_exactly_as_before(store):
++    w = {"sufficient": True, "by": "END_OF_FEED"}
++    legs = VCA.legs_from_rows(fills(), MA)["legs"]
++    before = copy.deepcopy(store.state)
++    out = store.attest_retired_market_cost(MA, legs=legs, walk=w,
++                                           correction_id="x")
++    assert out["attested"] is False
++    assert out["reason"] == "VENUE_QTY_NE_LEDGER_QTY"
++    assert out["superset"] == "NOT_OWNER_LISTED"
++    assert store.state == before
++
++
++@pytest.mark.parametrize("listing, why", [
++    ({"venue_up": "10"}, "LISTING_FIELDS"),
++    (dict(LISTED[MA], extra="1"), "LISTING_FIELDS"),
++    (dict(LISTED[MA], venue_up="ten"), "LISTING_UNREADABLE"),
++    ("yes", "LISTING_FIELDS"),
++])
++def test_a_malformed_listing_refuses(store, listing, why):
++    w = {"sufficient": True, "by": "END_OF_FEED"}
++    legs = VCA.legs_from_rows(fills(), MA)["legs"]
++    out = store.attest_retired_market_cost(
++        MA, legs=legs, walk=w, correction_id="x", expect_superset=listing)
++    assert out["attested"] is False and out["superset"] == why
++
++
++def test_a_time_floor_walk_is_not_enough_for_this_form(store):
++    w = {"sufficient": True, "by": "TIME_FLOOR"}
++    legs = VCA.legs_from_rows(fills(), MA)["legs"]
++    out = store.attest_retired_market_cost(
++        MA, legs=legs, walk=w, correction_id="x", expect_superset=LISTED[MA])
++    assert out["superset"] == "FEED_NOT_READ_TO_ITS_END"
++
++
++def test_a_listing_cannot_force_the_exact_forms_or_widen_them(tmp_path):
++    """A row whose quantities MATCH is the existing GROSS form: the listing
++    is not consulted, so it cannot be used to change that path."""
++    s = LX.InventoryStore(str(tmp_path / "g.json"))
++    for k in ("realized_attributed", "realized_unattributed",
++              "realized_today"):
++        s.state[k] = "0"
++    retire(s, MC, up="5", dn="5", yes="0", t="2026-11-16T15:00:00+00:00")
++    legs = VCA.legs_from_rows(fills(), MC)["legs"]
++    out = s.attest_retired_market_cost(
++        MC, legs=legs, walk={"sufficient": True, "by": "END_OF_FEED"},
++        correction_id="x", expect_superset={"nonsense": True})
++    assert out["attested"] is True
++    assert s.state["retired_markets"][MC]["venue_qty_form"] == "GROSS"
++
++
++# --- the shipped manifest and the wiring -------------------------------------
++
++def test_the_shipped_manifest_is_the_forty_reviewed_markets():
++    m = VSC.load_manifest()
++    assert m["ok"] and len(m["markets"]) == 40
++    raw = Path(VSC.MANIFEST_PATH).read_bytes()
++    assert m["sha256"] == hashlib.sha256(raw).hexdigest()
++    doc = json.loads(raw)
++    booked = sum(D(e["booked_pnl"]) for e in doc["markets"].values())
++    fixed = sum(D(e["corrected_pnl"]) for e in doc["markets"].values())
++    assert booked == D("-107.20") and fixed == D("-9.8835")
++    assert D(doc["delta_total"]) == fixed - booked == D("97.3165")
++    for name in doc["excluded_unreadable"]:
++        assert name not in doc["markets"]
++    for e in doc["markets"].values():
++        vu, vd = D(e["venue_up"]), D(e["venue_down"])
++        assert D(e["ledger_up"]) <= vu and D(e["ledger_down"]) <= vd
++        assert D(e["yes_value"]) in (D(0), D(1))
++        redeem = vu * D(e["yes_value"]) + vd * (1 - D(e["yes_value"]))
++        assert redeem - D(e["cost_up"]) - D(e["cost_down"]) \
++            == D(e["corrected_pnl"])
++
++
++def test_a_changed_manifest_has_a_different_hash(tmp_path):
++    doc = json.loads(Path(VSC.MANIFEST_PATH).read_text())
++    first = next(iter(doc["markets"]))
++    doc["markets"][first]["corrected_pnl"] = "99"
++    p = tmp_path / "m.json"
++    p.write_text(json.dumps(doc))
++    assert VSC.load_manifest(str(p))["sha256"] \
++        != VSC.load_manifest()["sha256"]
++
++
++@pytest.mark.parametrize("mutate, why", [
++    (lambda d: d.update(markets={}), "NO_MARKETS"),
++    (lambda d: d.update(count=39), "COUNT_NE_MARKETS"),
++    (lambda d: d["markets"].update(x={"venue_up": "1"}), "ENTRY_FIELDS"),
++])
++def test_a_malformed_manifest_is_not_loaded(tmp_path, mutate, why):
++    doc = json.loads(Path(VSC.MANIFEST_PATH).read_text())
++    mutate(doc)
++    p = tmp_path / "m.json"
++    p.write_text(json.dumps(doc))
++    got = VSC.load_manifest(str(p))
++    assert got["ok"] is False and got["why"] == why
++
++
++def test_the_runner_hook_is_off_by_default_and_swallowed():
++    src = (ROOT / "src" / "l5_pmus_live_runner.py").read_text()
++    assert src.count("self.maybe_correct_venue_supersets(now)") == 1
++    i = src.index("    def maybe_correct_venue_supersets")
++    body = src[i:src.index("    def maybe_diagnose_venue_costs")]
++    assert "if not (os.environ.get(VSC.MODE_ENV) or \"\").strip():\n" \
++           "                return" in body
++    assert "except BaseException" in body
++    for word in ("self.limits", "validation_gates", "max_cumulative",
++                 "self.halt"):
++        assert word not in body, word
++
++
++def test_nothing_else_calls_the_superset_form():
++    hits = []
++    for p in (ROOT / "src").glob("*.py"):
++        if "expect_superset=" in p.read_text():
++            hits.append(p.name)
++    assert sorted(hits) == ["l5_venue_superset_correction.py"]
++
++
++def test_the_live_image_ships_the_module_and_the_manifest():
++    d = (ROOT / "deploy" / "l5_pmus_live" / "Dockerfile").read_text()
++    for f in ("src/l5_venue_superset_correction.py",
++              "config/venue_superset_manifest_20261120.json"):
++        assert "COPY %s %s" % (f, f) in d
++    assert Path(VSC.MANIFEST_PATH) \
++        == ROOT / "config" / "venue_superset_manifest_20261120.json"
+-- 
+2.43.0
+

@@ -1,0 +1,79 @@
+{
+  "artifact": "arm_switch_probe_verification_20261103",
+  "authorization_scope_observed": "deploy and observe the read-only readiness probe only. No live trading, no arming, no campaign approval, no change to any financial risk limit. Nothing outside that was done.",
+  "running": {
+    "deployment": "5548b2bf-b5b1-4cda-83ed-88e5aefcfc73",
+    "commit": "17eea68042fa006efa46ad89164554b3e32d5f89",
+    "status": "SUCCESS",
+    "booted": "2026-11-03T19:55:38Z",
+    "strategy_config_digest": "c2e1889b6535f92c",
+    "digest_unchanged": "no strategy knob moved across any deploy in this cycle"
+  },
+  "probe_verified_emitting": true,
+  "actual_readiness_output": {
+    "observed_at": "2026-11-03T19:57:09.193Z and 19:57:11.189Z",
+    "marker": "L5_ARM_SWITCH_READINESS",
+    "ok": false,
+    "blockers": ["HALT_NOT_ASSERTED"],
+    "evidence": {
+      "halt_asserted": false,
+      "halt_latch": "CLEAR",
+      "live_orders": {"count": 0, "keys": []},
+      "pending_terminal": {"count": 0, "keys": []},
+      "quarantine": {"count": 0, "keys": []},
+      "submitted": {"count": 22848, "blocking": false,
+                    "note": "append-only idempotency ledger of every client order id ever submitted; never pruned, so its size is a lifetime count and not open-order state"},
+      "orders_uncertain": null,
+      "markets_with_exposure": [],
+      "windows_declared": []
+    },
+    "remaining_blocker": "HALT_NOT_ASSERTED -- correct and expected. The remote latch reads CLEAR; submissions are currently blocked by NOT_ARMED, not by the latch. Asserting the latch is a real operator step before any arm switch, not a formality."
+  },
+  "a_defect_the_probe_found_in_ITSELF": {
+    "first_emission": {
+      "deployment": "6d06e984-ab8d-46b2-b9aa-7d97a6ca9ca8",
+      "at": "2026-11-03T19:42:11.231Z",
+      "ok": false,
+      "blockers": ["HALT_NOT_ASSERTED", "SUBMITTED_NOT_EMPTY"],
+      "submitted_count": 22848,
+      "and_simultaneously": "live_orders 0, pending_terminal 0, quarantine 0, markets_with_exposure []"
+    },
+    "why_it_was_wrong": "my docstring claimed each row-book 'holds an order whose fate is not yet settled'. True of live_orders, pending_terminal and quarantine; FALSE of `submitted`, which record_submit writes for every client order id ever sent, which nothing anywhere pops or deletes, which backs already_submitted(coid) duplicate suppression, and which lives on a volume that outlives the process. Its size is the account's lifetime submission count.",
+    "consequence_if_unfixed": "the gate could never have passed again, so the arm switch it exists to authorize would have been blocked for ever",
+    "how_I_got_it_wrong": "I reasoned about `submitted` by analogy with its neighbours in the same state dict instead of reading how it is written",
+    "fix": "moved to EVIDENCE_ONLY_BOOKS -- still reported with its count and a note saying what it is, and unable to block",
+    "nothing_lost_and_pinned_on_source": [
+      "record_submit writes `submitted` and `live_orders` in the SAME call before one save, so a coid cannot be in one without the other",
+      "an order that leaves live_orders unresolved lands in pending_terminal",
+      "a set that cannot be enumerated at all is caught by orders_uncertain",
+      "a test asserts those source facts so a future change to record_submit cannot quietly invalidate the reasoning"
+    ],
+    "lesson": "this is the argument for emitting the gate rather than shipping a prose checklist: a checklist would have looked correct indefinitely"
+  },
+  "why_it_took_three_deploys": {
+    "my_error": "I set L5_ARM_SWITCH_PROBE with skipDeploys: true, and the write landed AFTER deployment 9968667a had snapshotted its environment.",
+    "railway_behaviour_confirmed": "a deployment's ENVIRONMENT is snapshotted at creation, and `redeploy` reuses that snapshot along with the build. So neither 9968667a nor its redeploy 0ce088c8 ever had the variable, and the emission returned at its opt-in check.",
+    "second_mistake": "setting the same value again was a no-op because the value had not changed, so it triggered nothing",
+    "resolution": "a fresh deploy (d2df888f) takes a new snapshot; the probe emitted 2 minutes after boot",
+    "what_I_verified_before_blaming_the_env": "the image carries the module (build log: '[35/72] COPY src/l5_arm_switch_gate.py'), the call site is inside heartbeat() with one emit and no early return, and the method is unit-tested"
+  },
+  "the_four_refusals_the_owner_asked_about": {
+    "remote_HALT_latch_not_asserted": "HALT_NOT_ASSERTED -- CONFIRMED IN PRODUCTION, it is the live blocker right now",
+    "latch_unreadable_or_NO_GATE": "HALT_STATE_UNESTABLISHED -- three states, not two; an unestablished latch is a blocker, never a pass",
+    "orders_uncertain": "ORDERS_UNCERTAIN -- the one case where we cannot even enumerate what would cross",
+    "inventory_still_exposed": "EXPOSURE_OUTSTANDING, from markets_with_exposure() which unions committed, positions, leg_cost, live_orders and pending_terminal minus retired_markets, so it catches residual inventory a quiet order book hides",
+    "prior_windows_not_settled_and_retired": "WINDOW_NOT_RETIRED, and WINDOW_RETIRED_WITHOUT_SETTLEMENT_RECORD for a retirement carrying no settlement figure. Checked BY NAME and never inferred from a quiet book, because an empty exposure list is also exactly what a window that never traded looks like.",
+    "unit_coverage": "33 tests, including a zero settlement value counting as recorded (a DOWN window settles at yes_value 0 and a truthiness test would have read it as missing), blockers accumulating rather than short-circuiting, and the gate writing nothing",
+    "all_passing": true
+  },
+  "preflight_unchanged": {
+    "verdict": "FAIL",
+    "fail": ["absolute_deadline", "campaign_approval"],
+    "both_are_owner_artifacts": true,
+    "note": "unchanged by any of this work; no authorization artifact was modified"
+  },
+  "parity": {"failing_ids": 80, "digest": "eb672d14b4baf439", "verdict": "EXACT on every tree in this cycle"},
+  "not_done": ["nothing armed", "no orders submitted", "at-touch still OFF",
+               "no campaign approval written", "no risk limit changed",
+               "no signing credential generated", "no authorization artifact modified"]
+}

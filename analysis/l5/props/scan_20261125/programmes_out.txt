@@ -1,0 +1,157 @@
+| type | programme (family) | period | pool $ | implied $/h | target | DF | maxSpread | markets in window | events | markets/event sharing pool (med) | pool $/h per market if shared per event |
+| moneyline | table_tennis_moneyline_day_of | day_of | 5.0 | 0.83 | 3200.0 | 0.5 | none | 370 | 370 | 3.0 | 0.278 |
+| moneyline | table_tennis_moneyline_live | live | 17.0 | 5.67 | 4800.0 | 0.5 | none | 370 | 370 | 1.0 | 5.667 |
+| moneyline | itf_ml_live | live | 52.0 | 17.33 | 7500.0 | 0.5 | none | 190 | 190 | 1.0 | 17.333 |
+| moneyline | itf_moneyline_dayof | day_of | 12.0 | 2.00 | 7500.0 | 0.35 | none | 190 | 190 | 1.0 | 2.000 |
+| moneyline | utr_moneyline_day_of | day_of | 10.0 | 1.67 | 250.0 | 0.35 | 0.07 | 140 | 140 | 1.0 | 1.667 |
+| moneyline | utr_moneyline_live | live | 50.0 | 16.67 | 500.0 | 0.3 | 0.06 | 140 | 140 | 1.0 | 16.667 |
+| moneyline | atp_wta_moneyline_day_of | day_of | 40.0 | 6.67 | 19000.0 | 0.3 | none | 53 | 53 | 1 | 6.667 |
+| moneyline | atp_wta_moneyline_live | live | 184.0 | 61.33 | 19000.0 | 0.3 | none | 53 | 53 | 1 | 61.333 |
+| moneyline | doubles_moneyline_day_of | day_of | 10.0 | 1.67 | 6000.0 | 0.3 | none | 48 | 48 | 1.0 | 1.667 |
+| moneyline | doubles_moneyline_live | live | 70.0 | 23.33 | 4000.0 | 0.3 | none | 48 | 48 | 1.0 | 23.333 |
+| moneyline | esports_moneyline_live | live | 80.0 | 26.67 | 7500.0 | 0.4 | none | 36 | 36 | 1.0 | 26.667 |
+| moneyline | esports_moneyline_pre_game | day_of | 10.0 | 1.67 | 15000.0 | 0.35 | none | 36 | 36 | 1.0 | 1.667 |
+| moneyline | darts_moneyline_day_of | day_of | 5.0 | 0.83 | 2500.0 | 0.5 | none | 15 | 15 | 1 | 0.833 |
+| moneyline | darts_moneyline_live | live | 25.0 | 8.33 | 2500.0 | 0.5 | none | 15 | 15 | 1 | 8.333 |
+| moneyline | ... 5 more programme rows | | | | | | | | | | |
+| moneyline_3way | ebattles_moneyline_day_of | day_of | 2.0 | 0.33 | 2000.0 | 0.5 | none | 24 | 8 | 3.0 | 0.111 |
+| moneyline_3way | ebattles_moneyline_live | live | 6.0 | 2.00 | 2000.0 | 0.5 | none | 24 | 8 | 3.0 | 0.667 |
+| moneyline_3way | ucl_teamwin_dayof | day_of | 160.0 | 26.67 | 10000.0 | 0.35 | none | 18 | 9 | 2.0 | 13.333 |
+| moneyline_3way | ucl_teamwin_early | early | 80.0 | n/a (early: listing to T-6h) | 10000.0 | 0.4 | none | 18 | 9 | 2.0 | - |
+| moneyline_3way | ucl_teamwin_live | live | 1280.0 | 426.67 | 10000.0 | 0.3 | none | 18 | 9 | 2.0 | 213.333 |
+| moneyline_3way | ucl_draw_dayof | day_of | 40.0 | 6.67 | 10000.0 | 0.35 | none | 9 | 9 | 1 | 6.667 |
+| moneyline_3way | ucl_draw_early | early | 20.0 | n/a (early: listing to T-6h) | 10000.0 | 0.4 | none | 9 | 9 | 1 | - |
+| moneyline_3way | ucl_draw_live | live | 320.0 | 106.67 | 10000.0 | 0.3 | none | 9 | 9 | 1 | 106.667 |
+| moneyline_3way | ligamx_moneyline_dayof | day_of | 180.0 | 30.00 | 10000.0 | 0.35 | none | 6 | 2 | 3.0 | 10.000 |
+| moneyline_3way | ligamx_moneyline_live | live | 1440.0 | 480.00 | 10000.0 | 0.35 | none | 6 | 2 | 3.0 | 160.000 |
+| spread_full | nba_regular_spreads_day_of | day_of | 3.0 | 0.50 | 14000.0 | 0.25 | none | 367 | 11 | 33 | 0.015 |
+| spread_full | nba_regular_spreads_live | live | 450.0 | 150.00 | 11250.0 | 0.3 | none | 367 | 11 | 33 | 4.545 |
+| spread_full | nhl_regular_spreads_dayof | day_of | 13.0 | 2.17 | 8000.0 | 0.25 | none | 90 | 15 | 12.0 | 0.181 |
+| spread_full | nhl_regular_spreads_live | live | 90.0 | 30.00 | 6000.0 | 0.3 | none | 90 | 15 | 12.0 | 2.500 |
+| spread_full | cfb_t2_spreads_day_of | day_of | 20.0 | 3.33 | 23000.0 | 0.2 | none | 82 | 2 | 41.0 | 0.081 |
+| spread_full | cfb_t2_spreads_live | live | 570.0 | 190.00 | 6000.0 | 0.2 | none | 82 | 2 | 41.0 | 4.634 |
+| spread_full | nfl_spreads_day_of | day_of | 7.0 | 1.17 | 169000.0 | 0.15 | none | 41 | 1 | 41 | 0.028 |
+| spread_full | nfl_spreads_live | live | 6300.0 | 2100.00 | 25000.0 | 0.25 | none | 41 | 1 | 41 | 51.220 |
+| spread_full | soccer_spreads_totals_day_of | day_of | 60.0 | 10.00 | 5000.0 | 0.35 | none | 36 | 9 | 38.0 | 0.263 |
+| spread_full | soccer_spreads_totals_live | live | 160.0 | 53.33 | 5000.0 | 0.25 | none | 36 | 9 | 38.0 | 1.404 |
+| spread_full | eurolg_spreads_totals_day_of | day_of | 5.0 | 0.83 | 5000.0 | 0.35 | none | 32 | 4 | 17.0 | 0.049 |
+| spread_full | eurolg_spreads_totals_live | live | 20.0 | 6.67 | 5000.0 | 0.25 | none | 32 | 4 | 17.0 | 0.392 |
+| spread_period | nba_regular_period_spreads_day_of | day_of | 6.0 | 1.00 | 1900.0 | 0.25 | none | 127 | 2 | 84 | 0.012 |
+| spread_period | nba_regular_period_spreads_live | live | 300.0 | 100.00 | 2250.0 | 0.3 | none | 127 | 2 | 84 | 1.190 |
+| spread_period | nhl_regular_spreads_dayof | day_of | 13.0 | 2.17 | 8000.0 | 0.25 | none | 90 | 15 | 12.0 | 0.181 |
+| spread_period | nhl_regular_spreads_live | live | 90.0 | 30.00 | 6000.0 | 0.3 | none | 90 | 15 | 12.0 | 2.500 |
+| spread_period | nfl_period_spreads_day_of | day_of | 10.0 | 1.67 | 4800.0 | 0.25 | none | 82 | 1 | 82.0 | 0.020 |
+| spread_period | nfl_period_spreads_live | live | 1500.0 | 500.00 | 3400.0 | 0.3 | none | 82 | 1 | 82.0 | 6.098 |
+| spread_period | soccer_spreads_totals_day_of | day_of | 60.0 | 10.00 | 5000.0 | 0.35 | none | 72 | 9 | 38.0 | 0.263 |
+| spread_period | soccer_spreads_totals_live | live | 160.0 | 53.33 | 5000.0 | 0.25 | none | 72 | 9 | 38.0 | 1.404 |
+| game_total_full | table_tennis_moneyline_day_of | day_of | 5.0 | 0.83 | 3200.0 | 0.5 | none | 676 | 338 | 3.0 | 0.278 |
+| game_total_full | setka_totals_live | live | 8.0 | 2.67 | 3200.0 | 0.5 | none | 646 | 323 | 2.0 | 1.333 |
+| game_total_full | nba_regular_totals_day_of | day_of | 15.0 | 2.50 | 11000.0 | 0.25 | none | 338 | 11 | 31.0 | 0.081 |
+| game_total_full | nba_regular_totals_live | live | 600.0 | 200.00 | 7500.0 | 0.3 | none | 338 | 11 | 31.0 | 6.452 |
+| game_total_full | nhl_regular_totals_dayof | day_of | 16.0 | 2.67 | 8000.0 | 0.25 | none | 120 | 15 | 20.0 | 0.133 |
+| game_total_full | nhl_regular_totals_live | live | 100.0 | 33.33 | 6000.0 | 0.3 | none | 120 | 15 | 20.0 | 1.667 |
+| game_total_full | soccer_spreads_totals_day_of | day_of | 60.0 | 10.00 | 5000.0 | 0.35 | none | 54 | 9 | 38.0 | 0.263 |
+| game_total_full | soccer_spreads_totals_live | live | 160.0 | 53.33 | 5000.0 | 0.25 | none | 54 | 9 | 38.0 | 1.404 |
+| game_total_full | cfb_t2_totals_day_of | day_of | 15.0 | 2.50 | 8500.0 | 0.2 | none | 50 | 2 | 25.0 | 0.100 |
+| game_total_full | cfb_t2_totals_live | live | 450.0 | 150.00 | 7000.0 | 0.2 | none | 50 | 2 | 25.0 | 6.000 |
+| game_total_full | eurolg_spreads_totals_day_of | day_of | 5.0 | 0.83 | 5000.0 | 0.35 | none | 36 | 4 | 17.0 | 0.049 |
+| game_total_full | eurolg_spreads_totals_live | live | 20.0 | 6.67 | 5000.0 | 0.25 | none | 36 | 4 | 17.0 | 0.392 |
+| game_total_full | nfl_totals_day_of | day_of | 7.0 | 1.17 | 125000.0 | 0.15 | none | 29 | 1 | 29 | 0.040 |
+| game_total_full | nfl_totals_live | live | 4450.0 | 1483.33 | 25000.0 | 0.25 | none | 29 | 1 | 29 | 51.149 |
+| game_total_period | nhl_regular_totals_dayof | day_of | 16.0 | 2.67 | 8000.0 | 0.25 | none | 180 | 15 | 20.0 | 0.133 |
+| game_total_period | nhl_regular_totals_live | live | 100.0 | 33.33 | 6000.0 | 0.3 | none | 180 | 15 | 20.0 | 1.667 |
+| game_total_period | nba_regular_period_totals_day_of | day_of | 7.0 | 1.17 | 2800.0 | 0.25 | none | 133 | 2 | 88 | 0.013 |
+| game_total_period | nba_regular_period_totals_live | live | 300.0 | 100.00 | 3000.0 | 0.3 | none | 133 | 2 | 88 | 1.136 |
+| game_total_period | soccer_spreads_totals_day_of | day_of | 60.0 | 10.00 | 5000.0 | 0.35 | none | 90 | 9 | 38.0 | 0.263 |
+| game_total_period | soccer_spreads_totals_live | live | 160.0 | 53.33 | 5000.0 | 0.25 | none | 90 | 9 | 38.0 | 1.404 |
+| game_total_period | nfl_period_totals_day_of | day_of | 10.0 | 1.67 | 6000.0 | 0.2 | none | 82 | 1 | 82.0 | 0.020 |
+| game_total_period | nfl_period_totals_live | live | 1500.0 | 500.00 | 6000.0 | 0.25 | none | 82 | 1 | 82.0 | 6.098 |
+| team_total_full | nba_regular_team_totals_live | live | 300.0 | 100.00 | 1500.0 | 0.3 | none | 76 | 2 | 59.0 | 1.695 |
+| team_total_full | soccer_spreads_totals_day_of | day_of | 60.0 | 10.00 | 5000.0 | 0.35 | none | 54 | 9 | 38.0 | 0.263 |
+| team_total_full | soccer_spreads_totals_live | live | 160.0 | 53.33 | 5000.0 | 0.25 | none | 54 | 9 | 38.0 | 1.404 |
+| team_total_full | nfl_team_totals_day_of | day_of | 5.0 | 0.83 | 6000.0 | 0.3 | none | 34 | 1 | 66.0 | 0.013 |
+| team_total_full | nfl_team_totals_live | live | 650.0 | 216.67 | 1500.0 | 0.3 | none | 34 | 1 | 66.0 | 3.283 |
+| team_total_period | nba_regular_team_totals_live | live | 300.0 | 100.00 | 1500.0 | 0.3 | none | 42 | 2 | 70.0 | 1.429 |
+| team_total_period | soccer_spreads_totals_day_of | day_of | 60.0 | 10.00 | 5000.0 | 0.35 | none | 36 | 9 | 38.0 | 0.263 |
+| team_total_period | soccer_spreads_totals_live | live | 160.0 | 53.33 | 5000.0 | 0.25 | none | 36 | 9 | 38.0 | 1.404 |
+| team_total_period | nfl_team_totals_day_of | day_of | 5.0 | 0.83 | 6000.0 | 0.3 | none | 32 | 1 | 66.0 | 0.013 |
+| team_total_period | nfl_team_totals_live | live | 650.0 | 216.67 | 1500.0 | 0.3 | none | 32 | 1 | 66.0 | 3.283 |
+| player_prop | nba_regular_player_props_day_of | day_of | 12.0 | 2.00 | 300.0 | 0.3 | none | 1401 | 6 | 210 | 0.010 |
+| player_prop | nba_regular_player_props_live | live | 700.0 | 233.33 | 450.0 | 0.35 | none | 1401 | 6 | 210 | 1.111 |
+| player_prop | nhl_regular_player_props_day_of | day_of | 26.0 | 4.33 | 2400.0 | 0.25 | none | 1075 | 13 | 85 | 0.051 |
+| player_prop | nhl_regular_player_props_live | live | 26.0 | 8.67 | 1600.0 | 0.3 | none | 1075 | 13 | 85 | 0.102 |
+| player_prop | nfl_player_props_day_of | day_of | 27.0 | 4.50 | 2200.0 | 0.3 | none | 148 | 1 | 148.0 | 0.030 |
+| player_prop | nfl_player_props_live | live | 3700.0 | 1233.33 | 550.0 | 0.35 | none | 148 | 1 | 148.0 | 8.333 |
+| player_prop | esports_props_live | live | 4.0 | 1.33 | 800.0 | 0.5 | none | 134 | 8 | 32.0 | 0.042 |
+| player_prop | esports_props_pre_game | day_of | 1.0 | 0.17 | 1100.0 | 0.5 | none | 134 | 8 | 32.0 | 0.005 |
+| player_prop | nfl_team_props_day_of | day_of | 8.0 | 1.33 | 550.0 | 0.3 | none | 125 | 1 | 184 | 0.007 |
+| player_prop | nfl_team_props_live | live | 300.0 | 100.00 | 350.0 | 0.35 | none | 125 | 1 | 184 | 0.543 |
+| period_winner_prop | table_tennis_set_winners_day_of | day_of | 2.0 | 0.33 | 1500.0 | 0.2 | none | 1011 | 337 | 3 | 0.111 |
+| period_winner_prop | table_tennis_set_winners_live | live | 4.0 | 1.33 | 1500.0 | 0.2 | none | 1011 | 337 | 3 | 0.444 |
+| period_winner_prop | nhl_regular_team_props_day_of | day_of | 26.0 | 4.33 | 2400.0 | 0.25 | none | 177 | 15 | 12 | 0.361 |
+| period_winner_prop | nhl_regular_team_props_live | live | 26.0 | 8.67 | 1600.0 | 0.3 | none | 177 | 15 | 12 | 0.722 |
+| period_winner_prop | esports_props_live | live | 4.0 | 1.33 | 800.0 | 0.5 | none | 62 | 31 | 2.0 | 0.667 |
+| period_winner_prop | esports_props_pre_game | day_of | 1.0 | 0.17 | 1100.0 | 0.5 | none | 62 | 31 | 2.0 | 0.083 |
+| period_winner_prop | nfl_period_winners_day_of | day_of | 10.0 | 1.67 | 25000.0 | 0.3 | none | 18 | 1 | 18.0 | 0.093 |
+| period_winner_prop | nfl_period_winners_live | live | 500.0 | 166.67 | 20000.0 | 0.3 | none | 18 | 1 | 18.0 | 9.259 |
+| period_winner_prop | cfb_t2_period_winners_live | live | 90.0 | 30.00 | 1000.0 | 0.3 | none | 12 | 2 | 7.5 | 4.000 |
+| other_game_prop | nba_regular_game_props_day_of | day_of | 6.0 | 1.00 | 450.0 | 0.3 | none | 417 | 11 | 40 | 0.025 |
+| other_game_prop | nba_regular_game_props_live | live | 150.0 | 50.00 | 650.0 | 0.35 | none | 417 | 11 | 40 | 1.250 |
+| other_game_prop | nfl_team_props_day_of | day_of | 8.0 | 1.33 | 550.0 | 0.3 | none | 59 | 1 | 184 | 0.007 |
+| other_game_prop | nfl_team_props_live | live | 300.0 | 100.00 | 350.0 | 0.35 | none | 59 | 1 | 184 | 0.543 |
+| other_game_prop | nhl_regular_player_props_day_of | day_of | 26.0 | 4.33 | 2400.0 | 0.25 | none | 25 | 15 | 93 | 0.047 |
+| other_game_prop | nhl_regular_player_props_live | live | 26.0 | 8.67 | 1600.0 | 0.3 | none | 25 | 15 | 93 | 0.093 |
+| futures | nfl_futures_core | daily_event | 10.0 | 0.42 | 11000.0 | 0.25 | none | 188 | 6 | 30.0 | 0.014 |
+| futures | nfl_fantasy_futures | daily_event | 10.0 | 0.42 | 2200.0 | 0.3 | none | 183 | 6 | 31 | 0.013 |
+| futures | nba_other_futures | daily_event | 4.0 | 0.17 | 3800.0 | 0.9 | none | 30 | 2 | 18.0 | 0.009 |
+
+moneyline distinct programme families: 19
+moneyline_3way distinct programme families: 10
+spread_full distinct programme families: 12
+spread_period distinct programme families: 8
+game_total_full distinct programme families: 14
+game_total_period distinct programme families: 8
+team_total_full distinct programme families: 5
+team_total_period distinct programme families: 5
+player_prop distinct programme families: 10
+period_winner_prop distinct programme families: 9
+other_game_prop distinct programme families: 6
+futures distinct programme families: 3
+
+EVENT nba-dal-den-2026-11-24 703 open markets
+('game_total_full', 'basketball_team_full_game_total') 32 ['tsc-nba-dal-den-2026-11-24-206pt5', 'tsc-nba-dal-den-2026-11-24-208pt5']
+('game_total_period', 'basketball_team_first_half_total') 17 ['tsc-nba-dal-den-2026-11-24-fh-103pt5', 'tsc-nba-dal-den-2026-11-24-fh-105pt5']
+('game_total_period', 'basketball_team_first_quarter_total') 13 ['tsc-nba-dal-den-2026-11-24-q1-48pt5', 'tsc-nba-dal-den-2026-11-24-q1-50pt5']
+('game_total_period', 'basketball_team_fourth_quarter_total') 13 ['tsc-nba-dal-den-2026-11-24-q4-43pt5', 'tsc-nba-dal-den-2026-11-24-q4-45pt5']
+('game_total_period', 'basketball_team_second_half_total') 19 ['tsc-nba-dal-den-2026-11-24-sh-98pt5', 'tsc-nba-dal-den-2026-11-24-sh-100pt5']
+('game_total_period', 'basketball_team_second_quarter_total') 13 ['tsc-nba-dal-den-2026-11-24-q2-46pt5', 'tsc-nba-dal-den-2026-11-24-q2-48pt5']
+('game_total_period', 'basketball_team_third_quarter_total') 13 ['tsc-nba-dal-den-2026-11-24-q3-45pt5', 'tsc-nba-dal-den-2026-11-24-q3-47pt5']
+('moneyline', 'basketball_team_full_game_winner') 1 ['aec-nba-dal-den-2026-11-24']
+('other_game_prop', 'basketball_game_overtime') 1 ['astatc-nba-dal-den-2026-11-24-ot']
+('other_game_prop', 'basketball_game_race_to_points') 29 ['atc-nba-dal-den-2026-11-24-race100-den', 'atc-nba-dal-den-2026-11-24-race90-den']
+('other_game_prop', 'basketball_game_winning_margin') 10 ['atc-nba-dal-den-2026-11-24-wm-den-11-15', 'atc-nba-dal-den-2026-11-24-wm-den-6-10']
+('period_winner_prop', 'basketball_team_first_half_winner') 3 ['atc-nba-dal-den-2026-11-24-fh-den', 'atc-nba-dal-den-2026-11-24-fh-dal']
+('period_winner_prop', 'basketball_team_first_quarter_winner') 3 ['atc-nba-dal-den-2026-11-24-q1-den', 'atc-nba-dal-den-2026-11-24-q1-dal']
+('period_winner_prop', 'basketball_team_fourth_quarter_winner') 3 ['atc-nba-dal-den-2026-11-24-q4-den', 'atc-nba-dal-den-2026-11-24-q4-dal']
+('period_winner_prop', 'basketball_team_second_half_winner') 3 ['atc-nba-dal-den-2026-11-24-sh-den', 'atc-nba-dal-den-2026-11-24-sh-dal']
+('period_winner_prop', 'basketball_team_second_quarter_winner') 3 ['atc-nba-dal-den-2026-11-24-q2-den', 'atc-nba-dal-den-2026-11-24-q2-dal']
+('period_winner_prop', 'basketball_team_third_quarter_winner') 3 ['atc-nba-dal-den-2026-11-24-q3-den', 'atc-nba-dal-den-2026-11-24-q3-dal']
+('player_prop', 'basketball_player_assists') 42 ['astatc-nba-dal-den-2026-11-24-ast-kyrirv-gte2', 'astatc-nba-dal-den-2026-11-24-ast-nikjok-gte6']
+('player_prop', 'basketball_player_blocks') 6 ['astatc-nba-dal-den-2026-11-24-blk-dangaf-gte1', 'astatc-nba-dal-den-2026-11-24-blk-coofla-gte1']
+('player_prop', 'basketball_player_double_double') 8 ['astatc-nba-dal-den-2026-11-24-dd-nikjok', 'astatc-nba-dal-den-2026-11-24-dd-coofla']
+('player_prop', 'basketball_player_points') 81 ['astatc-nba-dal-den-2026-11-24-pts-coofla-gte10', 'astatc-nba-dal-den-2026-11-24-pts-jammur-gte10']
+('player_prop', 'basketball_player_points_rebounds_assists') 50 ['astatc-nba-dal-den-2026-11-24-pra-aargor-gte10', 'astatc-nba-dal-den-2026-11-24-pra-kyrirv-gte20']
+('player_prop', 'basketball_player_rebounds') 75 ['astatc-nba-dal-den-2026-11-24-reb-dangaf-gte2', 'astatc-nba-dal-den-2026-11-24-reb-nikjok-gte6']
+('player_prop', 'basketball_player_steals') 15 ['astatc-nba-dal-den-2026-11-24-stl-coofla-gte1', 'astatc-nba-dal-den-2026-11-24-stl-nikjok-gte1']
+('player_prop', 'basketball_player_threes') 56 ['astatc-nba-dal-den-2026-11-24-3pm-jammur-gte1', 'astatc-nba-dal-den-2026-11-24-3pm-camjoh-gte1']
+('player_prop', 'basketball_player_triple_double') 3 ['astatc-nba-dal-den-2026-11-24-td-nikjok', 'astatc-nba-dal-den-2026-11-24-td-coofla']
+('spread_full', 'basketball_team_full_game_spread') 34 ['asc-nba-dal-den-2026-11-24-pos-34pt5', 'asc-nba-dal-den-2026-11-24-pos-36pt5']
+('spread_period', 'basketball_team_first_half_spread') 19 ['asc-nba-dal-den-2026-11-24-fh-pos-22pt5', 'asc-nba-dal-den-2026-11-24-fh-pos-20pt5']
+('spread_period', 'basketball_team_first_quarter_spread') 10 ['asc-nba-dal-den-2026-11-24-q1-pos-12pt5', 'asc-nba-dal-den-2026-11-24-q1-pos-10pt5']
+('spread_period', 'basketball_team_fourth_quarter_spread') 12 ['asc-nba-dal-den-2026-11-24-q4-pos-13pt5', 'asc-nba-dal-den-2026-11-24-q4-pos-11pt5']
+('spread_period', 'basketball_team_second_half_spread') 19 ['asc-nba-dal-den-2026-11-24-sh-pos-22pt5', 'asc-nba-dal-den-2026-11-24-sh-pos-20pt5']
+('spread_period', 'basketball_team_second_quarter_spread') 12 ['asc-nba-dal-den-2026-11-24-q2-pos-14pt5', 'asc-nba-dal-den-2026-11-24-q2-pos-12pt5']
+('spread_period', 'basketball_team_third_quarter_spread') 12 ['asc-nba-dal-den-2026-11-24-q3-pos-14pt5', 'asc-nba-dal-den-2026-11-24-q3-pos-12pt5']
+('team_total_full', 'basketball_team_total_points') 38 ['tsc-nba-dal-den-2026-11-24-tt-dal-fg-93pt5', 'tsc-nba-dal-den-2026-11-24-tt-den-fg-102pt5']
+('team_total_period', 'basketball_team_total_points_first_half') 22 ['tsc-nba-dal-den-2026-11-24-tt-den-fh-51pt5', 'tsc-nba-dal-den-2026-11-24-tt-dal-fh-47pt5']
+('team_total_period', 'basketball_team_total_points_second_half') 10 ['tsc-nba-dal-den-2026-11-24-tt-dal-sh-54pt5', 'tsc-nba-dal-den-2026-11-24-tt-den-sh-58pt5']

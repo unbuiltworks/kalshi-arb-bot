@@ -1,0 +1,118 @@
+== PART A. the two live windows of 2026-11-21 (venue-confirmed maker fills, fee 0) ==
+  2026-11-21-0620z (settled DOWN; fill time = the step that REPORTED the fill, up to ~6 s late)
+    06:20:21 DOWN 0.08 @ 0.40  INCREASING  +5s -0.03  +15s -0.07  +30s -0.13  settle +0.60
+    06:20:48 DOWN 0.07 @ 0.33  INCREASING  +5s -0.06  +15s -0.15  +30s -0.16  settle +0.67
+    06:20:48 UP   0.07 @ 0.66  REDUCING    +5s +0.06  +15s +0.15  +30s +0.16  settle -0.66
+    06:21:08 DOWN 0.06 @ 0.20  INCREASING  +5s -0.00  +15s +0.03  +30s +0.26  settle +0.80
+    06:21:08 UP   0.06 @ 0.79  REDUCING    +5s +0.00  +15s -0.03  +30s -0.26  settle -0.79
+    06:21:14 UP   0.06 @ 0.81  REDUCING    +5s +0.01  +15s -0.13  +30s -0.21  settle -0.81
+    06:21:21 DOWN 0.06 @ 0.20  INCREASING  +5s +0.03  +15s +0.26  +30s +0.25  settle +0.80
+    06:21:21 UP   0.06 @ 0.79  REDUCING    +5s -0.03  +15s -0.26  +30s -0.25  settle -0.79
+    06:21:27 UP   0.06 @ 0.82  REDUCING    +5s -0.14  +15s -0.22  +30s -0.42  settle -0.82
+    06:21:52 DOWN 0.08 @ 0.39  REDUCING    +5s +0.20  +15s +0.22  +30s +0.24  settle +0.61
+    06:21:52 UP   0.08 @ 0.60  REDUCING    +5s -0.20  +15s -0.22  +30s -0.24  settle -0.60
+    06:22:08 DOWN 0.08 @ 0.61  REDUCING    +5s -0.03  +15s +0.02  +30s +0.01  settle +0.39
+    06:22:35 DOWN 0.06 @ 0.72  INCREASING  +5s -0.10  +15s -0.10  +30s -0.06  settle +0.28
+    06:23:06 DOWN 0.07 @ 0.67  INCREASING  +5s -0.02  +15s +0.22  +30s +0.30  settle +0.33
+    06:23:29 UP   0.05 @ 0.10  REDUCING    +5s -0.07  +15s -0.08  +30s -0.09  settle -0.10
+    06:23:34 DOWN 0.05 @ 0.93  INCREASING  +5s +0.04  +15s +0.05  +30s +0.05  settle +0.07
+    06:23:34 UP   0.05 @ 0.06  REDUCING    +5s -0.04  +15s -0.05  +30s -0.05  settle -0.06
+  2026-11-21-1420z (settled UP; fill time = venue lastTransactTime)
+    14:20:08 DOWN 0.08 @ 0.60  INCREASING  +5s +0.00  +15s +0.01  +30s -0.07  settle -0.60
+    14:20:14 DOWN 0.08 @ 0.60  INCREASING  +5s +0.01  +15s -0.02  +30s -0.06  settle -0.60
+    14:20:22 UP   0.08 @ 0.38  REDUCING    +5s +0.02  +15s +0.08  +30s +0.11  settle +0.62
+    14:20:35 DOWN 0.08 @ 0.58  INCREASING  +5s -0.04  +15s -0.03  +30s -0.42  settle -0.58
+    14:20:45 UP   0.09 @ 0.45  REDUCING    +5s -0.01  +15s +0.26  +30s +0.46  settle +0.55
+    14:21:25 UP   0.05 @ 0.94  REDUCING    +5s -0.01  +15s -0.01  +30s +0.00  settle +0.06
+    14:21:42 UP   0.05 @ 0.93  REDUCING    +5s -0.01  +15s +0.01  +30s +0.03  settle +0.07
+    14:21:49 UP   0.05 @ 0.93  INCREASING  +5s +0.01  +15s +0.00  +30s +0.04  settle +0.07
+    14:21:54 DOWN 0.05 @ 0.06  REDUCING    +5s +0.00  +15s -0.01  +30s -0.04  settle -0.06
+    14:22:05 DOWN 0.05 @ 0.06  REDUCING    +5s -0.03  +15s -0.04  +30s -0.03  settle -0.06
+    14:22:23 UP   0.05 @ 0.97  REDUCING    +5s -0.01  +15s -0.02  +30s -0.04  settle +0.03
+    14:23:00 DOWN 0.05 @ 0.06  REDUCING    +5s +0.00  +15s +0.00  +30s +0.01  settle -0.06
+  per share, both windows (share-weighted):
+    INCREASING shares 0.74  +5s -0.0164  +15s +0.0135  +30s -0.0177  settlement +0.1289 ($+0.0954)
+    REDUCING   shares 1.12  +5s -0.0139  +15s -0.0058  +30s -0.0149  settlement -0.1042 ($-0.1167)
+  14:20Z, venue accept -> fill, the 12 filled orders (s): 0.1, 0.5, 1.1, 1.4, 1.6, 1.7, 1.8, 2.3, 2.6, 2.7, 7.5, 8.3
+    median 1.8 s; 10 of 12 filled within 3 s; the lane re-reads about every 5.5 s.
+  29 fills in 2 windows: an observation, not an estimate.
+
+== PART B. replay fills by kind (no rule, lane decides every 6 s): per share [95% over windows], shares ==
+  fills: STRICT
+   11-17/18 (FIT)  windows 576
+      INCREASING shares   366.7  +5s -0.0325 [-0.0343,-0.0307]  +15s -0.0345 [-0.0378,-0.0311]  +30s -0.0358 [-0.0407,-0.0310]  settle -0.0552 [-0.0783,-0.0326] ($-20.25)
+      REDUCING   shares   282.6  +5s -0.0362 [-0.0387,-0.0337]  +15s -0.0339 [-0.0382,-0.0295]  +30s -0.0334 [-0.0394,-0.0272]  settle -0.0165 [-0.0365,+0.0043] ($-4.67)
+   11-19/20 (held out)  windows 515
+      INCREASING shares   332.3  +5s -0.0337 [-0.0358,-0.0315]  +15s -0.0350 [-0.0385,-0.0313]  +30s -0.0340 [-0.0396,-0.0282]  settle -0.0335 [-0.0586,-0.0080] ($-11.15)
+      REDUCING   shares   249.1  +5s -0.0353 [-0.0378,-0.0325]  +15s -0.0376 [-0.0421,-0.0330]  +30s -0.0394 [-0.0462,-0.0325]  settle -0.0270 [-0.0506,-0.0034] ($-6.74)
+   11-11..16 (held out, 10 s quotes)  windows 1468
+      INCREASING shares   655.9  +5s -0.0687 [-0.0708,-0.0664]  +15s -0.0687 [-0.0718,-0.0655]  +30s -0.0658 [-0.0701,-0.0616]  settle -0.0655 [-0.0813,-0.0494] ($-42.97)
+      REDUCING   shares   466.9  +5s -0.0892 [-0.0930,-0.0854]  +15s -0.0884 [-0.0933,-0.0837]  +30s -0.0852 [-0.0913,-0.0792]  settle -0.0773 [-0.0925,-0.0623] ($-36.11)
+  fills: TOUCH
+   11-17/18 (FIT)  windows 576
+      INCREASING shares   369.9  +5s -0.0313 [-0.0331,-0.0296]  +15s -0.0329 [-0.0362,-0.0297]  +30s -0.0337 [-0.0385,-0.0289]  settle -0.0504 [-0.0733,-0.0280] ($-18.63)
+      REDUCING   shares   286.1  +5s -0.0352 [-0.0376,-0.0328]  +15s -0.0333 [-0.0375,-0.0290]  +30s -0.0332 [-0.0392,-0.0272]  settle -0.0191 [-0.0393,+0.0014] ($-5.46)
+   11-19/20 (held out)  windows 515
+      INCREASING shares   336.1  +5s -0.0325 [-0.0346,-0.0304]  +15s -0.0331 [-0.0366,-0.0294]  +30s -0.0317 [-0.0372,-0.0259]  settle -0.0339 [-0.0594,-0.0086] ($-11.39)
+      REDUCING   shares   251.0  +5s -0.0334 [-0.0360,-0.0306]  +15s -0.0360 [-0.0406,-0.0315]  +30s -0.0381 [-0.0448,-0.0313]  settle -0.0230 [-0.0465,+0.0005] ($-5.78)
+   11-11..16 (held out, 10 s quotes)  windows 1468
+      INCREASING shares   676.8  +5s -0.0663 [-0.0684,-0.0641]  +15s -0.0663 [-0.0693,-0.0631]  +30s -0.0633 [-0.0675,-0.0590]  settle -0.0630 [-0.0785,-0.0474] ($-42.63)
+      REDUCING   shares   483.5  +5s -0.0851 [-0.0887,-0.0812]  +15s -0.0843 [-0.0891,-0.0794]  +30s -0.0817 [-0.0875,-0.0761]  settle -0.0741 [-0.0892,-0.0588] ($-35.83)
+
+== PART C. could an INCREASING bid have been pulled before it filled? ==
+  (2 s quotes only: 11-17..20. 'warning' = the side's bid stood below its level at placement at a quote BEFORE the fill.)
+  fills STRICT: 10443 INCREASING fills, 699.0 shares, settlement $-31.40
+    seconds resting before the fill: median 2, 25% within 2, 75% within 4
+    warning at least 2 s before the fill:  3.2% of shares, carrying $-1.20 of the $-31.40
+    warning at least 4 s before the fill:  0.9% of shares, carrying $-0.32 of the $-31.40
+    warning at least 6 s before the fill:  0.3% of shares, carrying $-0.35 of the $-31.40
+    warning at least 8 s before the fill:  0.2% of shares, carrying $-0.25 of the $-31.40
+    no warning at any earlier quote:         0.0% of shares, carrying $+0.00
+  fills TOUCH: 10558 INCREASING fills, 706.0 shares, settlement $-30.03
+    seconds resting before the fill: median 2, 25% within 2, 75% within 4
+    warning at least 2 s before the fill:  0.0% of shares, carrying $+0.00 of the $-30.03
+    warning at least 4 s before the fill:  0.0% of shares, carrying $+0.00 of the $-30.03
+    warning at least 6 s before the fill:  0.0% of shares, carrying $+0.00 of the $-30.03
+    warning at least 8 s before the fill:  0.0% of shares, carrying $+0.00 of the $-30.03
+    no warning at any earlier quote:         0.0% of shares, carrying $+0.00
+  PULL RULE (cancel an INCREASING bid once the side's bid stands below its level at placement; do not re-bid that side at that decision). Total window economics:
+    STRICT decide every 6 s  11-17/18 (FIT)       no rule $ -24.91 (649 sh, -0.0384/sh) | pull $ -24.91 (649 sh, -0.0384/sh) | PAIRED $+0.00 [+0.00,+0.00]
+    STRICT decide every 6 s  11-19/20 (held out)  no rule $ -17.89 (581 sh, -0.0308/sh) | pull $ -17.89 (581 sh, -0.0308/sh) | PAIRED $+0.00 [+0.00,+0.00]
+    STRICT decide every 2 s  11-17/18 (FIT)       no rule $ -26.16 (666 sh, -0.0393/sh) | pull $ -26.16 (666 sh, -0.0393/sh) | PAIRED $+0.00 [+0.00,+0.00]
+    STRICT decide every 2 s  11-19/20 (held out)  no rule $ -20.25 (594 sh, -0.0341/sh) | pull $ -20.25 (594 sh, -0.0341/sh) | PAIRED $+0.00 [+0.00,+0.00]
+    TOUCH  decide every 6 s  11-17/18 (FIT)       no rule $ -24.10 (656 sh, -0.0367/sh) | pull $ -24.10 (656 sh, -0.0367/sh) | PAIRED $+0.00 [+0.00,+0.00]
+    TOUCH  decide every 6 s  11-19/20 (held out)  no rule $ -17.17 (587 sh, -0.0293/sh) | pull $ -17.17 (587 sh, -0.0293/sh) | PAIRED $+0.00 [+0.00,+0.00]
+    TOUCH  decide every 2 s  11-17/18 (FIT)       no rule $ -24.95 (671 sh, -0.0372/sh) | pull $ -24.95 (671 sh, -0.0372/sh) | PAIRED $+0.00 [+0.00,+0.00]
+    TOUCH  decide every 2 s  11-19/20 (held out)  no rule $ -19.98 (596 sh, -0.0335/sh) | pull $ -19.98 (596 sh, -0.0335/sh) | PAIRED $+0.00 [+0.00,+0.00]
+
+== PART D. ONE FILTER: quiet first leg (no INCREASING bid while the side's own bid moved >= X over the last N s) ==
+  fills: STRICT
+   FIT 11-17/18  no rule: net $-24.91, shares 649, per share -0.0384
+   FIT  X 0.02 N  6: net $-18.52, shares 535, per share -0.0346
+   FIT  X 0.03 N  6: net $-21.67, shares 590, per share -0.0368
+   FIT  X 0.02 N 10: net $-17.66, shares 511, per share -0.0346
+   FIT  X 0.03 N 10: net $-19.83, shares 565, per share -0.0351
+   FIT  X 0.02 N 30: net $-16.85, shares 492, per share -0.0343
+   FIT  X 0.03 N 30: net $-19.03, shares 523, per share -0.0364
+   chosen on FIT: X 0.02, N 30
+   11-19/20 (held out)                no rule: net $-17.89 (581 sh, -0.0308/sh) | rule: net $-14.07 [-15.62,-12.47] (430 sh, -0.0327/sh [-0.0365,-0.0289]) | PAIRED $+3.81 [-0.26,+7.63]
+        INCREASING no rule $-11.15 on 332 sh | rule $-5.21 on 157 sh
+        REDUCING   no rule $-6.74 on 249 sh | rule $-8.86 on 273 sh
+   11-11..16 (held out, 10 s quotes)  no rule: net $-79.08 (1123 sh, -0.0704/sh) | rule: net $-52.98 [-55.14,-50.80] (697 sh, -0.0760/sh [-0.0793,-0.0729]) | PAIRED $+26.11 [+21.73,+30.21]
+        INCREASING no rule $-42.97 on 656 sh | rule $-19.98 on 266 sh
+        REDUCING   no rule $-36.11 on 467 sh | rule $-32.99 on 431 sh
+  fills: TOUCH
+   FIT 11-17/18  no rule: net $-24.10, shares 656, per share -0.0367
+   FIT  X 0.02 N  6: net $-18.05, shares 546, per share -0.0330
+   FIT  X 0.03 N  6: net $-20.83, shares 602, per share -0.0346
+   FIT  X 0.02 N 10: net $-17.29, shares 521, per share -0.0332
+   FIT  X 0.03 N 10: net $-19.15, shares 575, per share -0.0333
+   FIT  X 0.02 N 30: net $-15.96, shares 500, per share -0.0319
+   FIT  X 0.03 N 30: net $-18.48, shares 531, per share -0.0348
+   chosen on FIT: X 0.02, N 30
+   11-19/20 (held out)                no rule: net $-17.17 (587 sh, -0.0293/sh) | rule: net $-13.29 [-14.88,-11.67] (434 sh, -0.0306/sh [-0.0344,-0.0267]) | PAIRED $+3.88 [-0.20,+7.68]
+        INCREASING no rule $-11.39 on 336 sh | rule $-5.12 on 160 sh
+        REDUCING   no rule $-5.78 on 251 sh | rule $-8.18 on 274 sh
+   11-11..16 (held out, 10 s quotes)  no rule: net $-78.46 (1160 sh, -0.0676/sh) | rule: net $-53.19 [-55.38,-51.09] (728 sh, -0.0731/sh [-0.0764,-0.0700]) | PAIRED $+25.27 [+20.84,+29.64]
+        INCREASING no rule $-42.63 on 677 sh | rule $-19.39 on 274 sh
+        REDUCING   no rule $-35.83 on 483 sh | rule $-33.80 on 453 sh

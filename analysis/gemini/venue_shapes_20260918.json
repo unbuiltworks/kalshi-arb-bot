@@ -1,0 +1,55 @@
+{
+  "source": "analysis/gemini/continuous_run_20260918T143045Z.json",
+  "captured_utc": "2026-09-18T14:31:11Z",
+  "labels": "VERBATIM venue payloads from the first live window. Fixtures built from these are exercised against the REAL response shape, not an invented one -- a fixture kinder than the venue is what hid the last three defects.",
+  "open_orders": [
+    {
+      "orderId": 145828836242288483,
+      "hashOrderId": "RXmwpwBOKoLR",
+      "clientOrderId": "l5cp-owner-2026-no-4ac75a39",
+      "globalOrderId": "145828836242288483",
+      "status": "open",
+      "symbol": "GEMI-BTC05M2609181435-UP",
+      "side": "buy",
+      "outcome": "no",
+      "orderType": "limit",
+      "timeInForce": "maker-or-cancel",
+      "quantity": "0.01",
+      "filledQuantity": "0",
+      "remainingQuantity": "0.01",
+      "price": "0.68",
+      "createdAt": "2026-09-18T14:31:00.522Z",
+      "fundsOnHold": "0.0068"
+    },
+    {
+      "orderId": 145828836242288478,
+      "hashOrderId": "AzQ7a7YpBdeP",
+      "clientOrderId": "l5cp-owner-2026-yes-774c492b",
+      "globalOrderId": "145828836242288478",
+      "status": "open",
+      "symbol": "GEMI-BTC05M2609181435-UP",
+      "side": "buy",
+      "outcome": "yes",
+      "orderType": "limit",
+      "timeInForce": "maker-or-cancel",
+      "quantity": "0.01",
+      "filledQuantity": "0",
+      "remainingQuantity": "0.01",
+      "price": "0.03",
+      "createdAt": "2026-09-18T14:31:00.483Z",
+      "fundsOnHold": "0.0003"
+    }
+  ],
+  "cancel_reject_ack": {
+    "id": "l5cp-81cf6a9a212542dc8db243198c4258c6",
+    "status": 400,
+    "error": {
+      "code": -1013,
+      "msg": "invalid orderId format"
+    }
+  },
+  "place_ack": {
+    "CAPTURED": false,
+    "why": "the code that placed these orders did not record its place ack, so the SUCCESSFUL shape has never been observed. result.orderId is taken from ws_canary's recovered known-good parser and is INFERRED, not verified."
+  }
+}

@@ -1,0 +1,344 @@
+{
+  "label": "GEMINI_L5_CONTINUOUS_RUN_V1",
+  "started_utc": "2026-09-21T16:35:07.505577+00:00",
+  "authorization_id": "NO-AUTHORIZATION-IN-FORCE",
+  "driver_executable_sha": "6846ebe397c56bfd5a8515648cf91db0a6eafeb4b5f14ca9ae6886272e2a479c",
+  "envelope_name": "GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_V1",
+  "envelope_sha": "0ba19c6dc47c84e650a368402f4fcf76adf7b5ec425be7c0479b533774c98ca3",
+  "envelope": {
+    "name": "GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_V1",
+    "action_size": "1",
+    "max_actions": "12",
+    "max_same_side_run": "2",
+    "max_residual_contracts": "2",
+    "max_imbalance_contracts": "2",
+    "max_yes_contracts": "2",
+    "max_no_contracts": "2",
+    "max_total_spend_usd": "2.50",
+    "max_committed_usd": "2.50",
+    "max_residual_usd": "2.00",
+    "max_working_orders": "2",
+    "max_concurrent_markets": "1",
+    "cohort_prefix": "GEMI-BTC15M",
+    "worst_case_loss_usd": "2.50"
+  },
+  "driver_envelope_sha": "625375d1f3f5d37372cba91d7c22e074c2adef8477ac5e1a959486c45f8bd97b",
+  "bundle_sha": "85bb4373a1c021bc62330f89f865b5d80c173f011fa5912404e4409aa30f4dc4",
+  "invoker_note": "this invoker is NOT covered by the authorized executable_sha, which covers the driver. It holds no bound of its own; every limit is enforced inside ws_continuous.Driver.",
+  "readiness_mode": true,
+  "mutation_boundary": "BLOCKED (readiness)",
+  "probe_spec": {
+    "label": "GEMINI_LIVE_PROBE_SPEC_V1",
+    "spec_id": "btc15m_q1",
+    "family": "btc15m",
+    "symbol_family": "GEMI-BTC15M",
+    "envelope": "live_q1_btc15m",
+    "envelope_id": "GEMINI_L5_LIVE_ENVELOPE_Q1_BTC15M_V1",
+    "entry_tte_band": "840:880",
+    "cohort": null,
+    "action_size": "1",
+    "ledger": "analysis/gemini/continuous_ledger.jsonl",
+    "bounds": {
+      "action_size": "1",
+      "max_working_orders": "2",
+      "max_committed_usd": "2.50",
+      "max_residual_usd": "2.00",
+      "max_same_side_run": "2",
+      "max_yes": "2",
+      "max_no": "2",
+      "max_actions": "12",
+      "max_concurrent_markets": "1",
+      "cohort_prefix": "GEMI-BTC15M"
+    },
+    "auth_id": "NO-AUTHORIZATION-IN-FORCE",
+    "live_cohort": "COHORT-2026-09-21-BTC15M-Q1LIVE-1",
+    "budget_cohort": "COHORT-2026-09-21-BTC15M-Q1LIVE-1",
+    "live_cohort_note": "carried but NOT in spec_sha, for the same reason as auth_id: a readiness run and its live counterpart are one experiment, and folding the granted budget ledger into the experiment's identity would move the hash at the moment of the grant",
+    "auth_id_note": "carried but NOT in spec_sha: readiness runs with the sentinel and live with the grant, so folding it in would make the readiness==live invariant unprovable by construction",
+    "spec_sha": "d2f1f05d789387f52fc2e72cb4516342684c560c1b2484f54fe2a282c5e05a3c"
+  },
+  "spec_sha": "d2f1f05d789387f52fc2e72cb4516342684c560c1b2484f54fe2a282c5e05a3c",
+  "family": {
+    "name": "BTC15m",
+    "prefix": "BTC15M",
+    "minutes": 15,
+    "resolved_symbol_prefix": "GEMI-BTC15M",
+    "explicit": true
+  },
+  "envelope_family": "GEMI-BTC15M",
+  "entry_schedule": {
+    "in_band": true,
+    "band": [
+      840.0,
+      880.0
+    ],
+    "waited_s": 616.78,
+    "polls": 76,
+    "entered_tte_s": 878.0963041782379,
+    "selection": {
+      "eligible": true,
+      "chosen": {
+        "symbol": "GEMI-BTC15M2609211700-UP",
+        "tte_s": 878.0963041782379,
+        "contract_status": "active",
+        "market_state": "open"
+      },
+      "band": [
+        840.0,
+        880.0
+      ],
+      "cohort": "BTC15m",
+      "considered": [
+        {
+          "symbol": "GEMI-BTC15M2609211700-UP",
+          "tte_s": 878.0963041782379,
+          "contract_status": "active",
+          "market_state": "open"
+        }
+      ]
+    },
+    "observed": [
+      {
+        "waited_s": 571.77,
+        "tte_s": [
+          23.76718544960022,
+          -876.2328145503998,
+          -1776.2328145503998,
+          -2676.2328145504
+        ]
+      },
+      {
+        "waited_s": 578.84,
+        "tte_s": [
+          15.715476989746094,
+          -884.2845230102539,
+          -1784.284523010254,
+          -2684.284523010254
+        ]
+      },
+      {
+        "waited_s": 587.89,
+        "tte_s": [
+          8.648573637008667,
+          -891.3514263629913,
+          -1791.3514263629913,
+          -2691.3514263629913
+        ]
+      },
+      {
+        "waited_s": 595.42,
+        "tte_s": [
+          -0.4107205867767334,
+          -900.4107205867767,
+          -1800.4107205867767,
+          -2700.4107205867767
+        ]
+      },
+      {
+        "waited_s": 601.93,
+        "tte_s": [
+          892.0689086914062,
+          -7.93109130859375,
+          -907.9310913085938,
+          -1807.9310913085938
+        ]
+      },
+      {
+        "waited_s": 609.39,
+        "tte_s": [
+          885.5542035102844,
+          -14.445796489715576,
+          -914.4457964897156,
+          -1814.4457964897156
+        ]
+      }
+    ],
+    "labels": "EXPERIMENTAL SCHEDULING ONLY: this chose WHEN to begin. The controller, prices, sizing and every bound are unchanged and know nothing about it."
+  },
+  "symbol_selection": {
+    "eligible": true,
+    "chosen": {
+      "symbol": "GEMI-BTC15M2609211700-UP",
+      "tte_s": 878.0963041782379,
+      "contract_status": "active",
+      "market_state": "open"
+    },
+    "band": [
+      840.0,
+      880.0
+    ],
+    "cohort": "BTC15m",
+    "considered": [
+      {
+        "symbol": "GEMI-BTC15M2609211700-UP",
+        "tte_s": 878.0963041782379,
+        "contract_status": "active",
+        "market_state": "open"
+      }
+    ]
+  },
+  "terms_status": {
+    "readable": true,
+    "verdict": "ACCEPTED",
+    "method": "GET",
+    "status": 200,
+    "hasAcceptedLatest": true,
+    "acceptedVersion": 1,
+    "latestVersion": 1,
+    "blocks_orders": false,
+    "attempts": [
+      {
+        "method": "GET",
+        "status": 200,
+        "body_keys": [
+          "acceptedVersion",
+          "hasAcceptedLatest",
+          "latestVersion"
+        ]
+      }
+    ],
+    "why": null
+  },
+  "preflight": {
+    "agrees": true,
+    "discrepancies": [],
+    "checked_before_latch": true
+  },
+  "cohort": {
+    "label": "GEMINI_MUTATION_COHORT_V1",
+    "cohort_id": "COHORT-2026-09-21-BTC15M-Q1LIVE-1",
+    "created_utc": "2026-09-21T15:52:01.058746+00:00",
+    "budget": 12,
+    "consumed": 0,
+    "remaining": 12,
+    "ledger_path": "analysis/gemini/cohorts/COHORT-2026-09-21-BTC15M-Q1LIVE-1/ledger.jsonl",
+    "envelope_max_actions": 12,
+    "predecessor": {
+      "intact": true,
+      "predecessor_ledger": "analysis/gemini/cohorts/COHORT-2026-09-21-Q1LIVE-1/ledger.jsonl",
+      "recorded_sha256": "94e7fa4b9194e655062d11be3e2479b032accc7ebeed540828eb3dd636349d4e",
+      "current_sha256": "94e7fa4b9194e655062d11be3e2479b032accc7ebeed540828eb3dd636349d4e",
+      "recorded_consumed": 12,
+      "current_consumed": 12,
+      "why": null
+    },
+    "note": "ONE BTC15m q=1 live window under OWNER-2026-09-21-GEMINI-BTC15M-Q1-LIVE-1. Capacity is exactly 12 action attempts = LIVE_Q1_BTC15M.max_actions = CP.MAX_ACTIONS; it is a FRESH DURABLE LEDGER, not a larger budget. Chained to COHORT-2026-09-21-Q1LIVE-1, which is 12/12 SPENT. No reset, no replenishment, no rollover, no second window: when this is spent its unused slots stay unused and a further window needs a further grant.",
+    "labels": "the cohort budget is a TIGHTENING of the envelope, never an extension of it. No rollover, no automatic successor."
+  },
+  "authoritative_state": {
+    "fills": [],
+    "open_orders": [],
+    "order_history": {
+      "readable": true,
+      "verdict": "NO_ORDERS_ON_RECORD",
+      "total_rows": 0
+    },
+    "active": {
+      "ok": true,
+      "status": 200,
+      "request_shape": "json_body"
+    },
+    "terminal_seen": 0,
+    "trades": 0,
+    "coherence_readers": {
+      "terminal_history_readable": true,
+      "trades_readable": true,
+      "terminal_history_error": null,
+      "trades_error": null,
+      "why": "the gate explains a disappearance from these two reads plus filled history; if either is unreadable, an unexplained order stops the window instead of being assumed away"
+    }
+  },
+  "ledger_unresolved": [],
+  "ledger_consumed_slots": 0,
+  "pre_latch_recovery": {
+    "checked_before_latch": true,
+    "checked_before_authorization": true,
+    "recovered": true,
+    "inventory": {
+      "yes_qty": "0",
+      "no_qty": "0",
+      "matched_qty": "0",
+      "directional_residual": "0",
+      "inventory_imbalance": "0",
+      "avg_yes_cost": null,
+      "avg_no_cost": null,
+      "effective_matched_pair_cost": null,
+      "total_spend_usd": "0",
+      "same_side_run": {
+        "leg": null,
+        "len": 0
+      },
+      "n_fills": 0,
+      "labels": "matched-pair economics, directional-residual P&L, fees, rebates and settlement cashflow are accounted SEPARATELY and never summed into one number. Nothing here is REALIZED: a cost basis is not a profit and settlement has not paid."
+    },
+    "working": "venue authoritative: 0 resting (+none / -none)",
+    "budget_consumed": 0,
+    "budget_note": "max(ledger 0, venue 0): a disagreement is always read upward",
+    "outstanding": {
+      "verdict": "CLEAR",
+      "tradeable": true,
+      "committed_usd": "0",
+      "blocking": [],
+      "foreign": [],
+      "released": [],
+      "why": null,
+      "labels": "only this read releases committed cash. A cancel ack is a receipt, not a release."
+    },
+    "budget_left": 12
+  },
+  "position_gate": {
+    "read": {
+      "path": "/v1/prediction-markets/positions",
+      "status": 200,
+      "ok": true,
+      "why": null,
+      "total": 2
+    },
+    "n_rows_for_symbol": 2,
+    "reconciliation": {
+      "label": "GEMINI_POSITION_LEDGER_V1",
+      "symbol": "GEMI-BTC15M2609211700-UP",
+      "our_signed": "0",
+      "our_yes_qty": "0",
+      "our_no_qty": "0",
+      "our_matched": "0",
+      "venue_representation": "FLAT_NO_ROWS",
+      "venue_signed": "0",
+      "implies_model": "B or C -- nothing is held, so it netted or was cashed out",
+      "matched_is_verified": false,
+      "matched_label": "our_matched is OUR OWN bookkeeping. Until the venue representation is resolved it is NOT confirmed state and must not be reported as Gemini economics.",
+      "verdict": "AGREE",
+      "tradeable": true,
+      "why": null
+    }
+  },
+  "authorization": {
+    "authorized": false,
+    "required_auth_id": "OWNER-2026-09-21-GEMINI-BTC15M-Q1-LIVE-1",
+    "authorized_sha": "6846ebe397c56bfd5a8515648cf91db0a6eafeb4b5f14ca9ae6886272e2a479c",
+    "executable_sha": "6846ebe397c56bfd5a8515648cf91db0a6eafeb4b5f14ca9ae6886272e2a479c",
+    "authorized_envelope": "625375d1f3f5d37372cba91d7c22e074c2adef8477ac5e1a959486c45f8bd97b",
+    "envelope_sha": "625375d1f3f5d37372cba91d7c22e074c2adef8477ac5e1a959486c45f8bd97b",
+    "arming": {
+      "armed": false,
+      "live_flag": false,
+      "auth_id_present": false,
+      "auth_id_matches": false,
+      "expiry_supplied": false,
+      "expired": null,
+      "expected_auth_id": "OWNER-2026-09-21-GEMINI-BTC15M-Q1-LIVE-1",
+      "why_not": "GEMINI_CANARY_LIVE is not YES"
+    },
+    "why_not": [
+      "transport arm: GEMINI_CANARY_LIVE is not YES"
+    ],
+    "labels": "an authorization names an EXECUTABLE and an ENVELOPE. Editing either after review invalidates it, which is the point: approval attaches to what was read, not to a name."
+  },
+  "state": "READY_TO_MUTATE_BUT_UNAUTHORIZED",
+  "why": "not authorized: transport arm: GEMINI_CANARY_LIVE is not YES",
+  "latch": {
+    "consumed": false,
+    "why": "authorization was refused BEFORE the latch was spent; the authorization is untouched"
+  },
+  "finished_utc": "2026-09-21T16:45:26.180527+00:00"
+}

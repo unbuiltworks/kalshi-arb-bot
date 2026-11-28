@@ -1,0 +1,4 @@
+SIDE-CAP PACING, held-out 11-19/20, 515 windows. INFERRED (STRICT) fills, not venue fills; shown to see how the limit binds, not as profit evidence.
+  deployed configuration           fills  8474  spent $ 271.03  NET $ -20.25  per share -0.0341  per window -0.0393  worst window -0.145
+  + pacing                         fills  8676  spent $ 191.10  NET $ -16.52  per share -0.0313  per window -0.0321  worst window -0.120
+  + pacing + heavy-underdog stop   fills  4833  spent $ 166.18  NET $ -12.43  per share -0.0386  per window -0.0241  worst window -0.165

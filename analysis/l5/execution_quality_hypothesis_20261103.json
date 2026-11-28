@@ -1,0 +1,146 @@
+{
+ "schema": "execution_quality_hypothesis/1",
+ "generated_utc": "2026-11-03T16:00:00Z",
+ "headline": "THE EXECUTION-QUALITY HYPOTHESIS IS REFUTED. L5 residual loses -0.1867/unit; ours loses -0.1855/unit. Indistinguishable. The difference is the MATCHED:RESIDUAL RATIO, not fill quality.",
+ "item8_decomposition": {
+  "the_correct_comparison": "L5 residual P&L per unit, computed on EXACTLY our measure (cost of the excess side at its average own price, versus what that side redeemed at settlement)",
+  "l5": {
+   "windows": 556,
+   "units": 104961.8,
+   "paid_per_unit": 0.3504,
+   "redeemed_per_unit": 0.1637,
+   "net_per_unit": -0.1867
+  },
+  "ours": {
+   "windows": 89,
+   "net_per_unit": -0.1855,
+   "source": "venue-settled usable-basis ledger"
+  },
+  "difference_per_unit": 0.0012,
+  "verdict": "statistically indistinguishable. L5 is adversely selected on residual to the SAME degree we are.",
+  "my_prior_framing_was_WRONG": "last turn I reported his residual as fairly priced (alpha +0.0043, z 0.8) against our -0.3994/unit in the 0.35-0.50 band. That compared his alpha on ALL FILLS against our realized loss on STRANDED LEGS -- two different conditioning sets, which is the exact category error I had warned about one turn earlier. Corrected here, the two measures agree.",
+  "residual_by_band": {
+   "0.00-0.20": {
+    "l5_net_per_unit": -0.1407,
+    "l5_n_windows": 89,
+    "l5_units": 24480.0
+   },
+   "0.20-0.35": {
+    "l5_net_per_unit": -0.247,
+    "l5_n_windows": 157,
+    "l5_units": 40235.1
+   },
+   "0.35-0.50": {
+    "l5_net_per_unit": -0.3027,
+    "l5_n_windows": 107,
+    "l5_units": 21739.0,
+    "ours": -0.3994
+   },
+   "0.50-0.65": {
+    "l5_net_per_unit": -0.1699,
+    "l5_n_windows": 84,
+    "l5_units": 8224.1
+   },
+   "0.65-1.01": {
+    "l5_net_per_unit": 0.1719,
+    "l5_n_windows": 119,
+    "l5_units": 10283.6
+   }
+  },
+  "band_reading": "in the band where our residual actually sits, L5 loses -0.3027/unit and we lose -0.3994/unit -- the same order of magnitude, not a gap that execution quality could explain. Our outlier bands (0.00-0.20 at n=5 legs, 0.65+ at n=3) are the underpowered ones.",
+  "order_placement": {
+   "l5_maker_pct": 87.4,
+   "l5_taker_pct": 4.4,
+   "l5_unknown_pct": 8.3,
+   "maker_alpha_by_band": {
+    "0.00-0.20": -0.0278,
+    "0.20-0.35": -0.0208,
+    "0.35-0.50": -0.0042,
+    "0.50-0.65": 0.0105,
+    "0.65-1.01": 0.0231
+   },
+   "maker_z_by_band": {
+    "0.00-0.20": -13.0,
+    "0.20-0.35": -5.0,
+    "0.35-0.50": -0.7,
+    "0.50-0.65": 1.9,
+    "0.65-1.01": 7.3
+   },
+   "reading": "L5 is overwhelmingly a maker, and his maker alpha is MONOTONE in price: adverse at cheap prices, favourable at dear ones. He is not uniformly well-executed; he is favourite-biased, which is the same effect already in the record."
+  },
+  "queue_position": "NOT MEASURABLE on either side. Our pre-submit rows carry our_position_within_level UNKNOWN; L5 public data carries no order-level events at all, only fills. No queue claim can be made for or against.",
+  "market_movement_and_depth": "not isolable as an explanation, because the outcome gap the decomposition was meant to explain does not exist once the conditioning sets are matched.",
+  "venue_differences": "L5 is Polymarket International, we are PMUS. The venues differ in fee schedule and in incentive programs, and THAT is where his advantage actually sits: his reconstructed trading P&L is -$2,829 against roughly $71,500 of credited incentives. He did not out-execute us on residual; he was paid to carry it.",
+  "what_the_difference_actually_IS": {
+   "l5_matched_contracts": 556457.6,
+   "l5_residual_units": 104961.8,
+   "l5_ratio": 5.3,
+   "our_ratio": 1.786,
+   "breakeven_ratio": 2.012,
+   "reading": "residual costs both of us about 0.186 a unit. L5 earns matched profit on 5.30 contracts for every residual unit; we earn it on 1.786, against a breakeven of about 2.012. He clears it on COMPLETION RATE, not on fill quality."
+  }
+ },
+ "item7_sensitivity": {
+  "question": "does arm B (aggressive repricing) survive queue and latency degradation?",
+  "p_fill_sweep": [
+   {
+    "p_fill": 1.0,
+    "train": -0.17,
+    "holdout": -1.67,
+    "pairs": 7.0,
+    "reprices": 12,
+    "beats_A": true
+   },
+   {
+    "p_fill": 0.75,
+    "train": -0.1892,
+    "holdout": -1.7157,
+    "pairs": 6.7,
+    "reprices": 15,
+    "beats_A": true
+   },
+   {
+    "p_fill": 0.5,
+    "train": -0.0667,
+    "holdout": -1.7689,
+    "pairs": 6.4,
+    "reprices": 20,
+    "beats_A": true
+   },
+   {
+    "p_fill": 0.25,
+    "train": 0.3093,
+    "holdout": -1.9633,
+    "pairs": 5.6,
+    "reprices": 31,
+    "beats_A": true
+   }
+  ],
+  "baseline_A": {
+   "train": -0.63,
+   "holdout": -2.53,
+   "pairs": 5.0,
+   "reprices": 7
+  },
+  "reading": "B beats A on the holdout at every fill probability tested, down to 0.25. The advantage is robust to queue uncertainty in this sample. Note the train column turns POSITIVE at p_fill 0.25 while pairs fall to 5.6 -- part of that apparent gain is simply fewer completions, the refusal pattern again.",
+  "latency_knob_was_INERT_and_here_is_why": "lag of 0, 1 and 2 ticks gave byte-identical results. Diagnosed rather than reported as a finding: all 7 complement fills in the tape occur 6, 2, 2, 2, 4, 6 and 2 ticks after the last reprice, so a 1-2 tick lag cannot block any of them. At ~4.4s median cadence a 1-tick lag already models 4.4s of latency, four times the measured 1.02s cancel round-trip. Real repricing latency is SUB-TICK on this tape and therefore unobservable -- not harmless."
+ },
+ "deliverable": {
+  "smallest_safe_change": "NONE to the money path this turn. The lever the evidence points at -- raising completions per residual unit -- is served by completion_requote(), which already exists, is already stricter than the fader on the cancel race, and is DISABLED by an unset L5_COMPLETION_REQUOTE. The telemetry row making that state visible shipped in d29a4bf7.",
+  "why_not_the_099_cap": "measured again and unchanged: train -0.63 -> +0.45, HOLDOUT -2.53 -> -2.83. It buys 3 completions between 0.96 and 0.99 whose dearer pairs do not pay for themselves out of sample. One of four real fills converts (2300z, +/bin/bash.3864), which is a single observation.",
+  "minimum_additional_real_time_measurements": [
+   "our queue position within the level at submit and on every book change -- currently UNKNOWN in our own pre-submit rows",
+   "per-level depth at and around our own quote price, not only the touch, at <=1s cadence",
+   "order-level events retained beyond the container: submit, ack, partial fill, cancel request, cancel ack, terminal state, each venue-timestamped",
+   "one bounded campaign with L5_COMPLETION_REQUOTE=YES and nothing else changed, which is the only way to observe real cancel/replace outcomes at sub-tick latency"
+  ]
+ },
+ "safety": {
+  "cancel_margin": "300s preserved",
+  "halt": "active",
+  "watchdog": "unchanged",
+  "limits": "unchanged",
+  "armed": false,
+  "live_orders": 0
+ }
+}

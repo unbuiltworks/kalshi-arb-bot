@@ -1,0 +1,533 @@
+{
+ "window": {
+  "start": "2026-11-28T00:16:33Z",
+  "end_used": "2026-11-28T03:15:00+00:00",
+  "counts_by_kind": {
+   "ACCOUNT_AUDIT": 3,
+   "CAMPAIGN_ECONOMICS": 3,
+   "CRICKET_LEARNED": 5,
+   "FILL": 24,
+   "FILL_MARKOUT": 20,
+   "INVENTORY_RECONCILE": 3,
+   "ORDER": 138,
+   "ORDER_NOT_SENT": 33,
+   "PILOT_PNL": 3,
+   "RESELECTED": 4,
+   "REWARD_CHECK": 3,
+   "RN1_QUOTE": 482,
+   "RN1_SELECT_NO_CHURN": 1,
+   "RN1_TOUCH_EV": 231,
+   "SELECTED": 16,
+   "SUBMISSION_LOCK_STATE": 1,
+   "heartbeat": 168,
+   "released_flat_market": 12
+  }
+ },
+ "1_qualifying": {
+  "live.qualifying_contract_s": 97.14,
+  "live.qualifying_contract_s.decreases": 0,
+  "live.resting_contract_s": 193.909,
+  "live.resting_contract_s.decreases": 0,
+  "live.orders": 6.0,
+  "live.orders.decreases": 0,
+  "live.fills": 2.0,
+  "live.fills.decreases": 0,
+  "pregame.qualifying_contract_s": 31877.509,
+  "pregame.qualifying_contract_s.decreases": 0,
+  "pregame.resting_contract_s": 33474.944,
+  "pregame.resting_contract_s.decreases": 0,
+  "pregame.orders": 132.0,
+  "pregame.orders.decreases": 0,
+  "pregame.fills": 22.0,
+  "pregame.fills.decreases": 0,
+  "window_minutes": 178,
+  "minutes_with_heartbeat": 168,
+  "pct_minutes_resting_orders_gt0": 91.6,
+  "pct_minutes_qualifying_increased": 91.6,
+  "heartbeats": 168,
+  "first_hb": "2026-11-28T00:16:37.800841+00:00",
+  "last_hb": "2026-11-28T03:14:49.507973+00:00"
+ },
+ "2_capital": {
+  "time_weighted_mean_usd": 3.9135,
+  "max_usd": 11.4253,
+  "mean_pct_of_60_cap": 6.52,
+  "max_pct_of_60_cap": 19.04,
+  "mean_pct_of_20_at_risk": 19.57,
+  "max_pct_of_20_at_risk": 57.13,
+  "minutes_zero_capital": 5.3,
+  "heartbeats_zero_capital": 5,
+  "max_resting_orders_usd": 4.2695,
+  "max_unpaired_usd": 5.410672727272727,
+  "max_paired_awaiting_usd": 4.875027272727273,
+  "capacity_usd_min": 8.0611,
+  "capacity_usd_max": 13.8777,
+  "capacity_null_heartbeats": 5,
+  "account_limit_reasons": {
+   "None": 163,
+   "ACCOUNT_DRAWDOWN_UNREADABLE": 5
+  },
+  "submission_lock_states": {
+   "{\"completions_locked\": false, \"new_exposure_locked\": false, \"why\": null, \"window_end\": \"2026-11-28T03:15:00Z\"}": 168
+  },
+  "safety_latch_states": {
+   "null": 168
+  },
+  "active_len_dist": {
+   "2": 96,
+   "1": 2,
+   "3": 14,
+   "4": 5,
+   "5": 9,
+   "6": 42
+  }
+ },
+ "3_gates": {
+  "touch_ev_events": 231,
+  "touch_ev_eligible_net_gt0": 72,
+  "eligible_distinct_slugs": 13,
+  "side_outcomes_by_gate_events": {
+   "rested": 68,
+   "block:jump_pause": 34,
+   "block:vol_pause": 13,
+   "why:marginal_ev:marginal_ev_not_positive": 12,
+   "block:net_not_positive": 8,
+   "block:account_risk": 3,
+   "no_quote_found": 2,
+   "block:max_markets": 1,
+   "why:refill_cooldown": 1
+  },
+  "side_outcomes_by_gate_distinct_slugs": {
+   "no_quote_found": 2,
+   "rested": 11,
+   "why:marginal_ev:marginal_ev_not_positive": 7,
+   "block:jump_pause": 7,
+   "block:vol_pause": 5,
+   "block:net_not_positive": 4,
+   "block:account_risk": 3,
+   "block:max_markets": 1,
+   "why:refill_cooldown": 1
+  },
+  "marginal_ev_rejections": 12,
+  "marginal_ev_rej_with_quote_reward0_while_touch_reward_gt0": 0,
+  "marginal_ev_rej_incentive_why": {
+   "qualifies": 12
+  },
+  "marginal_ev_rej_projected_usd_max": 0.0,
+  "marginal_ev_rej_projected_usd_mean": 0.0,
+  "touch_ev_by_hard": {
+   "recent_jump": 90,
+   "price_moving": 86,
+   "None": 55
+  },
+  "touch_ev_by_side_why": {
+   "YES:no_positive_placement": 113,
+   "NO:completion_keeps_placement": 108,
+   "NO:no_positive_placement": 84,
+   "YES:None": 64,
+   "YES:completion_keeps_placement": 54,
+   "NO:None": 39
+  },
+  "all_quotes_block_counts": {
+   "jump_pause": 151,
+   "net_not_positive": 118,
+   "None": 79,
+   "vol_pause": 52,
+   "account_risk": 49,
+   "max_markets": 33
+  },
+  "all_quotes_why_counts": {
+   "NO:None": 413,
+   "YES:None": 364,
+   "YES:marginal_ev:marginal_ev_not_positive": 104,
+   "NO:marginal_ev:marginal_ev_not_positive": 61,
+   "YES:refill_cooldown": 14,
+   "NO:refill_cooldown": 8
+  },
+  "quotes_with_want": 409
+ },
+ "4_reward_qual": {
+  "by_count": {
+   "qualifies": 482
+  },
+  "by_time_s": {
+   "qualifies": 17749
+  },
+  "by_time_pct": {
+   "qualifies": 100.0
+  },
+  "max_projected_usd": 0,
+  "max_projected_slug": null,
+  "min_payout_usd_values": [
+   "None"
+  ]
+ },
+ "5_payments": {
+  "reward_check_t": "2026-11-28T02:18:47.827035+00:00",
+  "credited_usd": "24.0900000000000001",
+  "accrued_not_credited_usd": "4.8600000000000001",
+  "by_status": {
+   "PAID": {
+    "n": 122,
+    "usd": "24.0900000000000001"
+   },
+   "PENDING": {
+    "n": 10,
+    "usd": "0.8600000000000001"
+   },
+   "SKIPPED": {
+    "n": 65,
+    "usd": "4.00"
+   }
+  },
+  "rows_brief_n": 50,
+  "rows_dated_campaign_day": [],
+  "reward_check_count_in_window": 3,
+  "campaign_economics_t": "2026-11-28T02:21:34.310282+00:00",
+  "campaign": {
+   "since": "2026-11-28T00:15:00+00:00",
+   "until": "2026-11-28T03:15:00+00:00",
+   "markets": 11,
+   "fills": 7,
+   "contracts": "9.04",
+   "spend_usd": "4.308600",
+   "completed_pairs": "1.49",
+   "pair_edge_usd": "0.044700",
+   "residual_contracts": "6.06",
+   "fees_charged_usd": "0",
+   "rewards_paid_usd": "0",
+   "rewards_pending_usd": "0",
+   "rewards_skipped_usd": "0",
+   "net_realized_usd": "0",
+   "realized_cash_basis_usd": "0.044700"
+  },
+  "pilot_pnl_t": "2026-11-28T02:21:34.266612+00:00",
+  "pilot_realized_net_usd": "0.044700",
+  "pilot_status": {
+   "paired_flat": 1,
+   "no_fills": 7,
+   "open": 3
+  },
+  "pilot_execution": {
+   "fills": 7,
+   "contracts": "9.04",
+   "spent_usd": "4.308600",
+   "completed_pairs": "1.49",
+   "avg_pair_cost": "0.9700",
+   "locked_pair_edge_usd": "0.044700",
+   "residual_contracts": "6.06",
+   "residual_cost_usd": "2.863300",
+   "label": "venue-reconciled fills only; a completed pair's edge is realized cash at pairing (venue nets and pays $1); residual legs realize at settlement"
+  }
+ },
+ "6_orders_fills": {
+  "orders": 138,
+  "fills": 24,
+  "orders_by_slug": {
+   "aec-setkameua-marmak-kobvit-2026-11-28": 2,
+   "aec-setkameua-hairus-romiva-2026-11-28": 1,
+   "aec-setkameua-lobval-gomole-2026-11-28": 6,
+   "aec-atpdb-aregonreyvar-ambroggomez-2026-11-27": 6,
+   "aec-setkameua-melval-cherom-2026-11-28": 2,
+   "aec-atpdb-chandrloof-jecankielan-2026-11-27": 2,
+   "aec-setkameua-bokrom-priser-2026-11-28": 46,
+   "aec-setkameua-masyev-cherom-2026-11-28": 16,
+   "aec-setkameua-kroyan-marmak-2026-11-28": 2,
+   "aec-setkameua-plivol-kovnaz-2026-11-28": 15,
+   "aec-setkameua-kryser-dunmyk-2026-11-28": 3,
+   "aec-setkameua-beldmy-kvaiho-2026-11-28": 7,
+   "aec-setkameua-kanden-kotand-2026-11-28": 24,
+   "aec-setkameua-makyar-karole-2026-11-28": 6
+  },
+  "fills_by_slug": {
+   "aec-atpdb-aregonreyvar-ambroggomez-2026-11-27": 2,
+   "aec-setkameua-bokrom-priser-2026-11-28": 6,
+   "aec-setkameua-masyev-cherom-2026-11-28": 4,
+   "aec-setkameua-plivol-kovnaz-2026-11-28": 3,
+   "aec-setkameua-beldmy-kvaiho-2026-11-28": 3,
+   "aec-setkameua-makyar-karole-2026-11-28": 4,
+   "aec-setkameua-kanden-kotand-2026-11-28": 2
+  },
+  "order_stage": {
+   "rn1_open": 54,
+   "two_sided_complete": 76,
+   "rn1_extend": 8
+  },
+  "fill_contracts": 21.72,
+  "order_not_sent": 33,
+  "order_not_sent_by_stage_why": {
+   "rn1_open:deferred_by_request_budget": 2,
+   "two_sided_complete:deferred_by_request_budget": 30,
+   "rn1_extend:deferred_by_request_budget": 1
+  },
+  "selected": 16,
+  "reselected": 4,
+  "fill_markout": 20
+ },
+ "7_accumulation": {
+  "by_class": {
+   "opening": {
+    "fills": 7,
+    "contracts": 9.1,
+    "cost_usd": 4.0775,
+    "avg_px": 0.4481
+   },
+   "completion": {
+    "fills": 9,
+    "contracts": 6.0200000000000005,
+    "cost_usd": 3.2273,
+    "avg_px": 0.5361
+   },
+   "same_side_addition": {
+    "fills": 8,
+    "contracts": 6.6,
+    "cost_usd": 3.083,
+    "avg_px": 0.4671
+   }
+  },
+  "fills": [
+   {
+    "t": "2026-11-28T01:45:57.454856+00:00",
+    "slug": "aec-atpdb-aregonreyvar-ambroggomez-2026-11-27",
+    "side": "NO",
+    "px": "0.3800",
+    "qty": "1",
+    "class": "opening",
+    "stage": "rn1_open",
+    "phase": "live"
+   },
+   {
+    "t": "2026-11-28T01:47:43.628491+00:00",
+    "slug": "aec-atpdb-aregonreyvar-ambroggomez-2026-11-27",
+    "side": "YES",
+    "px": "0.5900",
+    "qty": "1",
+    "class": "completion",
+    "stage": "two_sided_complete",
+    "phase": "live"
+   },
+   {
+    "t": "2026-11-28T02:03:27.950598+00:00",
+    "slug": "aec-setkameua-bokrom-priser-2026-11-28",
+    "side": "YES",
+    "px": "0.4600",
+    "qty": "1.55",
+    "class": "opening",
+    "stage": "rn1_open",
+    "phase": "pregame"
+   },
+   {
+    "t": "2026-11-28T02:11:09.459303+00:00",
+    "slug": "aec-setkameua-masyev-cherom-2026-11-28",
+    "side": "YES",
+    "px": "0.5300",
+    "qty": "2",
+    "class": "opening",
+    "stage": "rn1_open",
+    "phase": "pregame"
+   },
+   {
+    "t": "2026-11-28T02:13:57.266244+00:00",
+    "slug": "aec-setkameua-masyev-cherom-2026-11-28",
+    "side": "YES",
+    "px": "0.5300",
+    "qty": "1",
+    "class": "same_side_addition",
+    "stage": "rn1_extend",
+    "phase": "pregame"
+   },
+   {
+    "t": "2026-11-28T02:14:46.414156+00:00",
+    "slug": "aec-setkameua-masyev-cherom-2026-11-28",
+    "side": "NO",
+    "px": "0.4400",
+    "qty": "0.49",
+    "class": "completion",
+    "stage": "two_sided_complete",
+    "phase": "pregame"
+   },
+   {
+    "t": "2026-11-28T02:16:33.866786+00:00",
+    "slug": "aec-setkameua-plivol-kovnaz-2026-11-28",
+    "side": "YES",
+    "px": "0.4100",
+    "qty": "2",
+    "class": "opening",
+    "stage": "rn1_open",
+    "phase": "pregame"
+   },
+   {
+    "t": "2026-11-28T02:26:27.910276+00:00",
+    "slug": "aec-setkameua-beldmy-kvaiho-2026-11-28",
+    "side": "YES",
+    "px": "0.3900",
+    "qty": "0.55",
+    "class": "opening",
+    "stage": "rn1_open",
+    "phase": "pregame"
+   },
+   {
+    "t": "2026-11-28T02:27:32.267999+00:00",
+    "slug": "aec-setkameua-beldmy-kvaiho-2026-11-28",
+    "side": "YES",
+    "px": "0.3700",
+    "qty": "0.75",
+    "class": "same_side_addition",
+    "stage": "rn1_extend",
+    "phase": "pregame"
+   },
+   {
+    "t": "2026-11-28T02:35:06.624861+00:00",
+    "slug": "aec-setkameua-masyev-cherom-2026-11-28",
+    "side": "NO",
+    "px": "0.4400",
+    "qty": "0.15",
+    "class": "completion",
+    "stage": "two_sided_complete",
+    "phase": "pregame"
+   },
+   {
+    "t": "2026-11-28T02:36:09.060657+00:00",
+    "slug": "aec-setkameua-makyar-karole-2026-11-28",
+    "side": "NO",
+    "px": "0.5100",
+    "qty": "1",
+    "class": "opening",
+    "stage": "rn1_open",
+    "phase": "pregame"
+   },
+   {
+    "t": "2026-11-28T02:37:08.002957+00:00",
+    "slug": "aec-setkameua-makyar-karole-2026-11-28",
+    "side": "NO",
+    "px": "0.5000",
+    "qty": "1",
+    "class": "same_side_addition",
+    "stage": "rn1_extend",
+    "phase": "pregame"
+   },
+   {
+    "t": "2026-11-28T02:37:34.925411+00:00",
+    "slug": "aec-setkameua-makyar-karole-2026-11-28",
+    "side": "NO",
+    "px": "0.4900",
+    "qty": "1",
+    "class": "same_side_addition",
+    "stage": "rn1_extend",
+    "phase": "pregame"
+   },
+   {
+    "t": "2026-11-28T02:39:59.893159+00:00",
+    "slug": "aec-setkameua-beldmy-kvaiho-2026-11-28",
+    "side": "YES",
+    "px": "0.3700",
+    "qty": "0.55",
+    "class": "same_side_addition",
+    "stage": "rn1_extend",
+    "phase": "pregame"
+   },
+   {
+    "t": "2026-11-28T02:41:31.183137+00:00",
+    "slug": "aec-setkameua-bokrom-priser-2026-11-28",
+    "side": "NO",
+    "px": "0.5100",
+    "qty": "1",
+    "class": "completion",
+    "stage": "two_sided_complete",
+    "phase": "pregame"
+   },
+   {
+    "t": "2026-11-28T02:45:37.508607+00:00",
+    "slug": "aec-setkameua-makyar-karole-2026-11-28",
+    "side": "NO",
+    "px": "0.4400",
+    "qty": "0.55",
+    "class": "same_side_addition",
+    "stage": "rn1_extend",
+    "phase": "pregame"
+   },
+   {
+    "t": "2026-11-28T02:46:32.395609+00:00",
+    "slug": "aec-setkameua-bokrom-priser-2026-11-28",
+    "side": "YES",
+    "px": "0.4800",
+    "qty": "0.75",
+    "class": "same_side_addition",
+    "stage": "rn1_extend",
+    "phase": "pregame"
+   },
+   {
+    "t": "2026-11-28T02:58:30.820764+00:00",
+    "slug": "aec-setkameua-bokrom-priser-2026-11-28",
+    "side": "NO",
+    "px": "0.5000",
+    "qty": "1",
+    "class": "completion",
+    "stage": "two_sided_complete",
+    "phase": "pregame"
+   },
+   {
+    "t": "2026-11-28T02:59:09.375672+00:00",
+    "slug": "aec-setkameua-bokrom-priser-2026-11-28",
+    "side": "NO",
+    "px": "0.4700",
+    "qty": "0.19",
+    "class": "completion",
+    "stage": "two_sided_complete",
+    "phase": "pregame"
+   },
+   {
+    "t": "2026-11-28T03:09:32.329881+00:00",
+    "slug": "aec-setkameua-kanden-kotand-2026-11-28",
+    "side": "NO",
+    "px": "0.3800",
+    "qty": "1",
+    "class": "opening",
+    "stage": "rn1_open",
+    "phase": "pregame"
+   },
+   {
+    "t": "2026-11-28T03:11:02.756623+00:00",
+    "slug": "aec-setkameua-bokrom-priser-2026-11-28",
+    "side": "YES",
+    "px": "0.4800",
+    "qty": "1",
+    "class": "same_side_addition",
+    "stage": "rn1_extend",
+    "phase": "pregame"
+   },
+   {
+    "t": "2026-11-28T03:12:19.399228+00:00",
+    "slug": "aec-setkameua-plivol-kovnaz-2026-11-28",
+    "side": "NO",
+    "px": "0.5600",
+    "qty": "1",
+    "class": "completion",
+    "stage": "two_sided_complete",
+    "phase": "pregame"
+   },
+   {
+    "t": "2026-11-28T03:13:15.280595+00:00",
+    "slug": "aec-setkameua-kanden-kotand-2026-11-28",
+    "side": "YES",
+    "px": "0.5900",
+    "qty": "1",
+    "class": "completion",
+    "stage": "rn1_open",
+    "phase": "pregame"
+   },
+   {
+    "t": "2026-11-28T03:14:23.843229+00:00",
+    "slug": "aec-setkameua-plivol-kovnaz-2026-11-28",
+    "side": "NO",
+    "px": "0.5600",
+    "qty": "0.19",
+    "class": "completion",
+    "stage": "two_sided_complete",
+    "phase": "pregame"
+   }
+  ],
+  "markout_events": 20,
+  "label": "acquisition cost = venue fill price; markout is a mark, not profit"
+ }
+}
