@@ -135,6 +135,7 @@ class Market:
         self.last_t: Optional[float] = None
         self.fair_now: Optional[D] = None    # international YES fair
         self.vmid: deque = deque()           # (t, venue YES mid)
+        self.tf_fh: deque = deque()          # (t, intl YES fair)
 
     # fair band exactly as Engine.intl_fair_band (on recorded samples)
     def band(self, t: float, mid: Optional[D]) -> Optional[dict]:
@@ -244,6 +245,13 @@ class Market:
             mid = (ONE - im) if flip else im
         band = self.band(t, mid)
         self.fair_now = mid
+        ws = float(self.policy.get("weaken_s", 300))
+        if mid is None:
+            self.tf_fh.clear()
+        else:
+            self.tf_fh.append((t, mid))
+            while len(self.tf_fh) > 1 and t - self.tf_fh[0][0] > ws:
+                self.tf_fh.popleft()
         vm_now = (f["yes_bid"] + f["yes_ask"]) / 2
         self.vmid.append((t, vm_now))
         fw = float(self.policy.get("falling_s") or 0)
@@ -338,7 +346,8 @@ class Market:
             tg = want[s]
             if tg is None or tg["role"] == "complete":
                 continue
-            why = self._tf_why(s, tg["px"], mid, vm_now, tick)
+            why = self._tf_why(s, tg["px"], mid, vm_now, tick,
+                               tg.get("qty", 0))
             if why:
                 want[s] = None
                 self.decisions[why] += 1
@@ -368,9 +377,15 @@ class Market:
                 want[s] = res.get(s) if want.get(s) is not None else None
         ladder = self._ladder(want)
         kept = []
+        lq = {sd: (D(str(want[sd]["qty"])) if want.get(sd) is not None and
+                   want[sd]["role"] != "complete" else ZERO)
+              for sd in ("YES", "NO")}
         for l_ in ladder:
+            if l_["role"] != "complete":
+                lq[l_["side"]] += D(str(l_["qty"]))
             why = None if l_["role"] == "complete" else \
-                self._tf_why(l_["side"], l_["px"], mid, vm_now, tick)
+                self._tf_why(l_["side"], l_["px"], mid, vm_now, tick,
+                             lq[l_["side"]])
             if why:
                 self.decisions[why] += 1
             else:
@@ -393,15 +408,28 @@ class Market:
         self._replace(targets, t)
 
     def _tf_why(self, s: str, px: D, mid: Optional[D], vm_now: D,
-                tick: D) -> Optional[str]:
+                tick: D, qty: Any = 0) -> Optional[str]:
         pol = self.policy
         fair_s = None if mid is None else (mid if s == "YES" else ONE - mid)
         if pol.get("require_fair") and fair_s is None:
             return "tf_no_fair"
-        if pol.get("edge_min") is not None and fair_s is not None and \
-                fair_s - px - D(str(pol.get("ev_fill_loss", "0"))) < \
-                D(str(pol["edge_min"])):
-            return "tf_negative_ev"
+        if pol.get("edge_min") is not None and fair_s is not None:
+            o = "NO" if s == "YES" else "YES"
+            unp = max(ZERO, self.pos[s] + D(str(qty or 0)) - self.pos[o])
+            need = D(str(pol.get("ev_fill_loss", "0"))) + \
+                D(str(pol["edge_min"])) + \
+                D(str(pol.get("conc", "0"))) * unp + \
+                (D(str(pol.get("dog_extra", "0"))) if fair_s < D("0.5")
+                 else ZERO)
+            if fair_s - px < need:
+                return "tf_negative_ev"
+        wk = D(str(pol.get("weaken", "0")))
+        if wk > 0 and fair_s is not None and len(self.tf_fh) > 1:
+            d = self.tf_fh[-1][1] - self.tf_fh[0][1]
+            if s == "NO":
+                d = -d
+            if d <= -wk:
+                return "tf_weakening"
         fs = pol.get("fav_side")
         if fs and fair_s is not None and \
                 ((fs == "favorite" and

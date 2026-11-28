@@ -116,3 +116,56 @@ def test_log_separates_trading_edge_from_reward(en, monkeypatch, capsys):
     tf = quotes(capsys)[-1]["trading_first"]
     assert D(tf["pre_reward_edge"]["YES"]["trading_edge"]) >= D("0.02")
     assert D(tf["pre_reward_edge"]["NO"]["trading_edge"]) < 0
+
+
+def test_underdog_needs_extra_edge_favourite_does_not(en, monkeypatch):
+    """Favourite bias without a ban: book 0.48/0.50, YES fair 0.52
+    (favourite) edge .04 at 0.48; NO fair 0.48 (underdog) edge -.02."""
+    e, v, _ = en
+    monkeypatch.setattr(M, "RN1_TRADING_FIRST", True)
+    monkeypatch.setattr(M, "RN1_TF_EDGE_USD", D("0.01"))
+    monkeypatch.setattr(M, "RN1_TF_DOG_EXTRA_USD", D("0.02"))
+    _fair(e, monkeypatch, "0.52")
+    e.step_market(SLUG)
+    tl = e.b.m(SLUG)["_tf_last"]
+    assert tl["YES"]["favourite"] and not tl["NO"]["favourite"]
+    assert D(tl["NO"]["required"]) == D("0.03")
+    assert D(tl["YES"]["required"]) >= D("0.01")
+    assert {s for s, _p, _q in resting(v)} <= {"YES"}
+
+
+def test_value_underdog_still_admissible(en, monkeypatch):
+    e, v, _ = en
+    monkeypatch.setattr(M, "RN1_TRADING_FIRST", True)
+    monkeypatch.setattr(M, "RN1_TF_EDGE_USD", D("0.01"))
+    monkeypatch.setattr(M, "RN1_TF_DOG_EXTRA_USD", D("0.02"))
+    _fair(e, monkeypatch, "0.45")        # NO fav .55; YES dog .45
+    v.bid, v.ask = D("0.40"), D("0.62")   # YES touch .40: dog edge .05
+    e.step_market(SLUG)
+    assert "YES" in {s for s, _p, _q in resting(v)}
+
+
+def test_concentration_stops_replenishment(en, monkeypatch):
+    e, v, _ = en
+    monkeypatch.setattr(M, "RN1_TRADING_FIRST", True)
+    monkeypatch.setattr(M, "RN1_TF_CONC_USD", D("0.02"))
+    _fair(e, monkeypatch, "0.60")         # YES edge at .48 = .12
+    mk = e.b.m(SLUG)
+    mk["pos"] = {"YES": "4", "NO": "0"}
+    mk["cost"] = {"YES": "1.80", "NO": "0"}
+    e.step_market(SLUG)
+    # 4 held + 2 more -> 6 unpaired: required .02 + .12 = .14 > .12
+    assert all(not (s == "YES" and st != "two_sided_complete")
+               for s, _p, st in _orders(e))
+
+
+def test_weakening_favourite_refused(en, monkeypatch):
+    e, v, _ = en
+    monkeypatch.setattr(M, "RN1_TRADING_FIRST", True)
+    monkeypatch.setattr(M, "RN1_TF_WEAKEN_USD", D("0.02"))
+    _fair(e, monkeypatch, "0.60")
+    mk = e.b.m(SLUG)
+    mk["_tf_fair"] = [(time.time() - 60, D("0.66"))]   # YES fair fell 6c
+    e.step_market(SLUG)
+    assert all(s != "YES" for s, _p, _q in resting(v))
+    assert e.b.m(SLUG)["_tf_fair"][-1][1] == D("0.60")

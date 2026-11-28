@@ -1850,6 +1850,21 @@ RN1_TF_FAV_ONLY = os.getenv("PMUS_RN1_TF_FAV_ONLY", "0").strip() == "1"
 RN1_TF_FAV_MIN = D(os.getenv("PMUS_RN1_TF_FAV_MIN", "0.5"))
 RN1_TF_FALLING_S = float(os.getenv("PMUS_RN1_TF_FALLING_S", "0"))
 RN1_TF_FALLING_TICKS = int(os.getenv("PMUS_RN1_TF_FALLING_TICKS", "2"))
+# Hybrid refinements (all inside RN1_TRADING_FIRST; 0 = off):
+#   DOG_EXTRA_USD  favourite bias: a bid on the side the independent fair
+#                  makes < 0.5 needs this much MORE edge (value underdogs
+#                  remain admissible; underdogs without value are not)
+#   CONC_USD       replenishment: required edge rises by this much per
+#                  contract that would be left unpaired on the side after
+#                  the bid fills (marginal EV falls as inventory concentrates)
+#   WEAKEN_USD/_S  no opening/addition on a side whose INDEPENDENT fair fell
+#                  by >= WEAKEN_USD over WEAKEN_S (weakening favourite)
+# Underdog hedging is the existing completion path (pair cap unchanged): a
+# completion locks the pair whatever the fair, so it is never refused here.
+RN1_TF_DOG_EXTRA_USD = D(os.getenv("PMUS_RN1_TF_DOG_EXTRA_USD", "0"))
+RN1_TF_CONC_USD = D(os.getenv("PMUS_RN1_TF_CONC_USD", "0"))
+RN1_TF_WEAKEN_USD = D(os.getenv("PMUS_RN1_TF_WEAKEN_USD", "0"))
+RN1_TF_WEAKEN_S = float(os.getenv("PMUS_RN1_TF_WEAKEN_S", "300"))
 
 
 # PREGAME FILL RATE (27 Nov, default 1.0 = unchanged). The fill rates above
@@ -5950,10 +5965,29 @@ class Engine:
         while h and now - h[0][0] > RN1_TF_FALLING_S:
             h.pop(0)
 
+    def rn1_tf_note_fair(self, mk: Dict[str, Any],
+                         prob: Optional[Mapping[str, Any]],
+                         now: float) -> None:
+        """Independent-fair history for RN1_TF_WEAKEN_USD. A missing fair
+        clears it (weakening is measured on an unbroken series only)."""
+        if RN1_TF_WEAKEN_USD <= 0:
+            return
+        h = mk.setdefault("_tf_fair", [])
+        if prob is None:
+            h.clear()
+            return
+        try:
+            h.append((now, D(str(prob["p"]))))
+        except Exception:                                 # noqa: BLE001
+            h.clear()
+            return
+        while len(h) > 1 and now - h[0][0] > RN1_TF_WEAKEN_S:
+            h.pop(0)
+
     def rn1_trading_first_why(self, slug: str, mk: Dict[str, Any],
                               side: str, px: Any, tick: Any,
-                              prob: Optional[Mapping[str, Any]]
-                              ) -> Optional[str]:
+                              prob: Optional[Mapping[str, Any]],
+                              qty: Any = 0) -> Optional[str]:
         """None = the exposure-adding bid passes RN1_TRADING_FIRST, else the
         refusal reason. Records the pre-reward trading edge (reward EV is
         never part of it)."""
@@ -5962,13 +5996,28 @@ class Engine:
             if prob is None:
                 return "tf_no_fair"
             fair_c = DA.fair_for(prob, side, conservative=True)
+            fair_m = DA.fair_for(prob, side, conservative=False)
             edge = fair_c - D(str(px))
+            other = "NO" if side == "YES" else "YES"
+            pos = mk.get("pos") or {}
+            unp = max(D(0), D(str(pos.get(side) or 0)) + D(str(qty or 0)) -
+                      D(str(pos.get(other) or 0)))
+            need = RN1_TF_EDGE_USD + RN1_TF_CONC_USD * unp + (
+                RN1_TF_DOG_EXTRA_USD if fair_m < D("0.5") else D(0))
             rec = mk.setdefault("_tf_last", {})
             rec[side] = {"px": str(px), "fair_conservative": str(fair_c),
-                         "trading_edge": str(edge),
+                         "trading_edge": str(edge), "required": str(need),
+                         "favourite": fair_m >= D("0.5"),
                          "source": prob.get("source")}
-            if edge < RN1_TF_EDGE_USD:
+            if edge < need:
                 return "tf_negative_ev"
+            fh = mk.get("_tf_fair") or []
+            if RN1_TF_WEAKEN_USD > 0 and len(fh) > 1:
+                d = fh[-1][1] - fh[0][1]
+                if side == "NO":
+                    d = -d
+                if d <= -RN1_TF_WEAKEN_USD:
+                    return "tf_weakening"
             if RN1_TF_FAV_ONLY and \
                     DA.fair_for(prob, side, conservative=False) < \
                     RN1_TF_FAV_MIN:
@@ -7460,8 +7509,10 @@ class Engine:
             if tg and tg["role"] != "complete" and RN1_TRADING_FIRST:
                 if tf_prob is _TF_UNSET:
                     tf_prob = self.rn1_directional_prob(slug)
+                    self.rn1_tf_note_fair(mk, tf_prob, now)
                 twhy = self.rn1_trading_first_why(slug, mk, side, tg["px"],
-                                                  tick, tf_prob)
+                                                  tick, tf_prob,
+                                                  tg.get("qty", 0))
                 if twhy:
                     q["why_" + side] = twhy
                     tg = None
@@ -7498,11 +7549,19 @@ class Engine:
         if RN1_TRADING_FIRST and ladder:
             if tf_prob is _TF_UNSET:
                 tf_prob = self.rn1_directional_prob(slug)
+                self.rn1_tf_note_fair(mk, tf_prob, now)
             kept_l, ref_l = [], []
+            # each level is judged with the levels in front of it filled
+            lq = {sd: D(str((want.get(sd) or {}).get("qty") or 0))
+                  if (want.get(sd) or {}).get("role") != "complete" else D(0)
+                  for sd in ("YES", "NO")}
             for l_ in ladder:
-                lw = None if l_.get("role") == "complete" else \
-                    self.rn1_trading_first_why(slug, mk, l_["side"],
-                                               l_["px"], tick, tf_prob)
+                lw = None
+                if l_.get("role") != "complete":
+                    lq[l_["side"]] += D(str(l_.get("qty") or 0))
+                    lw = self.rn1_trading_first_why(
+                        slug, mk, l_["side"], l_["px"], tick, tf_prob,
+                        lq[l_["side"]])
                 if lw:
                     ref_l.append({"side": l_["side"],
                                   "level": l_.get("level"), "why": lw})

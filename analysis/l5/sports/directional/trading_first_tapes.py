@@ -38,6 +38,16 @@ if os.getenv("TF_SWEEP"):
                 if fs: pol["fav_side"] = fs
                 if fall: pol.update(falling_s=30, falling_ticks=2)
                 P.append((f"edge>={el} sides={fs or 'both'} falling={'on' if fall else 'off'}", pol))
+if os.getenv("TF_HYBRID"):
+    P = [("A baseline: production pauses (6e6cc2d5d-like core)", {})]
+    for el, dog, conc, wk in [("0.02","0","0","0"), ("0.01","0.01","0","0"),
+                              ("0.01","0.02","0","0"), ("0.015","0.01","0","0"),
+                              ("0.01","0.01","0.005","0"), ("0.01","0.01","0","0.02"),
+                              ("0.01","0.01","0.005","0.02"), ("0.015","0.01","0.005","0.02"),
+                              ("0.02","0.01","0.005","0.02"), ("0.005","0.02","0.005","0.02")]:
+        P.append((f"hybrid edge>={el} dog+{dog} conc {conc}/ct weaken {wk}",
+                  {"require_fair": True, "edge_min": "0", "ev_fill_loss": el,
+                   "dog_extra": dog, "conc": conc, "weaken": wk}))
 HZ = (30, 120, 300)
 
 def mk(slug, side, t, px, h):
