@@ -183,6 +183,21 @@ def test_size_never_exceeds_the_account_clip(monkeypatch):
     assert q["YES"]["qty"] == q["NO"]["qty"] == D("2")
 
 
+def test_the_share_credited_is_that_of_the_size_actually_quoted(monkeypatch):
+    """Configured 400: the $100 market cap allows 104, and 10 once $90.40
+    is deployed. The net estimate is built on the share of the size that
+    would actually rest, not of the configured 400."""
+    ra_on(monkeypatch, RA_PROBE=True, QTY=D("400"))
+    c = {"pair_cap": "0.97", "complete_max_pair": "0.97"}
+    big = RQ(c=c)
+    small = RQ(c=c, capital_used="90.4")        # room: $9.60 = 10 pairs
+    assert big["YES"]["qty"] == D("104") and small["YES"]["qty"] == D("10")
+    assert small["model"]["share"] < big["model"]["share"] / 5
+    want = CR.assess(DEEP, PROG, T, [("YES", D("0.47"), 10),
+                                     ("NO", D("0.49"), 10)])["share"]
+    assert small["model"]["share"] == pytest.approx(want)
+
+
 def test_pair_of_bids_is_stepped_back_until_it_fits_the_pair_cap(
         monkeypatch):
     """A 1c-wide book: one tick behind is 0.48 + 0.49 = 0.97. Under a 0.96
@@ -315,17 +330,20 @@ def test_two_contracts_project_cents_and_fail_the_floor_on_every_basis(
 
 
 def test_positive_estimate_replenishes_and_is_labelled_inferred(monkeypatch):
-    ra_on(monkeypatch, RA_ALLOCATION="shared_program_et_day",
+    ra_on(monkeypatch, RA_ALLOCATION="per_contract_et_day",
           QTY=D("400"), RA_FILLS_PER_HOUR="0.5")
     q = RQ(c={"pair_cap": "0.97", "complete_max_pair": "0.97"},
            max_leg_usd=None)
+    # the conservative basis is under the $1 floor for the same quote
+    assert q["ra"]["by_hypothesis"]["shared_program_et_day"][
+        "reward_usd"] == "0"
     assert q["ra"]["ok"] and q["ra"]["evidence"] == "INFERRED"
     assert D(q["ra"]["net_usd"]) > 0
     assert q["YES"]["role"] == "open" and q["NO"]["role"] == "open"
 
 
 def test_estimate_turns_negative_when_cost_exceeds_reward(monkeypatch):
-    ra_on(monkeypatch, RA_ALLOCATION="shared_program_et_day",
+    ra_on(monkeypatch, RA_ALLOCATION="per_contract_et_day",
           QTY=D("400"), RA_FILLS_PER_HOUR="200", RA_FILL_COST_USD="0.05")
     q = RQ(c={"pair_cap": "0.97", "complete_max_pair": "0.97"})
     assert q["YES"] is None
@@ -335,18 +353,18 @@ def test_estimate_turns_negative_when_cost_exceeds_reward(monkeypatch):
 
 def test_paid_evidence_is_claimed_only_for_the_verified_hypothesis(
         monkeypatch):
-    ra_on(monkeypatch, RA_ALLOCATION="shared_program_et_day",
-          RA_PAID_VERIFIED="shared_program_et_day", QTY=D("400"),
+    ra_on(monkeypatch, RA_ALLOCATION="per_contract_et_day",
+          RA_PAID_VERIFIED="per_contract_et_day", QTY=D("400"),
           RA_FILLS_PER_HOUR="0.5")
     q = RQ(c={"pair_cap": "0.97", "complete_max_pair": "0.97"})
     assert q["ra"]["evidence"] == "PAID"
     by = q["ra"]["by_hypothesis"]
-    assert by["shared_program_et_day"]["evidence"] == "PAID"
-    assert by["per_contract_window"]["evidence"] == "INFERRED"
+    assert by["per_contract_et_day"]["evidence"] == "PAID"
+    assert by["shared_program_et_day"]["evidence"] == "INFERRED"
 
 
 def test_unknown_paid_fraction_credits_nothing(monkeypatch):
-    ra_on(monkeypatch, RA_ALLOCATION="shared_program_et_day",
+    ra_on(monkeypatch, RA_ALLOCATION="per_contract_et_day",
           QTY=D("400"), RA_FILLS_PER_HOUR="0.5")
     q = RQ(c={"pair_cap": "0.97", "complete_max_pair": "0.97"},
            paid_fraction=0)

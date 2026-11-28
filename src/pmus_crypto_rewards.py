@@ -999,6 +999,11 @@ def ra_quotes(*, book_md: Optional[Mapping[str, Any]],
         for s in open_sides:
             out["why_" + s] = short
         return out
+    if q != qty0:
+        # the share credited is the share of the size actually quoted
+        qs = [(s, chosen[s], q) for s in open_sides] + ([comp] if comp else [])
+        m = assess(book_md, program, tick, qs, resting)
+        out["model"] = m
     net = ra_net(slug=slug, program=program, share=m.get("share") or 0,
                  seconds_left=seconds_left, paid_fraction=paid_fraction)
     out["ra"] = net
