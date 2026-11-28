@@ -1865,6 +1865,14 @@ RN1_TF_FALLING_TICKS = int(os.getenv("PMUS_RN1_TF_FALLING_TICKS", "2"))
 # an independent fair source rank ahead, order otherwise kept) or "only"
 # (markets without one take no slot; an error then selects nothing new).
 RN1_TF_SELECT = os.getenv("PMUS_RN1_TF_SELECT", "off").strip().lower()
+# ECONOMICAL HEDGE under RN1_TRADING_FIRST (unset = off): a completion bid is
+# priced no higher than the independent fair for its side + HEDGE_GIVE_USD
+# (and never above the pair-cap ceiling, which still applies). Completing
+# above fair converts a favourable residual into a locked pair at an EV cost;
+# below it the hedge is EV-neutral or better. Without an independent fair the
+# completion is unchanged (the pair cap alone governs it).
+_hg = os.getenv("PMUS_RN1_TF_HEDGE_GIVE_USD", "").strip()
+RN1_TF_HEDGE_GIVE_USD: Optional[D] = D(_hg) if _hg else None
 RN1_TF_DOG_EXTRA_USD = D(os.getenv("PMUS_RN1_TF_DOG_EXTRA_USD", "0"))
 RN1_TF_CONC_USD = D(os.getenv("PMUS_RN1_TF_CONC_USD", "0"))
 RN1_TF_WEAKEN_USD = D(os.getenv("PMUS_RN1_TF_WEAKEN_USD", "0"))
@@ -6019,6 +6027,30 @@ class Engine:
                 label="trading-first selection: independent fair first")
         return out
 
+    def rn1_tf_hedge_price(self, mk: Dict[str, Any], side: str,
+                           tg: Dict[str, Any], tick: Any,
+                           prob: Optional[Mapping[str, Any]]
+                           ) -> Dict[str, Any]:
+        """See RN1_TF_HEDGE_GIVE_USD: the completion repriced down to
+        fair + give (never up). No fair or any error: unchanged."""
+        if prob is None:
+            return tg
+        try:
+            from src import pmus_directional_alloc as DA
+            t = D(str(tick))
+            cap = DA.fair_for(prob, side, conservative=False) + \
+                RN1_TF_HEDGE_GIVE_USD
+            cap = (cap / t).to_integral_value(rounding="ROUND_FLOOR") * t
+            rec = mk.setdefault("_tf_last", {})
+            rec["hedge_" + side] = {"px": str(tg["px"]), "cap": str(cap)}
+            if D(str(tg["px"])) > cap:
+                if cap <= 0:
+                    return None
+                return dict(tg, px=cap, hedge_capped=True)
+            return tg
+        except Exception:                                 # noqa: BLE001
+            return tg
+
     def rn1_tf_note_mid(self, slug: str, mk: Dict[str, Any],
                         bbo: Mapping[str, Any], now: float) -> None:
         """Venue YES-mid history for RN1_TF_FALLING_S (diagnostic input to
@@ -7571,6 +7603,12 @@ class Engine:
                     self.guard.stats["blocked"] += 1
                     q["why_" + side] = "intl_guard:" + str(gv.get("why"))
                     tg = None
+            if tg and tg["role"] == "complete" and RN1_TRADING_FIRST and \
+                    RN1_TF_HEDGE_GIVE_USD is not None:
+                if tf_prob is _TF_UNSET:
+                    tf_prob = self.rn1_directional_prob(slug)
+                    self.rn1_tf_note_fair(mk, tf_prob, now)
+                tg = self.rn1_tf_hedge_price(mk, side, tg, tick, tf_prob)
             if tg and tg["role"] != "complete" and RN1_TRADING_FIRST:
                 if tf_prob is _TF_UNSET:
                     tf_prob = self.rn1_directional_prob(slug)

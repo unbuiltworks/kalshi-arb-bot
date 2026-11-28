@@ -26,7 +26,18 @@ for fill in ("touch", "through"):
     for part in SETS:
         BASE[(fill, part)] = run({}, fill, part)
 
+def row_str(arg):
+    name, pol = arg
+    if name == "__HDR__":
+        return "\n== hedge economics on the admission rules (give = max hedge EV cost vs fair; cap = tighter pair cap; frac = share of imbalance per order)"
+    return _row(name, pol)
+
 def row(name, pol):
+    JOBS.append((name, pol))
+
+JOBS = []
+
+def _row(name, pol):
     out = [name]
     for fill in ("touch", "through"):
         r = run(pol, fill, "all"); b = BASE[(fill, "all")]
@@ -40,8 +51,10 @@ def row(name, pol):
         out.append(f"{fill}: {float(r['1_settled_trading_pnl_after_fees_usd']):+6.2f} (m {float(r['6_matched_pnl_usd']):+5.2f} r {float(r['6_residual_pnl_usd']):+6.2f}) "
                    f"f {r['fills']:3} spend {sp:6.2f} ret {(float(r['1_settled_trading_pnl_after_fees_usd'])/sp*100 if sp else 0):+5.1f}% "
                    f"halves {halves[0]:+5.2f}/{halves[1]:+5.2f} paired {m:+.3f}±{se:.3f}")
-    print(" | ".join(out), flush=True)
+    return " | ".join(out)
 
+if __name__ != "__main__":
+    raise SystemExit
 print(__doc__)
 for fill in ("touch", "through"):
     b = BASE[(fill, "all")]
@@ -49,7 +62,7 @@ for fill in ("touch", "through"):
 print("\n== admission grid (edge = bid below intl fair; dog = extra edge for underdogs; weaken = fair drop over 300 s)")
 for e, dog, wk in itertools.product(("0.01", "0.015", "0.02", "0.025"), ("0", "0.01", "0.02"), ("0", "0.02")):
     row(f"edge {e} dog+{dog} weaken {wk}", {"require_fair": True, "edge_min": "0", "ev_fill_loss": e, "dog_extra": dog, "weaken": wk})
-print("\n== hedge economics on the admission rules (give = max hedge EV cost vs fair; cap = tighter pair cap; frac = share of imbalance per order)")
+JOBS.append(("__HDR__", None)); HDR2 = ("\n== hedge economics on the admission rules (give = max hedge EV cost vs fair; cap = tighter pair cap; frac = share of imbalance per order)")
 for adm in (("0.02", "0", "0"), ("0.015", "0.01", "0.02"), ("0.01", "0.01", "0.02")):
     for hg, hpc, hf in itertools.product((None, "0", "0.01"), (None, "0.95"), (None, "0.5")):
         if hg is None and hpc is None and hf is None:
@@ -59,3 +72,8 @@ for adm in (("0.02", "0", "0"), ("0.015", "0.01", "0.02"), ("0.01", "0.01", "0.0
         if hpc is not None: pol["hedge_pair_cap"] = hpc
         if hf is not None: pol["hedge_frac"] = hf
         row(f"edge {adm[0]} dog+{adm[1]} weaken {adm[2]} | hedge give {hg} cap {hpc} frac {hf}", pol)
+
+import multiprocessing as mp
+with mp.get_context("fork").Pool(3) as pool:
+    for line in pool.imap(row_str, JOBS):
+        print(line, flush=True)

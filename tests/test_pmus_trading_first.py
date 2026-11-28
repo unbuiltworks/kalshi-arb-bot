@@ -225,3 +225,31 @@ def test_sportsbook_fair_counts_only_when_fresh(en, monkeypatch):
                                    "odds_age_s": 30}}
     assert e.rn1_has_independent_fair("x")
     assert not e.rn1_has_independent_fair("y")
+
+
+def test_hedge_repriced_to_fair_plus_give(en, monkeypatch):
+    """YES held at 0.40; NO completion would rest at the 0.50 touch (pair
+    0.90 <= 0.97). NO fair .45 + give 0 -> the completion rests at <= .45."""
+    e, v, _ = en
+    monkeypatch.setattr(M, "RN1_TRADING_FIRST", True)
+    monkeypatch.setattr(M, "RN1_TF_HEDGE_GIVE_USD", D("0"))
+    _fair(e, monkeypatch, "0.55")
+    mk = e.b.m(SLUG)
+    mk["pos"] = {"YES": "2", "NO": "0"}
+    mk["cost"] = {"YES": "0.80", "NO": "0"}
+    e.step_market(SLUG)
+    comp = [px for s, px, st in _orders(e) if st == "two_sided_complete"]
+    assert comp and all(px <= D("0.45") for px in comp)
+
+
+def test_hedge_unchanged_without_fair_or_flag(en, monkeypatch):
+    e, v, _ = en
+    monkeypatch.setattr(M, "RN1_TRADING_FIRST", True)
+    monkeypatch.setattr(M, "RN1_TF_HEDGE_GIVE_USD", D("0"))
+    _fair(e, monkeypatch, None)
+    mk = e.b.m(SLUG)
+    mk["pos"] = {"YES": "2", "NO": "0"}
+    mk["cost"] = {"YES": "0.80", "NO": "0"}
+    e.step_market(SLUG)
+    comp = [px for s, px, st in _orders(e) if st == "two_sided_complete"]
+    assert comp and max(comp) > D("0.45")      # pair cap alone governs

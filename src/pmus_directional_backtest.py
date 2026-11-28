@@ -352,10 +352,22 @@ class Market:
                 continue
             if hg is not None and mid is not None:
                 fair_s = mid if s == "YES" else ONE - mid
-                if tg["px"] > fair_s + D(str(hg)):
-                    want[s] = None
-                    self.decisions["hedge_held"] += 1
-                    continue
+                capx = fair_s + D(str(hg))
+                if tg["px"] > capx:
+                    if self.policy.get("hedge_mode") == "reprice":
+                        capx = (capx / tick).to_integral_value(
+                            rounding="ROUND_FLOOR") * tick
+                        if capx > 0:
+                            want[s] = dict(tg, px=capx)
+                            self.decisions["hedge_repriced"] += 1
+                            tg = want[s]
+                        else:
+                            want[s] = None
+                            continue
+                    else:
+                        want[s] = None
+                        self.decisions["hedge_held"] += 1
+                        continue
             if hf is not None:
                 o = "NO" if s == "YES" else "YES"
                 need = self.pos[o] - self.pos[s]

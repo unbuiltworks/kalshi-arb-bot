@@ -48,6 +48,17 @@ if os.getenv("TF_HYBRID"):
         P.append((f"hybrid edge>={el} dog+{dog} conc {conc}/ct weaken {wk}",
                   {"require_fair": True, "edge_min": "0", "ev_fill_loss": el,
                    "dog_extra": dog, "conc": conc, "weaken": wk}))
+if os.getenv("TF_BEST"):
+    P = [("A baseline: production pauses (6e6cc2d5d-like core)", {}),
+         ("edge>=2c, hedge always within pair cap", {"require_fair": True, "edge_min": "0", "ev_fill_loss": "0.02"}),
+         ("edge>=2c, hedge only at or below fair (give 0)", {"require_fair": True, "edge_min": "0", "ev_fill_loss": "0.02", "hedge_give": "0"}),
+         ("edge>=2c, hedge give 1c", {"require_fair": True, "edge_min": "0", "ev_fill_loss": "0.02", "hedge_give": "0.01"}),
+         ("edge>=1.5c dog+1c weaken 2c, hedge give 0 cap 0.95", {"require_fair": True, "edge_min": "0", "ev_fill_loss": "0.015", "dog_extra": "0.01", "weaken": "0.02", "hedge_give": "0", "hedge_pair_cap": "0.95"})]
+if os.getenv("TF_REPRICE"):
+    P = [("A baseline: production pauses (6e6cc2d5d-like core)", {})]
+    for e in ("0.015", "0.02", "0.025"):
+        for hg in ("0", "0.01"):
+            P.append((f"edge>={e}, hedge repriced to fair+{hg}", {"require_fair": True, "edge_min": "0", "ev_fill_loss": e, "hedge_give": hg, "hedge_mode": "reprice"}))
 HZ = (30, 120, 300)
 
 def mk(slug, side, t, px, h):
