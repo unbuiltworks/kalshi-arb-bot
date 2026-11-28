@@ -1,0 +1,237 @@
+{
+ "atc-bel1-cer-yrm-2026-11-28-cer": {
+  "closed": true,
+  "outcome_yes": 1,
+  "tick": "0.01"
+ },
+ "atc-bel1-cer-yrm-2026-11-28-draw": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.01"
+ },
+ "atc-bel1-cer-yrm-2026-11-28-yrm": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.01"
+ },
+ "atc-bel1-lom-zul-2026-11-28-draw": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "atc-bel1-lom-zul-2026-11-28-lom": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "atc-bel1-lom-zul-2026-11-28-zul": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "atc-bel1-rch-bev-2026-11-28-bev": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "atc-bel1-rch-bev-2026-11-28-draw": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "atc-bel1-rch-bev-2026-11-28-rch": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "atc-bun-koe-elv-2026-11-28-draw": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.01"
+ },
+ "atc-bun-koe-elv-2026-11-28-elv": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.01"
+ },
+ "atc-bun-koe-elv-2026-11-28-koe": {
+  "closed": true,
+  "outcome_yes": 1,
+  "tick": "0.01"
+ },
+ "atc-bun-scp-s04-2026-11-28-draw": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.01"
+ },
+ "atc-bun-scp-s04-2026-11-28-s04": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.01"
+ },
+ "atc-bun-scp-s04-2026-11-28-scp": {
+  "closed": true,
+  "outcome_yes": 1,
+  "tick": "0.01"
+ },
+ "atc-ecu1-mac-ldu-2026-11-28-draw": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "atc-ecu1-mac-ldu-2026-11-28-ldu": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "atc-ecu1-mac-ldu-2026-11-28-mac": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "atc-ecu1-uni-ind-2026-11-28-draw": {
+  "closed": true,
+  "outcome_yes": 1,
+  "tick": "0.01"
+ },
+ "atc-ecu1-uni-ind-2026-11-28-ind": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.01"
+ },
+ "atc-ecu1-uni-ind-2026-11-28-uni": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.01"
+ },
+ "atc-epl-ips-ast-2026-11-28-ast": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.01"
+ },
+ "atc-epl-ips-ast-2026-11-28-draw": {
+  "closed": true,
+  "outcome_yes": 1,
+  "tick": "0.01"
+ },
+ "atc-epl-ips-ast-2026-11-28-ips": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.01"
+ },
+ "atc-ere-cam-spa-2026-11-28-cam": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "atc-ere-cam-spa-2026-11-28-draw": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "atc-ere-cam-spa-2026-11-28-spa": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "atc-ere-psv-goa-2026-11-28-draw": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.01"
+ },
+ "atc-ere-psv-goa-2026-11-28-goa": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.01"
+ },
+ "atc-ere-psv-goa-2026-11-28-psv": {
+  "closed": true,
+  "outcome_yes": 1,
+  "tick": "0.01"
+ },
+ "atc-lal-bet-ray-2026-11-28-bet": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.01"
+ },
+ "atc-lal-bet-ray-2026-11-28-draw": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.01"
+ },
+ "atc-lal-bet-ray-2026-11-28-ray": {
+  "closed": true,
+  "outcome_yes": 1,
+  "tick": "0.01"
+ },
+ "atc-sea-fro-par-2026-11-28-draw": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.01"
+ },
+ "atc-sea-fro-par-2026-11-28-fro": {
+  "closed": true,
+  "outcome_yes": 1,
+  "tick": "0.01"
+ },
+ "atc-sea-fro-par-2026-11-28-par": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.01"
+ },
+ "atc-sea-int-gen-2026-11-28-draw": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "atc-sea-int-gen-2026-11-28-gen": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "atc-sea-int-gen-2026-11-28-int": {
+  "closed": false,
+  "outcome_yes": null,
+  "tick": "0.01"
+ },
+ "atc-sea-tor-laz-2026-11-28-draw": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.01"
+ },
+ "atc-sea-tor-laz-2026-11-28-laz": {
+  "closed": true,
+  "outcome_yes": 1,
+  "tick": "0.01"
+ },
+ "atc-sea-tor-laz-2026-11-28-tor": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.01"
+ },
+ "atc-swe2-nor-lbk-2026-11-28-draw": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.01"
+ },
+ "atc-swe2-nor-lbk-2026-11-28-lbk": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.01"
+ },
+ "atc-swe2-nor-lbk-2026-11-28-nor": {
+  "closed": true,
+  "outcome_yes": 1,
+  "tick": "0.01"
+ },
+ "atc-swe2-osk-esk-2026-11-28-draw": {
+  "closed": true,
+  "outcome_yes": 0,
+  "tick": "0.01"
+ },
+ "atc-swe2-osk-esk-2026-11-28-osk": {
+  "closed": true,
+  "outcome_yes": 1,
+  "tick": "0.01"
+ }
+}

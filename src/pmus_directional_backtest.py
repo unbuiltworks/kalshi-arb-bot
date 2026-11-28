@@ -74,8 +74,12 @@ def load_cross_venue(paths: Iterable[str]) -> Dict[str, List[dict]]:
         op = gzip.open if p.endswith(".gz") else open
         with op(p, "rt") as fh:
             for line in fh:
-                r = json.loads(line)
-                if "games" in r or "slug" not in r:
+                try:
+                    r = json.loads(line)
+                except ValueError:
+                    continue      # truncated line: tape still being written
+                if not isinstance(r, dict) or "games" in r or \
+                        "slug" not in r:
                     continue
                 if r.get("ub") is None or r.get("ua") is None:
                     continue
