@@ -423,3 +423,129 @@ def test_a_stale_attestation_cancels_resting_opening_orders(
     e.step_market(S1)
     assert len([o for o in e.b.d["markets"][S1]["orders"].values()
                 if o.get("open")]) == 2
+
+
+# ------------------------------------- loss stops at the final gate (owner
+# 2026-11-26: "Isolate the final pre-submission loss-stop correction")
+def test_the_campaign_loss_stop_refuses_an_opening_at_the_gate(
+        g, capsys, monkeypatch):
+    e, v = g
+    monkeypatch.setattr(M, "PILOT_LOSS_USD", D("10"))
+    e.b.d["pilot_loss_stop"] = {"t": "x", "net": "-10.5"}     # latched
+    e.place(S1, "YES", D("0.47"), D("1"), "rn1_open")
+    assert sent(v) == []
+    assert refusals(capsys)[-1] == "campaign_loss_stop:pilot_loss_stop"
+
+
+def test_the_campaign_loss_stop_never_refuses_a_completion(g, monkeypatch):
+    e, v = g
+    monkeypatch.setattr(M, "PILOT_LOSS_USD", D("10"))
+    e.b.d["pilot_loss_stop"] = {"t": "x", "net": "-10.5"}
+    mk = e.b.m(S1)
+    mk["pos"]["YES"], mk["cost"]["YES"] = D("1"), D("0.60")
+    e.place(S1, "NO", D("0.37"), D("1"), "two_sided_complete")
+    assert len(sent(v)) == 1
+
+
+def test_an_unavailable_loss_meter_refuses_an_opening_at_the_gate(
+        g, capsys, monkeypatch):
+    """Fail closed: with the campaign stop on and no current meter result,
+    new exposure is refused here too, as step_market already refuses it."""
+    e, v = g
+    monkeypatch.setattr(M, "PILOT_LOSS_USD", D("10"))
+    e._pilot, e._pilot_at = None, None
+    e.place(S1, "YES", D("0.47"), D("1"), "rn1_open")
+    assert sent(v) == []
+    assert refusals(capsys)[-1] == \
+        "campaign_loss_stop:pilot_meter_unavailable"
+
+
+def test_a_loss_at_risk_including_this_order_refuses_at_the_gate(
+        g, capsys, monkeypatch):
+    """Held unpaired cost 9.60 in the other market; this 0.47 bid would
+    take the worst case past the $10 stop (resting counted, as deployed)."""
+    e, v = g
+    monkeypatch.setattr(M, "PILOT_LOSS_USD", D("10"))
+    monkeypatch.setattr(M, "RN1_LOSS_STOP_COUNTS_RESTING", True)
+    e._pilot = {"realized_net_usd": "0", "open_residual_worst_usd": "0",
+                "unconfirmed": []}
+    e._pilot_at = time.monotonic()
+    mk = _campaign(e, S2)
+    mk["pos"]["YES"], mk["cost"]["YES"] = D("20"), D("9.60")
+    e.place(S1, "YES", D("0.47"), D("1"), "rn1_open")
+    assert sent(v) == []
+    assert refusals(capsys)[-1].startswith("campaign_loss_stop")
+
+
+def test_the_daily_loss_stop_refuses_an_opening_at_the_gate(
+        g, capsys, monkeypatch):
+    e, v = g
+    monkeypatch.setattr(e, "daily_stopped", lambda: True)
+    e.place(S1, "YES", D("0.47"), D("1"), "rn1_open")
+    assert sent(v) == []
+    assert refusals(capsys)[-1] == "daily_loss_stop"
+
+
+def test_the_daily_loss_stop_never_refuses_a_completion(g, monkeypatch):
+    e, v = g
+    monkeypatch.setattr(e, "daily_stopped", lambda: True)
+    mk = e.b.m(S1)
+    mk["pos"]["YES"], mk["cost"]["YES"] = D("1"), D("0.60")
+    e.place(S1, "NO", D("0.37"), D("1"), "two_sided_complete")
+    assert len(sent(v)) == 1
+
+
+def test_with_no_stop_in_force_an_opening_is_sent_as_before(g, monkeypatch):
+    e, v = g
+    monkeypatch.setattr(M, "PILOT_LOSS_USD", D("10"))
+    e._pilot = {"realized_net_usd": "-1.00", "open_residual_worst_usd": "0",
+                "unconfirmed": []}
+    e._pilot_at = time.monotonic()
+    e.place(S1, "YES", D("0.47"), D("1"), "rn1_open")
+    assert len(sent(v)) == 1
+
+
+# ----------------------- in-flight orders in OTHER markets count (owner
+# 2026-11-26: two markets must not bypass the aggregate limits)
+def test_an_uncertain_submission_elsewhere_counts_toward_the_campaign(
+        g, capsys, monkeypatch):
+    e, v = g
+    monkeypatch.setattr(R, "TOTAL_UNMATCHED_USD", D("0.80"))
+    _campaign(e, S1)
+    rid = e.reserve_order(S2, "YES", D("0.47"), D("1"), "rn1_open")
+    e._reservations()[rid]["state"] = "uncertain"     # send result unknown
+    e.place(S1, "YES", D("0.47"), D("1"), "rn1_open")  # 0.47 + 0.47 > 0.80
+    assert sent(v) == []
+    assert refusals(capsys)[-1].startswith("campaign_unpaired")
+    e.release_reservation(rid)
+    e.place(S1, "YES", D("0.47"), D("1"), "rn1_open")
+    assert len(sent(v)) == 1
+
+
+def test_a_reserved_first_order_in_an_untracked_market_counts(
+        g, capsys, monkeypatch):
+    e, v = g
+    monkeypatch.setattr(R, "TOTAL_SPEND_USD", D("1.50"))
+    _campaign(e, S1)
+    e.reserve_order("aec-atp-new-mkt-2026-11-25", "NO", D("0.50"), D("1"),
+                    "rn1_open")
+    exp = e.rn1_campaign_exposure(exclude=S1)
+    assert exp["spend"] > D(0)
+    e.place(S1, "YES", D("0.47"), D("1"), "rn1_open")
+    assert sent(v) == []
+    assert refusals(capsys)[-1].startswith("campaign_spend")
+
+
+def test_two_markets_filling_together_stay_inside_the_campaign_caps(
+        g, monkeypatch):
+    """Both markets hold fills and resting bids at once; every further
+    opening in either is checked against the two together."""
+    e, v = g
+    monkeypatch.setattr(R, "TOTAL_UNMATCHED_USD", D("2.00"))
+    for s_ in (S1, S2):
+        mk = _campaign(e, s_)
+        mk["pos"]["YES"], mk["cost"]["YES"] = D("1"), D("0.47")
+    for _ in range(6):
+        for s_ in (S1, S2):
+            e.place(s_, "YES", D("0.47"), D("1"), "rn1_open")
+    assert e.rn1_campaign_exposure()["unmatched"] <= D("2.00")

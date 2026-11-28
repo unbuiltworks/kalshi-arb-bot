@@ -279,11 +279,13 @@ UNCONFIRMED = ("fills_unconfirmed", "position_unconfirmed")
 def meter(markets: Mapping[str, Mapping[str, Any]],
           rows: Iterable[Mapping[str, Any]],
           since: Optional[float] = None,
-          venue_net: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
+          venue_net: Optional[Mapping[str, Any]] = None,
+          stages: Sequence[str] = PILOT_STAGES) -> Dict[str, Any]:
     """`venue_net`: {slug: signed venue position} from a COMPLETE positions
     walk, or None when no such walk is available (position check skipped,
-    reported as `positions_checked: False`)."""
-    slugs = pilot_slugs(markets, since)
+    reported as `positions_checked: False`). `stages`: the order stages
+    that mark a market as this campaign's (the crypto lane passes its own)."""
+    slugs = pilot_slugs(markets, since, stages)
     vs = venue_side(rows, slugs)
     chk = venue_net is not None
     per = {s: market_result(markets[s], vs.get(s),

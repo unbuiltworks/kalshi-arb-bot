@@ -78,6 +78,14 @@ RESIDUAL_CAP_USD = _d("PMUS_RN1_RESIDUAL_CAP_USD", "3")
 PER_MARKET_USD = _d("PMUS_RN1_PER_MARKET_USD", "8")
 EXTEND_MAX_UP = _d("PMUS_RN1_EXTEND_MAX_UP", "0.02")
 REFILL_COOLDOWN_S = _f("PMUS_RN1_REFILL_COOLDOWN_S", "60")
+# SIZE DOWN TO FIT (owner 2026-11-25: "If two contracts exceed available
+# capacity but one fits, evaluate one instead of refusing the entire
+# addition"). With 1, an opening or extension bid that would breach the
+# per-market unpaired cap or the per-market spend cap at the full clip is
+# tried at each smaller whole size down to the venue minimum; the largest
+# size that fits is bid. The caps themselves are unchanged. 0 = refuse the
+# whole bid, as before.
+FIT_QTY = os.getenv("PMUS_RN1_FIT_QTY", "0").strip() == "1"
 # A BALANCED POSITION IS A FRESH ENTRY (owner 2026-11-25: "Separate
 # fresh-entry restrictions from genuine same-side inventory extensions").
 # Without this, a market holding 3 YES and 3 NO (every pair complete,
@@ -250,6 +258,100 @@ def edge(*, side: str, px: Any, tick: Any, fair_yes: Any,
             "adds_exposure": bool(adds_exposure), "step": str(t)}
 
 
+def marginal_ev(*, fair: Any, px: Any, qty: Any, fill_rate: Any,
+                fee: Any = ZERO, gate_adverse: Any = ZERO,
+                adverse: Any = ZERO, risk: Any = ZERO,
+                reward_usd_per_hour: Any = 0.0,
+                rebate: Any = ZERO) -> Dict[str, Any]:
+    """Combined marginal net value of ONE proposed opening/extension bid,
+    in dollars per resting hour. Pure. (Engine flag PMUS_RN1_MARGINAL_EV.)
+
+      per contract filled = fair - px - fee - adverse - risk + rebate
+      trading per hour    = fill_rate x qty x per contract filled
+      total per hour      = trading per hour + incremental reward per hour
+
+    `adverse` is the adverse-selection cost charged per filled contract;
+    `gate_adverse` is the marginal test's own allowance. A bid whose
+    trade edge at the marginal test's allowance (fair - px - fee -
+    gate_adverse) is negative is refused whatever its reward: rewards never
+    rescue a negative trade edge. Otherwise it is accepted only when the
+    TOTAL is positive, so a zero standalone reward does not reject an
+    attractive bid and a positive reward cannot carry a negative total.
+    `rebate` is per contract; callers pass 0 unless a rebate is sourced."""
+    f, p, q = D(str(fair)), D(str(px)), D(str(qty))
+    fe, adv, gadv = D(str(fee)), D(str(adverse)), D(str(gate_adverse))
+    rk, rb = D(str(risk)), D(str(rebate))
+    trade_edge = f - p - fe - gadv
+    per_contract = f - p - fe - adv - rk + rb
+    fills_h = float(fill_rate) * float(q)
+    trading_h = fills_h * float(per_contract)
+    rew_h = max(0.0, float(reward_usd_per_hour or 0.0))
+    total = trading_h + rew_h
+    why = None
+    if trade_edge < ZERO:
+        why = "trade_edge_negative"
+    elif total <= 0.0:
+        why = "marginal_ev_not_positive"
+    return {"ok": why is None, "why": why, "fair": str(f), "px": str(p),
+            "qty": str(q), "fee": str(fe), "adverse": str(adv),
+            "risk": str(rk), "rebate": str(rb),
+            "trade_edge": str(trade_edge),
+            "per_contract": str(per_contract),
+            "fills_per_hour": round(fills_h, 6),
+            "trading_usd_per_hour": round(trading_h, 6),
+            "reward_usd_per_hour": round(rew_h, 6),
+            "ev_usd_per_hour": round(total, 6)}
+
+
+def concentration_risk(*, tick: Any, unpaired_clips: int,
+                       risk_step_ticks: Any = None) -> D:
+    """Concentration/risk charge per contract for an exposure-adding bid,
+    exactly as `edge` computes it (one step = max(tick, EDGE_UNIT_USD),
+    times RISK_STEP_TICKS, times the unpaired clips already held). Pure."""
+    t = max(D(str(tick)), EDGE_UNIT_USD)
+    return t * D(str(RISK_STEP_TICKS if risk_step_ticks is None
+                     else risk_step_ticks)) * max(0, int(unpaired_clips))
+
+
+def marginal_ev_no_fair(*, px: Any, qty: Any, fill_rate: Any,
+                        fill_loss: Any, fee: Any = ZERO, risk: Any = ZERO,
+                        reward_usd_per_hour: Any = 0.0,
+                        rebate: Any = ZERO) -> Dict[str, Any]:
+    """Marginal net value of ONE opening/extension bid in a market with NO
+    fair value, in dollars per resting hour. Pure. (Engine flag
+    PMUS_RN1_MARGINAL_EV_NO_FAIR.)
+
+      cost per contract filled = fill_loss + fee + risk - rebate
+      total per hour = reward per hour - fill_rate x qty x cost per contract
+
+    THERE IS NO TRADE-EDGE TERM: without a fair value there is nothing to
+    measure the price against, and none is invented (not the venue's own
+    mid, not a model). `fill_loss` (RN1_FILL_LOSS for the placement and
+    competition, the same settings cost the market-level net estimate
+    charges) is the adverse-selection proxy for what a fill costs. A bid is
+    accepted only when the TOTAL is positive, so only a qualifying
+    incremental reward larger than its expected fill cost carries a bid;
+    with no reward every bid is refused. `rebate` is per contract; callers
+    pass 0 unless a rebate is sourced."""
+    p, q = D(str(px)), D(str(qty))
+    fe, ls, rk, rb = (D(str(fee)), max(ZERO, D(str(fill_loss))),
+                      D(str(risk)), D(str(rebate)))
+    cost = ls + fe + rk - rb
+    fills_h = float(fill_rate) * float(q)
+    cost_h = fills_h * float(cost)
+    rew_h = max(0.0, float(reward_usd_per_hour or 0.0))
+    total = rew_h - cost_h
+    why = None if total > 0.0 else "marginal_ev_not_positive"
+    return {"ok": why is None, "why": why, "basis": "no_fair",
+            "fair": None, "px": str(p), "qty": str(q), "fee": str(fe),
+            "adverse": str(ls), "risk": str(rk), "rebate": str(rb),
+            "trade_edge": None, "per_contract": str(-cost),
+            "fills_per_hour": round(fills_h, 6),
+            "trading_usd_per_hour": round(-cost_h, 6),
+            "reward_usd_per_hour": round(rew_h, 6),
+            "ev_usd_per_hour": round(total, 6)}
+
+
 def quotes(*, yes_bid: Any, yes_ask: Any, tick: Any,
            pos: Mapping[str, Any], cost: Mapping[str, Any],
            last_fill_t: Optional[Mapping[str, Any]] = None,
@@ -280,9 +382,12 @@ def quotes(*, yes_bid: Any, yes_ask: Any, tick: Any,
     if not (ZERO < yb < ya < ONE):
         out["why"] = "no_two_sided_book"
         return out
+    # per-side placement (engine PMUS_RN1_TOUCH_EV); absent = `depth` for
+    # both sides, exactly as before
+    dside = k.get("depth_ticks_side") or {}
     for s, o in (("YES", "NO"), ("NO", "YES")):
         touch = side_bid(s, yb, ya)
-        px = _floor(touch - depth * t, t)
+        px = _floor(touch - int(dside.get(s, depth)) * t, t)
         role, why = None, None
         if p[o] > p[s]:
             # COMPLETING the lighter side: profitable pair only, patient
@@ -300,8 +405,10 @@ def quotes(*, yes_bid: Any, yes_ask: Any, tick: Any,
                 qty = mq                        # venue minimum; tiny overfill
         else:
             # OPEN (flat) or EXTEND (heavier / equal side): accumulate,
-            # bounded by unmatched cost; replenish after a cool-down
-            qty = qty0
+            # bounded by unmatched cost; replenish after a cool-down.
+            # `qty_side` (engine directional sizing): this side's clip
+            # before the caps below; absent = the common clip.
+            qty = D(str((k.get("qty_side") or {}).get(s, qty0)))
             fresh = p[s] == 0 or (p[s] == p[o] and bool(
                 k.get("balanced_is_open", BALANCED_IS_OPEN)))
             role = "open" if fresh else "extend"
@@ -309,7 +416,15 @@ def quotes(*, yes_bid: Any, yes_ask: Any, tick: Any,
             if last is not None and now - float(last) < cool:
                 out["why_" + s] = "refill_cooldown"
                 continue
-            if p[s] > 0 and not fresh:
+            # Opt-in: let the independent marginal edge gate price additions.
+            # Without that gate, retain the legacy average-cost ceiling.
+            independent = bool(k.get("edge_gate")) and bool(k.get(
+                "independent_adds", os.getenv("PMUS_RN1_INDEPENDENT_ADDS", "0") == "1"))
+            # `adds_priced_externally` (engine directional allocation with
+            # a settled probability): the addition is priced by its marginal
+            # EV against that probability instead of the average-cost cap.
+            priced = bool(k.get("adds_priced_externally"))
+            if p[s] > 0 and not fresh and not independent and not priced:
                 avg_s = cs[s] / p[s]
                 if px > avg_s + up:
                     px = _floor(avg_s + up, t)  # don't chase it up
@@ -336,6 +451,21 @@ def quotes(*, yes_bid: Any, yes_ask: Any, tick: Any,
                         "edge": str(fair_s - px), "need": str(need),
                         "unpaired_clips": clips}
                     continue
+            if k.get("fit_qty", FIT_QTY):
+                # largest whole size, down to the venue minimum, that keeps
+                # both per-market caps (unpaired, spend incl. reserve)
+                def _fits(qq: D) -> bool:
+                    na = (cs[s] + px * qq) / (p[s] + qq)
+                    if max(ZERO, p[s] + qq - p[o]) * na > rcap:
+                        return False
+                    qa = p[s] + qq - p[o]
+                    res = max(ZERO, qa) * max(ZERO, pcap - na)
+                    return spent + px * qq + res <= mcap
+                qq = qty
+                while qq > mq and not _fits(qq):
+                    qq = max(mq, qq - ONE)
+                if _fits(qq):
+                    qty = qq
             # unpaired cost if this fills: excess shares at the new average
             new_avg = (cs[s] + px * qty) / (p[s] + qty)
             unm_after = max(ZERO, p[s] + qty - p[o]) * new_avg
@@ -458,6 +588,34 @@ def quotes(*, yes_bid: Any, yes_ask: Any, tick: Any,
                     None)
         if drop is None or all(out[sd]["role"] != "complete" for sd in live):
             drop = max(live, key=lambda sd: out[sd]["px"])
+            ev = out.get("edge") or {}
+            if k.get("ev_priority") and all(
+                    (ev.get(sd) or {}).get("net_edge") is not None
+                    for sd in live):
+                # ECONOMIC PRIORITY (engine PMUS_RN1_MARGINAL_EV): drop the
+                # bid worth less per fill (net edge x size), not the dearer
+                # one; ties keep the old rule.
+                val = {sd: D(ev[sd]["net_edge"]) * out[sd]["qty"]
+                       for sd in live}
+                lo = min(val.values())
+                low = [sd for sd in live if val[sd] == lo]
+                if len(low) == 1:
+                    drop = low[0]
+        if k.get("fit_pair_cap"):
+            # SIZE DOWN BEFORE DROPPING (engine PMUS_RN1_FIT_ALL_LEVELS):
+            # the dropped bid is first tried at each smaller whole size
+            # down to the venue minimum; the cap itself is unchanged.
+            def _over() -> bool:
+                return spent + sum(out[sd]["px"] * out[sd]["qty"]
+                                   for sd in live) > mcap
+            q0 = out[drop]["qty"]
+            while _over() and out[drop]["qty"] - ONE >= mq:
+                out[drop]["qty"] -= ONE
+            if not _over():
+                if out[drop]["qty"] != q0:
+                    out[drop]["why"] = "per_market_cap_sized"
+                return out
+            out[drop]["qty"] = q0
         out[drop] = None
         out["why_" + drop] = "per_market_cap"
     return out

@@ -92,8 +92,9 @@ def _get(t: q1.Transport, path: str, base: Optional[str] = None) -> dict:
         return {"ok": False, "error": str(exc)[:200]}
 
 
-def earnings(t: q1.Transport) -> dict:
-    """OBSERVED credits from the venue's earnings endpoint."""
+def earnings(t: q1.Transport, detail_max: int = 50) -> dict:
+    """OBSERVED credits from the venue's earnings endpoint. `detail_max`
+    bounds `rows_detail` (default 50, as before)."""
     out: dict = {"endpoint": None, "ok": False, "rows": 0, "total_usd": None,
                  "by_program": {}, "sample": None, "error": None}
     for path in EARNINGS_PATHS:
@@ -150,7 +151,10 @@ def earnings(t: q1.Transport) -> dict:
                     "accrued_not_credited_usd":
                         status_split["accrued_but_not_credited_usd"],
                     "by_status": status_split["by_status"],
-                    "rows_detail": [dict(r) for r in rows[:50]],
+                    "rows_detail": [dict(r) for r in rows[:detail_max]],
+                    # every row, for per-market attribution (the crypto
+                    # lane counts a reward only when a row names its market)
+                    "rows_all": [dict(r) for r in rows],
                     "total_usd": str(total) if n_amount else None,
                     "by_program": dict(by_prog),
                     "sample": json.loads(json.dumps(rows[0], default=str)) if rows else None,

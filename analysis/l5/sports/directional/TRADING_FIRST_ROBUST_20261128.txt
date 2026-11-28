@@ -1,0 +1,29 @@
+THEORETICAL robustness: edge gate (bid <= intl fair - edge) by recording half; pre-reward; modelled fills
+half 1 touch   baseline trading  +3.44 fills 61
+   edge 0.015 both     trading  -4.44 (matched +0.31 resid -4.75) fills  15 traded 6 | paired vs baseline -0.985±0.426 (n 8)
+   edge 0.015 favorite trading  -2.82 (matched +0.12 resid -2.94) fills   6 traded 4 | paired vs baseline -0.782±0.428 (n 8)
+   edge 0.02  both     trading  +0.20 (matched +0.20 resid +0.00) fills   6 traded 2 | paired vs baseline -0.405±0.485 (n 8)
+   edge 0.02  favorite trading  +0.06 (matched +0.06 resid +0.00) fills   2 traded 1 | paired vs baseline -0.422±0.490 (n 8)
+   edge 0.03  both     trading  +0.14 (matched +0.14 resid +0.00) fills   4 traded 1 | paired vs baseline -0.412±0.485 (n 8)
+   edge 0.03  favorite trading  +0.00 (matched +0.00 resid +0.00) fills   0 traded 0 | paired vs baseline -0.430±0.490 (n 8)
+half 1 through baseline trading  -4.01 fills 23
+   edge 0.015 both     trading  -0.27 (matched +0.13 resid -0.40) fills   5 traded 3 | paired vs baseline +0.623±0.560 (n 6)
+   edge 0.015 favorite trading  +0.06 (matched +0.06 resid +0.00) fills   2 traded 1 | paired vs baseline +0.678±0.554 (n 6)
+   edge 0.02  both     trading  +0.07 (matched +0.07 resid +0.00) fills   2 traded 1 | paired vs baseline +0.680±0.550 (n 6)
+   edge 0.02  favorite trading  +0.00 (matched +0.00 resid +0.00) fills   0 traded 0 | paired vs baseline +0.668±0.556 (n 6)
+   edge 0.03  both     trading  +0.07 (matched +0.07 resid +0.00) fills   2 traded 1 | paired vs baseline +0.680±0.550 (n 6)
+   edge 0.03  favorite trading  +0.00 (matched +0.00 resid +0.00) fills   0 traded 0 | paired vs baseline +0.668±0.556 (n 6)
+half 2 touch   baseline trading  -5.93 fills 111
+   edge 0.015 both     trading  -0.34 (matched +2.43 resid -2.76) fills  35 traded 8 | paired vs baseline +0.329±0.302 (n 17)
+   edge 0.015 favorite trading  +0.27 (matched +0.57 resid -0.30) fills  18 traded 6 | paired vs baseline +0.364±0.272 (n 17)
+   edge 0.02  both     trading  +0.77 (matched +0.51 resid +0.26) fills  13 traded 3 | paired vs baseline +0.394±0.231 (n 17)
+   edge 0.02  favorite trading  +0.77 (matched +0.51 resid +0.26) fills  13 traded 3 | paired vs baseline +0.394±0.231 (n 17)
+   edge 0.03  both     trading  +0.00 (matched +0.00 resid +0.00) fills   0 traded 0 | paired vs baseline +0.349±0.239 (n 17)
+   edge 0.03  favorite trading  +0.00 (matched +0.00 resid +0.00) fills   0 traded 0 | paired vs baseline +0.349±0.239 (n 17)
+half 2 through baseline trading  -6.02 fills 82
+   edge 0.015 both     trading  -1.99 (matched +1.89 resid -3.88) fills  30 traded 7 | paired vs baseline +0.310±0.336 (n 13)
+   edge 0.015 favorite trading  -0.13 (matched +0.51 resid -0.64) fills  14 traded 4 | paired vs baseline +0.453±0.267 (n 13)
+   edge 0.02  both     trading  +0.75 (matched +0.51 resid +0.24) fills  12 traded 2 | paired vs baseline +0.521±0.254 (n 13)
+   edge 0.02  favorite trading  +0.75 (matched +0.51 resid +0.24) fills  12 traded 2 | paired vs baseline +0.521±0.254 (n 13)
+   edge 0.03  both     trading  +0.00 (matched +0.00 resid +0.00) fills   0 traded 0 | paired vs baseline +0.463±0.268 (n 13)
+   edge 0.03  favorite trading  +0.00 (matched +0.00 resid +0.00) fills   0 traded 0 | paired vs baseline +0.463±0.268 (n 13)

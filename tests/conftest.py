@@ -92,3 +92,49 @@ def _migration_close_uses_ephemeral_test_state(monkeypatch, tmp_path, request):
     """
     if "test_migration_close.py" in request.node.nodeid:
         monkeypatch.setenv("PMUS_Q1_STATE_DIR", str(tmp_path / "pmus-q1"))
+
+
+#: modules that control the reward feed themselves (they test what happens
+#: with NO reward, a non-qualifying one, or set their own programme), so the
+#: enabled-mode reward below must never be added to them
+_ENABLED_MODE_OWN_REWARD = ("test_pmus_rn1_marginal_ev.py",
+                            "test_pmus_rn1_marginal_ev_no_fair.py",
+                            "test_pmus_enabled_mode_safety.py")
+
+
+@pytest.fixture(autouse=True)
+def _enabled_mode_paying_reward(monkeypatch, request):
+    """ENABLED MODE ONLY (PMUS_RN1_MARGINAL_EV=1 and
+    PMUS_RN1_MARGINAL_EV_NO_FAIR=1 at import; with flags off this does
+    nothing at all). In that mode a bid in a market with no international
+    fair value rests only when its qualifying incremental theoretical
+    reward beats its expected fill cost, and the existing fixtures have no
+    reward programme: no bid rests and the safety assertions after setup
+    are never reached.
+
+    So, for a market the test gave NO programme, every marginal-EV
+    evaluation is served a realistic paying programme, public book and
+    qualifying projection (tests/pmus_enabled_mode.py, default profile "doubles_live"),
+    scored by the real venue rule. Only that evaluation sees it: ranking,
+    reward-first quoting, release and every other path keep the test's own
+    state, and no assertion changes. A market the test gave its own
+    programme is evaluated on that programme unchanged."""
+    import sys
+    M = sys.modules.get("src.pmus_sports_two_sided")
+    if M is None or not (M.RN1_MARGINAL_EV and M.RN1_MARGINAL_EV_NO_FAIR):
+        return
+    if request.node.nodeid.split("::")[0].endswith(_ENABLED_MODE_OWN_REWARD):
+        return
+    from tests import pmus_enabled_mode as EM
+    orig = M.Engine.rn1_marginal_ev
+
+    def rn1_marginal_ev(self, slug, *a, **k):
+        try:
+            own = self.rn1_reward(slug)
+        except Exception:                                 # noqa: BLE001
+            own = None
+        if own:
+            return orig(self, slug, *a, **k)
+        with EM.feed_for(self).scoped(slug):
+            return orig(self, slug, *a, **k)
+    monkeypatch.setattr(M.Engine, "rn1_marginal_ev", rn1_marginal_ev)

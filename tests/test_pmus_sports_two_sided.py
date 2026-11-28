@@ -1164,18 +1164,27 @@ def test_crypto_late_rule_uses_end_date():
     assert M.is_late({"type": "crypto-1d", "endDate": "x"}) == "crypto_end_unknown"
 
 
-def test_crypto_targets_only_explicit_prefixes_never_btc(monkeypatch):
+def test_crypto_is_discovered_only_by_the_lane_feed_never_btc_never_sports(monkeypatch):
+    """2026-11-22: daily crypto belongs to the crypto reward lane. The
+    legacy prefix variable selects nothing, live_sports() never returns a
+    crypto market (RN1 would trade it), and the venue object has no crypto
+    discovery of its own: the lane's feed thread is the only reader."""
+    from src import pmus_crypto_feed as CF
     monkeypatch.setattr(M, "CRYPTO_PREFIXES", ("cpcsol-sol-updown-1d-", "cpc-btc-"))
     v = M.Venue.__new__(M.Venue)
     v.states = {}
-    v.gget = lambda path: {"events": [{"markets": [
-        {"slug": "cpcsol-sol-updown-1d-2026-11-15-2200z", "endDate": "2026-11-16T22:00:00Z",
-         "bestBidQuote": "0.48", "bestAskQuote": "0.50"},
+    v._live_sports = lambda: []
+    assert v.live_sports() == [] and not hasattr(v, "crypto_targets")
+    feed = CF.CryptoFeed(lambda path: {"events": [{"markets": [
+        {"slug": "cpcsol-sol-updown-1d-2026-11-15-2200z", "endDate": "2026-11-16T22:00:00Z"},
         {"slug": "cpc-btc-updown-1d-2026-11-15-2200z"},
         {"slug": "cpceth-eth-updown-1d-2026-11-15-2200z"}]}]}
-    out = v.crypto_targets()
-    assert [t["slug"] for t in out] == ["cpcsol-sol-updown-1d-2026-11-15-2200z"]
-    assert v.states["cpcsol-sol-updown-1d-2026-11-15-2200z"]["type"] == "crypto-1d"
+        if "events" in path else {"programs": []},
+        lambda slug: {"tick": T, "min_qty": D("1")}, sleep=lambda s: None)
+    feed.poll_once(force=True)
+    assert sorted(t["slug"] for t in feed.targets()[0]) == [
+        "cpceth-eth-updown-1d-2026-11-15-2200z",
+        "cpcsol-sol-updown-1d-2026-11-15-2200z"]
 
 
 def test_closed_markets_do_not_count_toward_the_cap(eng):
